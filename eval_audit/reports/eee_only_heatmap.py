@@ -544,7 +544,18 @@ def _render_heatmap(
     *,
     out_filename: str = "reproducibility_heatmap.png",
     subtitle: str | None = None,
+    transpose: bool = False,
 ) -> Path:
+    """Render the heatmap PNG.
+
+    ``transpose=False`` (default): rows = benchmarks, cols = models —
+    the canonical tall layout used in the per-metric drill-down.
+
+    ``transpose=True``: rows = models, cols = benchmarks — short-and-
+    wide layout that fits as a single \\linewidth figure in a paper
+    column. Cell drawing, colormap, and legend are unchanged; only the
+    grid orientation, axis labels, and figure aspect ratio differ.
+    """
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -554,9 +565,24 @@ def _render_heatmap(
     n_bench = len(benchmarks)
     n_models = len(models)
 
-    fig_w = max(6.0, 2.2 * n_models + 2.0)
-    fig_h = max(5.0, 0.5 * n_bench + 1.5)
+    if transpose:
+        # Wide-and-short: cols = benchmarks, rows = models. Pick a
+        # figsize that gives roughly-square cells (the matching
+        # set_aspect("equal") below makes this exact). Vertical budget
+        # accounts for the data area (~n_models × 0.55") and the
+        # rotated x-axis labels (~0.8"); no title or in-figure legend
+        # in transpose/paper-compact mode, and a final
+        # cropwhite_ondisk pass below trims any residual margin.
+        fig_w = max(8.0, 0.6 * n_bench + 2.0)
+        fig_h = max(2.4, 0.55 * n_models + 1.0)
+    else:
+        fig_w = max(6.0, 2.2 * n_models + 2.0)
+        fig_h = max(5.0, 0.5 * n_bench + 1.5)
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    if transpose:
+        # Force square cells regardless of how matplotlib redistributes
+        # whitespace around the colorbar/legend.
+        ax.set_aspect("equal")
 
     # Colormap: RdYlGn for agreement (red=low, green=high). The default
     # range is tightened to [0.7, 1.0] because for the slim-paper heatmap
@@ -585,14 +611,21 @@ def _render_heatmap(
     ax.set_facecolor(_MISSING_COLOR)
 
     # Draw each cell explicitly so the three statuses get distinct visuals.
-    for i, bench in enumerate(benchmarks):
-        for j, model in enumerate(models):
+    # In transposed layout, x=benchmarks (col), y=models (row); in the
+    # default layout, x=models (col), y=benchmarks (row).
+    join_label_fontsize = 6 if transpose else 7
+    for i_bench, bench in enumerate(benchmarks):
+        for i_model, model in enumerate(models):
+            if transpose:
+                col, row = i_bench, i_model
+            else:
+                col, row = i_model, i_bench
             cell = cells.get((model, bench))
             if cell is not None and cell.get("status") == "present":
                 # Real value: colored by agree_ratio
                 val = cell["agree_ratio"]
                 rect = plt.Rectangle(
-                    (j - 0.5, i - 0.5), 1, 1,
+                    (col - 0.5, row - 0.5), 1, 1,
                     facecolor=cmap(cmap_norm(val)),
                     edgecolor="white", linewidth=0.5,
                 )
@@ -603,7 +636,7 @@ def _render_heatmap(
                 norm_val = float(cmap_norm(val))
                 text_color = "white" if (norm_val < 0.2 or norm_val > 0.85) else "black"
                 ax.text(
-                    j, i,
+                    col, row,
                     f"{val:.3f}",
                     ha="center", va="center",
                     fontsize=8, color=text_color, fontweight="bold",
@@ -614,7 +647,7 @@ def _render_heatmap(
                 # (solid gray) so a quick glance tells you which gap
                 # is fixable.
                 rect = plt.Rectangle(
-                    (j - 0.5, i - 0.5), 1, 1,
+                    (col - 0.5, row - 0.5), 1, 1,
                     facecolor=_JOIN_FAILED_COLOR,
                     edgecolor="white", linewidth=0.5,
                     hatch="////",
@@ -622,10 +655,10 @@ def _render_heatmap(
                 ax.add_patch(rect)
                 n_total = cell.get("n_pairs_total", 0)
                 ax.text(
-                    j, i,
+                    col, row,
                     f"join 0/{n_total}",
                     ha="center", va="center",
-                    fontsize=7, color="#7a4f00", fontweight="bold",
+                    fontsize=join_label_fontsize, color="#7a4f00", fontweight="bold",
                 )
             elif cell is not None and cell.get("status") == "no_core_metrics":
                 # Light purple + dotted hatching → "joined but no
@@ -633,52 +666,78 @@ def _render_heatmap(
                 # is to extend CORE_PREFIXES, not to investigate the
                 # data.
                 rect = plt.Rectangle(
-                    (j - 0.5, i - 0.5), 1, 1,
+                    (col - 0.5, row - 0.5), 1, 1,
                     facecolor=_NO_CORE_METRICS_COLOR,
                     edgecolor="white", linewidth=0.5,
                     hatch="....",
                 )
                 ax.add_patch(rect)
                 ax.text(
-                    j, i,
+                    col, row,
                     "no core",
                     ha="center", va="center",
-                    fontsize=7, color="#4a148c", fontweight="bold",
+                    fontsize=join_label_fontsize, color="#4a148c", fontweight="bold",
                 )
             else:
                 # Missing: solid darker gray + dash. Drawn explicitly so
                 # the cell border visually delimits it from the
                 # background of the same color.
                 rect = plt.Rectangle(
-                    (j - 0.5, i - 0.5), 1, 1,
+                    (col - 0.5, row - 0.5), 1, 1,
                     facecolor=_MISSING_COLOR,
                     edgecolor="white", linewidth=0.5,
                 )
                 ax.add_patch(rect)
                 ax.text(
-                    j, i, "—",
+                    col, row, "—",
                     ha="center", va="center",
                     fontsize=10, color="#606060",
                 )
 
     # Axis labels
-    ax.set_xticks(range(n_models))
-    ax.set_xticklabels(
-        [_MODEL_DISPLAY.get(m, m) for m in models],
-        fontsize=9, ha="right", rotation=25,
-    )
-    ax.set_yticks(range(n_bench))
-    ax.set_yticklabels(
-        [_BENCHMARK_DISPLAY.get(b, b) for b in benchmarks],
-        fontsize=8,
-    )
-    ax.set_xlim(-0.5, n_models - 0.5)
-    ax.set_ylim(-0.5, n_bench - 0.5)
+    if transpose:
+        ax.set_xticks(range(n_bench))
+        ax.set_xticklabels(
+            [_BENCHMARK_DISPLAY.get(b, b) for b in benchmarks],
+            fontsize=7, ha="right", rotation=35,
+        )
+        ax.set_yticks(range(n_models))
+        ax.set_yticklabels(
+            [_MODEL_DISPLAY.get(m, m) for m in models],
+            fontsize=8,
+        )
+        ax.set_xlabel("Benchmarks", fontsize=9)
+        ax.set_ylabel("Models", fontsize=9)
+        ax.set_xlim(-0.5, n_bench - 0.5)
+        ax.set_ylim(-0.5, n_models - 0.5)
+    else:
+        ax.set_xticks(range(n_models))
+        ax.set_xticklabels(
+            [_MODEL_DISPLAY.get(m, m) for m in models],
+            fontsize=9, ha="right", rotation=25,
+        )
+        ax.set_yticks(range(n_bench))
+        ax.set_yticklabels(
+            [_BENCHMARK_DISPLAY.get(b, b) for b in benchmarks],
+            fontsize=8,
+        )
+        ax.set_xlabel("Models", fontsize=9)
+        ax.set_ylabel("Benchmarks", fontsize=9)
+        ax.set_xlim(-0.5, n_models - 0.5)
+        ax.set_ylim(-0.5, n_bench - 0.5)
     ax.invert_yaxis()
 
-    # Colorbar for the present-status colormap
-    cbar = fig.colorbar(cmap_scalar, ax=ax, fraction=0.03, pad=0.02)
-    cbar.set_label("agree_ratio", fontsize=8)
+    # Colorbar for the present-status colormap. In transposed layout
+    # the figure is wide and short; the axis already has a fixed
+    # square-cell aspect, so we just attach a slim vertical colorbar
+    # of the same height to the right of the axis. The in-figure
+    # status legend lives below the x-axis (rotated benchmark labels),
+    # so the two never collide.
+    if transpose:
+        cbar = fig.colorbar(cmap_scalar, ax=ax, fraction=0.02, pad=0.01)
+    else:
+        cbar = fig.colorbar(cmap_scalar, ax=ax, fraction=0.03, pad=0.02)
+    cbar.set_label("Agree Ratio (Micro Average)", fontsize=8)
     cbar.ax.tick_params(labelsize=7)
 
     # Build the legend dynamically: only include status entries that
@@ -716,24 +775,48 @@ def _render_heatmap(
             Patch(facecolor=_MISSING_COLOR, edgecolor="white",
                   label="missing (no packet for this cell)")
         )
-    ax.legend(
-        handles=legend_handles,
-        loc="upper center", bbox_to_anchor=(0.5, -0.08),
-        ncol=min(len(legend_handles), 3), fontsize=7, frameon=False,
-    )
+    # In-figure title and status legend are suppressed in transpose
+    # (paper-compact) mode: the LaTeX caption carries the same info,
+    # and dropping them lets the figure be vertically tight enough to
+    # fit \linewidth without dominating the column.
+    if not transpose:
+        ax.legend(
+            handles=legend_handles,
+            loc="upper center", bbox_to_anchor=(0.5, -0.08),
+            ncol=min(len(legend_handles), 3), fontsize=7, frameon=False,
+        )
 
-    sub = subtitle if subtitle is not None else (
-        f"instance-level agree_ratio at abs_tol={abs_tol}"
-    )
-    ax.set_title(
-        f"{title}\n{sub}",
-        fontsize=9, pad=8,
-    )
+        # Subtitle handling:
+        # * subtitle=None  → use the default "instance-level agree_ratio
+        #                    at abs_tol=…" string
+        # * subtitle=""    → suppress the second title line entirely
+        # * subtitle=<str> → use the literal string
+        if subtitle is None:
+            sub = f"instance-level agree_ratio at abs_tol={abs_tol}"
+        else:
+            sub = subtitle
+        if title and sub:
+            ax.set_title(f"{title}\n{sub}", fontsize=9, pad=8)
+        elif title:
+            ax.set_title(title, fontsize=9, pad=8)
+        elif sub:
+            ax.set_title(sub, fontsize=9, pad=8)
 
     plt.tight_layout()
     png_path = out_dir / out_filename
-    _atomic_savefig(fig, png_path, dpi=150, bbox_inches="tight")
+    _atomic_savefig(fig, png_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
+    # Trim residual white margins so paper figures don't carry
+    # whitespace from matplotlib's tight-bbox heuristic. Soft import:
+    # if kwplot isn't installed, the saved PNG is still usable.
+    try:
+        import kwplot
+        kwplot.cropwhite_ondisk(png_path)
+    except ImportError as exc:
+        logger.debug(
+            f"kwplot not available ({exc}); skipping cropwhite_ondisk on "
+            f"{png_path}."
+        )
     logger.info(f"Wrote heatmap: {rich_link(png_path)}")
     return png_path
 
@@ -763,6 +846,9 @@ def _render_per_metric_heatmaps(
     abs_tol: float,
     title: str,
     out_dir: Path,
+    *,
+    transpose: bool = False,
+    subtitle_override: str | None = None,
 ) -> list[Path]:
     """Emit one ``model × benchmark`` heatmap per metric.
 
@@ -798,6 +884,13 @@ def _render_per_metric_heatmaps(
         ]
         if not benchmarks_for_metric:
             continue
+        if subtitle_override is not None:
+            subtitle = subtitle_override
+        else:
+            subtitle = (
+                f"instance-level agree_ratio at abs_tol={abs_tol} "
+                f"(metric: {metric})"
+            )
         png_path = _render_heatmap(
             per_metric_cells,
             models,
@@ -806,10 +899,8 @@ def _render_per_metric_heatmaps(
             f"{title} — metric: {metric}",
             sub_dir,
             out_filename=f"{_safe_filename_part(metric)}.png",
-            subtitle=(
-                f"instance-level agree_ratio at abs_tol={abs_tol} "
-                f"(metric: {metric})"
-            ),
+            subtitle=subtitle,
+            transpose=transpose,
         )
         written.append(png_path)
     return written
@@ -941,6 +1032,8 @@ def _write_redraw_plots_script(
     title: str,
     per_metric: bool,
     include_bookkeeping: bool,
+    transpose: bool = False,
+    no_subtitle: bool = False,
 ) -> Path:
     """Drop a self-contained ``redraw_plots.sh`` next to the heatmap outputs.
 
@@ -972,6 +1065,10 @@ def _write_redraw_plots_script(
         cmd_parts.append("--per-metric")
     if include_bookkeeping:
         cmd_parts.append("--include-bookkeeping")
+    if transpose:
+        cmd_parts.append("--transpose")
+    if no_subtitle:
+        cmd_parts.append("--no-subtitle")
 
     # Quote every fixed arg; the "$SCRIPT_DIR" placeholder must remain
     # unquoted so the shell expands it.
@@ -1068,6 +1165,29 @@ def main(argv: list[str] | None = None) -> None:
             "metrics under a sea of 1.0 cells."
         ),
     )
+    parser.add_argument(
+        "--transpose",
+        action="store_true",
+        default=False,
+        help=(
+            "Render the heatmap transposed: rows = models, columns = "
+            "benchmarks. Produces a wide-and-short figure that fits as a "
+            "single \\linewidth figure in a paper column. Applies to the "
+            "main heatmap and to per-metric drill-downs when "
+            "--per-metric is also set."
+        ),
+    )
+    parser.add_argument(
+        "--no-subtitle",
+        action="store_true",
+        default=False,
+        help=(
+            "Suppress the in-figure subtitle line "
+            "('instance-level agree_ratio at abs_tol=…'). Use this for "
+            "paper figures where the same information is in the LaTeX "
+            "caption and the in-figure subtitle is redundant."
+        ),
+    )
     args = parser.parse_args(argv)
 
     analysis_root = Path(args.analysis_root).expanduser().resolve()
@@ -1116,6 +1236,8 @@ def main(argv: list[str] | None = None) -> None:
         title=title,
         per_metric=args.per_metric,
         include_bookkeeping=args.include_bookkeeping,
+        transpose=args.transpose,
+        no_subtitle=args.no_subtitle,
     )
     logger.info(f"Wrote regen script: {rich_link(redraw_path)}")
 
@@ -1130,8 +1252,13 @@ def main(argv: list[str] | None = None) -> None:
     _save_cell_data(cells, models, benchmarks, abs_tol, out_dir)
 
     # Heatmap PNG
+    main_subtitle: str | None = "" if args.no_subtitle else None
     try:
-        _render_heatmap(cells, models, benchmarks, abs_tol, title, out_dir)
+        _render_heatmap(
+            cells, models, benchmarks, abs_tol, title, out_dir,
+            transpose=args.transpose,
+            subtitle=main_subtitle,
+        )
     except ImportError as exc:
         logger.warning(
             f"matplotlib not available ({exc}); skipping PNG output."
@@ -1205,6 +1332,8 @@ def main(argv: list[str] | None = None) -> None:
                 written = _render_per_metric_heatmaps(
                     per_metric_cells, models, benchmarks, metrics_in_order,
                     abs_tol, title, out_dir,
+                    transpose=args.transpose,
+                    subtitle_override=("" if args.no_subtitle else None),
                 )
                 logger.info(
                     f"Wrote {len(written)} per-metric heatmap(s) under "

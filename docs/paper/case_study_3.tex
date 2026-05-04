@@ -53,10 +53,12 @@ Thus, \eee{} detects failure modes and provides forensics, but does not replace
 \begin{figure}[t]
   \centering
   %% CITATION/ASSET NOTE: replace with the final camera-ready figure path.
-  \includegraphics[width=0.66\linewidth]{/data/crfm-helm-audit-store/eee-only-reproducibility-heatmap-paper-slim/heatmap/reproducibility_heatmap.png}
-  \caption{Instance-level agreement between official records and local reproductions
-after conversion to \eee{}. Entity-Matching is non-comparable; WikiFact reflects
-stochastic decoding; the largest post-join discrepancy is
-SyntheticReasoning-Natural with Pythia-6.9B.}%
+  \includegraphics[width=\linewidth]{/data/crfm-helm-audit-store/eee-only-reproducibility-heatmap-paper-slim/heatmap/reproducibility_heatmap.png}
+  \caption{Instance-level agreement (fraction of matched (instance, core
+metric) pairs equal to \texttt{abs\_tol=1e-9}) between official HELM records
+and our local reproductions after conversion to \eee{}. Hatched cells
+(Entity-Matching) are non-comparable: \texttt{sample\_hash} sets did not overlap.
+WikiFact's $\sim 0.92$ band reflects stochastic decoding; the largest
+post-join discrepancy is SyntheticReasoning-Natural with Pythia-6.9B.}%
   \label{fig:cs3-helm-heatmap}
 \end{figure}

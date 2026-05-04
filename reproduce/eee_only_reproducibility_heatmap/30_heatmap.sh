@@ -53,6 +53,16 @@ fi
 if [ "${INCLUDE_BOOKKEEPING:-0}" = "1" ]; then
   extra_args+=("--include-bookkeeping")
 fi
+# TRANSPOSE=1 → models on rows, benchmarks on columns (wide-and-short
+# layout used in the paper figure). NO_SUBTITLE=1 drops the in-figure
+# subtitle for paper-compact rendering — the LaTeX caption carries the
+# abs_tol info instead.
+if [ "${TRANSPOSE:-0}" = "1" ]; then
+  extra_args+=("--transpose")
+fi
+if [ "${NO_SUBTITLE:-0}" = "1" ]; then
+  extra_args+=("--no-subtitle")
+fi
 
 python3 -m eval_audit.reports.eee_only_heatmap \
   --analysis-root "$FROM_EEE_OUT" \
