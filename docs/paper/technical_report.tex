@@ -152,21 +152,23 @@ The hash validates whether two records describe the same
         produces a greedy first token of \texttt{`The'}, captures the
         model's actual answer, and recovers $\approx 20\%$ accuracy on
         the same task.
-  \item \textbf{Recipe-level stochasticity (Case~C).}
+  \item \textbf{Recipe-level stochasticity and scoring-cardinality asymmetry (Case~C).}
         The \texttt{wikifact} cells at $\approx 0.92$ across all three
         models reflect HELM's recipe-level non-determinism: the
-        benchmark pins \path{temperature=1.0, num_outputs=5}, and
-        the expected agreement of two independent stochastic runs on
-        a benchmark with per-prompt \texttt{exact\_match@5} hit rate
-        $p_i$ decomposes as
-        $\mathbb{E}_i[p_i^2 + (1-p_i)^2]
-        = \text{agree}(\bar p) + 2\,\mathrm{Var}_i(p_i)$
-        (formalized in
-        \path{wikifact_consistency_claim.lean}, theorem
-        \path{expectedAgreement_eq_uniformAgreement_add_variance}).
+        benchmark pins \path{temperature=1.0, num_outputs=5}.  However,
+        the public HELM v0.3.0 artifacts effectively expose one stored
+        completion per request state, while our local audit artifacts
+        expose five.  Thus the observed comparison is best modeled as an
+        asymmetric stochastic comparison rather than a clean symmetric
+        \texttt{@5}-versus-\texttt{@5} rerun.  The Bernoulli
+        \texttt{@1}-versus-\texttt{@5} model predicts disagreement on
+        the same order as observed, while the remaining gap is
+        plausibly due to estimator uncertainty or backend drift.
         This is the only one of the three mechanisms not surfaceable as
-        a reproducibility bug; it is the design-baked floor that any
-        honest reproducibility audit must acknowledge.
+        a straightforward reproducibility bug; it is an expected
+        artifact of a stochastic recipe plus artifact-level scoring
+        cardinality.
+
 \end{enumerate}
 
 \paragraph{The systematic Pythia-Together-vs-HuggingFace pattern.}
@@ -201,9 +203,10 @@ A reproducibility report that surfaces the cell-level number alone
   prompts but the metric scores both as 0, so the agreement reads as
   1.0 even though outputs differ (Falcon~$\times$~SR at $0.999$ hides
   a $1.0\%$ true output-divergence rate);
-  (iii)~\emph{stochastic noise floor}, where recipe-pinned
-  \texttt{temperature>0} sets an inherent non-zero disagreement
-  expectation regardless of any reproduction effort
+  (iii)~\emph{stochastic sampling and scoring-cardinality asymmetry},
+  where recipe-pinned \texttt{temperature>0} induces non-zero
+  disagreement and the \texttt{wikifact} public/local artifacts expose
+  different completion cardinalities
   (\texttt{wikifact} at $\approx 0.92$).
 
 \paragraph{EEE audit/forensics scope.}
@@ -680,10 +683,14 @@ We use three validation hooks, each independently verifiable:
         analysis step and emits a verdict
         (Table~\ref{tab:tr-audit-verdict}).
   \item Numerical-level: the math claims about \texttt{wikifact}'s
-        stochastic-recipe expected agreement are formalized in
+        stochastic-recipe expected agreement, including both the
+        symmetric \texttt{@5}-versus-\texttt{@5} reference model and
+        the asymmetric public-\texttt{@1} versus local-\texttt{@5}
+        model, are formalized in
         \path{wikifact_consistency_claim.lean}, which compiles
         against \texttt{Mathlib} and is referenced by theorem name in
         Section~\ref{sec:tr-case-c}.
+    
 \end{enumerate}
 
 
@@ -1441,8 +1448,7 @@ The instance-level $0.788$ does not capture this gap.
 
 
 % =====================================================================
-\section{Case Study C: \texorpdfstring{\texttt{wikifact} ($\approx 0.92$ across all three models)}{wikifact (approx 0.92 across all three models)} --- stochastic noise floor}
-\label{sec:tr-case-c}
+\section{Case Study C: \texorpdfstring{\texttt{wikifact} ($\approx 0.92$ across all three models)}{wikifact (approx 0.92 across all three models)} --- stochastic sampling and completion-cardinality asymmetry}\label{sec:tr-case-c}
 % =====================================================================
 
 The three \texttt{wikifact} cells agree at $0.920$, $0.922$, $0.927$
@@ -1450,48 +1456,56 @@ The three \texttt{wikifact} cells agree at $0.920$, $0.922$, $0.927$
 The recipe (verified bytewise on both sides) is
   \texttt{temperature=1.0, num\_outputs=5, max\_tokens=8,
   stop\_sequences=[`\textbackslash n']}.
-HELM uses \texttt{temperature=1.0} on \texttt{wikifact} to draw five
-  diverse outputs for the \texttt{exact\_match@5} family of metrics.
-Two independent runs of a stochastic recipe are not bitwise
-  reproducible by construction, and we predict the observed $\approx
-  0.92$ from a Bernoulli model whose key identity is mechanically
-  proved in our companion Lean file
-  \path{wikifact_consistency_claim.lean}.
+HELM uses \texttt{temperature=1.0} on \texttt{wikifact}, so independent
+  executions are not bitwise reproducible by construction.
+A first-order symmetric \texttt{@5}-versus-\texttt{@5} Bernoulli model
+  is formalized in our companion Lean file
+  \path{wikifact_consistency_claim.lean}; it shows how prompt-level
+  heterogeneity raises expected agreement above the homogeneous
+  Bernoulli baseline.
+However, the public HELM v0.3.0 artifacts expose one completion per
+  request state, while the local audit artifacts expose five.  The
+  artifact-specific model is therefore asymmetric: public \texttt{@1}
+  versus local \texttt{@5}.
 
 \subsection{The Bernoulli model and its variance decomposition}
 \label{sec:tr-case-c-math}
 
-For a binary metric with per-prompt hit rate $p_i$ (defined as the
-  per-prompt probability that the metric scores $1$ on a single
-  stochastic run, i.e., the per-prompt \texttt{exact\_match@5}
-  success probability), the expected agreement of two independent
-  stochastic runs over a benchmark of $N$ prompts is
+For a binary score-pair row, let $q_i$ be the probability that one
+  stochastic completion scores $1$ on row $i$.  If both sides exposed
+  independent \texttt{@5} executions, the per-row \texttt{@5} hit
+  probability would be
 \[
-  \mathbb{E}_i[\,\text{agree}(p_i)\,]
-  \;=\;
+  p_i = 1 - (1-q_i)^5,
+\]
+and the symmetric expected agreement would be
+\[
   \mathbb{E}_i[\,p_i^2 + (1-p_i)^2\,].
 \]
-
 The Lean-verified central identity (theorem
   \path{expectedAgreement_eq_uniformAgreement_add_variance}
-  in \path{wikifact_consistency_claim.lean}) decomposes this as
+  in \path{wikifact_consistency_claim.lean}) decomposes this symmetric
+  reference model as
 \[
   \mathbb{E}_i[\,\text{agree}(p_i)\,]
   \;=\;
   \text{agree}(\bar p)
   \;+\; 2\,\mathrm{Var}_i(p_i),
 \]
-where $\bar p = \mathbb{E}_i[p_i]$ is the prompt-averaged hit rate
-  and $\mathrm{Var}_i(p_i) = \mathbb{E}_i[(p_i - \bar p)^2]$.
-The first term is the homogeneous-Bernoulli prediction one would
-  make if every prompt had the same hit rate $\bar p$; the second is
-  a non-negative variance term that captures prompt-level
-  heterogeneity.
-Together they imply (theorem
-  \path{uniformAgreement_le_expectedAgreement}) that
-  $\text{agree}(\bar p) \le \mathbb{E}_i[\text{agree}(p_i)]$: the
-  homogeneous prediction at the mean is a lower bound on the
-  heterogeneous expected agreement.
+where $\bar p = \mathbb{E}_i[p_i]$.
+Thus the homogeneous-Bernoulli prediction at the mean is a lower bound
+  on the heterogeneous expected agreement.
+
+The actual public/local WikiFact artifacts are asymmetric.  The public
+  side exposes one completion per request state, while the local side
+  exposes five.  Under the same single-sample rate $q_i$, the
+  public-side success probability is $q_i$ and the local-side success
+  probability is $p_i = 1-(1-q_i)^5$, so the artifact-specific expected
+  agreement on row $i$ is
+\[
+  q_i p_i + (1-q_i)(1-p_i).
+\]
+
 
 \subsection{Numerical values for the homogeneous prediction}
 \label{sec:tr-case-c-numerics}
@@ -1563,26 +1577,38 @@ This supports the interpretation that recipe-induced stochasticity
   is the main driver of disagreement on this cell rather than any
   model-specific backend effect.
 
-\subsection{\texorpdfstring{The 1-vs-5 EEE \texttt{output.raw} converter cosmetic}{The 1-vs-5 EEE output.raw converter cosmetic}}
-\label{sec:tr-case-c-cosmetic}
+\subsection{\texorpdfstring{Official \texttt{@1} versus local \texttt{@5} artifact cardinality}{Official @1 versus local @5 artifact cardinality}}
+\label{sec:tr-case-c-cardinality}
 
-On the public HELM side, EEE's \texttt{output.raw} is a 1-element
-  list (e.g.\ \texttt{["New York City"]});
-on the local side it is a 5-element list
-  (e.g.\ \texttt{["New York City", "Newark", "Albany", "Brooklyn",
-  "Manhattan"]}).
-This is a converter cosmetic, not a HELM-side recipe difference:
-  HELM computed the \texttt{*@5} metrics with all 5 outputs at run
-  time and stored the resulting per-metric scores, which are
-  bitwise-equivalent in interpretation.
-The older \texttt{every\_eval\_ever} converter active when the
-  public EEE store was produced truncated \texttt{output.raw} to the
-  first generation for display; the current converter retains all 5.
+The public HELM v0.3.0 \texttt{wikifact} artifacts expose one
+  completion per request state despite the adapter recording
+  \texttt{num\_outputs=5}.  Across the 900 canonical
+  \texttt{place\_of\_birth} request states for each of Pythia, Vicuna,
+  and Falcon, \path{request_state.result.completions} has length one
+  on the public side.  Consistently, the public
+  \texttt{exact\_match} and \texttt{exact\_match@5} scores are
+  pointwise identical in \path{per_instance_stats.json}.
+This is not an EEE display cosmetic: EEE is faithfully preserving the
+  one-completion public artifact.
 
-The diversity of the local \texttt{output.raw} list is itself the
-  evidence that \texttt{temperature>0} sampling was active --- a
-  helpful side-effect of preserving the full output set, since EEE's
-  \texttt{metadata} field does not record temperature explicitly.
+The local audit artifacts, in contrast, preserve five completions per
+  request state.  On the local side, \texttt{exact\_match@5} can
+  strictly exceed \texttt{exact\_match}, as expected when additional
+  stochastic samples sometimes contain a gold match.
+Thus the observed WikiFact comparison is not a symmetric
+  \texttt{@5}-versus-\texttt{@5} rerun.  It is better modeled as a
+  public-\texttt{@1} versus local-\texttt{@5} stochastic comparison.
+
+Using the five local samples to estimate each row's single-sample match
+  probability gives the right order of magnitude for the observed
+  disagreement, but does not support a precise hypothesis test: five
+  samples per row are insufficient to pin down the underlying
+  $q_i$ values.  The plug-in asymmetric Bernoulli prediction
+  under-shoots the observed disagreement counts, while posterior
+  intervals over $q_i$ are broad.  We therefore interpret the
+  \texttt{wikifact} cells as mostly recipe/artifact-induced
+  stochasticity, with residual disagreement plausibly attributable to
+  estimator uncertainty or backend drift.
 
 
 % =====================================================================
@@ -1923,21 +1949,19 @@ This is not a flaw in the metric --- it accurately reports score
 
 For recipes with \texttt{temperature>0}, two independent runs are not
   bitwise reproducible by design.
-The expected agreement under a per-prompt Bernoulli model with
-  per-prompt hit rate $p_i$ (the per-prompt
-  \texttt{exact\_match@k} probability) decomposes exactly as
+The symmetric Bernoulli reference model decomposes expected agreement as
   $\mathbb{E}_i[\,\text{agree}(p_i)\,] = \text{agree}(\bar p) + 2\,
   \mathrm{Var}_i(p_i)$
   (Section~\ref{sec:tr-case-c}).
-\texttt{wikifact} at $\approx 0.92$ across all three models is
-  consistent with prompt-level heterogeneity in $p_i$ --- many prompts
-  near-deterministic, which is what one would expect for a trained
-  model on a benchmark with prompt-dependent difficulty.
-A reviewer who interprets the cell as ``92\% reproducibility'' rather
-  than ``stochastic recipe at the heterogeneity-corrected expected
-  agreement'' is missing the recipe-level non-determinism the
-  benchmark explicitly enables.
-
+\texttt{wikifact} adds an artifact-level wrinkle: the public HELM
+  v0.3.0 side exposes one completion per request state, while the
+  local audit side exposes five.
+Thus the observed $\approx 0.92$ agreement is better read as an
+  asymmetric stochastic comparison under a temperature-sampling recipe,
+  not as a clean deterministic reproducibility failure.
+A reviewer who interprets the cell as ``92\% reproducibility'' is
+  missing both the recipe-level non-determinism and the public/local
+  completion-cardinality asymmetry.
 \subsection{What honest reporting looks like}
 \label{sec:tr-microavg-honest}
 

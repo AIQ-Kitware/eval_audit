@@ -62,18 +62,18 @@ _MODEL_DISPLAY: dict[str, str] = {
 
 _BENCHMARK_DISPLAY: dict[str, str] = {
     "boolq": "BoolQ",
-    "civil_comments": "CivilComments",
-    "entity_data_imputation": "Entity-DataImputation",
-    "entity_matching": "Entity-Matching",
+    "civil_comments": "Civil Comments",
+    "entity_data_imputation": "Entity Data Imputation",
+    "entity_matching": "Entity Matching",
     "gsm": "GSM",
     "imdb": "IMDB",
-    "lsat_qa": "LSAT-QA",
+    "lsat_qa": "LSAT QA",
     "mmlu": "MMLU",
-    "narrativeqa": "NarrativeQA",
+    "narrativeqa": "Narrative QA",
     "quac": "QuAC",
-    "synthetic_reasoning": "SyntheticReasoning",
-    "sythetic_reasoning_natural": "SyntheticReasoning-Natural",
-    "truthful_qa": "TruthfulQA",
+    "synthetic_reasoning": "Synthetic Reasoning",
+    "sythetic_reasoning_natural": "Synthetic Reasoning (Natural)",
+    "truthful_qa": "Truthful QA",
     "wikifact": "WikiFact",
 }
 
@@ -533,6 +533,29 @@ def _atomic_savefig(fig, fpath: Path, **kwargs) -> Path:
     return fpath
 
 
+# Serif fonts that are reliably present on our build machines. Listed in
+# preference order: STIXGeneral is Times-like and pairs well with the
+# paper's Computer Modern body text; DejaVu Serif is the matplotlib
+# fallback. See `python -m matplotlib.font_manager` for what's actually
+# bundled.
+_PAPER_FONT_STACK: list[str] = ["STIXGeneral", "DejaVu Serif"]
+
+
+def _paper_rc() -> dict[str, object]:
+    """rcParams used inside the paper-figure render context.
+
+    Switches matplotlib to a serif font that visually matches the
+    paper's Computer Modern body text and tightens default tick
+    appearance for the despined paper layout.
+    """
+    return {
+        "font.family": "serif",
+        "font.serif": _PAPER_FONT_STACK,
+        "mathtext.fontset": "stix",
+        "axes.unicode_minus": False,
+    }
+
+
 @profile
 def _render_heatmap(
     cells: dict[tuple[str, str], dict[str, Any]],
@@ -560,60 +583,96 @@ def _render_heatmap(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import matplotlib.colors as mcolors
-    import numpy as np
+    from matplotlib.ticker import FuncFormatter
 
     n_bench = len(benchmarks)
     n_models = len(models)
 
     if transpose:
-        # Wide-and-short: cols = benchmarks, rows = models. Pick a
-        # figsize that gives roughly-square cells (the matching
-        # set_aspect("equal") below makes this exact). Vertical budget
-        # accounts for the data area (~n_models × 0.55") and the
-        # rotated x-axis labels (~0.8"); no title or in-figure legend
-        # in transpose/paper-compact mode, and a final
-        # cropwhite_ondisk pass below trims any residual margin.
-        fig_w = max(8.0, 0.6 * n_bench + 2.0)
-        fig_h = max(2.4, 0.55 * n_models + 1.0)
+        # Wide-and-short: cols = benchmarks, rows = models. Sized so
+        # cells come out wider than tall (roughly 0.85" × 0.65" with
+        # the default 14-bench × 3-model grid), which gives the cell
+        # text labels — "99.7%", "78.8%", etc. — comfortable
+        # horizontal breathing room without forcing tiny font sizes.
+        # No title or in-figure legend in transpose/paper-compact
+        # mode; the final cropwhite_ondisk + tight bbox trim any
+        # residual margin.
+        fig_w = max(10.0, 0.75 * n_bench + 2.5)
+        fig_h = max(2.6, 0.55 * n_models + 1.1)
     else:
         fig_w = max(6.0, 2.2 * n_models + 2.0)
         fig_h = max(5.0, 0.5 * n_bench + 1.5)
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
-    if transpose:
-        # Force square cells regardless of how matplotlib redistributes
-        # whitespace around the colorbar/legend.
-        ax.set_aspect("equal")
 
-    # Colormap: RdYlGn for agreement (red=low, green=high). The default
-    # range is tightened to [0.7, 1.0] because for the slim-paper heatmap
-    # every present cell sits in [0.788, 1.000] — using vmin=0 wastes
-    # most of the gradient on values that never occur and leaves the
-    # actual data clustered in the green band where small differences
-    # are imperceptible. Override per-render via env vars
-    # EVAL_AUDIT_HEATMAP_VMIN / EVAL_AUDIT_HEATMAP_VMAX.
+    rc_ctx = plt.rc_context(_paper_rc())
+    rc_ctx.__enter__()
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    # In transpose mode we *don't* call set_aspect("equal") — letting
+    # cells be rectangular (wider than tall) gives the percentage
+    # labels enough horizontal room to read cleanly. The default
+    # (non-transpose) layout still draws square cells via the figure
+    # aspect alone.
+
+    # Colormap: a custom diverging "OrangeBlue" built from Wong's
+    # colorblind-safe palette — warm orange (#E69F00) at the low end,
+    # near-white at the midpoint, deep blue (#0072B2) at the high end.
+    # Wong's seven-color palette is the de-facto gold standard for CVD
+    # safety (deutera/protan/tritan all preserve hue separation between
+    # this orange and this blue). The diverging shape gives the dense
+    # 92–100% band visible blue-gradient contrast while letting low
+    # outliers (e.g. 78.8%) show up as a striking orange. Every cell
+    # still carries an explicit numeric percentage, so the colormap's
+    # role is to draw the eye to outliers, not to encode readable
+    # values. Range is tightened to [0.7, 1.0] because the paper's data
+    # sits in [0.788, 1.000] and a wider range wastes gradient on values
+    # that never occur. Override via env vars EVAL_AUDIT_HEATMAP_VMIN /
+    # EVAL_AUDIT_HEATMAP_VMAX / EVAL_AUDIT_HEATMAP_CMAP.
     cmap_vmin = float(os.environ.get("EVAL_AUDIT_HEATMAP_VMIN", "0.7"))
     cmap_vmax = float(os.environ.get("EVAL_AUDIT_HEATMAP_VMAX", "1.0"))
-    cmap = plt.get_cmap("RdYlGn")
+    cmap_name = os.environ.get("EVAL_AUDIT_HEATMAP_CMAP", "")
+    if cmap_name:
+        cmap = plt.get_cmap(cmap_name)
+    else:
+        # Two-stop linear interp keeps the gradient saturated end-to-end
+        # — no near-white midpoint that would wash out cells near the
+        # transition. Linear RGB interp puts the midpoint at a muted
+        # sage/olive, which preserves the impression of a continuous
+        # warm-to-cool ramp without the diverging "neutral" cue.
+        cmap = mcolors.LinearSegmentedColormap.from_list(
+            "OrangeBlue",
+            [
+                (0.0, "#E69F00"),  # Wong orange (low / disagreement)
+                (1.0, "#0072B2"),  # Wong blue   (high / agreement)
+            ],
+            N=256,
+        )
     cmap_norm = mcolors.Normalize(vmin=cmap_vmin, vmax=cmap_vmax)
     cmap_scalar = plt.cm.ScalarMappable(norm=cmap_norm, cmap=cmap)
 
     # Background defaults to the "missing" color so any cell we don't
     # explicitly draw shows as missing.
     _MISSING_COLOR = "#bdbdbd"
-    _JOIN_FAILED_COLOR = "#fff4d6"  # light amber — not red (it's not bad
-                                     # data, just unavailable for analysis
-                                     # until the converter mismatch is fixed)
-    _NO_CORE_METRICS_COLOR = "#e1bee7"  # light purple — distinct from amber
-                                         # so a reviewer can tell at a glance
-                                         # that the failure is analyzer-side
-                                         # (missing metric registration), not
-                                         # an upstream data problem.
+    _JOIN_FAILED_COLOR = "#f0f0f0"  # neutral light gray — pairs with
+                                     # diagonal hatching to mark cells
+                                     # whose data is non-comparable
+                                     # rather than scoring badly.
+    _NO_CORE_METRICS_COLOR = "#e6dcf1"  # muted lavender — distinct from
+                                         # the join_failed gray so a
+                                         # reviewer can tell at a glance
+                                         # that the failure is
+                                         # analyzer-side (missing metric
+                                         # registration), not an upstream
+                                         # data problem.
     ax.set_facecolor(_MISSING_COLOR)
 
     # Draw each cell explicitly so the three statuses get distinct visuals.
     # In transposed layout, x=benchmarks (col), y=models (row); in the
     # default layout, x=models (col), y=benchmarks (row).
-    join_label_fontsize = 6 if transpose else 7
+    if transpose:
+        cell_value_fontsize = 9
+        status_label_fontsize = 8
+    else:
+        cell_value_fontsize = 8
+        status_label_fontsize = 7
     for i_bench, bench in enumerate(benchmarks):
         for i_model, model in enumerate(models):
             if transpose:
@@ -624,28 +683,42 @@ def _render_heatmap(
             if cell is not None and cell.get("status") == "present":
                 # Real value: colored by agree_ratio
                 val = cell["agree_ratio"]
+                cell_rgba = cmap(cmap_norm(val))
                 rect = plt.Rectangle(
                     (col - 0.5, row - 0.5), 1, 1,
-                    facecolor=cmap(cmap_norm(val)),
+                    facecolor=cell_rgba,
                     edgecolor="white", linewidth=0.5,
                 )
                 ax.add_patch(rect)
-                # Pick text color based on the *normalized* position
-                # (0..1) within the cmap range so the choice tracks the
-                # actual cell color regardless of vmin/vmax.
-                norm_val = float(cmap_norm(val))
-                text_color = "white" if (norm_val < 0.2 or norm_val > 0.85) else "black"
+                # Pick text color from the cell's actual luminance
+                # (Rec. 601 weighting). This adapts to whatever
+                # colormap is in use — viridis goes dark→bright, YlGn
+                # light→dark, OrangeBlue diverges. White text on
+                # dark cells, black on light, regardless of cmap.
+                r, g, b = cell_rgba[:3]
+                luminance = 0.299 * r + 0.587 * g + 0.114 * b
+                text_color = "white" if luminance < 0.55 else "black"
+                # Strip a trailing ".0" so 100.0% renders as "100%"
+                # (the trailing zero overflowed narrow cells in the
+                # paper-slim layout). Non-integer percents keep one
+                # decimal: 99.7% stays "99.7%", 78.8% stays "78.8%".
+                pct = val * 100
+                pct_text = f"{pct:.1f}".rstrip("0").rstrip(".")
+                if plt.rcParams.get("text.usetex"):
+                    cell_label = f"{pct_text}\\%"
+                else:
+                    cell_label = f"{pct_text}%"
                 ax.text(
-                    col, row,
-                    f"{val:.3f}",
+                    col, row, cell_label,
                     ha="center", va="center",
-                    fontsize=8, color=text_color, fontweight="bold",
+                    fontsize=cell_value_fontsize, color=text_color,
+                    fontweight="bold",
                 )
             elif cell is not None and cell.get("status") == "join_failed":
-                # Light amber + diagonal hatching → "no hash overlap"
-                # (upstream data problem). Distinct from missing
-                # (solid gray) so a quick glance tells you which gap
-                # is fixable.
+                # Neutral gray + diagonal hatching → "no hash overlap"
+                # (data is non-comparable, not bad). Distinct from
+                # missing (solid darker gray, no hatch) so a quick glance
+                # tells you which gap is fixable.
                 rect = plt.Rectangle(
                     (col - 0.5, row - 0.5), 1, 1,
                     facecolor=_JOIN_FAILED_COLOR,
@@ -653,12 +726,12 @@ def _render_heatmap(
                     hatch="////",
                 )
                 ax.add_patch(rect)
-                n_total = cell.get("n_pairs_total", 0)
                 ax.text(
                     col, row,
-                    f"join 0/{n_total}",
+                    "N/A",
                     ha="center", va="center",
-                    fontsize=join_label_fontsize, color="#7a4f00", fontweight="bold",
+                    fontsize=status_label_fontsize, color="#404040",
+                    fontweight="bold",
                 )
             elif cell is not None and cell.get("status") == "no_core_metrics":
                 # Light purple + dotted hatching → "joined but no
@@ -674,13 +747,14 @@ def _render_heatmap(
                 ax.add_patch(rect)
                 ax.text(
                     col, row,
-                    "no core",
+                    "N/A",
                     ha="center", va="center",
-                    fontsize=join_label_fontsize, color="#4a148c", fontweight="bold",
+                    fontsize=status_label_fontsize, color="#4a148c",
+                    fontweight="bold",
                 )
             else:
-                # Missing: solid darker gray + dash. Drawn explicitly so
-                # the cell border visually delimits it from the
+                # Missing: solid darker gray + em-dash. Drawn explicitly
+                # so the cell border visually delimits it from the
                 # background of the same color.
                 rect = plt.Rectangle(
                     (col - 0.5, row - 0.5), 1, 1,
@@ -699,33 +773,43 @@ def _render_heatmap(
         ax.set_xticks(range(n_bench))
         ax.set_xticklabels(
             [_BENCHMARK_DISPLAY.get(b, b) for b in benchmarks],
-            fontsize=7, ha="right", rotation=35,
+            fontsize=10, ha="right", rotation=35,
         )
         ax.set_yticks(range(n_models))
         ax.set_yticklabels(
             [_MODEL_DISPLAY.get(m, m) for m in models],
-            fontsize=8,
+            fontsize=10,
         )
-        ax.set_xlabel("Benchmarks", fontsize=9)
-        ax.set_ylabel("Models", fontsize=9)
+        # Push the xlabel below the rotated benchmark tick labels —
+        # without explicit padding the long ones (e.g. "Synthetic
+        # Reasoning (Natural)") descend past the default xlabel
+        # position and clip the "Benchmark" text under tight bbox.
+        ax.set_xlabel("Benchmark", fontsize=11, labelpad=18)
+        ax.set_ylabel("Model", fontsize=11, labelpad=10)
         ax.set_xlim(-0.5, n_bench - 0.5)
         ax.set_ylim(-0.5, n_models - 0.5)
     else:
         ax.set_xticks(range(n_models))
         ax.set_xticklabels(
             [_MODEL_DISPLAY.get(m, m) for m in models],
-            fontsize=9, ha="right", rotation=25,
+            fontsize=10, ha="right", rotation=25,
         )
         ax.set_yticks(range(n_bench))
         ax.set_yticklabels(
             [_BENCHMARK_DISPLAY.get(b, b) for b in benchmarks],
-            fontsize=8,
+            fontsize=10,
         )
-        ax.set_xlabel("Models", fontsize=9)
-        ax.set_ylabel("Benchmarks", fontsize=9)
+        ax.set_xlabel("Model", fontsize=11)
+        ax.set_ylabel("Benchmark", fontsize=11)
         ax.set_xlim(-0.5, n_models - 0.5)
         ax.set_ylim(-0.5, n_bench - 0.5)
     ax.invert_yaxis()
+    # Despine: drop the axes box and tick marks. The white grid lines
+    # between cells already delimit the data area, and the despined look
+    # is the paper-figure default.
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.tick_params(axis="both", which="both", length=0)
 
     # Colorbar for the present-status colormap. In transposed layout
     # the figure is wide and short; the axis already has a fixed
@@ -737,8 +821,13 @@ def _render_heatmap(
         cbar = fig.colorbar(cmap_scalar, ax=ax, fraction=0.02, pad=0.01)
     else:
         cbar = fig.colorbar(cmap_scalar, ax=ax, fraction=0.03, pad=0.02)
-    cbar.set_label("Agree Ratio (Micro Average)", fontsize=8)
-    cbar.ax.tick_params(labelsize=7)
+    cbar.set_label("Agreement (\\%)" if plt.rcParams.get("text.usetex")
+                   else "Agreement (%)", fontsize=10)
+    cbar.ax.tick_params(labelsize=9, length=0)
+    cbar.outline.set_visible(False)
+    cbar.ax.yaxis.set_major_formatter(
+        FuncFormatter(lambda x, _pos: f"{x * 100:.0f}%")
+    )
 
     # Build the legend dynamically: only include status entries that
     # actually appear in this heatmap. For the slim-paper render, that
@@ -756,24 +845,25 @@ def _render_heatmap(
     # midpoint which lands in yellow with a tightened vmin).
     legend_handles = [
         Patch(facecolor=cmap(cmap_norm(cmap_vmax)), edgecolor="white",
-              label="present (agree_ratio shown)"),
+              label="Agreement (shown as \\%)" if plt.rcParams.get("text.usetex")
+              else "Agreement (shown as %)"),
     ]
     if "join_failed" in statuses_present:
         legend_handles.append(
             Patch(facecolor=_JOIN_FAILED_COLOR, edgecolor="white",
                   hatch="////",
-                  label="join_failed (no hash overlap; upstream)")
+                  label="Non-comparable (no hash overlap)")
         )
     if "no_core_metrics" in statuses_present:
         legend_handles.append(
             Patch(facecolor=_NO_CORE_METRICS_COLOR, edgecolor="white",
                   hatch="....",
-                  label="no_core_metrics (joined; classifier gap)")
+                  label="No core metrics (joined; classifier gap)")
         )
     if has_missing_in_grid:
         legend_handles.append(
             Patch(facecolor=_MISSING_COLOR, edgecolor="white",
-                  label="missing (no packet for this cell)")
+                  label="Missing (no packet for this cell)")
         )
     # In-figure title and status legend are suppressed in transpose
     # (paper-compact) mode: the LaTeX caption carries the same info,
@@ -783,7 +873,7 @@ def _render_heatmap(
         ax.legend(
             handles=legend_handles,
             loc="upper center", bbox_to_anchor=(0.5, -0.08),
-            ncol=min(len(legend_handles), 3), fontsize=7, frameon=False,
+            ncol=min(len(legend_handles), 3), fontsize=9, frameon=False,
         )
 
         # Subtitle handling:
@@ -803,22 +893,42 @@ def _render_heatmap(
             ax.set_title(sub, fontsize=9, pad=8)
 
     plt.tight_layout()
-    png_path = out_dir / out_filename
-    _atomic_savefig(fig, png_path, dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    # Trim residual white margins so paper figures don't carry
-    # whitespace from matplotlib's tight-bbox heuristic. Soft import:
-    # if kwplot isn't installed, the saved PNG is still usable.
-    try:
-        import kwplot
-        kwplot.cropwhite_ondisk(png_path)
-    except ImportError as exc:
-        logger.debug(
-            f"kwplot not available ({exc}); skipping cropwhite_ondisk on "
-            f"{png_path}."
+    primary_path = out_dir / out_filename
+    primary_suffix = primary_path.suffix.lower()
+    _atomic_savefig(
+        fig, primary_path,
+        dpi=300, bbox_inches="tight", pad_inches=0.3,
+    )
+    # Always emit a vector PDF sibling next to the rendered file so the
+    # paper figure picks up a resolution-independent version. tight bbox
+    # already trims the PDF; raster paths still need cropwhite_ondisk
+    # (which is image-only).
+    pdf_path = primary_path.with_suffix(".pdf")
+    if primary_suffix == ".pdf":
+        pdf_path = primary_path
+    else:
+        _atomic_savefig(
+            fig, pdf_path,
+            bbox_inches="tight", pad_inches=0.05,
         )
-    logger.info(f"Wrote heatmap: {rich_link(png_path)}")
-    return png_path
+    plt.close(fig)
+    rc_ctx.__exit__(None, None, None)
+    # Trim residual white margins on the raster output. Soft import: if
+    # kwplot isn't installed, the saved PNG is still usable. PDFs are
+    # vector and tight bbox already cropped them, so skip kwplot there.
+    if primary_suffix in {".png", ".jpg", ".jpeg"}:
+        try:
+            import kwplot
+            kwplot.cropwhite_ondisk(primary_path)
+        except ImportError as exc:
+            logger.debug(
+                f"kwplot not available ({exc}); skipping cropwhite_ondisk "
+                f"on {primary_path}."
+            )
+    logger.info(f"Wrote heatmap: {rich_link(primary_path)}")
+    if pdf_path != primary_path:
+        logger.info(f"Wrote vector heatmap: {rich_link(pdf_path)}")
+    return primary_path
 
 
 # ---------------------------------------------------------------------------

@@ -11,9 +11,21 @@ audit runs and producing reproducibility reports. The execution side
 (`eval-audit-run` → `kwdagger` → `magnet` → `helm-run`) was confirmed working
 on **2026-04-28** by [`reproduce/pythia12b_mmlu_smoke/`](reproduce/pythia12b_mmlu_smoke/),
 which produced a perfect-agreement local reproduction of pythia-12b-v0 ×
-MMLU on aiq-gpu through the HuggingFace transformers path. The serving-stack
+MMLU through the HuggingFace transformers path. The serving-stack
 extensions (vLLM, KubeAI, LiteLLM) and the `eval-audit-make-manifest` path
 have **not** been re-validated; those remain marked **UNSURE** below.
+
+Late-April / May 2026 work added the **EEE-only reproducibility heatmap**
+(paper Case Study 3) at
+[`reproduce/eee_only_reproducibility_heatmap/`](reproduce/eee_only_reproducibility_heatmap/),
+the Falcon-7B / Qwen-2.5 / gpt-oss / LLaMA-2-70B grid extensions
+([`extend_grid_falcon_7b/`](reproduce/extend_grid_falcon_7b/),
+[`finish_qwen25_gptoss/`](reproduce/finish_qwen25_gptoss/),
+[`llama2_70b_helm_audit/`](reproduce/llama2_70b_helm_audit/)),
+and the cross-harness comparability stress in
+[`inspectai_helm_eee_compare/`](reproduce/inspectai_helm_eee_compare/).
+The paper sources moved from `dev/paper/` to
+[`docs/paper/`](docs/paper/) on 2026-05-02.
 
 > If you only want the active path, jump to [Analysis runbooks](#analysis-runbooks-actively-maintained).
 
@@ -122,6 +134,12 @@ update its README before claiming it's still good.
 | `reproduce/pythia_mmlu_stress/` | analysis-only pythia × MMLU slice | **WORKING** (analysis) |
 | `reproduce/open_helm_models_reproducibility/` | analysis-only open-weight × benchmark slice | **WORKING** (analysis) |
 | `reproduce/eee_only_demo/` | tutorial: pure-EEE comparison via `eval-audit-from-eee` against checked-in 3×3 fixture | **WORKING** (2026-04-29) |
+| `reproduce/eee_only_reproducibility_heatmap/` | EEE-only model × benchmark agreement heatmap (paper Case Study 3) | **WORKING** (2026-05) |
+| `reproduce/pythia_smoke_eee_only/` | EEE-only counterpart to `pythia12b_mmlu_smoke/` (no execution; pythia-6.9b on MMLU/BoolQ) | **WORKING** (2026-05) |
+| `reproduce/inspectai_helm_eee_compare/` | EEE-only comparability stress: HELM-shaped + InspectAI-shaped artifacts in one bundle | **WORKING** (2026-05) |
+| `reproduce/extend_grid_falcon_7b/` | local Falcon-7B reproduction extending the heatmap grid | **WORKING** (2026-05, execution side) |
+| `reproduce/finish_qwen25_gptoss/` | close the Qwen 2.5 + gpt-oss audit gaps surfaced by Case Study 3 | **WORKING** (2026-05, with documented gated-dataset caveats) |
+| `reproduce/llama2_70b_helm_audit/` | local LLaMA-2-70B reproduction (4×96 GB, vLLM tp=2) for Case Study 3 | **IN PROGRESS** (2026-05) |
 | `reproduce/smoke/` | minimal end-to-end sanity run | **UNSURE** |
 | `reproduce/apples/` | apples-to-apples reproduction control | **UNSURE** |
 | `reproduce/historic_grid/` | regenerate a historic public-run manifest grid | **UNSURE** |
@@ -214,6 +232,7 @@ straightforward apt invocation).
 | [`docs/helm-gotchas.md`](docs/helm-gotchas.md) | **CURRENT** | running ledger of HELM-specific behaviors hit during analysis |
 | [`docs/helm-reproduction-research-journal.md`](docs/helm-reproduction-research-journal.md) | **CURRENT** | research context, failure taxonomies |
 | [`docs/eee-vs-helm-metadata.md`](docs/eee-vs-helm-metadata.md) | **CURRENT** | what HELM has that EEE doesn't, what `unknown` comparability facts mean, how to ship sidecar metadata so they evaluate normally |
+| [`docs/paper/`](docs/paper/) | **ACTIVE** | paper drafts (`main.tex`, `technical_report.tex`, `case_study_3*.tex`) and per-session writing logs; renamed from `dev/paper/` on 2026-05-02 |
 | [`docs/kwdagger-notes.md`](docs/kwdagger-notes.md) | **UNSURE** | small file, may still be accurate |
 | [`docs/helm-null-completion-text-patch-proposal.md`](docs/helm-null-completion-text-patch-proposal.md) | **UNSURE** | pre-EEE patch proposal; outcome unclear |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | **PARTIALLY STALE** | core ADRs (raw vs derived, reports/, filesystem-as-interface) still hold; specific module/CLI lists drifted with the rename and recent refactors |
