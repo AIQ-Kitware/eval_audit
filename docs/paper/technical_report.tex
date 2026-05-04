@@ -157,13 +157,18 @@ The hash validates whether two records describe the same
         models reflect HELM's recipe-level non-determinism: the
         benchmark pins \path{temperature=1.0, num_outputs=5}.  However,
         the public HELM v0.3.0 artifacts effectively expose one stored
-        completion per request state, while our local audit artifacts
-        expose five.  Thus the observed comparison is best modeled as an
-        asymmetric stochastic comparison rather than a clean symmetric
-        \texttt{@5}-versus-\texttt{@5} rerun.  The Bernoulli
-        \texttt{@1}-versus-\texttt{@5} model predicts disagreement on
-        the same order as observed, while the remaining gap is
-        plausibly due to estimator uncertainty or backend drift.
+        completion per request state (verified three independent ways
+        in Section~\ref{sec:tr-case-c-cardinality}), while our local
+        audit artifacts expose five.  Thus the observed comparison is
+        best modeled as an asymmetric stochastic comparison rather than
+        a clean symmetric \texttt{@5}-versus-\texttt{@5} rerun.  The
+        Bernoulli \texttt{@1}-versus-\texttt{@5} model gets the
+        \emph{order of magnitude} right --- predictions and
+        observation are both dozens of disagreements out of 900
+        --- but five-sample estimation noise in $\hat q_i$ leaves a
+        wide gap between plug-in and posterior point predictions
+        and we do not claim a precise quantitative match
+        (Section~\ref{sec:tr-case-c-audit-findings}).
         This is the only one of the three mechanisms not surfaceable as
         a straightforward reproducibility bug; it is an expected
         artifact of a stochastic recipe plus artifact-level scoring
@@ -228,6 +233,15 @@ We release four reproducer tools alongside this report
   for Case~A),
   and \path{diagnose_entity_matching_join.py} (Q1--Q5
   divergence-pattern diagnostic).
+For Case~C we additionally release a sample-derived two-run
+  prediction audit pipeline
+  (\path{docs/paper/measure_wikifact_logits.py},
+  \path{docs/paper/wikifact_two_run_prediction.py}) that emits the
+  full per-prompt CSV, per-token logprob JSONL, the cardinality
+  verification, and the empirical bindings in
+  \path{wikifact_consistency_data.lean} alongside the human-readable
+  audit memo
+  (\path{docs/paper/wikifact_logits_out/two_run_prediction_audit.md}).
 We also contribute four code changes to the audit pipeline:
   registration of the \texttt{*\_set\_match} metric family in the core
   classifier, a new \texttt{no\_core\_metrics} heatmap status
@@ -687,12 +701,25 @@ We use three validation hooks, each independently verifiable:
         symmetric \texttt{@5}-versus-\texttt{@5} reference model and
         the asymmetric public-\texttt{@1} versus local-\texttt{@5}
         model, are formalized in
-        \path{wikifact_consistency_claim.lean}, which compiles
-        against \texttt{Mathlib} and is referenced by theorem name in
-        Section~\ref{sec:tr-case-c}.
-    
+        \path{docs/paper/wikifact_consistency_claim.lean}, which
+        compiles against \texttt{Mathlib} and is referenced by
+        theorem name in Section~\ref{sec:tr-case-c}.
+  \item Empirical-numerical-level: the per-prompt sample-derived
+        $\hat q_i$ values, the plug-in and posterior-bootstrap
+        predictions for both the symmetric and asymmetric Bernoulli
+        models, the official-side cardinality verification
+        (per-prompt completions length, $\texttt{em} \equiv
+        \texttt{em@5}$ pointwise identity, and the relevant HELM
+        metric source line), and the per-prompt CSV with renamed
+        \texttt{q\_i\_hat\_sample} estimates are recorded in the
+        audit memo at
+        \path{docs/paper/wikifact_logits_out/two_run_prediction_audit.md},
+        with companion
+        \path{two_run_per_prompt.csv} and machine-readable
+        \path{two_run_prediction_audit.json}.
+        These let a reviewer reproduce every Case~C number without
+        re-running HELM.
 \end{enumerate}
-
 
 % =====================================================================
 \section{Headline Results}
@@ -1582,12 +1609,40 @@ This supports the interpretation that recipe-induced stochasticity
 
 The public HELM v0.3.0 \texttt{wikifact} artifacts expose one
   completion per request state despite the adapter recording
-  \texttt{num\_outputs=5}.  Across the 900 canonical
-  \texttt{place\_of\_birth} request states for each of Pythia, Vicuna,
-  and Falcon, \path{request_state.result.completions} has length one
-  on the public side.  Consistently, the public
-  \texttt{exact\_match} and \texttt{exact\_match@5} scores are
-  pointwise identical in \path{per_instance_stats.json}.
+  \texttt{num\_outputs=5}.
+We verify this conclusion with three independent lines of evidence:
+\begin{enumerate}
+  \item \textbf{Direct artifact inspection.}
+        Across the 900 canonical \texttt{place\_of\_birth} request
+        states for each of Pythia, Vicuna, and Falcon,
+        \path{request_state.result.completions} has length one on
+        the public side ($900/900$ for each model);
+        \path{request_state.result.cached} is \texttt{true} on
+        $900/900$ for the Pythia run, indicating the v0.3.0 cache
+        layer stored only one completion per request despite
+        \texttt{adapter\_spec.num\_outputs=5}.
+  \item \textbf{Score identity in \texttt{per\_instance\_stats.json}.}
+        \texttt{exact\_match} and \texttt{exact\_match@5} are
+        pointwise identical for all 900 instances on the public
+        side ($0/900$ rows differ for each model).  If HELM had
+        scored against $\geq 2$ completions, $\texttt{em@5} \geq
+        \texttt{em}$ with strict inequality on any prompt where a
+        non-first completion matched a gold reference; the
+        identity is incompatible with \texttt{@5}-style scoring.
+  \item \textbf{HELM metric source.}
+        \path{helm/benchmark/metrics/basic_metrics.py:528-529}
+        constructs \texttt{preds = [c.text.strip() for c in
+        request\_state.result.completions]} and computes
+        $\texttt{score@k} = \max_{(\text{gold}, \text{pred})}
+        \text{score}(\text{gold}, \text{pred})$ over \texttt{preds},
+        so \texttt{score@5} mechanically collapses to
+        \texttt{score\_1} whenever \texttt{len(completions)=1}.
+\end{enumerate}
+For methodological cross-check, the same lines applied to the local
+  side (where five completions are stored) give the opposite signal:
+  $\texttt{em@5} > \texttt{em}$ on $17/900$ prompts for Pythia,
+  $44/900$ for Vicuna, $30/900$ for Falcon, exactly as expected when
+  additional samples sometimes contain a gold match.
 This is not an EEE display cosmetic: EEE is faithfully preserving the
   one-completion public artifact.
 
@@ -1599,16 +1654,93 @@ Thus the observed WikiFact comparison is not a symmetric
   \texttt{@5}-versus-\texttt{@5} rerun.  It is better modeled as a
   public-\texttt{@1} versus local-\texttt{@5} stochastic comparison.
 
-Using the five local samples to estimate each row's single-sample match
-  probability gives the right order of magnitude for the observed
-  disagreement, but does not support a precise hypothesis test: five
-  samples per row are insufficient to pin down the underlying
-  $q_i$ values.  The plug-in asymmetric Bernoulli prediction
-  under-shoots the observed disagreement counts, while posterior
-  intervals over $q_i$ are broad.  We therefore interpret the
-  \texttt{wikifact} cells as mostly recipe/artifact-induced
-  stochasticity, with residual disagreement plausibly attributable to
-  estimator uncertainty or backend drift.
+\subsection{Audit findings on the canonical \texttt{place\_of\_birth} packet}
+\label{sec:tr-case-c-audit-findings}
+
+We use the local five-sample artifacts to compute, per prompt $i$,
+  the sample-derived single-sample match-rate estimate
+\[
+  \hat q_i = \frac{m_i}{n_{\text{local}}} = \frac{m_i}{5},
+\]
+where $m_i \in \{0, \dots, 5\}$ is the number of local completions
+  whose normalized text matches a \texttt{correct} reference under
+  HELM's \texttt{quasi\_exact\_match} normalization.
+We deliberately do \emph{not} call $\hat q_i$ ``logits-derived'':
+  HELM's \texttt{scenario\_state.json} stores per-token log-probabilities
+  along the sampled trajectory only, not full per-step vocabulary
+  distributions, so we cannot compute teacher-forced
+  $\log P(\text{gold} \mid \text{prompt})$ from artifacts alone.
+$\hat q_i$ is the unbiased Monte Carlo estimator of $q_i$ from five
+  independent samples and is the most we can extract from the
+  persisted public/local data.
+Defining $\hat p_i = 1 - (1 - \hat q_i)^5$, the asymmetric per-prompt
+  disagreement probability is $\hat r_i^{\text{asym}} = 1 - [\hat q_i
+  \hat p_i + (1 - \hat q_i)(1 - \hat p_i)]$.
+
+Table~\ref{tab:tr-case-c-audit} reports the resulting per-cell
+  predictions on the canonical \texttt{place\_of\_birth} packet
+  (the cell the slim heatmap surfaces) against the observed
+  disagreement count $D_{\text{obs}}$.
+The plug-in prediction (treating $\hat q_i$ as truth) under-shoots
+  $D_{\text{obs}}$ by 18--31 prompts on the 900-prompt cell.
+A Bayesian posterior on $q_i$ that propagates the five-sample
+  estimation noise via $q_i \sim \text{Beta}(\alpha + m_i,
+  \beta + 5 - m_i)$ moves the prediction in the opposite direction
+  (because $\sim 88\%$ of prompts have $m_i = 0$ and any $\alpha,
+  \beta \geq 0.5$ puts appreciable posterior mass on $q_i \gg 0$
+  there) and over-shoots $D_{\text{obs}}$ by a wide margin under
+  both Jeffreys and uniform priors.
+Five samples per prompt are not sufficient to pin $q_i$ tightly
+  enough for a clean quantitative test: plug-in and posterior
+  bracket $D_{\text{obs}}$ from opposite sides.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Audit findings on the canonical
+  \texttt{wikifact}/\texttt{place\_of\_birth} packet ($N = 900$
+  prompts), per model.
+$\bar{p}_5 = \mathbb{E}_i[\hat p_i]$ and $\mathrm{Var}_i(\hat p_i)$
+  are the heterogeneous-Bernoulli mean and variance derived from
+  $\hat q_i = m_i / 5$.
+$D_{\text{obs}}$ is the observed disagreement count between the
+  public-\texttt{@1} and local-\texttt{@5} \texttt{exact\_match@5}
+  rows on this packet.
+$D_{\text{pred}}^{\text{asym, plug-in}}$ is the plug-in asymmetric
+  prediction $\sum_i \hat r_i^{\text{asym}}$.
+The 95\% credible intervals on the right are posterior bootstraps
+  ($B = 2000$, $q_i \sim \mathrm{Beta}(\alpha + m_i, \beta + 5 - m_i)$).
+Full per-prompt records are in
+  \path{docs/paper/wikifact_logits_out/two_run_per_prompt.csv}.}
+\label{tab:tr-case-c-audit}
+\begin{tabular}{lrrrrrll}
+\toprule
+model & $\bar{p}_5$ & $\mathrm{Var}_i(\hat p_i)$ & $D_{\text{obs}}$
+      & $D_{\text{pred}}^{\text{plug-in}}$
+      & resid.
+      & 95\% CI Jeffreys & 95\% CI uniform \\
+\midrule
+Pythia-6.9B    & 0.066 & 0.048 & 75 & 44.1 & $+30.9$ & $[244, 269]$ & $[359, 382]$ \\
+Vicuna-7B-v1.3 & 0.124 & 0.091 & 91 & 69.5 & $+21.5$ & $[252, 277]$ & $[361, 383]$ \\
+Falcon-7B      & 0.093 & 0.067 & 77 & 59.2 & $+17.8$ & $[250, 275]$ & $[361, 384]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Honest interpretation.}
+We do not claim the asymmetric stochastic-sampling model
+  \emph{quantitatively} explains the $\approx 0.92$ cell agreement.
+The audit-supported claim is that stochastic sampling under
+  \texttt{temperature=1.0} is in the right \emph{order of magnitude}
+  --- predictions and observation are both dozens, not thousands, of
+  disagreements out of 900 --- but no point estimate of
+  $D_{\text{pred}}^{\text{asym}}$ falls inside a 95\% interval that
+  covers $D_{\text{obs}}$ under either prior, because five samples
+  per prompt simply are not enough to pin $q_i$ tightly.
+The residual at the plug-in level (18--31 prompts) is consistent
+  with serving-stack drift, completion-cardinality asymmetry, or
+  estimator uncertainty in $\hat q_i$, and the audit does not
+  separately quantify these.
 
 
 % =====================================================================
