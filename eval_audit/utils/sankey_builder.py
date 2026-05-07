@@ -513,7 +513,7 @@ class SankeyDiGraph(nx.DiGraph):
         Example:
             >>> # xdoctest: +REQUIRES(module:plotly)
             >>> import plotly
-            >>> from magnet.utils.sankey import *  # NOQA
+            >>> from eval_audit.utils.sankey_builder import *  # NOQA
             >>> self = SankeyDiGraph.demo()
             >>> print(self.summarize())
             Nodes: 10  Edges: 17
@@ -576,7 +576,7 @@ class SankeyDiGraph(nx.DiGraph):
 
         Example:
             >>> # Convert nx graph to plotly sankey arrays
-            >>> from magnet.utils.sankey import *  # NOQA
+            >>> from eval_audit.utils.sankey_builder import *  # NOQA
             >>> import networkx as nx
             >>> G = SankeyDiGraph()
             >>> G.add_edge("A", "B", value=2)
@@ -615,7 +615,7 @@ class SankeyDiGraph(nx.DiGraph):
         Example:
             >>> # xdoctest: +REQUIRES(module:plotly)
             >>> import plotly
-            >>> from magnet.utils.sankey import *  # NOQA
+            >>> from eval_audit.utils.sankey_builder import *  # NOQA
             >>> G = SankeyDiGraph.demo(n=20)
             >>> fig = G.to_plotly(title='Demo')
             >>> assert fig.layout.title.text == 'Demo'
@@ -676,7 +676,7 @@ def demo():
         - {run: run4, suite: suite4, retcode: 0, retmsg: '', spec_diagnosis: 'disagree-input', metric_iou: 0.1}
         '''))
 
-    from magnet.utils import sankey_builder
+    from eval_audit.utils import sankey_builder
     root = sankey_builder.Root(label="All Attempts")
     bench = root.group(by="suite", name="benchmark")
 

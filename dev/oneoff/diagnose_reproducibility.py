@@ -17,8 +17,8 @@ import ubelt as ub
 
 from magnet.backends.helm.helm_outputs import HelmOutputs
 from magnet.backends.helm.helm_outputs import HelmRun
-from magnet.backends.helm.helm_run_diff import HelmRunDiff
-from magnet.utils import sankey_builder
+from eval_audit.helm.diff import HelmRunDiff
+from eval_audit.utils import sankey_builder
 
 
 HELM_DETAILS_FPATH = ub.Path('run_details.yaml')

@@ -10,9 +10,20 @@ import ubelt as ub
 import kwutil
 from magnet.backends.helm.helm_outputs import HelmRun
 from magnet.backends.helm.helm_outputs import HelmOutputs
-from magnet.backends.helm.helm_run_analysis import HelmRunAnalysis
-from magnet.backends.helm.helm_run_diff import HelmRunDiff
-from magnet.utils import sankey
+from eval_audit.helm.analysis import HelmRunAnalysis
+from eval_audit.helm.diff import HelmRunDiff
+# NOTE: this script uses the legacy Plan/Root/Group/Bucket/Split DSL that was
+# preserved at dev/poc/old-sankey/sankey.py when the DSL was retired in favor
+# of the fluent builder in eval_audit.utils.sankey_builder. The block below
+# would need to be reworked against the new builder to run again.
+import importlib.util as _importlib_util
+import pathlib as _pathlib
+_legacy_sankey_spec = _importlib_util.spec_from_file_location(
+    'old_sankey',
+    str(_pathlib.Path(__file__).resolve().parents[2] / 'dev' / 'poc' / 'old-sankey' / 'sankey.py'),
+)
+sankey = _importlib_util.module_from_spec(_legacy_sankey_spec)
+_legacy_sankey_spec.loader.exec_module(sankey)
 
 """
 !python ~/code/aiq-magnet/dev/poc/inspect_historic_helm_runs.py /data/crfm-helm-public --out_fpath run_specs.yaml --out_detail_fpath run_details.yaml
@@ -556,7 +567,7 @@ df['stats_name_status'].value_counts()
 # Does this make sense?
 
 
-from magnet.utils import sankey_builder
+from eval_audit.utils import sankey_builder
 root = sankey_builder.Root()
 bench_groups = root.group(by='benchmark_name')
 
