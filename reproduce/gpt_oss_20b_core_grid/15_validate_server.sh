@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENV_FPATH="${LITELLM_ENV_FPATH:-/data/service/service-repo/vllm/generated/.env}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ENV_FPATH="${LITELLM_ENV_FPATH:-$ROOT/submodules/vllm_service/generated/.env}"
 LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:14000}"
 
 if [[ -f "$ENV_FPATH" ]]; then
