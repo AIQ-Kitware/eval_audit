@@ -52,8 +52,8 @@ suite: audit-gpt-oss-20b-core-grid
 mode: compute_if_missing
 materialize: symlink
 backend: tmux
-devices: 0
-tmux_workers: 1
+devices: 0,1,2,3
+tmux_workers: 4
 local_path: prod_env
 precomputed_root: null
 require_per_instance_stats: true
