@@ -10,7 +10,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VLLM_SERVICE_ROOT="$ROOT/submodules/vllm_service"
-PROFILE="${VLLM_PROFILE:-gpt-oss-20b-completions}"
+PROFILE="${VLLM_PROFILE:-gpt-oss-20b-completions-dp4}"
 
 cd "$VLLM_SERVICE_ROOT"
 

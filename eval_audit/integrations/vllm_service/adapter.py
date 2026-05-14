@@ -13,7 +13,7 @@ from eval_audit.infra.yaml_io import dump_yaml
 
 PRESET_CONFIGS: dict[str, dict[str, Any]] = {
     "gpt_oss_20b_core_grid": {
-        "profile": "gpt-oss-20b-completions",
+        "profile": "gpt-oss-20b-completions-dp4",
         "bundle_name": "gpt_oss_20b_core_grid",
         "access_kind": "openai-compatible",
         "model_deployment_name": "litellm/gpt-oss-20b-local",
