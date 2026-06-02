@@ -1,6 +1,6 @@
-[submodule "submodules/vllm_service"]
-	path = submodules/vllm_service
-	url = https://github.com/AIQ-Kitware/vllm_service.git
+[submodule "submodules/infer_stack"]
+	path = submodules/infer_stack
+	url = https://github.com/AIQ-Kitware/infer_stack.git
 	branch = main
 [submodule "submodules/aiq-magnet"]
 	path = submodules/aiq-magnet
