@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import importlib
 import os
 import shutil
 import sys
+import subprocess
+import json
 from pathlib import Path
 from typing import Any
 
@@ -330,22 +331,77 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             "max_eval_instances": 1000,
         },
     },
+    "e2e-phi_2-vllm-philosophy": {
+        "profile": "phi2-single",
+        "bundle_name": "e2e-phi_2-vllm",
+        "access_kind": "openai-compatible",
+        "model_deployment_name": "vllm/phi-2-local",
+        "profiles": [
+            {
+                "profile": "phi2-single",
+                "model_deployment_name": "vllm/phi-2-local",
+                "helm_model_name": "microsoft/phi-2",
+                "helm_tokenizer_name": "microsoft/phi-2",
+                "helm_max_sequence_and_generated_tokens_length": 2048,
+            }
+        ],
+        "smoke_manifest": {
+            "experiment_name": "e2e-phi_2-vllm-philosophy-smoke",
+            "description": "Smoke-test for phi-2 on a small HELM batch.",
+            "run_entries": [
+                "mmlu:subject=philosophy,method=multiple_choice_joint,model=microsoft/phi-2,eval_split=test"
+            ],
+            "suite": "e2e-phi_2-vllm-philosophy-smoke",
+            "max_eval_instances": 5,
+        },
+        "full_manifest": {
+            "experiment_name": "e2e-phi_2-vllm-philosophy-full",
+            "description": "Full HELM batch for phi-2.",
+            "run_entries": [
+                "mmlu:subject=philosophy,method=multiple_choice_joint,model=microsoft/phi-2,eval_split=test"
+            ],
+            "suite": "e2e-phi_2-vllm-philosophy-full",
+            "max_eval_instances": 1000,
+        },
+    },
+    "e2e-phi_2-vllm-philosophy-incomparable": {
+        "profile": "phi2-single",
+        "bundle_name": "e2e-phi_2-vllm-philosophy-incomparable",
+        "access_kind": "openai-compatible",
+        "model_deployment_name": "vllm/phi-2-local",
+        "profiles": [
+            {
+                "profile": "phi2-single",
+                "model_deployment_name": "vllm/phi-2-local",
+                "helm_model_name": "microsoft/phi-2",
+                "helm_tokenizer_name": "microsoft/phi-2",
+                "helm_max_sequence_and_generated_tokens_length": 2048,
+            }
+        ],
+        "smoke_manifest": {
+            "experiment_name": "e2e-phi_2-vllm-philosophy-incomparable-smoke",
+            "description": "Smoke-test for phi-2 with temperature changed",
+            "run_entries": [
+                "mmlu:subject=philosophy,method=multiple_choice_joint,model=microsoft/phi-2,eval_split=test,temperature=1"
+            ],
+            "suite": "e2e-phi_2-vllm-philosophy-incomparable-smoke",
+            "max_eval_instances": 5,
+        },
+        "full_manifest": {
+            "experiment_name": "e2e-phi_2-vllm-philosophy-incomparable-full",
+            "description": "Full HELM batch for phi-2 with temperature changed",
+            "run_entries": [
+                'mmlu:subject=philosophy,method=multiple_choice_joint,model=microsoft/phi-2,eval_split=test,temperature=1'
+            ],
+            "suite": "e2e-phi_2-vllm-philosophy-incomparable-full",
+            "max_eval_instances": 1000,
+        },
+    },
 }
 
 
 def vllm_service_root() -> Path:
     return repo_root() / "submodules" / "vllm_service"
-
-
-def _ensure_importable_vllm_service(root: Path | None = None) -> None:
-    package_root = str((root or vllm_service_root()).resolve())
-    if package_root not in sys.path:
-        sys.path.insert(0, package_root)
-
-
-def _import_vllm_contracts(root: Path | None = None) -> Any:
-    _ensure_importable_vllm_service(root)
-    return importlib.import_module("vllm_service.contracts")
 
 
 def load_profile_contract(
@@ -355,14 +411,25 @@ def load_profile_contract(
     simulate_hardware: str | None = None,
     vllm_root: Path | None = None,
 ) -> dict[str, Any]:
-    root = (vllm_root or vllm_service_root()).resolve()
-    contracts = _import_vllm_contracts(root)
-    return contracts.load_profile_contract(
-        profile,
-        root=root,
-        backend=backend,
-        simulate_hardware_spec=simulate_hardware,
-    )
+    """Resolve a profile contract by invoking the infer-stack CLI.
+
+    Uses the `infer-stack` binary on PATH to describe profiles.
+    """
+    cmd = ["infer-stack", "describe-profile", profile, "--format", "json"]
+    cwd = None
+    if backend:
+        cmd += ["--backend", backend]
+    if simulate_hardware:
+        cmd += ["--simulate-hardware", simulate_hardware]
+    try:
+        proc = subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=cwd)
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr.strip() if exc.stderr else str(exc)
+        raise RuntimeError(f"infer-stack describe-profile failed: {stderr}") from exc
+    try:
+        return json.loads(proc.stdout)
+    except Exception as exc:
+        raise RuntimeError(f"Failed to parse JSON from infer-stack output: {exc}\nOutput:\n{proc.stdout}") from exc
 
 
 def _select_service(contract: dict[str, Any]) -> dict[str, Any]:
@@ -434,6 +501,7 @@ def _model_deployment_entry(
     model_deployment_name: str | None = None,
     base_url: str | None = None,
     api_key_value: str | None = None,
+    extra_client_args: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     service = _select_service(contract)
     access = _select_access(service, access_kind)
@@ -466,7 +534,7 @@ def _model_deployment_entry(
     else:
         resolved_api_key = _resolve_api_key(access, api_key_value=api_key_value)
         entry["client_spec"]["args"]["api_key"] = resolved_api_key
-        entry["client_spec"]["args"]["openai_model_name"] = access["request_model_name"]
+        entry["client_spec"]["args"]["openai_model_name"] = service["model"]["model_ref"]
     return entry
 
 
@@ -566,6 +634,8 @@ def materialize_benchmark_bundle(
     for contract, spec in zip(contracts, specs, strict=True):
         service = _select_service(contract)
         selected_kind = access_kind or spec.get("access_kind") or preset_cfg.get("access_kind")
+        # Allow presets/profiles to supply extra client args (e.g., default_instructions)
+        extra_client_args = spec.get("client_args") if spec.get("client_args") is not None else preset_cfg.get("client_args")
         model_entries.append(
             _model_deployment_entry(
                 contract,
@@ -576,6 +646,7 @@ def materialize_benchmark_bundle(
                 model_deployment_name=spec.get("model_deployment_name"),
                 base_url=base_url,
                 api_key_value=api_key_value,
+                extra_client_args=extra_client_args,
             )
         )
         _assert_helm_aliases_exist(model_entries[-1]["model_name"], model_entries[-1]["tokenizer_name"])
@@ -684,8 +755,19 @@ def export_benchmark_bundle(
         for spec in specs
     ]
     if bundle_root is None:
-        bundle_name = preset_cfg.get("bundle_name") or specs[0]["profile"].replace("-", "_")
-        bundle_root = audit_store_root() / "local-bundles" / bundle_name
+        # Allow presets to override the target bundle root path. If the
+        # preset sets `bundle_root`, interpret absolute paths directly
+        # and relative paths as repo-root-relative. Otherwise fall back
+        # to the default audit store location.
+        preset_bundle_root = preset_cfg.get("bundle_root")
+        if preset_bundle_root:
+            bpath = Path(preset_bundle_root)
+            if not bpath.is_absolute():
+                bpath = repo_root() / preset_bundle_root
+            bundle_root = bpath.resolve()
+        else:
+            bundle_name = preset_cfg.get("bundle_name") or specs[0]["profile"].replace("-", "_")
+            bundle_root = audit_store_root() / "local-bundles" / bundle_name
     return materialize_benchmark_bundle(
         contracts=contracts,
         output_dir=bundle_root,
