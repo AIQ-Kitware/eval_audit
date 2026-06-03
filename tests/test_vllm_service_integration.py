@@ -6,24 +6,24 @@ from pathlib import Path
 import pytest
 import yaml
 
-from eval_audit.integrations.vllm_service.adapter import (
+from eval_audit.integrations.infer_stack.adapter import (
     export_benchmark_bundle,
     load_profile_contract,
 )
 
 
-def _import_vllm_config():
-    submodule_root = Path(__file__).resolve().parents[1] / "submodules" / "vllm_service"
+def _import_infer_stack_config():
+    submodule_root = Path(__file__).resolve().parents[1] / "submodules" / "infer_stack"
     if str(submodule_root) not in sys.path:
         sys.path.insert(0, str(submodule_root))
-    from vllm_service.config import initial_config, save_yaml
+    from infer_stack.config import initial_config, save_yaml
 
     return initial_config, save_yaml
 
 
-def _make_vllm_root(tmp_path: Path, *, backend: str = "compose") -> Path:
-    initial_config, save_yaml = _import_vllm_config()
-    root = tmp_path / "vllm_service_root"
+def _make_infer_stack_root(tmp_path: Path, *, backend: str = "compose") -> Path:
+    initial_config, save_yaml = _import_infer_stack_config()
+    root = tmp_path / "infer_stack_root"
     root.mkdir()
     cfg = initial_config()
     cfg["backend"] = backend
@@ -38,8 +38,8 @@ def _make_vllm_root(tmp_path: Path, *, backend: str = "compose") -> Path:
     return root
 
 
-def test_load_profile_contract_from_vllm_service(tmp_path: Path) -> None:
-    vllm_root = _make_vllm_root(tmp_path)
+def test_load_profile_contract_from_infer_stack(tmp_path: Path) -> None:
+    vllm_root = _make_infer_stack_root(tmp_path)
     contract = load_profile_contract(
         "qwen2-72b-instruct-tp2-balanced",
         simulate_hardware="2x96",
@@ -51,7 +51,7 @@ def test_load_profile_contract_from_vllm_service(tmp_path: Path) -> None:
 
 
 def test_export_bundle_distinguishes_gpt_oss_chat_vs_completions(tmp_path: Path) -> None:
-    vllm_root = _make_vllm_root(tmp_path)
+    vllm_root = _make_infer_stack_root(tmp_path)
     completions = export_benchmark_bundle(
         "gpt-oss-20b-completions",
         bundle_root=tmp_path / "gpt-oss-completions",
@@ -73,7 +73,7 @@ def test_export_bundle_distinguishes_gpt_oss_chat_vs_completions(tmp_path: Path)
 
 
 def test_export_bundle_uses_qwen_direct_vllm_convention(tmp_path: Path) -> None:
-    vllm_root = _make_vllm_root(tmp_path)
+    vllm_root = _make_infer_stack_root(tmp_path)
     result = export_benchmark_bundle(
         "qwen2-72b-instruct-tp2-balanced",
         preset="qwen2_72b_vllm",
@@ -88,7 +88,7 @@ def test_export_bundle_uses_qwen_direct_vllm_convention(tmp_path: Path) -> None:
 
 
 def test_machine_local_bundle_uses_absolute_model_deployments_path(tmp_path: Path) -> None:
-    vllm_root = _make_vllm_root(tmp_path)
+    vllm_root = _make_infer_stack_root(tmp_path)
     bundle_root = tmp_path / "machine-local-bundle"
     result = export_benchmark_bundle(
         "gpt-oss-20b-completions",
@@ -103,7 +103,7 @@ def test_machine_local_bundle_uses_absolute_model_deployments_path(tmp_path: Pat
 
 
 def test_export_bundle_fails_fast_when_openai_auth_is_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    vllm_root = _make_vllm_root(tmp_path)
+    vllm_root = _make_infer_stack_root(tmp_path)
     monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
     with pytest.raises(ValueError, match="LITELLM_MASTER_KEY"):
         export_benchmark_bundle(
@@ -117,7 +117,7 @@ def test_export_bundle_fails_fast_when_openai_auth_is_missing(tmp_path: Path, mo
 
 
 def test_export_bundle_uses_env_auth_when_available(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    vllm_root = _make_vllm_root(tmp_path)
+    vllm_root = _make_infer_stack_root(tmp_path)
     monkeypatch.setenv("LITELLM_MASTER_KEY", "env-test-key")
     result = export_benchmark_bundle(
         "gpt-oss-20b-completions",
@@ -131,7 +131,7 @@ def test_export_bundle_uses_env_auth_when_available(tmp_path: Path, monkeypatch:
 
 
 def test_export_bundle_uses_explicit_auth_when_available(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    vllm_root = _make_vllm_root(tmp_path)
+    vllm_root = _make_infer_stack_root(tmp_path)
     monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
     result = export_benchmark_bundle(
         "gpt-oss-20b-completions",
@@ -146,7 +146,7 @@ def test_export_bundle_uses_explicit_auth_when_available(tmp_path: Path, monkeyp
 
 
 def test_qwen_direct_vllm_export_does_not_require_litellm_auth(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    vllm_root = _make_vllm_root(tmp_path)
+    vllm_root = _make_infer_stack_root(tmp_path)
     monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
     result = export_benchmark_bundle(
         "qwen2-72b-instruct-tp2-balanced",
@@ -160,7 +160,7 @@ def test_qwen_direct_vllm_export_does_not_require_litellm_auth(tmp_path: Path, m
 
 
 def test_export_bundle_supports_multi_model_kubeai_overnight_preset(tmp_path: Path) -> None:
-    vllm_root = _make_vllm_root(tmp_path)
+    vllm_root = _make_infer_stack_root(tmp_path)
     result = export_benchmark_bundle(
         "",
         preset="small_models_kubeai_overnight",

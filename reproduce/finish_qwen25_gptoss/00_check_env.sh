@@ -7,7 +7,7 @@
 #   - $AUDIT_STORE_ROOT / $AUDIT_RESULTS_ROOT exist + writable
 #   - HuggingFace cache reachable (we don't download here, but later
 #     steps need it for the gpt-oss tokenizer)
-#   - vllm_service repo present at submodules/vllm_service and
+#   - infer_stack repo present at submodules/infer_stack and
 #     manage.py invokable
 set -euo pipefail
 
@@ -57,19 +57,19 @@ for d in "$STORE_ROOT" "$RESULTS_ROOT" "$HF_CACHE_DIR"; do
 done
 
 echo
-echo "== vllm_service submodule =="
-VLLM_SERVICE_ROOT="$ROOT/submodules/vllm_service"
-if [[ ! -f "$VLLM_SERVICE_ROOT/manage.py" ]]; then
-  echo "FAIL: $VLLM_SERVICE_ROOT/manage.py missing — submodule not checked out?" >&2
+echo "== infer_stack submodule =="
+INFER_STACK_ROOT="$ROOT/submodules/infer_stack"
+if [[ ! -f "$INFER_STACK_ROOT/manage.py" ]]; then
+  echo "FAIL: $INFER_STACK_ROOT/manage.py missing — submodule not checked out?" >&2
   exit 1
 fi
-echo "  OK: $VLLM_SERVICE_ROOT/manage.py"
+echo "  OK: $INFER_STACK_ROOT/manage.py"
 
 # Verify our profile is registered.
-if (cd "$VLLM_SERVICE_ROOT" && python manage.py list-profiles 2>/dev/null | grep -q pythia-qwen25-gptoss-mixed-4x96); then
+if (cd "$INFER_STACK_ROOT" && python manage.py list-profiles 2>/dev/null | grep -q pythia-qwen25-gptoss-mixed-4x96); then
   echo "  OK: pythia-qwen25-gptoss-mixed-4x96 is registered"
 else
-  echo "FAIL: profile pythia-qwen25-gptoss-mixed-4x96 not registered with vllm_service. Did the submodule update apply?" >&2
+  echo "FAIL: profile pythia-qwen25-gptoss-mixed-4x96 not registered with infer_stack. Did the submodule update apply?" >&2
   exit 1
 fi
 

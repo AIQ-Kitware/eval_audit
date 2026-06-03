@@ -1,7 +1,7 @@
 # llama2_70b_helm_audit — local LLaMA-2-70B reproduction for Case Study 3
 
 This runbook brings up the new
-[`pythia-llama2-70b-mixed-4x96`](../../submodules/vllm_service/vllm_service/templates/default-profiles.yaml)
+[`pythia-llama2-70b-mixed-4x96`](../../submodules/infer_stack/infer_stack/templates/default-profiles.yaml)
 serving profile and re-runs the public HELM Classic v0.3.0 LLaMA-2-70B
 benchmarks locally so the EEE-only reproducibility heatmap (Case Study
 3) can include LLaMA-2-70B as a fourth open-weight model.
@@ -65,7 +65,7 @@ unchanged.
 ```bash
 python3 -c "
 import yaml
-d = yaml.safe_load(open('submodules/vllm_service/vllm_service/templates/default-profiles.yaml'))
+d = yaml.safe_load(open('submodules/infer_stack/infer_stack/templates/default-profiles.yaml'))
 print('pythia-llama2-70b-mixed-4x96' in d['profiles'])
 print('helm-llama-2-70b' in d['profiles'])
 print('helm-llama-2-13b' in d['profiles'])

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bring up (or switch to) the gpt-oss-20b-completions vllm_service profile.
+# Bring up (or switch to) the gpt-oss-20b-completions infer_stack profile.
 #
 # Uses the standalone single-model profile (gpt-oss-20b on one GPU via the
 # legacy completions protocol) that the gpt_oss_20b_core_grid preset expects.
@@ -9,10 +9,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-VLLM_SERVICE_ROOT="$ROOT/submodules/vllm_service"
+INFER_STACK_ROOT="$ROOT/submodules/infer_stack"
 PROFILE="${VLLM_PROFILE:-gpt-oss-20b-completions-dp4}"
 
-cd "$VLLM_SERVICE_ROOT"
+cd "$INFER_STACK_ROOT"
 
 if python manage.py status 2>/dev/null | grep -q "active_profile"; then
   ACTIVE="$(python manage.py status --format json 2>/dev/null \

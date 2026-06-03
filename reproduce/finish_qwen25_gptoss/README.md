@@ -38,7 +38,7 @@ this runbook supports today.
 ./00_check_env.sh         # eval-audit-check-env + verify GPU layout
 ./02_warmup_data.sh       # pre-cache the HF datasets HELM needs (gpqa, ifeval, mmlu_pro, ...)
 ./05_write_bundle.sh      # write the eval-audit benchmark bundle
-./10_start_service.sh     # vllm_service: switch to the new profile
+./10_start_service.sh     # infer_stack: switch to the new profile
 ./15_validate_server.sh   # smoke-test the LiteLLM router with $LITELLM_MASTER_KEY from env
 ./16_curl_test_bundle.sh  # smoke-test using the *exact* api_key/base_url HELM will use (reads bundle's model_deployments.yaml)
 ./20_preview_smoke.sh     # eval-audit-run --run=0 (dry-run) on the smoke manifest
@@ -97,7 +97,7 @@ $AUDIT_STORE_ROOT/indexes/audit_results_index.csv       # refreshed by 60_index_
   The smoke manifest's Qwen entry uses `mmlu:us_foreign_policy`
   instead so the smoke run doesn't depend on either disabled dataset.
   To re-enable, restore the run_entries in
-  `eval_audit/integrations/vllm_service/adapter.py` and add the
+  `eval_audit/integrations/infer_stack/adapter.py` and add the
   matching dataset name to `02_warmup_data.sh`.
 
   The same workaround applies if any other HF-backed benchmark

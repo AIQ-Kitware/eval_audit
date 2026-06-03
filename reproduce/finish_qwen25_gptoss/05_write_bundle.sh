@@ -8,7 +8,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 STORE_ROOT="${AUDIT_STORE_ROOT:-/data/crfm-helm-audit-store}"
 BUNDLE_ROOT="${BUNDLE_ROOT:-$STORE_ROOT/local-bundles/finish_qwen25_gptoss}"
-LITELLM_ENV_FPATH="${LITELLM_ENV_FPATH:-/home/local/KHQ/jon.crall/code/helm_audit/submodules/vllm_service/generated/.env}"
+LITELLM_ENV_FPATH="${LITELLM_ENV_FPATH:-/home/local/KHQ/jon.crall/code/helm_audit/submodules/infer_stack/generated/.env}"
 LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:14000}"
 
 # Clear any stale shell value before sourcing so the .env file is
@@ -25,7 +25,7 @@ if [[ ! -f "$LITELLM_ENV_FPATH" ]]; then
 fi
 
 # ``set -a`` auto-exports every variable assigned by the sourced file
-# so plain ``KEY=value`` lines in vllm_service's generated/.env (no
+# so plain ``KEY=value`` lines in infer_stack's generated/.env (no
 # ``export`` prefix) propagate to the python subprocess below.
 set -a
 # shellcheck disable=SC1090
@@ -46,7 +46,7 @@ echo "Sourced LITELLM_MASTER_KEY from $LITELLM_ENV_FPATH" \
      "(prefix=${LITELLM_MASTER_KEY:0:4}.. len=${#LITELLM_MASTER_KEY})"
 
 cd "$ROOT"
-python -m eval_audit.integrations.vllm_service export-benchmark-bundle \
+python -m eval_audit.integrations.infer_stack export-benchmark-bundle \
   --preset finish_qwen25_gptoss \
   --bundle-root "$BUNDLE_ROOT" \
   --base-url "${LITELLM_BASE_URL}/v1"

@@ -9,7 +9,7 @@ from .adapter import export_benchmark_bundle, load_profile_contract
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        description="eval_audit integration layer for consuming vllm_service serving profiles."
+        description="eval_audit integration layer for consuming infer_stack serving profiles."
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 

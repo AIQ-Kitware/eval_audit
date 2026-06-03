@@ -825,7 +825,7 @@ def build_local_serving_recovery_text(inventory_rows: list[dict[str, Any]]) -> s
         '  no-local-helm-deployment = Stage 1 automatic filter found no default local',
         '  HELM deployment path for this model. On-story models have a recipe in',
         '  eval_audit/model_registry.py and are run via a separate serving bundle.',
-        '  TODO: Add runtime verification that vllm_service profiles can serve these.',
+        '  TODO: Add runtime verification that infer_stack profiles can serve these.',
     ]
     return '\n'.join(lines) + '\n'
 

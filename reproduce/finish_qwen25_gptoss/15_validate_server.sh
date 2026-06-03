@@ -8,11 +8,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ENV_FPATH="${LITELLM_ENV_FPATH:-$ROOT/submodules/vllm_service/generated/.env}"
+ENV_FPATH="${LITELLM_ENV_FPATH:-$ROOT/submodules/infer_stack/generated/.env}"
 LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:14000}"
 
 if [[ -f "$ENV_FPATH" ]]; then
-  # ``set -a`` so plain ``KEY=value`` lines in vllm_service's
+  # ``set -a`` so plain ``KEY=value`` lines in infer_stack's
   # generated/.env (no ``export`` prefix) make it into env for the
   # curl invocations below.
   set -a

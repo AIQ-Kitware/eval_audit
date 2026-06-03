@@ -14,10 +14,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-VLLM_SERVICE_ROOT="$ROOT/submodules/vllm_service"
+INFER_STACK_ROOT="$ROOT/submodules/infer_stack"
 PROFILE="${VLLM_PROFILE:-pythia-qwen25-gptoss-mixed-4x96}"
 
-cd "$VLLM_SERVICE_ROOT"
+cd "$INFER_STACK_ROOT"
 
 # Detect whether the stack is already running. ``status`` exits non-zero
 # when nothing is up; we treat both branches as fine.

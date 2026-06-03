@@ -20,7 +20,7 @@ is the primary output, not a reproducibility agreement ratio.
 Requires a single GPU with ≥96 GB VRAM (e.g., H100/A100-80G) or two GPUs
 with ≥48 GB each (`tensor_parallel_size: 2`). On 24 GB-class GPUs the model
 will not fit; use the existing `gpt_oss_20b_vllm` profile which targets larger
-hardware, or adjust `tensor_parallel_size` in the vllm_service profile.
+hardware, or adjust `tensor_parallel_size` in the infer_stack profile.
 
 ## Steps
 

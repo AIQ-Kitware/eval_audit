@@ -44,7 +44,7 @@ eval_audit/                 the Python package (renamed from helm_audit on 2026-
 │                           hashers.py, metrics.py, run_entries.py)
 ├── indexing/               run-spec hash + schema helpers
 ├── infra/                  paths, env, yaml IO, logging, plotly env
-├── integrations/           kwdagger_bridge.py + vllm_service/  [not recently exercised]
+├── integrations/           kwdagger_bridge.py + infer_stack/  [not recently exercised]
 ├── compat/                 backward-compat shims
 └── model_registry.py
 ```

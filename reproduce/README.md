@@ -56,7 +56,7 @@ The `gpt_oss_20b_vllm/` runbook assumes:
 
 The `small_models_kubeai/` runbook assumes:
 - the KubeAI chart is already installed and reachable at `KUBEAI_BASE_URL` (default `http://127.0.0.1:8000/openai/v1`, typically via `kubectl port-forward`)
-- the `vllm_service` repo is configured for the same KubeAI namespace and can `switch --apply` the `qwen2-5-7b-instruct-turbo-default` and `vicuna-7b-v1-3-no-chat-template` profiles
+- the `infer_stack` repo is configured for the same KubeAI namespace and can `switch --apply` the `qwen2-5-7b-instruct-turbo-default` and `vicuna-7b-v1-3-no-chat-template` profiles
 - applying the second profile is additive on the cluster, so both KubeAI `Model` objects remain resident for the combined overnight manifest
 - on `aiq-gpu`, the KubeAI Helm release currently lives in the `default` namespace, so these scripts default `KUBEAI_NAMESPACE=default`
 - tonight's runbook also applies an explicit post-deploy patch so both model CRs use `resourceProfile=gpu-single-default:1`, `minReplicas=1`, and `--served-model-name=<public profile name>` to match the routed OpenAI model ids exposed by `/openai/v1/models`

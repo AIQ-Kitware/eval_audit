@@ -147,7 +147,7 @@ if [[ "$n_fail" -gt 0 ]]; then
   echo "      'available models' the server advertises. The bundle's"
   echo "      client_spec.args.openai_model_name is probably stale or"
   echo "      points at a name LiteLLM doesn't alias. Check the active"
-  echo "      vllm_service profile's router.aliases (or the served_aliases"
+  echo "      infer_stack profile's router.aliases (or the served_aliases"
   echo "      in default-models.yaml)."
   echo "  - 404 model not found:"
   echo "      LiteLLM router is up but doesn't have an alias for the"

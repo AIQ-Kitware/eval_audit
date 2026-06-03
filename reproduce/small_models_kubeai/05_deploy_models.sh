@@ -4,9 +4,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT/reproduce/small_models_kubeai/_lib.sh"
 
-SERVICE_ROOT="${VLLM_SERVICE_ROOT:-$ROOT/submodules/vllm_service}"
+SERVICE_ROOT="${INFER_STACK_ROOT:-$ROOT/submodules/infer_stack}"
 KUBEAI_NAMESPACE="$(resolve_kubeai_namespace)"
-PYTHON_BIN="${VLLM_SERVICE_PYTHON:-python3}"
+PYTHON_BIN="${INFER_STACK_PYTHON:-python3}"
 APPLY_KUBEAI_TONIGHT_PATCHES="${APPLY_KUBEAI_TONIGHT_PATCHES:-1}"
 
 cd "$SERVICE_ROOT"

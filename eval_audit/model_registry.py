@@ -4,7 +4,7 @@ Checked-in registry of models expected to be locally servable.
 Each entry documents whether we have a local serving recipe for a model and
 whether it participates in the main public HELM reproducibility storyline.
 
-Sources: PRESET_CONFIGS in integrations/vllm_service/adapter.py and
+Sources: PRESET_CONFIGS in integrations/infer_stack/adapter.py and
 KNOWN_HF_OVERRIDES in cli/index_historic_helm_runs.py.
 
 Semantics:
@@ -13,7 +13,7 @@ Semantics:
   replaces_helm_deployment null      → local/off-story extension; not a public
       HELM open-weight model in the main storyline.
 
-TODO: Add runtime verification that vllm_service profiles can actually switch to
+TODO: Add runtime verification that infer_stack profiles can actually switch to
 the relevant profile and serve the listed models on a target machine.
 """
 from __future__ import annotations

@@ -333,19 +333,19 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
 }
 
 
-def vllm_service_root() -> Path:
-    return repo_root() / "submodules" / "vllm_service"
+def infer_stack_root() -> Path:
+    return repo_root() / "submodules" / "infer_stack"
 
 
-def _ensure_importable_vllm_service(root: Path | None = None) -> None:
-    package_root = str((root or vllm_service_root()).resolve())
+def _ensure_importable_infer_stack(root: Path | None = None) -> None:
+    package_root = str((root or infer_stack_root()).resolve())
     if package_root not in sys.path:
         sys.path.insert(0, package_root)
 
 
-def _import_vllm_contracts(root: Path | None = None) -> Any:
-    _ensure_importable_vllm_service(root)
-    return importlib.import_module("vllm_service.contracts")
+def _import_infer_stack_contracts(root: Path | None = None) -> Any:
+    _ensure_importable_infer_stack(root)
+    return importlib.import_module("infer_stack.contracts")
 
 
 def load_profile_contract(
@@ -355,8 +355,8 @@ def load_profile_contract(
     simulate_hardware: str | None = None,
     vllm_root: Path | None = None,
 ) -> dict[str, Any]:
-    root = (vllm_root or vllm_service_root()).resolve()
-    contracts = _import_vllm_contracts(root)
+    root = (vllm_root or infer_stack_root()).resolve()
+    contracts = _import_infer_stack_contracts(root)
     return contracts.load_profile_contract(
         profile,
         root=root,
