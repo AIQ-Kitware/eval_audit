@@ -198,12 +198,12 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         #   - gpt-oss 20B: 8 capabilities/v1.12.0 + safety/v1.14.0
         #     run_entries with no local repro.
         # Driven by the ``pythia-qwen25-gptoss-mixed-4x96`` profile in
-        # the vllm_service submodule, which co-resides Qwen 2.5 + gpt-oss
+        # the infer_stack submodule, which co-resides Qwen 2.5 + gpt-oss
         # alongside the two Pythia services another experiment uses on
         # the same host.
         "bundle_name": "finish_qwen25_gptoss",
         "backend": "compose",
-        "vllm_service_profile": "pythia-qwen25-gptoss-mixed-4x96",
+        "infer_stack_profile": "pythia-qwen25-gptoss-mixed-4x96",
         "profiles": [
             {
                 "profile": "qwen2-5-7b-instruct-turbo-default",
