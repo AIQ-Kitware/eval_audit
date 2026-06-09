@@ -34,10 +34,6 @@ except ImportError:
         return func
 
 
-PLANNER_VERSION = "core_report_packet_planner.v1"
-OFFICIAL_SELECTION_POLICY = "latest_suite_version_per_public_track"
-
-
 def _clean_optional_text(value: Any) -> str | None:
     text = str(value or "").strip()
     if not text:
@@ -46,6 +42,15 @@ def _clean_optional_text(value: Any) -> str | None:
         return None
     return text
 
+
+PLANNER_VERSION = "core_report_packet_planner.v1"
+OFFICIAL_SELECTION_POLICY = "latest_suite_version_per_public_track"
+# When set to 1/true/yes, generate additional normalized key variants that
+# strip non-essential key=value suffix tokens (currently `groups=`) so the
+# prefiltering can match official/local runs that differ only by those tokens.
+GROUP_STRIP = os.environ.get(
+    "EVAL_AUDIT_GROUP_STRIP", ""
+).strip().lower() in {"1", "true", "yes"}
 
 def _coerce_float(value: Any) -> float:
     try:
@@ -184,13 +189,82 @@ def load_index_rows(index_fpath: str | Path) -> list[dict[str, Any]]:
 
 
 def _row_logical_keys(row: dict[str, Any]) -> set[str]:
-    keys = {
+    raw_keys = [
         _clean_optional_text(row.get("logical_run_key")),
         _clean_optional_text(row.get("run_entry")),
         _clean_optional_text(row.get("run_name")),
         _clean_optional_text(row.get("run_spec_name")),
-    }
-    return {key for key in keys if key}
+    ]
+    keys: set[str] = set()
+    for key in raw_keys:
+        if not key:
+            continue
+        keys.update(_logical_key_variants(key))
+    return keys
+
+
+def _logical_key_variants(key: str | None) -> set[str]:
+    """Return a set of common sanitized variants for a logical run key.
+
+    The indexes sometimes substitute '/' with '_' or '-' (or vice versa).
+    Generate the common permutations so prefiltering and grouping are
+    resilient to that sanitization.
+    """
+    if not key:
+        return set()
+    variants: set[str] = {key}
+    # Basic separator permutations (existing behaviour)
+    if "/" in key:
+        variants.add(key.replace("/", "_"))
+        variants.add(key.replace("/", "-"))
+    if "_" in key:
+        variants.add(key.replace("_", "/"))
+        variants.add(key.replace("_", "-"))
+    if "-" in key:
+        variants.add(key.replace("-", "/"))
+        variants.add(key.replace("-", "_"))
+
+    # Extended normalization: optionally strip non-essential key=value
+    # suffixes (e.g. `groups=...`) and add variants of the stripped form.
+    if GROUP_STRIP:
+        try:
+            # Split on commas to isolate `key=value` style tokens and
+            # filter ones we consider non-essential for matching.
+            tokens = [t for t in key.split(",")]
+            stripped_tokens = [t for t in tokens if not t.strip().startswith("groups=")]
+            if len(stripped_tokens) < len(tokens):
+                stripped = ",".join(stripped_tokens)
+                variants.add(stripped)
+                # also add separator permutations for the stripped form
+                if "/" in stripped:
+                    variants.add(stripped.replace("/", "_"))
+                    variants.add(stripped.replace("/", "-"))
+                if "_" in stripped:
+                    variants.add(stripped.replace("_", "/"))
+                    variants.add(stripped.replace("_", "-"))
+                if "-" in stripped:
+                    variants.add(stripped.replace("-", "/"))
+                    variants.add(stripped.replace("-", "_"))
+        except Exception:
+            # Don't allow diagnostics/normalization to raise and break planning
+            pass
+    return variants
+
+
+def _strip_groups_token(s: str | None) -> str | None:
+    """Return a copy of the logical key with any `groups=...` tokens removed.
+
+    Returns None when input is falsy. This mirrors the fallback stripping
+    logic used in `_prefilter_index_rows` so canonicalization is consistent
+    across planner stages.
+    """
+    if not s:
+        return s
+    try:
+        parts = [p for p in s.split(",") if not p.strip().startswith("groups=")]
+        return ",".join(parts)
+    except Exception:
+        return s
 
 
 @profile
@@ -200,7 +274,7 @@ def _prefilter_index_rows(
     official_rows: list[dict[str, Any]],
     experiment_name: str | None,
     run_entry: str | None,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """Narrow raw CSV rows before expensive EEE discovery.
 
     The planner historically normalized the whole official public index and
@@ -225,7 +299,7 @@ def _prefilter_index_rows(
         scoped_local_rows.append(row)
 
     if run_entry is not None:
-        wanted_keys = {run_entry}
+        wanted_keys = _logical_key_variants(run_entry)
     elif experiment_name is not None:
         wanted_keys = set().union(*(_row_logical_keys(row) for row in scoped_local_rows)) if scoped_local_rows else set()
     else:
@@ -241,7 +315,49 @@ def _prefilter_index_rows(
     else:
         scoped_official_rows = official_rows
 
-    return scoped_local_rows, scoped_official_rows
+    # Diagnostics to help when no official candidates are retained.
+    diagnostics: dict[str, Any] = {
+        "original_official_count": len(official_rows),
+        "scoped_official_count": len(scoped_official_rows),
+        "wanted_keys_count": len(wanted_keys),
+        "wanted_keys_sample": sorted(list(wanted_keys))[:20],
+        "prefilter_fallback_used": False,
+        "prefilter_fallback_matches": [],
+    }
+
+    # If no official rows matched but extended normalization is enabled,
+    # attempt a fallback matching that strips `groups=...` tokens and
+    # compares stripped key forms. This catches cases where the only
+    # difference is non-essential extra tokens.
+    if wanted_keys and not scoped_official_rows and GROUP_STRIP:
+        def _strip_groups_token(s: str | None) -> str | None:
+            if not s:
+                return s
+            parts = [p for p in s.split(",") if not p.strip().startswith("groups=")]
+            return ",".join(parts)
+
+        wanted_stripped = {_strip_groups_token(k) for k in wanted_keys}
+        fallback_matches: list[dict[str, Any]] = []
+        for row in official_rows:
+            row_keys = _row_logical_keys(row)
+            row_stripped = {_strip_groups_token(k) for k in row_keys}
+            if row_stripped & wanted_stripped:
+                fallback_matches.append(row)
+        if fallback_matches:
+            diagnostics["prefilter_fallback_used"] = True
+            diagnostics["prefilter_fallback_matches"] = [
+                {
+                    "run_name": _clean_optional_text(row.get("run_name")),
+                    "logical_run_key": _clean_optional_text(row.get("logical_run_key")),
+                    "component_id": _clean_optional_text(row.get("component_id")),
+                }
+                for row in fallback_matches[:50]
+            ]
+            scoped_official_rows = fallback_matches
+
+    diagnostics["scoped_official_count"] = len(scoped_official_rows)
+
+    return scoped_local_rows, scoped_official_rows, diagnostics
 
 
 def _resolve_artifact_format(row: dict[str, Any]) -> tuple[str, str | None, bool]:
@@ -711,7 +827,7 @@ def _packet_payload(
     run_entry: str | None,
     local_components: list[NormalizedPlannerComponent],
     official_components: list[NormalizedPlannerComponent],
-    official_selection: dict[str, Any],
+    canonicalized_original_keys: list[str] | None = None,
     packet_track: str | None = None,
 ) -> dict[str, Any]:
     packet_components = [*local_components, *official_components]
@@ -719,7 +835,6 @@ def _packet_payload(
     packet_comparability_facts = build_comparability_facts(packet_components)
     packet_caveats = _comparison_caveats(packet_comparability_facts)
     packet_warnings = [
-        *official_selection["warnings"],
         *itertools.chain.from_iterable(_component_warning_lines(component) for component in packet_components),
         *_comparability_warning_lines(packet_comparability_facts),
     ]
@@ -790,6 +905,23 @@ def _packet_payload(
                     notes="planner first-pass local repeat comparison",
                 )
             )
+    # Canonicalization debug plumbing removed: do not attach internal
+    # `official_selection` diagnostics to packet/ comparison objects.
+    # If grouping canonicalization stripped `groups=...` tokens for this
+    # packet, surface a compact warning so downstream consumers can see
+    # which original keys were canonicalized.
+    if canonicalized_original_keys:
+        try:
+            note = f"canonicalization_stripped_groups:original_keys={canonicalized_original_keys}"
+            # Attach to official_vs_local comparisons so reviewers can see
+            # which comparisons were affected.
+            for comp in comparisons:
+                if comp.get("comparison_kind") == "official_vs_local":
+                    comp["warnings"] = list(dict.fromkeys([*(comp.get("warnings") or []), note]))
+            packet_warnings.append(note)
+        except Exception:
+            pass
+
     packet_experiment_name = experiment_name
     if packet_experiment_name is None:
         experiment_names = _unique_nonempty([component.experiment_name for component in local_components])
@@ -806,7 +938,6 @@ def _packet_payload(
         "components": [component.to_manifest_component() for component in packet_components],
         "comparisons": comparisons,
         "comparability_facts": packet_comparability_facts,
-        "official_selection": official_selection,
         "warnings": list(dict.fromkeys([
             *packet_warnings,
             *(["missing_local_component"] if not local_components else []),
@@ -839,38 +970,80 @@ def build_packet_intents(
             for component in filtered
             if component.source_kind == "local"
         }
+
+        # Build a set of logical-key variants derived from local components so
+        # official candidates that differ only by non-essential suffixes
+        # (e.g. `groups=...`) are still included in the scoped set.
+        local_wanted_key_variants: set[str] = set()
+        for component in filtered:
+            if component.source_kind != "local":
+                continue
+            for candidate in (component.logical_run_key, component.run_entry, component.run_spec_name):
+                if candidate:
+                    local_wanted_key_variants.update(_logical_key_variants(candidate))
+
+        def _component_key_variants(component: NormalizedPlannerComponent) -> set[str]:
+            vals: set[str] = set()
+            for candidate in (component.logical_run_key, component.run_entry, component.run_spec_name):
+                if candidate:
+                    vals.update(_logical_key_variants(candidate))
+            # official rows may also expose run_name in extra_metadata
+            rn = None
+            try:
+                rn = component.extra_metadata.get("run_name") if isinstance(component.extra_metadata, dict) else None
+            except Exception:
+                rn = None
+            if rn:
+                vals.update(_logical_key_variants(rn))
+            return vals
+
         filtered = [
             component
             for component in filtered
             if component.source_kind == "local"
             or (component.logical_run_key or component.run_entry or component.component_id) in scoped_local_group_keys
+            or bool(_component_key_variants(component) & local_wanted_key_variants)
         ]
 
     grouped: dict[str, list[NormalizedPlannerComponent]] = {}
+    # Track original raw keys that were canonicalized so we can surface a
+    # compact warning when the groups= token was stripped for any member of
+    # a packet.
+    original_keys_by_group: dict[str, set[str]] = {}
     for component in filtered:
-        key = component.logical_run_key or component.run_entry or component.component_id
-        grouped.setdefault(key, []).append(component)
+        raw_key = component.logical_run_key or component.run_entry or component.component_id
+        # Canonicalize grouping keys so non-essential suffixes like
+        # `groups=...` do not split otherwise-identical runs into separate
+        # packets. Honor the global extended-normalization flag so this
+        # behaviour is opt-in and consistent with `_logical_key_variants`.
+        if GROUP_STRIP:
+            stripped = _strip_groups_token(raw_key) or raw_key
+            canonical_key = stripped
+            # Record when we actually changed the key so we can warn later.
+            if raw_key and stripped != raw_key:
+                original_keys_by_group.setdefault(canonical_key, set()).add(raw_key)
+        else:
+            canonical_key = raw_key
+        grouped.setdefault(canonical_key, []).append(component)
 
     packets: list[dict[str, Any]] = []
     for group_key, group_components in sorted(grouped.items()):
         sorted_components = sorted(group_components, key=_component_sort_key)
         local_components = [component for component in sorted_components if component.source_kind == "local"]
         official_components_all = [component for component in sorted_components if component.source_kind == "official"]
-        official_selection = _latest_official_selection(official_components_all) if official_components_all else {
-            "policy_name": OFFICIAL_SELECTION_POLICY,
-            "considered_component_ids": [],
+        stripped_orig = original_keys_by_group.get(group_key) or set()
+        canonicalized_keys = sorted(list(stripped_orig)) if stripped_orig else None
+        selection = _latest_official_selection(official_components_all) if official_components_all else {
             "retained_component_ids": [],
-            "discarded_component_ids": [],
-            "considered_by_track": {},
             "retained_by_track": {},
             "warnings": [],
         }
-        retained_official_ids = set(official_selection["retained_component_ids"])
+        retained_official_ids = set(selection.get("retained_component_ids") or [])
         official_components = [
             component for component in official_components_all
             if component.component_id in retained_official_ids
         ]
-        retained_by_track = official_selection.get("retained_by_track") or {}
+        retained_by_track = selection.get("retained_by_track") or {}
         if len(retained_by_track) > 1:
             official_by_id = {
                 component.component_id: component
@@ -882,16 +1055,6 @@ def build_packet_intents(
                     for component_id in track_component_ids
                     if component_id in official_by_id
                 ]
-                track_selection = {
-                    **official_selection,
-                    "selected_public_track": track,
-                    "retained_component_ids": track_component_ids,
-                    "retained_by_track": {track: track_component_ids},
-                    "warnings": list(dict.fromkeys([
-                        *official_selection.get("warnings", []),
-                        f"render_split_by_public_track:{track}",
-                    ])),
-                }
                 packets.append(
                     _packet_payload(
                         group_key=group_key,
@@ -899,7 +1062,7 @@ def build_packet_intents(
                         run_entry=run_entry,
                         local_components=local_components,
                         official_components=track_official_components,
-                        official_selection=track_selection,
+                        canonicalized_original_keys=canonicalized_keys,
                         packet_track=track,
                     )
                 )
@@ -911,7 +1074,7 @@ def build_packet_intents(
                     run_entry=run_entry,
                     local_components=local_components,
                     official_components=official_components,
-                    official_selection=official_selection,
+                    canonicalized_original_keys=canonicalized_keys,
                 )
             )
     return packets
@@ -930,7 +1093,7 @@ def build_planning_artifact(
 ) -> dict[str, Any]:
     local_rows = load_index_rows(local_index_fpath)
     official_rows = load_index_rows(official_index_fpath)
-    local_rows, official_rows = _prefilter_index_rows(
+    local_rows, official_rows, prefilter_diagnostics = _prefilter_index_rows(
         local_rows=local_rows,
         official_rows=official_rows,
         experiment_name=experiment_name,
@@ -938,21 +1101,26 @@ def build_planning_artifact(
     )
     official_eee_root = official_eee_root or default_official_eee_root()
     local_eee_root = local_eee_root or default_local_eee_root()
-    normalized_components = normalize_index_rows(
-        local_rows=local_rows,
-        official_rows=official_rows,
-        local_index_fpath=local_index_fpath,
-        official_index_fpath=official_index_fpath,
-        official_eee_root=official_eee_root,
+    # Normalize local and official rows separately so we can retain
+    # lightweight debug previews in the planner artifact.
+    normalized_local_components = normalize_local_index_rows(
+        local_rows,
+        index_fpath=local_index_fpath,
         local_eee_root=local_eee_root,
         ensure_local_eee=ensure_local_eee,
     )
+    normalized_official_components = normalize_official_index_rows(
+        official_rows,
+        index_fpath=official_index_fpath,
+        official_eee_root=official_eee_root,
+    )
+    normalized_components = [*normalized_local_components, *normalized_official_components]
     packets = build_packet_intents(
         normalized_components,
         experiment_name=experiment_name,
         run_entry=run_entry,
     )
-    return {
+    artifact = {
         "generated_utc": now_utc_iso(),
         "planner_version": PLANNER_VERSION,
         "local_index_fpath": str(Path(local_index_fpath).expanduser().resolve()),
@@ -965,6 +1133,8 @@ def build_planning_artifact(
         "packet_count": len(packets),
         "packets": packets,
     }
+
+    return artifact
 
 
 def load_planning_artifact(path: str | Path) -> dict[str, Any]:
@@ -1099,14 +1269,7 @@ def warning_summary_lines(artifact: dict[str, Any]) -> list[str]:
             lines.append("  packet_warnings:")
             for warning in packet_warnings:
                 lines.append(f"    - {warning}")
-        official_selection = packet.get("official_selection") or {}
-        if official_selection:
-            lines.append("  official_selection:")
-            lines.append(f"    policy_name: {official_selection.get('policy_name')}")
-            lines.append(f"    retained_component_ids: {official_selection.get('retained_component_ids')}")
-            lines.append(f"    discarded_component_ids: {official_selection.get('discarded_component_ids')}")
-            if official_selection.get("warnings"):
-                lines.append(f"    warnings: {official_selection.get('warnings')}")
+        # official_selection diagnostics removed from packets
         lines.append("  comparisons:")
         for comparison in packet.get("comparisons", []):
             lines.append(
@@ -1144,7 +1307,7 @@ def planning_summary_lines(artifact: dict[str, Any]) -> list[str]:
         lines.append(f"  experiment_name: {packet.get('experiment_name')}")
         lines.append(f"  warnings: {packet.get('warnings')}")
         lines.append(f"  caveats: {packet.get('caveats')}")
-        lines.append(f"  official_selection: {packet.get('official_selection')}")
+        # official_selection diagnostics removed from packets
         lines.append("  components:")
         for component in packet.get("components", []):
             lines.append(

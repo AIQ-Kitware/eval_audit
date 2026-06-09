@@ -1,0 +1,36 @@
+vllm_models:
+  phi2:
+    hf_model_id: microsoft/phi-2
+    served_model_name: microsoft/phi-2
+    logical_model_name: microsoft/phi-2
+    tokenizer_name: microsoft/phi-2
+    family: phi
+    modalities: [text]
+    supported_protocols: [completions]
+    memory_class_gib: 1
+    min_vram_gib_per_replica: 1
+    preferred_gpu_count: 1
+    context_window: 2048
+    defaults:
+      max_model_len: 2048
+      gpu_memory_utilization: 0.8
+      enable_prefix_caching: true
+      max_num_batched_tokens: 2048
+      max_num_seqs: 16
+
+profiles:
+  phi2-single:
+    description: Phi-2 model on one GPU
+    vllm:
+      enable_responses_api_store: false
+      logging_level: INFO
+    services:
+    - service_name: chat
+      protocol_mode: completions
+      model: phi2
+      placement:
+        strategy: first_fit
+        gpu_count: 1
+    router:
+      aliases:
+        phi2: chat

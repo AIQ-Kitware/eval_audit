@@ -1,0 +1,92 @@
+name: local-llm-stack
+backend: compose
+active_profile: phi2-single
+catalog:
+  builtin_models: true
+  builtin_profiles: true
+  user_models_file: models.yaml
+policy:
+  require_fit_validation: true
+  reserve_display_gpu: auto
+  forbid_reserved_gpu_use: false
+  require_homogeneous_multi_gpu_groups: true
+  minimum_vram_headroom_gib: 2
+  allow_unsupported_render: false
+runtime:
+  compose_cmd: docker compose
+  target_inventory: auto
+providers:
+  ollama:
+    enabled: auto
+  vllm:
+    enabled: auto
+gateways:
+  litellm:
+    enabled: auto
+frontends:
+  open_webui:
+    enabled: auto
+ollama:
+  publish_port: false
+  host: 0.0.0.0:11434
+  keep_alive: 2m
+  context_length: 4096
+  num_parallel: 1
+  max_loaded_models: 1
+  max_queue: 8
+  gpu_indices: auto
+ports:
+  litellm: 14042
+  open_webui: 13000
+  postgres: 15432
+  ollama: 11434
+images:
+  postgres: postgres:16.8
+  open_webui: ghcr.io/open-webui/open-webui:v0.8.6
+  litellm: ghcr.io/berriai/litellm:v1.82.3-stable
+  vllm: vllm/vllm-openai:v0.19.1
+  ollama: ollama/ollama:latest
+state:
+  hf_cache: /home/local/KHQ/edward.wang/.local/share/infer_stack/hf-cache
+  vllm_cache: /home/local/KHQ/edward.wang/.local/share/infer_stack/vllm-cache
+  torch_cache: /home/local/KHQ/edward.wang/.local/share/infer_stack/torch-cache
+  triton_cache: /home/local/KHQ/edward.wang/.local/share/infer_stack/triton-cache
+  cuda_cache: /home/local/KHQ/edward.wang/.local/share/infer_stack/cuda-cache
+  open_webui: /home/local/KHQ/edward.wang/.local/share/infer_stack/open-webui
+  postgres_open_webui: /home/local/KHQ/edward.wang/.local/share/infer_stack/postgres-open-webui
+  postgres_litellm: /home/local/KHQ/edward.wang/.local/share/infer_stack/postgres-litellm
+  ollama: /home/local/KHQ/edward.wang/.local/share/infer_stack/ollama
+  runtime: /home/local/KHQ/edward.wang/.local/share/infer_stack/runtime
+output:
+  generated_dir: /home/local/KHQ/edward.wang/.local/share/infer_stack/generated
+open_webui:
+  auth: false
+  provider: auto
+cluster:
+  namespace: kubeai
+  kubeai_release_name: kubeai
+  kubeai_chart: kubeai/kubeai
+  service_name: kubeai
+  ingress:
+    enabled: false
+    class_name: traefik
+    host: ''
+    path_prefix: /
+    tls_secret_name: ''
+resource_profiles:
+  gpu-single-default:
+    limits:
+      nvidia.com/gpu: 1
+    requests:
+      nvidia.com/gpu: 1
+  gpu-tp2-balanced:
+    limits:
+      nvidia.com/gpu: 2
+    requests:
+      nvidia.com/gpu: 2
+  gpu-tp2-maxctx:
+    limits:
+      nvidia.com/gpu: 2
+    requests:
+      nvidia.com/gpu: 2
+profiles: {}
