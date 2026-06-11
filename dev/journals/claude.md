@@ -1653,3 +1653,64 @@ cognitive cost: each plot is now a clean
 rather than "scroll the same figure." The same trade probably
 applies elsewhere in the project where multi-axis condensation
 fights readability.
+
+## 2026-06-11 14:38:57 -0400
+
+**User intent.** The repo has grown hard to maintain and use; the
+user asked for a refactor plan making it more elegant, experiments
+easier to understand/reproduce, and maintenance cheaper. Across
+three follow-ups: write the plan to `docs/planning/`, review it for
+errors, then revise it again for implementation-readiness.
+
+**Model/config.** Claude Opus 4.8 (claude-opus-4-8[1m]) for the
+survey and first draft; Sonnet 4.6 for the first revision pass;
+Fable 5 (claude-fable-5[1m]) for the implementation-readiness pass.
+Claude Code VSCode harness throughout.
+
+**What happened.** Surveyed the full tree (86 modules, ~32.8k LOC,
+18 console scripts) and wrote
+`docs/planning/repo-refactor-plan.md`: Phase 0 hygiene +
+finish-the-`infer_stack`-rename, Phase 1 unify the CLI surface
+under `eval_audit/cli/`, Phase 2 decompose god modules (chiefly
+`build_reports_summary.py`, 5,369 lines / 108 functions), Phase 3
+unify HELM/EEE into one comparison core with two input adapters.
+
+The review pass caught three real errors in my own first draft,
+each found only by grepping rather than trusting file names:
+(1) `run_specs.yaml`/`run_details.yaml` at repo root looked like
+stale run outputs but are the canonical run registry loaded via
+`infra/paths.py` from the audit store — the plan now moves them to
+`configs/` instead of deleting; (2) `cli/compare.py` and
+`cli/reports.py` looked like orphaned dispatchers but are imported
+by `tests/test_smoke.py::test_cli_help_smoke` — deletion now pairs
+with a test update; (3) the `vllm_service` rename was already
+~done, so Phase 0b shrank to two mechanical steps plus two broken
+`dev/e2e-tests/` scripts still invoking the deleted module path.
+
+The implementation-readiness pass added: a complete 18-script
+entrypoint mapping table with per-script actions; a minimal-churn
+strategy (library modules keep their `main()`s because runbooks
+invoke `python -m eval_audit.workflows.*` directly); verified
+pitfalls (the `@profile`/line_profiler shim at
+`build_reports_summary.py:51-60` must be hoisted to
+`infra/profiling.py` before the split; `eval-audit-make-bundle` in
+`reproduce/llama2_70b_helm_audit/README.md:76` references a
+nonexistent script; `workflows/analyze_official_index.py` is a
+4-line dead alias); and per-phase verification command blocks.
+
+**Uncertainties.** Whether `cli/analyze_backlog.py` is still in
+active operational use (plan says ask the operator before wiring or
+archiving it). Whether the operator workflow that copies
+`run_specs.yaml` into the audit store lives outside the repo — no
+sync script exists in-tree, so the move to `configs/` needs a
+docs-grep but could still surprise an out-of-tree script.
+
+**Next steps.** No code changed; plan only. Execution starts at
+Phase 0a when the user green-lights. Phase 3 requires its own
+design doc before any code.
+
+**Design insight.** When auditing a repo for "stale" files, the
+filename and location are evidence, not verdicts — every candidate
+deletion needs a fan-in grep first. All three errors in the first
+draft came from trusting appearance (root-level YAML "looks like
+output", unwired CLI "looks orphaned") over reference-tracing.
