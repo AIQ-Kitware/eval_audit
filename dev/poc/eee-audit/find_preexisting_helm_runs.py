@@ -76,7 +76,7 @@ def load_official_index_or_details(
     except FileNotFoundError:
         pass
 
-    fpath = repo_root / "run_details.yaml"
+    fpath = repo_root / "configs" / "run_details.yaml"
     rows = yaml.safe_load(fpath.read_text())
     df = pd.DataFrame(rows)
     return fpath, _normalize_official_df(df)
