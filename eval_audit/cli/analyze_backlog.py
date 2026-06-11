@@ -1,3 +1,11 @@
+"""Operational tool: rebuild core reports for the analyzable backlog.
+
+Reads the latest Stage 6 ``run_inventory`` and re-runs the per-pair
+core report only for rows marked ``completed_with_run_artifacts`` that
+have no existing ``repro_report_dir``. Invoked manually via
+``python -m eval_audit.cli.analyze_backlog`` (not wired as a console
+script; see dev/journals/codex.md for the operational history).
+"""
 from __future__ import annotations
 
 import argparse

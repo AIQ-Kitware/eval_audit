@@ -1,3 +1,10 @@
+"""On-disk format of a core-report packet (names, slugs, manifests).
+
+Write-side conventions for the artifacts that ``reports.core_metrics``
+emits: manifest filenames, slug rules, and latest-symlink naming. The
+read-side loader lives in ``reports.core_packet_summary``; see
+``reports.core_metrics`` for the role map of all ``core_*`` modules.
+"""
 from __future__ import annotations
 
 import json

@@ -73,7 +73,8 @@ print('helm-llama-2-13b' in d['profiles'])
 ```
 
 All three should print `True`. The HELM `model_deployments.yaml`
-emitted by `eval-audit-make-bundle` then routes
+emitted by `python -m eval_audit.integrations.infer_stack
+export-benchmark-bundle` then routes
 `meta/llama-2-70b` through the LiteLLM router at the local vLLM
 service.
 

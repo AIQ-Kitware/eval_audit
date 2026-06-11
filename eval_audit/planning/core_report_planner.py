@@ -1,3 +1,11 @@
+"""Comparison-intent planner: decides which official/local pairs to compare.
+
+Pairs official + local components by logical run key and emits
+comparison intents (including ``local_repeat`` for multi-attempt
+locals). Downstream, ``reports.core_metrics`` executes each planned
+comparison; see its module docstring for the role map of all
+``core_*`` modules.
+"""
 from __future__ import annotations
 
 import csv

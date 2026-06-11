@@ -1,3 +1,17 @@
+"""Per-pair core-metric comparison: tolerance sweeps and agreement curves.
+
+Role among the ``core_*`` modules:
+
+- ``reports.core_metrics`` (this file): computes per-metric agreement
+  across the abs_tol sweep for one official/local comparison and renders
+  ``core_metric_report.{txt,json,png}``. CLI: ``eval-audit-report-core``.
+- ``reports.core_packet``: the on-disk *format* of a finished core
+  report (manifest names, slugs, latest-symlink conventions).
+- ``reports.core_packet_summary``: read-side loader that aggregate
+  summaries use to consume finished packets.
+- ``planning.core_report_planner``: decides *which* comparisons to run
+  by pairing official + local components by logical run key.
+"""
 from __future__ import annotations
 
 import argparse

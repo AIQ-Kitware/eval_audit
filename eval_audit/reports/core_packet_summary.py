@@ -1,3 +1,10 @@
+"""Read-side loader for finished core-report packets.
+
+Aggregate summaries (``workflows.build_reports_summary``) use this to
+consume the packets that ``reports.core_metrics`` produced, using the
+format conventions defined in ``reports.core_packet``. See
+``reports.core_metrics`` for the role map of all ``core_*`` modules.
+"""
 from __future__ import annotations
 
 import json
