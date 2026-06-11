@@ -138,7 +138,7 @@ class CompileHelmReproListConfig(scfg.DataConfig):
 
     out_report_dpath = scfg.Value(
         None,
-        help="Deprecated. Reporting is now handled by eval_audit.cli.reports filter.",
+        help="Deprecated. Reporting is now handled by eval_audit.reports.filter_analysis.",
     )
 
     out_inventory_json = scfg.Value(
@@ -188,7 +188,7 @@ class CompileHelmReproListConfig(scfg.DataConfig):
             raise SystemExit(
                 '--out_report_dpath is no longer supported here. '
                 'Use --out_inventory_json to save the Stage 1 inventory, then run '
-                '`python -m eval_audit.cli.reports filter --report-dpath <reports/filtering> '
+                '`python -m eval_audit.reports.filter_analysis --report-dpath <reports/filtering> '
                 '--inventory-json <inventory.json>`.'
             )
 

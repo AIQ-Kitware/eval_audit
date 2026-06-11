@@ -668,8 +668,7 @@ def write_filter_rebuild_script(report_dpath: Path, *, inventory_json: Path | No
     cmd = [
         '"${PYTHON_BIN}"',
         '-m',
-        'eval_audit.cli.reports',
-        'filter',
+        'eval_audit.reports.filter_analysis',
         '--report-dpath',
         '"${REPORT_DPATH}"',
         '--inventory-json',
@@ -707,7 +706,7 @@ def write_filter_reproduce_script(report_dpath: Path, *, source_command: str | N
         lines.extend([
             '',
             '# Rebuild the filter report bundle from the latest saved inventory.',
-            'PYTHONPATH="$REPO_ROOT" "$PYTHON_BIN" -m eval_audit.cli.reports filter --report-dpath "$REPORT_DPATH" "$@"',
+            'PYTHONPATH="$REPO_ROOT" "$PYTHON_BIN" -m eval_audit.reports.filter_analysis --report-dpath "$REPORT_DPATH" "$@"',
         ])
     script = write_reproduce_script(report_dpath / 'reproduce.sh', lines)
     link_alias(script, report_dpath, 'reproduce.sh')

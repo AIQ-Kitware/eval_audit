@@ -1,3 +1,19 @@
+"""Deprecated grouped dispatcher kept for previously generated artifacts.
+
+Filter-report ``reproduce.sh`` / ``rebuild_analysis.sh`` scripts written
+before 2026-06-11 invoke ``python -m eval_audit.cli.reports filter ...``,
+so this module must keep resolving those commands (ADR 5: every
+generated output gets a reproduce script). Newly generated scripts and
+all documentation use the flat surface instead:
+
+- ``filter``     -> ``python -m eval_audit.reports.filter_analysis``
+- ``pair``       -> ``eval-audit-compare-pair``
+- ``core``       -> ``eval-audit-report-core``
+- ``aggregate``  -> ``eval-audit-report-aggregate``
+- ``experiment`` -> ``eval-audit-analyze-experiment``
+
+Do not add new subcommands here.
+"""
 from __future__ import annotations
 
 import argparse

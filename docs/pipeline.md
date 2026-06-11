@@ -257,7 +257,8 @@ Both Stage 2 and Stage 4 read from two indexes:
 - **Local audit index:** `eval-audit-index` builds the audit-results index
   CSV/JSONL at `$AUDIT_STORE_ROOT/indexes/audit_results_index_<timestamp>.{csv,jsonl,txt}`.
   Re-run before composing if new audit runs have appeared on disk.
-- **Official public index:** built by [`eval_audit/workflows/analyze_official_index.py`](../eval_audit/workflows/analyze_official_index.py)
+- **Official public index:** built by [`eval_audit/workflows/analyze_index_snapshot.py`](../eval_audit/workflows/analyze_index_snapshot.py)
+  (`eval-audit-analyze-index-snapshot`; formerly named `analyze_official_index`)
   from the public HELM corpus mirror at `/data/crfm-helm-public/`. **UNSURE**:
   exact regeneration cadence; check `$AUDIT_STORE_ROOT/indexes/official_public_index*` modification times.
 

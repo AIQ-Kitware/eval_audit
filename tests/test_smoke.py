@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 from eval_audit.cli.check_env import main as check_env_main
-from eval_audit.cli.compare import main as compare_main
+from eval_audit.cli.compare_batch import main as compare_batch_main
+from eval_audit.cli.compare_pair import main as compare_pair_main
 from eval_audit.cli.manifests import main as manifests_main
 from eval_audit.cli.reports import main as reports_main
 from eval_audit.cli.run import main as run_main
@@ -20,7 +21,16 @@ from eval_audit.workflows.compare_batch import aggregate_report
 
 @pytest.mark.parametrize(
     "main",
-    [check_env_main, compare_main, manifests_main, reports_main, run_main],
+    [
+        check_env_main,
+        compare_batch_main,
+        compare_pair_main,
+        manifests_main,
+        # cli.reports is the deprecated grouped dispatcher kept alive for
+        # previously generated reproduce.sh artifacts; keep it smoke-tested.
+        reports_main,
+        run_main,
+    ],
 )
 def test_cli_help_smoke(main):
     with pytest.raises(SystemExit) as exc:
