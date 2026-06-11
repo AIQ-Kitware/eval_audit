@@ -213,9 +213,13 @@ def test_build_reports_summary_loads_rows_from_packet_manifests_without_selectio
     report_dir = canonical_root / "exp-a" / "core-reports" / "core-metrics-bench-model-a"
     _write_core_report_packet(report_dir, experiment_name="exp-a", run_entry="bench:model=a", single_run=False)
 
-    monkeypatch.setattr(build_reports_summary, "experiments_analysis_root", lambda: canonical_root)
-    monkeypatch.setattr(build_reports_summary, "publication_experiments_root", lambda: publication_root_link)
-    monkeypatch.setattr(build_reports_summary, "legacy_repo_publication_root", lambda: legacy_repo_root)
+    # _load_all_repro_rows lives in reports.summary.loading and binds the
+    # path helpers from its own module namespace; patch them there.
+    from eval_audit.reports.summary import loading as summary_loading
+
+    monkeypatch.setattr(summary_loading, "experiments_analysis_root", lambda: canonical_root)
+    monkeypatch.setattr(summary_loading, "publication_experiments_root", lambda: publication_root_link)
+    monkeypatch.setattr(summary_loading, "legacy_repo_publication_root", lambda: legacy_repo_root)
 
     rows = build_reports_summary._load_all_repro_rows()
 
