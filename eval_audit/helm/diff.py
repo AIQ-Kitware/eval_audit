@@ -76,13 +76,7 @@ from eval_audit.helm.analysis import HelmRunAnalysis
 from eval_audit.utils.numeric import safe_float as _safe_float, quantile as _quantile
 from typing import Any, Callable, Iterable
 
-# Zero-overhead in normal runs; line_profiler swaps in a real profiler when
-# the LINE_PROFILE env var is set.
-try:
-    from line_profiler import profile  # type: ignore[import-not-found]
-except ImportError:
-    def profile(func):  # type: ignore[no-redef]
-        return func
+from eval_audit.infra.profiling import profile
 
 
 def _format_bool(ok: bool) -> str:

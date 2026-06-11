@@ -50,13 +50,7 @@ from eval_audit.infra.logging import setup_cli_logging
 from eval_audit.planning.core_report_planner import build_planning_artifact
 from eval_audit.workflows.plan_core_report_packets import write_planning_outputs
 
-# Zero-overhead in normal runs; line_profiler swaps in a real profiler when
-# the LINE_PROFILE env var is set. See the same shim in build_reports_summary.
-try:
-    from line_profiler import profile  # type: ignore[import-not-found]
-except ImportError:
-    def profile(func):  # type: ignore[no-redef]
-        return func
+from eval_audit.infra.profiling import profile
 
 
 # ---------------------------------------------------------------------------

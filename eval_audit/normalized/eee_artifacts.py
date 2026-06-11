@@ -26,13 +26,7 @@ from eval_audit.helm.hashers import stable_hash36
 from eval_audit.infra.paths import audit_store_root, repo_root
 from eval_audit.normalized.loaders import _eee_converter_name, _eee_converter_version
 
-# Zero-overhead in normal runs; line_profiler swaps in a real profiler when
-# the LINE_PROFILE env var is set.
-try:
-    from line_profiler import profile  # type: ignore[import-not-found]
-except ImportError:
-    def profile(func):  # type: ignore[no-redef]
-        return func
+from eval_audit.infra.profiling import profile
 
 
 def _atomic_write_text(fpath: Path, content: str) -> None:

@@ -34,13 +34,7 @@ from eval_audit.reports.core_packet import (
     slugify_identifier,
 )
 
-# Same line_profiler shim used in build_reports_summary / sankey: zero cost
-# unless LINE_PROFILE=1, identity wrapper if line_profiler isn't installed.
-try:
-    from line_profiler import profile  # type: ignore[import-not-found]
-except ImportError:
-    def profile(func):  # type: ignore[no-redef]
-        return func
+from eval_audit.infra.profiling import profile
 
 
 def latest_index_csv(index_dpath: Path) -> Path:

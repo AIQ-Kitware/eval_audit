@@ -48,17 +48,7 @@ from eval_audit.utils import sankey_builder
 
 from loguru import logger
 
-# ``@profile`` is a zero-overhead no-op unless ``LINE_PROFILE=1`` is set in
-# the environment, in which case ``line_profiler`` swaps in a real profiler.
-# That lets us leave decorators on hot functions in production without any
-# runtime cost. Fallback to an identity wrapper when line_profiler isn't
-# installed at all (so fresh checkouts don't break before someone runs
-# ``uv pip install line_profiler``).
-try:
-    from line_profiler import profile  # type: ignore[import-not-found]
-except ImportError:
-    def profile(func):  # type: ignore[no-redef]
-        return func
+from eval_audit.infra.profiling import profile
 
 
 DEFAULT_BREAKDOWN_DIMS = [

@@ -31,13 +31,7 @@ from eval_audit.normalized.joins import (
 )
 from eval_audit.normalized.model import InstanceRecord, NormalizedRun
 
-# Zero-overhead in normal runs; line_profiler swaps in a real profiler when
-# the LINE_PROFILE env var is set.
-try:
-    from line_profiler import profile  # type: ignore[import-not-found]
-except ImportError:
-    def profile(func):  # type: ignore[no-redef]
-        return func
+from eval_audit.infra.profiling import profile
 
 
 # ---------------------------------------------------------------------------
