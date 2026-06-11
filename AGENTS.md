@@ -3,6 +3,9 @@ aivm-2404, you very likely have a python environment already setup at:
 /home/agent/.local/uv/envs/uvpy3.13.2/bin/python with access to uv. You may
 install new packages as needed.
 
+General machine rules: prefer the `uv` at `~/.local/bin/uv` when one is not
+already on PATH. Never use `sudo`.
+
 ## Developer journal
 Keep a running journal at `dev/journals/<agent_name>.md` (e.g.
 `dev/journals/codex.md`) to capture the story of the work (decisions, progress,

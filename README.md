@@ -235,7 +235,7 @@ straightforward apt invocation).
 | [`docs/paper/`](docs/paper/) | **ACTIVE** | paper drafts (`main.tex`, `technical_report.tex`, `case_study_3*.tex`) and per-session writing logs; renamed from `dev/paper/` on 2026-05-02 |
 | [`docs/kwdagger-notes.md`](docs/kwdagger-notes.md) | **UNSURE** | small file, may still be accurate |
 | [`docs/helm-null-completion-text-patch-proposal.md`](docs/helm-null-completion-text-patch-proposal.md) | **UNSURE** | pre-EEE patch proposal; outcome unclear |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | **PARTIALLY STALE** | core ADRs (raw vs derived, reports/, filesystem-as-interface) still hold; specific module/CLI lists drifted with the rename and recent refactors |
+| [`docs/architecture.md`](docs/architecture.md) | **PARTIALLY STALE** | core ADRs (raw vs derived, reports/, filesystem-as-interface) still hold; specific module/CLI lists drifted with the rename and recent refactors; moved from repo-root `ARCHITECTURE.md` on 2026-06-11 |
 
 Moved into [`docs/historical/`](docs/historical/) on 2026-04-28 (preserved
 verbatim — they may still be useful as records of *how* a problem was

@@ -247,7 +247,7 @@ live under `.history/`. Many directories also carry a `reproduce.sh`
 that re-runs the computation that produced that directory. ADRs 4 ("the
 filesystem is part of the interface") and 5 ("every meaningful generated
 output gets a reproduce script") in
-[`ARCHITECTURE.md`](../ARCHITECTURE.md#appendix-architecture-decision-records)
+[`docs/architecture.md`](architecture.md#appendix-architecture-decision-records)
 describe the convention.
 
 ## Indexing (used by Stages 2–4)
