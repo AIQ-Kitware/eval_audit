@@ -788,9 +788,42 @@ def test_prioritized_example_symlink_tree_is_created_and_points_to_real_targets(
     assert (example_dir / "core_metric_report.png").resolve() == (report_dir / "core_metric_report.png").resolve()
 
 
-def test_prioritized_example_repairs_missing_latest_artifacts(tmp_path, monkeypatch):
-    report_dir = tmp_path / "reports" / "needs-repair"
-    report_dir.mkdir(parents=True)
+def test_prioritized_example_repair_classifies_without_regenerating(tmp_path):
+    """The repair pass classifies report dirs; it never regenerates.
+
+    Regeneration via ``rebuild_core_report_main`` was intentionally
+    removed (see the History section of
+    ``_repair_prioritized_example_reports``); the summary phase is a
+    pure read-pass. The function now classifies each prioritized
+    example as ``missing_report_dir``, ``incomplete``, or
+    ``already_ok``.
+    """
+    missing_dir = tmp_path / "reports" / "never-created"
+    incomplete_dir = tmp_path / "reports" / "incomplete"
+    incomplete_dir.mkdir(parents=True)
+    complete_dir = tmp_path / "reports" / "complete"
+    complete_dir.mkdir(parents=True)
+    # Without a core_metric_report.json packet, the expected artifact
+    # list falls back to the six fixed names.
+    fallback_artifacts = [
+        "core_metric_report.png",
+        "core_metric_management_summary.txt",
+        "components_manifest.json",
+        "comparisons_manifest.json",
+        "warnings.json",
+        "warnings.txt",
+    ]
+    for name in fallback_artifacts:
+        (complete_dir / name).write_text("present")
+
+    def _example_row(run_entry: str, report_dir: Path) -> dict:
+        return {
+            "experiment_name": "exp-repair",
+            "run_entry": run_entry,
+            "report_dir": str(report_dir),
+            "analysis_single_run": True,
+        }
+
     summary = {
         "selected_by_section": {
             "score_ge_95": [
@@ -798,16 +831,13 @@ def test_prioritized_example_repairs_missing_latest_artifacts(tmp_path, monkeypa
                     "priority_rank": 1,
                     "dimension": "benchmark",
                     "dimension_value": "bench-repair",
-                    "selection_reason": "repair me",
+                    "selection_reason": "classify me",
                     "breakdown_dir": str(tmp_path / "breakdowns" / "bench-repair"),
                     "breakdown_index_dir": str(tmp_path / "breakdowns"),
                     "example_rows": [
-                        {
-                            "experiment_name": "exp-repair",
-                            "run_entry": "bench-repair:model=a",
-                            "report_dir": str(report_dir),
-                            "analysis_single_run": True,
-                        }
+                        _example_row("bench-repair:model=missing", missing_dir),
+                        _example_row("bench-repair:model=incomplete", incomplete_dir),
+                        _example_row("bench-repair:model=complete", complete_dir),
                     ],
                 }
             ],
@@ -819,32 +849,16 @@ def test_prioritized_example_repairs_missing_latest_artifacts(tmp_path, monkeypa
         }
     }
 
-    calls = []
-
-    def _fake_rebuild(argv):
-        calls.append(argv)
-        for name in [
-            "core_metric_report.png",
-            "core_metric_management_summary.txt",
-            "components_manifest.json",
-            "comparisons_manifest.json",
-            "warnings.json",
-            "warnings.txt",
-            comparison_sample_latest_name("official_vs_local"),
-        ]:
-            (report_dir / name).write_text("repaired")
-
-    monkeypatch.setattr(
-        "eval_audit.workflows.build_reports_summary.rebuild_core_report_main",
-        _fake_rebuild,
-    )
-
     repairs = _repair_prioritized_example_reports(
         summary=summary,
         index_fpath=tmp_path / "index.csv",
     )
 
-    assert len(calls) == 1
-    assert "--allow-single-repeat" in calls[0]
-    assert repairs[0]["status"] == "repaired"
-    assert repairs[0]["missing_artifacts"] == []
+    by_status = {row["status"]: row for row in repairs}
+    assert set(by_status) == {"missing_report_dir", "incomplete", "already_ok"}
+    assert by_status["missing_report_dir"]["missing_artifacts"] == fallback_artifacts
+    assert by_status["incomplete"]["missing_artifacts"] == fallback_artifacts
+    assert by_status["already_ok"]["missing_artifacts"] == []
+    # No artifacts were created anywhere: classification is read-only.
+    assert list(incomplete_dir.iterdir()) == []
+    assert not missing_dir.exists()
