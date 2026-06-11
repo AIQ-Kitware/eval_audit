@@ -236,42 +236,63 @@ wc -l eval_audit/reports/summary/*.py eval_audit/workflows/build_reports_summary
 ## Phase 3 — One comparison core, HELM + EEE as adapters
 *Effort: 1–2 weeks · Risk: high · Needs its own design pass before any code*
 
-**Problem:** the HELM-shaped and EEE-only paths are parallel surfaces — `compare-pair` vs
-`compare-pair-eee`, `from-eee`, plus the `normalized/helm_compat` + `compat/helm_outputs` bridges.
-Logic is duplicated rather than shared.
+**Status: DESIGNED 2026-06-11, not started.** The design pass this phase requires is written:
 
-### Target architecture
+- [`phase3-comparison-core-unification.md`](phase3-comparison-core-unification.md) — the design.
+- [`phase3-behavior-equivalence-matrix.md`](phase3-behavior-equivalence-matrix.md) — the test matrix
+  that gates every sub-stage.
+
+**Problem:** the HELM-shaped and EEE-only paths run two forked comparison cores (`HelmRunDiff` vs
+`normalized.compare`) that produce overlapping agreement numbers, plus thrice-implemented EEE
+index-row synthesis. The planner, renderer, and aggregate are already shared — only the loader→diff
+segment is forked.
+
+**The design pass corrected one thing in the sketch below.** Phase 3 ≡ the unstarted **Stage 4** of
+the in-flight normalized refactor ([`dev/analysis/eee_refactor_stage1_map.md`](../../dev/analysis/eee_refactor_stage1_map.md))
+**+** the enabling half of the **EEE-only hard split** ([`docs/eee-only-hard-split-todo.md`](../eee-only-hard-split-todo.md),
+owned by Jon). Those two prior efforts make the original "collapse the dual CLIs into one
+auto-detecting command" sketch **wrong**: the EEE entry points must stay *separately importable and
+HELM-free* so "the analysis used only EEE" is a checkable `grep`, not a code review. **Corrected
+goal: unify the core, keep the entry points thin and separate.** See the design doc §1.2.
+
+### Target architecture (corrected)
 
 ```
-                ┌─ helm_adapter  (run_spec.json + HELM run dirs) ─┐
-input sources ──┤                                                 ├─→ NormalizedRun ─→ comparison core ─→ reports
-                └─ eee_adapter   (every_eval_ever artifacts)      ─┘
-                                                   (single path: planner → core_metrics → summary)
+            ┌─ helm_adapter (run_spec.json + HELM run dirs) ─┐
+inputs ─────┤                                                ├─► NormalizedRun ─► NormalizedDiff ─► reports
+            └─ eee_adapter  (every_eval_ever artifacts)      ─┘        │           (HELM-free core)
+                                                                       └─► HelmRunDiff: run_spec semantic
+                                                                           diff only, HELM path only,
+                                                                           never imported by EEE entry points
 ```
 
-- **`NormalizedRun` becomes the only currency** past the adapter boundary. `normalized/model.py` and
-  `helm_compat.py` already exist — this phase promotes that boundary from "bridge bolted onto the
-  HELM path" to "the contract everything speaks."
-- **Collapse the dual CLIs:** `compare-pair` and `compare-pair-eee` become one `eval-audit-compare-pair`
-  that auto-detects source type (`detect_helm_sidecars` in `cli/from_eee.py` already does part of
-  this). Same for the analyze→summarize chain — it should run unchanged regardless of source, which
-  is already the stated goal for `build-virtual-experiment`.
-- **Keep the "comparability collapses to `unknown`" behavior** — that's correct per the research
-  design (see CLAUDE.md). The point isn't to change semantics, it's to stop maintaining two code
-  paths that produce them.
-- Keep the old `eval-audit-compare-pair-eee` script as a deprecated alias for one release cycle so
-  existing runbooks don't break silently; print a deprecation pointer.
+- **`NormalizedRun` is already the currency** ([`normalized/model.py`](../../eval_audit/normalized/model.py));
+  this phase promotes the Stage-3 `helm_compat` shim into a real `NormalizedDiff` and quarantines
+  `HelmRunDiff` to run_spec semantic diff + raw-evidence inspection.
+- **Keep two thin, separate entry points**, not one. The EEE renderer lives in a HELM-free
+  `eval_audit/eee_only/` namespace enforced by a `sys.modules` test (0 `eval_audit.helm.*` loaded).
+- **Preserve `comparability_unknown:*` collapse** — it's the honest "recipe unverifiable" signal
+  (CLAUDE.md). The comparability-facts machinery in the planner is already source-kind-agnostic and is
+  NOT touched.
+- Three HELM tendrils must be cut first (`helm.metrics` lift, module-level `HelmRunDiff` import, the
+  silent HELM fallback in the EEE loader) — see design doc §2.2.
+
+### Sub-stages (full breakdown in the design doc §4)
+
+4.0 lift `helm.metrics` → 4.1 `recipe_facts` accessor → 4.2 `normalized/diagnose.py` (byte-match
+`_diagnose_repro`) → 4.3 `NormalizedDiff` (high-risk hinge) → 4.4 `eee_only/` HELM-free renderer →
+4.5 remove the silent HELM fallback → 4.6 point HELM path at `NormalizedDiff` → 4.7 native EEE
+`recipe_facts` (upstream coordination) → 4.8 docs + retire shims.
 
 ### Why last
 
-It's the only phase that touches research-meaningful behavior, so it needs Phases 1–2's clean seams
-and test coverage underneath it first. Start it with a written design doc + a behavior-equivalence
-test matrix (HELM-input and EEE-input producing the expected `status`/`comparability_unknown:*`
-fields), *then* refactor.
+It's the only phase touching research-meaningful numbers, so it needs Phases 1–2's clean seams and a
+captured behavior baseline first. **Stop condition:** if at 4.3 or 4.6 the numbers move beyond the
+matrix tolerance, halt — the soft separation was load-bearing somewhere unaudited.
 
-**Exit criteria:** a single comparison core with two input adapters; one `compare-pair` and one
-analyze→summarize chain; EEE/HELM behavior matrix tests green; `tests/test_eee_only_demo.py` and
-`tests/test_compare_pair_eee.py` outputs unchanged.
+**Exit criteria:** one `NormalizedDiff` core; `HelmRunDiff` quarantined to semantic-diff;
+`import eval_audit.cli.from_eee` loads 0 `eval_audit.helm.*`; behavior-equivalence matrix green;
+`tests/test_eee_only_demo.py` and `tests/test_compare_pair_eee.py` outputs unchanged.
 
 ---
 
