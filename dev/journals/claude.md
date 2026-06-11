@@ -1799,3 +1799,71 @@ a repo writes executable artifacts referencing its own module paths,
 those paths are public API. (3) Fix the validation gate before
 refactoring through it — the stale monkeypatch test would have
 muddied every subsequent test run with a false failure.
+
+## 2026-06-11 15:27:31 -0400
+
+**User intent.** Continue with the Phase 2 secondary targets from
+`docs/planning/repo-refactor-plan.md`, committing each logical unit.
+
+**Model/config.** Claude Fable 5 (claude-fable-5[1m]), Claude Code
+VSCode harness.
+
+**What landed (6 commits, `9b7ddb7`..`9fcdfef` + plan/journal).** All
+five secondary-target god modules split, plus `helm/analysis.py`:
+
+- `cli/index_historic_helm_runs.py` 1015→483: Stage 1 library logic to
+  `indexing/historic_filtering.py` (390) and
+  `indexing/official_public_index.py` (218); the scriptconfig class and
+  `main()` stay in the CLI.
+- `helm/diff.py` 2658→2015: ~750 lines of module-level primitives
+  (walkers, truncation, semantic canonicalization, `Coverage`,
+  `dataset_overlap_from_request_states`) to `helm/diff_primitives.py`.
+- `reports/core_metrics.py` 2690→758: three layers —
+  `core_metric_curves.py` (math/loading/diagnostics, 884),
+  `core_metric_plots.py` (matplotlib, 829), `core_metric_tables.py`
+  (text/tables, 367).
+- `reports/filter_analysis.py` 1790→636:
+  `filter_analysis_{tables,text,charts,io}.py`; `emit_*` orchestrators
+  stay because generated `reproduce.sh` artifacts call this module.
+- `reports/eee_only_heatmap.py` 1460→311: `eee_heatmap_data.py` +
+  `eee_heatmap_render.py`; left the known
+  `sythetic_reasoning_natural` key alone per the 2026-05-01 session
+  log (fixing it would orphan data).
+- `helm/analysis.py` 1304→296: `helm/instance_stats.py` (join layer) +
+  `helm/analysis_report.py` (summary shaping); `HelmRunAnalysis`'s
+  methods resolve `summary`/`summary_dict` through module globals, so
+  the facade's re-export bindings preserve behavior.
+
+**Method.** Generalized the AST splitter from the morning session into
+a reusable harness (`/tmp/splitlib.py` + `/tmp/verify_split.py`):
+parse → symbol/dependency map → cluster spec → generate submodules
+with exactly the imports each needs → facade keeps `main()`/classes +
+compat re-exports. Every split verified by (a) AST-identity of every
+top-level symbol vs HEAD, (b) undefined-name scan over the new
+modules, (c) targeted test suites incl. `--run-slow` rendering/e2e
+runs, (d) full suite matching the 10-failure pre-existing baseline.
+
+**Two test fixes along the way** (same root cause as the morning's):
+monkeypatching a facade module doesn't reach functions that now bind
+collaborators in their new home module —
+`test_core_metrics_single_run` now patches
+`reports.core_metric_curves` directly.
+
+**Deliberately not split.** `HelmRunDiff` (1,902-line class),
+`_render_scope_summary` (907-line function), and
+`core_report_planner.py` (1,336, single cohesive planner): all three
+are cohesive logic units where partitioning is behavior-risky surgery,
+not relocation. Recorded in the plan as future deliberate redesigns.
+
+**Next steps.** Phase 3 (HELM/EEE adapter unification) design doc;
+cross-cutting cleanups (dev/oneoff triage, configs/generated policy,
+reproduce/ runbook audit); submodule-sync pass for the 10 baseline
+failures once the adapter work settles.
+
+**Design insight.** Once the splitter was a reusable harness, each
+subsequent god-module split cost ~15 minutes including verification —
+the marginal cost of mechanical refactoring collapses when the
+verification (AST-identity + name scan) is automated rather than
+re-reasoned per file. The judgment that remains human is *where the
+seams are* and *what must stay put* (python -m surfaces, generated
+artifacts' import paths, monkeypatch targets).

@@ -198,12 +198,29 @@ Split into a `reports/summary/` subpackage, along the function-name-prefix seams
 
 ### Secondary targets (same characterization-first method, lower urgency)
 
-- `cli/index_historic_helm_runs.py` (1015) — extract filtering/eligibility logic to `indexing/`,
-  leave a thin CLI (finishes the Phase 1 deferral).
-- `helm/diff.py` (2658) and `helm/analysis.py` (1304) — split diff computation from diff *reporting*.
-- `reports/core_metrics.py` (2672) — separate curve math from rendering.
-- `reports/filter_analysis.py` (1790) and `reports/eee_only_heatmap.py` (1460) — separate
-  data-shaping from plotting.
+**Status: DONE 2026-06-11** (commits `9b7ddb7`..`9fcdfef`). All splits were pure relocation,
+verified by AST-identity of every top-level symbol against HEAD plus the relevant test suites
+(including `--run-slow` rendering/e2e tests).
+
+- ✅ `cli/index_historic_helm_runs.py` (1015→483) — library logic extracted to
+  `indexing/historic_filtering.py` + `indexing/official_public_index.py`.
+- ✅ `helm/diff.py` (2658→2015) — module-level primitives extracted to `helm/diff_primitives.py`.
+  **Remaining**: `HelmRunDiff` itself is a cohesive 1,902-line class; partitioning it is logic
+  surgery (mixins/extraction with behavior risk), deliberately out of scope for the mechanical
+  pass. Future deliberate redesign if it keeps growing.
+- ✅ `helm/analysis.py` (1304→296) — `helm/instance_stats.py` + `helm/analysis_report.py`.
+- ✅ `reports/core_metrics.py` (2690→758) — `core_metric_curves.py` + `core_metric_plots.py` +
+  `core_metric_tables.py`; the 614-line CLI `main()` stays.
+- ✅ `reports/filter_analysis.py` (1790→636) — `filter_analysis_{tables,text,charts,io}.py`;
+  `emit_*` orchestrators and `main()` stay (the module is the `python -m` surface that generated
+  `reproduce.sh` artifacts invoke).
+- ✅ `reports/eee_only_heatmap.py` (1460→311) — `eee_heatmap_data.py` + `eee_heatmap_render.py`;
+  `main()` stays (runbook invokes `python -m eval_audit.reports.eee_only_heatmap`).
+
+Files still >1,200 lines after this pass: `helm/diff.py` (2015, the HelmRunDiff class — see above),
+`planning/core_report_planner.py` (1336, single cohesive planner), and the
+`build_reports_summary.py` orchestrator (1296, of which ~907 is `_render_scope_summary` — splitting
+that function is logic surgery, same verdict as HelmRunDiff).
 
 ### Phase 2 verification
 
