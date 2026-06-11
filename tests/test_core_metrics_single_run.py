@@ -126,18 +126,22 @@ def test_single_run_instance_rows_honor_manifest_component(monkeypatch):
     calls = []
     marker = object()
 
+    # _single_run_instance_core_rows lives in reports.core_metric_curves and
+    # binds its collaborators from that module's namespace; patch them there.
+    from eval_audit.reports import core_metric_curves
+
     monkeypatch.setattr(
-        core_metrics,
+        core_metric_curves,
         "_load_component_run",
         lambda arg: calls.append(("component", arg)) or marker,
     )
     monkeypatch.setattr(
-        core_metrics,
+        core_metric_curves,
         "_load_normalized",
         lambda arg: calls.append(("raw", arg)) or object(),
     )
     monkeypatch.setattr(
-        core_metrics.ncompare,
+        core_metric_curves.ncompare,
         "instance_core_score_records",
         lambda nrun: calls.append(("records", nrun)) or [],
     )
