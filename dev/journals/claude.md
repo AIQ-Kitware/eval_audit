@@ -1714,3 +1714,88 @@ filename and location are evidence, not verdicts — every candidate
 deletion needs a fan-in grep first. All three errors in the first
 draft came from trusting appearance (root-level YAML "looks like
 output", unwired CLI "looks orphaned") over reference-tracing.
+
+## 2026-06-11 15:11:29 -0400
+
+**User intent.** Execute the refactor plan written earlier today
+(`docs/planning/repo-refactor-plan.md`), committing each logical unit
+of work separately.
+
+**Model/config.** Claude Fable 5 (claude-fable-5[1m]), Claude Code
+VSCode harness. Repo-local git identity set to the user.
+
+**What landed (10 commits).** Phases 0–2 of the plan are implemented;
+each phase verified before its commit.
+
+- *Baseline repair.* `tests/test_end_to_end_summary.py` had one test
+  monkeypatching the long-deleted `rebuild_core_report_main` attribute;
+  rewrote it to the current classify-only contract. Established the
+  known-failure baseline first: 10 failures in
+  `test_infer_stack_integration.py` / `test_run_surface.py` pre-date
+  everything here (infer_stack submodule's `load_profile_contract`
+  dropped its `root` kwarg; kwdagger argv drift) and sit in the
+  integration boundary the user is actively reworking in adapter.py
+  (left uncommitted, untouched).
+- *Phase 0.* Moved `run_specs.yaml`/`run_details.yaml` →
+  `configs/`, fixed the one in-repo reader; fixed `.gitignore`
+  (`./X/` patterns are invalid gitignore syntax and matched nothing —
+  anchored as `/X/`; widened `.venv*/`); removed the empty
+  `integrations/vllm_service/` dir; renamed the test file; repaired
+  two dev e2e scripts still invoking the deleted module path; moved
+  `ARCHITECTURE.md` → `docs/architecture.md` with link fixes.
+- *Phase 1.* All 19 console scripts now resolve to thin
+  `eval_audit.cli.*` wrappers (7 new shims); Stage 1 gained
+  `eval-audit-index-historic`; deleted `cli/compare.py`; froze
+  `cli/reports.py` as a documented compat surface because previously
+  generated `reproduce.sh` artifacts invoke
+  `python -m eval_audit.cli.reports filter` (ADR 5) — new artifacts
+  reference `eval_audit.reports.filter_analysis` directly; deleted the
+  dead `workflows/analyze_official_index.py` alias; role docstrings on
+  the four confusable `core_*` modules.
+- *Phase 2.* Hoisted the `@profile` shim (duplicated in **fourteen**
+  modules, not just one) into `infra/profiling.py`. Then split the
+  5,369-line `build_reports_summary.py` into
+  `reports/summary/{common,classification,failure_triage,loading,
+  sankeys,multiplicity,breakdown,plots,publish}.py` with a 1,296-line
+  orchestrator keeping `_render_scope_summary`/`_render_breakdown_scopes`
+  (the one genuine cycle), `main()`, and compat re-exports.
+
+**Method note for the split.** Did it programmatically: AST-parsed the
+module, computed the top-level-symbol reference graph, validated the
+cluster assignment was a DAG (one cycle found and resolved by keeping
+both renderers in the orchestrator), then generated each submodule
+with exactly the imports its symbols reference. Verified by (a)
+asserting all 125 top-level symbols are AST-identical to HEAD, (b)
+full suite matching the pre-refactor baseline, (c) the slow
+`--run-slow` end-to-end summary builds (28 tests) passing, (d)
+console-script and `python -m` invocation both working. Two
+`AnnAssign` constants (`_QUANTILE_BUCKET_TARGETS`,
+`_FAILURE_CATEGORIES`) slipped through the first pass because the
+generator only handled plain `Assign` — caught by an undefined-name
+scan, relocated manually.
+
+**Not done / next steps.**
+- Phase 2 secondary targets: `helm/diff.py` (2658), `core_metrics.py`
+  (2672+docstring), `filter_analysis.py` (1790), `eee_only_heatmap.py`
+  (1460), and extracting `index_historic_helm_runs.py` filtering logic
+  into `indexing/`. Same characterization-first method applies.
+- Phase 3 (HELM/EEE adapter unification) still needs its own design
+  doc before any code.
+- Cross-cutting: `dev/oneoff/` triage, `configs/generated/` policy,
+  full `reproduce/` runbook audit (one stale ref already fixed).
+- The 10 baseline failures want a submodule-sync pass once the user's
+  adapter work settles.
+- `.git/gc.log` warns about unreachable loose objects; a `git prune`
+  would quiet it (left alone — user's call).
+
+**Design insights.** (1) For god-module splits, generating the split
+from the AST beats hand-moving functions: the reference graph tells
+you the real seams (and the one true cycle), and AST-dump equality
+gives a machine-checkable "pure relocation" guarantee that no amount
+of eyeballing matches. (2) "Orphaned" is a property of the whole
+artifact ecosystem, not the repo: `cli/reports.py` looked deletable
+until generated-on-disk reproduce scripts turned out to call it. When
+a repo writes executable artifacts referencing its own module paths,
+those paths are public API. (3) Fix the validation gate before
+refactoring through it — the stale monkeypatch test would have
+muddied every subsequent test run with a false failure.
