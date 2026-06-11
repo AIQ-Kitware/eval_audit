@@ -24,7 +24,7 @@ infer-stack switch \
 
 infer-stack wait-ready
 
-python -m eval_audit.integrations.vllm_service export-benchmark-bundle \
+python -m eval_audit.integrations.infer_stack export-benchmark-bundle \
   --preset e2e-phi_2-vllm-philosophy \
   --bundle-root "$BUNDLE_ROOT" \
   --base-url "${LITELLM_BASE_URL}/v1" \
