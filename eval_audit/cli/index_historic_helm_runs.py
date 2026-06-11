@@ -1010,6 +1010,11 @@ def write_official_public_index(
 
 __cli__ = CompileHelmReproListConfig
 
-if __name__ == "__main__":
+
+def main(argv: list[str] | None = None) -> None:
     setup_cli_logging()
-    __cli__.main()
+    __cli__.main(argv=argv)
+
+
+if __name__ == "__main__":
+    main()

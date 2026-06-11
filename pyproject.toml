@@ -47,21 +47,26 @@ dependencies = [
 
 
 [project.scripts]
+# Every console script resolves to a thin wrapper in eval_audit.cli.*;
+# business logic lives in the domain packages (workflows/, reports/, ...).
+# Runbooks that invoke `python -m eval_audit.workflows.X` keep working
+# because the library modules retain their main() functions.
 eval-audit-check-env = "eval_audit.cli.check_env:main"
 eval-audit-make-manifest = "eval_audit.cli.manifests:main"
 eval-audit-run = "eval_audit.cli.run:main"
-eval-audit-index = "eval_audit.workflows.index_results:main"
-eval-audit-compare-pair = "eval_audit.reports.pair_report:main"
-eval-audit-compare-batch = "eval_audit.workflows.compare_batch:main"
-eval-audit-report-core = "eval_audit.reports.core_metrics:main"
-eval-audit-report-aggregate = "eval_audit.reports.aggregate:main"
-eval-audit-rebuild-core = "eval_audit.workflows.rebuild_core_report:main"
-eval-audit-analyze-experiment = "eval_audit.workflows.analyze_experiment:main"
+eval-audit-index = "eval_audit.cli.index:main"
+eval-audit-index-historic = "eval_audit.cli.index_historic_helm_runs:main"
+eval-audit-compare-pair = "eval_audit.cli.compare_pair:main"
+eval-audit-compare-batch = "eval_audit.cli.compare_batch:main"
+eval-audit-report-core = "eval_audit.cli.report_core:main"
+eval-audit-report-aggregate = "eval_audit.cli.report_aggregate:main"
+eval-audit-rebuild-core = "eval_audit.cli.rebuild_core:main"
+eval-audit-analyze-experiment = "eval_audit.cli.analyze_experiment:main"
 eval-audit-analyze-many = "eval_audit.cli.analyze_many:main"
-eval-audit-build-summary = "eval_audit.workflows.build_reports_summary:main"
+eval-audit-build-summary = "eval_audit.cli.build_summary:main"
 eval-audit-portfolio-status = "eval_audit.cli.portfolio_status:main"
-eval-audit-analyze-index-snapshot = "eval_audit.workflows.analyze_index_snapshot:main"
-eval-audit-prepare-eee = "eval_audit.workflows.prepare_eee_artifacts:main"
+eval-audit-analyze-index-snapshot = "eval_audit.cli.analyze_index_snapshot:main"
+eval-audit-prepare-eee = "eval_audit.cli.prepare_eee:main"
 eval-audit-build-virtual-experiment = "eval_audit.cli.build_virtual_experiment:main"
 eval-audit-from-eee = "eval_audit.cli.from_eee:main"
 eval-audit-compare-pair-eee = "eval_audit.cli.compare_pair_eee:main"
