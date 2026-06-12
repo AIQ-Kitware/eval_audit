@@ -24,6 +24,14 @@ from eval_audit.normalized import (
 from eval_audit.normalized import compare as ncompare
 from eval_audit.normalized.helm_compat import helm_view
 from eval_audit.utils.numeric import quantile as _quantile
+# Row math relocated to the unified comparison core (Phase 3 / 4.3);
+# re-imported under the historical names so this module's public
+# surface (and the core_metrics facade re-exports) are unchanged.
+from eval_audit.normalized.diff import (
+    agreement_curve as _agreement_curve,
+    group_quantiles as _group_quantiles,
+    metric_quantiles as _metric_quantiles,
+)
 from eval_audit.infra.profiling import profile
 
 
@@ -221,62 +229,8 @@ def _diagnostic_flags(
     return flags
 
 
-@profile
-def _group_quantiles(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Compute every reported quantile of ``abs_delta`` in a single pass.
-
-    Previously called the pure-python ``_quantile`` helper six times, and
-    each call did its own internal sort — so we sorted the same vector
-    seven times. ``np.quantile`` does one sort and answers every q at
-    once.
-    """
-    n = len(rows)
-    if n == 0:
-        return {
-            'count': 0,
-            'abs_delta': {
-                'min': None, 'p50': None, 'p90': None,
-                'p95': None, 'p99': None, 'max': None,
-            },
-        }
-    arr = np.fromiter(
-        (float(r['abs_delta']) for r in rows),
-        dtype=np.float64,
-        count=n,
-    )
-    # method='linear' matches the existing _quantile helper's
-    # interpolation rule, so existing report numbers don't shift.
-    qs = np.quantile(arr, [0.0, 0.5, 0.9, 0.95, 0.99, 1.0], method='linear')
-    return {
-        'count': n,
-        'abs_delta': {
-            'min': float(qs[0]),
-            'p50': float(qs[1]),
-            'p90': float(qs[2]),
-            'p95': float(qs[3]),
-            'p99': float(qs[4]),
-            'max': float(qs[5]),
-        },
-    }
 
 
-@profile
-def _metric_quantiles(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    by_metric: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        # Split into separate statements so the line profiler can
-        # attribute the dict-key cast, the ``setdefault`` lookup, and
-        # the list append independently. ``setdefault(...).append(...)``
-        # collapses three operations onto one line.
-        metric_key = str(row['metric'])
-        bucket = by_metric.setdefault(metric_key, [])
-        bucket.append(row)
-    out = []
-    for metric, items in sorted(by_metric.items()):
-        info = _group_quantiles(items)
-        info['metric'] = metric
-        out.append(info)
-    return out
 
 
 _BINARY_CORE_METRICS = {
@@ -347,54 +301,6 @@ def _should_treat_as_discrete(values) -> bool:
     return len(unique_values) <= 8 and all(v in {0.0, 1.0} for v in unique_values)
 
 
-@profile
-def _agreement_curve(rows: list[dict[str, Any]], thresholds: list[float]) -> list[dict[str, Any]]:
-    """Count abs_delta-≤-threshold for each threshold via a single sort + searchsorted.
-
-    Previously did ``sum(v <= t for v in vals)`` inside a per-threshold
-    Python loop — O(N × K) Python comparisons per call. np.searchsorted
-    on a sorted array does each threshold's count in O(log N) (binary
-    search). For "≤ t" we use side='right': the rightmost insertion
-    point equals the number of values ≤ t.
-
-    Each subexpression is on its own line so the line profiler can
-    attribute the dict-extract, the sort, the searchsorted, the ratio
-    division, and the dict construction independently.
-    """
-    if not rows:
-        return []
-    n = len(rows)
-    # Pull the numerical column. ``np.fromiter`` avoids materializing
-    # an intermediate Python list at the cost of a generator-driven
-    # fill; for n in the thousands the difference is small but it
-    # keeps the GC heap quieter.
-    arr = np.fromiter(
-        (float(r['abs_delta']) for r in rows),
-        dtype=np.float64,
-        count=n,
-    )
-    arr.sort()
-    thresh_arr = np.asarray(thresholds, dtype=np.float64)
-    # side='right' = count of values ≤ t (rightmost insertion point).
-    counts = np.searchsorted(arr, thresh_arr, side='right')
-    # Ratios in one vector op rather than per-element division in
-    # the comprehension below.
-    ratios = counts / n
-    # Pre-cast counts to a Python list so the per-element ``int(...)``
-    # in the loop becomes a list-element fetch (numpy ints would JSON-
-    # serialize fine but downstream consumers expect Python ints).
-    counts_py = counts.tolist()
-    thresholds_py = thresh_arr.tolist()
-    ratios_py = ratios.tolist()
-    return [
-        {
-            'abs_tol': t,
-            'agree_ratio': r,
-            'matched': c,
-            'count': n,
-        }
-        for t, c, r in zip(thresholds_py, counts_py, ratios_py)
-    ]
 
 
 def _infer_run_spec_name(*run_paths: str) -> str:
