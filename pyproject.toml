@@ -41,6 +41,12 @@ dependencies = [
     "scikit-learn>=1.7.1",
     "scriptconfig>=0.8.4",
     "seaborn>=0.13",
+    # HELM tokenizer backends. The base crfm-helm pin does not pull these in,
+    # but local-execution runs load each model's HF tokenizer for prompt-window
+    # fitting; converting a slow tokenizer to fast needs one of these (e.g.
+    # allenai/olmo-7b — see submodules/helm tokenizer_configs.yaml note).
+    "sentencepiece>=0.2.0",
+    "tiktoken>=0.7",
     "typing-extensions>=4.0.0",
     "ubelt>=1.3.8",
 ]
