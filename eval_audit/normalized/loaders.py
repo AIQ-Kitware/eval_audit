@@ -89,6 +89,39 @@ def load_run(ref: NormalizedRunRef) -> NormalizedRun:
     return get_loader(ref.artifact_format).load(ref)
 
 
+#: ``ref.extra`` key declaring which instance source an EEE load uses.
+INSTANCE_SOURCE_POLICY_KEY = "instance_source_policy"
+
+_INSTANCE_SOURCE_POLICIES = {"eee-only", "helm-preferred"}
+
+
+def _resolve_instance_source_policy(ref: NormalizedRunRef) -> str:
+    """Resolve the declared instance-source policy for an EEE load.
+
+    Priority: an explicit ``instance_source_policy`` on ``ref.extra``
+    (set by the entry point — EEE-only CLIs declare ``eee-only``, the
+    HELM-driven renderer declares ``helm-preferred``), then the
+    deprecated ``EVAL_AUDIT_EEE_STRICT`` env override (one deprecation
+    cycle; equivalent to ``eee-only``), then ``helm-preferred`` — the
+    legacy enriched behavior, now explicit and recorded instead of
+    silent (Phase 3 / 4.5).
+    """
+    raw = str(ref.extra.get(INSTANCE_SOURCE_POLICY_KEY) or "").strip().lower()
+    if raw in _INSTANCE_SOURCE_POLICIES:
+        return raw
+    if raw:
+        raise LoaderError(
+            f"Unknown instance_source_policy {raw!r}; "
+            f"expected one of {sorted(_INSTANCE_SOURCE_POLICIES)}"
+        )
+    eee_strict = os.environ.get(
+        "EVAL_AUDIT_EEE_STRICT", ""
+    ).strip().lower() in {"1", "true", "yes"}
+    if eee_strict:
+        return "eee-only"
+    return "helm-preferred"
+
+
 # ---------------------------------------------------------------------------
 # EEE artifact loader
 # ---------------------------------------------------------------------------
@@ -265,30 +298,39 @@ class EeeArtifactLoader(Loader):
         # source, but report drilldown still needs stable HELM sample ids.
         # Older conversions lacked metric ids; newer conversions may carry
         # metric rows with sample hashes that do not join across separately
-        # converted public/local artifacts. Use raw HELM per_instance_stats
-        # whenever provenance is available so official/local instance joins
-        # remain comparable and drill back to the original evidence.
+        # converted public/local artifacts. Raw HELM per_instance_stats can
+        # therefore be the better instance source — but ONLY as a declared
+        # policy, never implicitly from what happens to be on disk
+        # (Phase 3 / 4.5, design doc §3.7; replaces the silent fallback
+        # flagged as the hot finding in docs/eee-only-hard-split-todo.md).
         #
-        # *** PAPER VALIDITY GUARD ***
-        # The block below silently overwrites the EEE-derived instances with
-        # HELM-derived instances when the HELM run dir is also on disk. For
-        # the EEE-only paper claim, this fallback must be off so the
-        # analysis honestly uses *only* EEE data. Set
-        # EVAL_AUDIT_EEE_STRICT={1,true,yes} (or pass the flag at the entry
-        # point that propagates here) to skip the HELM fallback. With it
-        # set, instance joins that depend on stable HELM sample ids
-        # gracefully fail to ``join_failed`` cells in the heatmap — which
-        # is the *honest* EEE-only signal. See
-        # docs/eee-only-hard-split-todo.md for the full architectural fix
-        # (lifting the recipe facts into the EEE schema so the fallback
-        # is never needed).
-        _eee_strict = os.environ.get(
-            "EVAL_AUDIT_EEE_STRICT", ""
-        ).strip().lower() in {"1", "true", "yes"}
-        if not _eee_strict and ref.origin.helm_run_path is not None:
-            raw_instances = _instances_from_raw_helm(ref.origin.helm_run_path, chosen_log)
+        # ``instance_source_policy`` on ref.extra:
+        #   'helm-preferred' — use HELM-derived instances when the origin
+        #       run dir yields them; if the origin is recorded but
+        #       unreadable, degrade to EEE instances and RECORD the
+        #       degradation (EEE artifacts are self-sufficient; missing
+        #       enrichment is a caveat, not a crash).
+        #   'eee-only' — never read HELM JSONs; joins that needed stable
+        #       HELM sample ids land in join_failed, the honest EEE-only
+        #       signal.
+        # The resulting choice is recorded as ``instance_source`` on the
+        # returned ref's extra so reports carry the provenance.
+        policy = _resolve_instance_source_policy(ref)
+        instance_source = "eee"
+        instance_source_note: str | None = None
+        if policy == "helm-preferred" and ref.origin.helm_run_path is not None:
+            try:
+                raw_instances = _instances_from_raw_helm(
+                    ref.origin.helm_run_path, chosen_log
+                )
+            except OSError as ex:
+                raw_instances = []
+                instance_source_note = f"helm_origin_unreadable: {ex!r}"
             if raw_instances:
                 instances = raw_instances
+                instance_source = "helm"
+            elif instance_source_note is None:
+                instance_source_note = "helm_origin_yielded_no_instances"
 
         # Augment ref.origin with the actual chosen artifact path.
         new_origin = Origin(
@@ -297,6 +339,11 @@ class EeeArtifactLoader(Loader):
             converter_name=ref.origin.converter_name or _eee_converter_name(),
             converter_version=ref.origin.converter_version or _eee_converter_version(),
         )
+        new_extra = dict(ref.extra)
+        new_extra["instance_source"] = instance_source
+        new_extra["instance_source_policy"] = policy
+        if instance_source_note is not None:
+            new_extra["instance_source_note"] = instance_source_note
         new_ref = NormalizedRunRef(
             source_kind=ref.source_kind,
             artifact_format=ref.artifact_format,
@@ -305,7 +352,7 @@ class EeeArtifactLoader(Loader):
             component_id=ref.component_id,
             logical_run_key=ref.logical_run_key,
             display_name=ref.display_name,
-            extra=ref.extra,
+            extra=new_extra,
         )
         return NormalizedRun(
             ref=new_ref,
