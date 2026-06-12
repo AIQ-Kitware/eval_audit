@@ -1867,3 +1867,76 @@ verification (AST-identity + name scan) is automated rather than
 re-reasoned per file. The judgment that remains human is *where the
 seams are* and *what must stay put* (python -m surfaces, generated
 artifacts' import paths, monkeypatch targets).
+
+## 2026-06-12 09:04:16 -0400
+
+**User intent.** Two asks across the session boundary: (1) create the
+design docs Phase 3 of the refactor plan requires (written 2026-06-11,
+commit `5b05562`); (2) revise them for a research-context shift: the
+EEE reproducibility case study is concluding, and the new program is
+HELM reproducibility with verified open-weight models plus an
+open-judge extension (closed-judge benchmarks re-run with open judges
+and compared), with the EEE-only path kept permanently as the
+framework-portability layer for when HELM is deprecated.
+
+**Model/config.** Opus 4.8 (claude-opus-4-8[1m]) for the initial
+design pass; Fable 5 (claude-fable-5[1m]) for the revision. Claude
+Code VSCode harness.
+
+**What landed.** `docs/planning/phase3-comparison-core-unification.md`
++ `phase3-behavior-equivalence-matrix.md` (commits `5b05562`,
+`76a320c`), plus the plan doc's Phase 3 section rewritten twice to
+match.
+
+**Initial design pass (yesterday).** Mapping both pipelines surfaced
+that Phase 3 is not greenfield: it equals the unstarted Stage 4 of the
+in-flight normalized refactor (helm_compat.py:138 says so explicitly)
+plus the EEE-only hard split. That inverted the plan's sketch —
+"collapse the CLIs into one auto-detecting command" would have
+imported the HELM adapter into the EEE path and destroyed the
+grep-checkable paper claim. Also found that even the "EEE-native"
+normalized/compare.py imports helm.metrics (a 117-line, stdlib-only
+metric-name taxonomy that isn't actually HELM-specific), and that
+from-eee/compare-pair-eee load 2 eval_audit.helm.* modules at import.
+
+**Revision pass (today).** The research-context shift changes the
+*weights*, and notably it does NOT reinstate the CLI merge — the
+entry-point separation survives on new grounds (metadata-tier
+explicitness: the R1 HELM renderer must fail loudly on missing
+run_spec rather than degrade to unknown; and future framework
+adapters arrive as thin entry points over one core). Key deltas:
+import-isolation guardrails demoted to optional hygiene, replaced by
+an operability gate (EEE entry points must build their full report
+tree with zero HELM artifacts on disk); the strict-mode default flip
+replaced by declared instance-source policies (helm-preferred /
+eee-only) with per-component instance_source provenance — under the
+new program HELM-derived instances are *better* data when available,
+so the sin to remove was silence, not enrichment; new sub-stage 4.9
+for the open-judge extension (relax CLOSED_JUDGE_BENCHMARKS behind a
+flag, same_judge fact, declared substitutions on comparison intents,
+judge-dependent vs deterministic metric-class split). Substitution
+semantics decision: facts stay honest (same_judge: no), only the
+diagnosis re-labels (intended_substitution:judge); a "substituted"
+fact status was rejected as dishonest-by-construction.
+
+**Uncertainties.** Where HELM run_specs carry judge/annotator
+identity per closed-judge benchmark — needs a spike across the six
+CLOSED_JUDGE_BENCHMARKS before same_judge is specifiable (recorded as
+open decision §9.2). Whether Jon agrees the case study is concluded
+enough to demote the guardrails (§9.1). Whether the F9 fixture can
+pin a realistic judge-metric shift without real closed-judge data.
+
+**Next steps.** §9 sign-offs, then 4.0–4.2 (taxonomy lift + judge
+classes, recipe_facts accessor, normalized/diagnose.py) — they are
+prerequisites for both the core swap and the extension, and 4.9's
+planner half can be pulled ahead of 4.3–4.6 if the extension
+analysis schedule demands it.
+
+**Design insights.** (1) When research priorities shift, re-derive
+each architectural conclusion from the new premises instead of
+toggling it: the CLI-merge rejection survived the demotion of its
+original justification because two *new* grounds replaced it — a
+conclusion can outlive its first rationale. (2) "Remove the fallback"
+and "make the fallback explicit" are different fixes for the same
+bug; which one is right depends on whether the fallback's *data* is
+wanted (here: yes, under R1) or only its *silence* is the problem.
