@@ -2077,3 +2077,66 @@ model identity) while *gifting* the extension a control group nobody
 had noticed (the open ensemble member's sub-scores). Cheap
 reality-checks against the actual corpus before specifying a feature
 beat another design iteration in the abstract.
+
+## 2026-06-12 10:05:09 -0400
+
+**User intent.** Continue Phase 3 implementation, committing logical
+units (third implementation session today).
+
+**Model/config.** Claude Fable 5 (claude-fable-5[1m]), Claude Code
+VSCode harness.
+
+**What landed (4 commits).** Sub-stages 4.6 and 4.5 — Phase 3's
+wiring flips — completing 4.0–4.6:
+
+- *4.6* (`5c8f7a4`) — `_build_pair` now builds its agreement blocks
+  via `NormalizedDiff.pair_summary` (one core), with HelmRunDiff's
+  HELM-grade diagnosis overlaid when not skipped;
+  `HelmRunDiff._diagnose_repro` delegates to
+  `normalized.diagnose.diagnose_repro` (single input-to-label
+  implementation, byte-match proven before the flip). Also repaired
+  the latent --run-slow failure in `test_core_metrics_single_run`:
+  the *third* instance of the facade-vs-implementing-module
+  monkeypatch pattern (table/figure writers bind
+  `_single_run_*` from their own namespaces since the Phase 2
+  split). All 9 tests in that file pass under --run-slow for the
+  first time since the split.
+- *4.5 loader half* (`9e40aa9`) — the silent HELM fallback in
+  `EeeArtifactLoader` replaced with a declared
+  `instance_source_policy` ('helm-preferred' enriches from a
+  readable origin and records degradation otherwise; 'eee-only'
+  never reads HELM JSONs; unknown values are loud errors;
+  EVAL_AUDIT_EEE_STRICT honored as a deprecated alias). Every EEE
+  load records instance_source/policy/note on the ref. The F6 probe
+  test stages the real demo artifact + a divergent synthetic HELM
+  run and pins: which ids win per policy, disk-state insensitivity,
+  recorded degradation. (First attempt at a fully synthetic EEE
+  aggregate failed pydantic validation — staging the committed
+  fixture was both easier and more honest.)
+- *4.5 renderer half* (`e5f905c`) — `--instance-source` on
+  core_metrics, stamped onto every manifest component so all load
+  sites honor it without per-site threading; EEE CLIs pass
+  eee-only; `pairs[].instance_sources` lands in the report next to
+  artifact_formats. F3/F4 baseline re-captured for the intended
+  additive change — reviewed diff: 12 insertions, 0 deletions.
+
+**State.** Phase 3 sub-stages 4.0–4.6 complete. Full suite 166
+passed + the same 10 pre-existing integration-boundary failures;
+all slow gates green. Design doc §4 updated with status.
+
+**Next steps.** 4.9 (open-judge extension: Stage-1
+--allow-closed-judge-benchmarks relax, curated judge map keyed by
+annotator class + suite version per the inventory, same_judge fact
+scoped to declared-substitution comparisons, per-metric judge
+attribution + metric-class split into reports/aggregates — the
+Stage-6 instance_source column rides along); 4.7 (file the upstream
+EEE recipe_facts issue incl. judge_models); 4.8 (docs + retire
+--skip-diagnosis / EVAL_AUDIT_EEE_STRICT after 4.9).
+
+**Design insight.** The two flip sub-stages (4.5/4.6) were cheap
+*because* everything risky had been proven additive-first: the core
+was byte-equal to the baseline before any wiring moved, so each flip
+was a small diff whose gates were already standing. Inverting the
+usual order — build the replacement next to the incumbent, prove
+equivalence, then swap — turned the 'high-risk hinge' into two
+routine commits.

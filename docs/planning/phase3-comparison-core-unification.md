@@ -281,6 +281,18 @@ recorded, never disk-state-dependent:
 Every sub-stage ends green against the [behavior-equivalence matrix](phase3-behavior-equivalence-matrix.md).
 Numbering continues the normalized-refactor stages.
 
+**Status 2026-06-12:** 4.0–4.6 **DONE** (commits `94c7fb4`..`e5f905c`); every gate green at each
+commit. Notes vs. the plan: 4.4 found and lifted a fourth tendril the §2.2 list missed
+(`helm/hashers.py` — the actual last `helm.*` module in the EEE import chain), after which the EEE
+CLIs import **zero** `eval_audit.helm.*` modules; the planned lazy-`HelmRunDiff` change proved
+unnecessary (Phase 2's split had already removed the renderer from the CLI import chain). 4.5's
+loader probe stages the real demo artifact rather than a synthetic aggregate (pydantic-valid by
+construction). The §9.2 judge-identity spike is done
+([`judge-identity-inventory.md`](judge-identity-inventory.md)) — its findings reshape 4.9
+(per-metric substitution framing; curated class+version→judge-model map; `same_judge` emitted only
+for declared-substitution comparisons). Remaining: **4.7** (upstream EEE issue), **4.8** (docs +
+retire `--skip-diagnosis`/`EVAL_AUDIT_EEE_STRICT`), **4.9** (open-judge extension enablement).
+
 | # | Sub-stage | Risk | Deliverable | Gate |
 |---|---|---|---|---|
 | **4.0** | **Lift + broaden the metric taxonomy** | low | `helm/metrics.py` → `metrics_taxonomy.py` (framework-free); re-export shim. **Add judge-dependent vs deterministic classification** (R2). | `normalized.compare` imports 0 `helm.*`; full suite unchanged; taxonomy unit tests |
