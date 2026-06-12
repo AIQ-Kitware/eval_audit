@@ -173,13 +173,70 @@ def compute_run_spec_hash(run_spec_fpath: Path | str | None) -> str | None:
         return None
 
 
+def extract_judge_models(spec: dict[str, Any]) -> tuple[str, ...] | None:
+    """Conservative judge-identity extraction from a HELM run_spec dict.
+
+    Reads the ``annotators`` list (newer HELM run_specs carry the
+    LLM-judge configuration there): for each annotator entry, prefer
+    explicit model-identifier args (keys containing ``model``), falling
+    back to the annotator ``class_name`` basename so the *kind* of
+    judge is still recorded when the model id isn't inline.
+
+    Returns ``None`` when the run_spec has no ``annotators`` key at all
+    (judge identity unknown — most pre-annotator HELM specs), and a
+    sorted tuple otherwise (empty tuple = explicitly no annotators).
+
+    This is the documented interim extractor for the open-judge
+    extension (Phase 3 design §3.5); the sub-stage 4.9 inventory across
+    the closed-judge benchmarks refines it (some benchmarks configure
+    judges through metric_specs args instead).
+    """
+    if 'annotators' not in spec:
+        return None
+    annotators = spec.get('annotators')
+    if not isinstance(annotators, list):
+        return None
+
+    def _clean(value: Any) -> str | None:
+        text = str(value if value is not None else '').strip()
+        return text or None
+
+    found: set[str] = set()
+    for entry in annotators:
+        if not isinstance(entry, dict):
+            continue
+        model_values = [
+            _clean(value)
+            for key, value in sorted(entry.items())
+            if 'model' in key.lower() and isinstance(value, str)
+        ]
+        args = entry.get('args')
+        if isinstance(args, dict):
+            model_values.extend(
+                _clean(value)
+                for key, value in sorted(args.items())
+                if 'model' in key.lower() and isinstance(value, str)
+            )
+        model_values = [v for v in model_values if v]
+        if model_values:
+            found.update(model_values)
+            continue
+        class_name = _clean(entry.get('class_name'))
+        if class_name:
+            found.add(class_name.rsplit('.', 1)[-1])
+    return tuple(sorted(found))
+
+
 def extract_run_spec_fields(run_spec_fpath: Path | str | None) -> dict[str, Any]:
     """Extract common fields from a run_spec.json, tolerant of absence / errors.
 
     Returns a dict with keys:
       ``run_spec_name``, ``model``, ``model_deployment``, ``scenario_class``,
-      ``benchmark_group``, ``run_spec_hash``, ``has_run_spec_json``.
+      ``benchmark_group``, ``run_spec_hash``, ``has_run_spec_json``,
+      ``judge_models``.
     All string-valued fields may be ``None`` when unavailable.
+    ``judge_models`` is ``None`` when judge identity is unknown and a
+    sorted tuple otherwise (see :func:`extract_judge_models`).
     """
     out: dict[str, Any] = {
         'run_spec_name': None,
@@ -189,6 +246,7 @@ def extract_run_spec_fields(run_spec_fpath: Path | str | None) -> dict[str, Any]
         'benchmark_group': None,
         'run_spec_hash': None,
         'has_run_spec_json': False,
+        'judge_models': None,
     }
     if run_spec_fpath is None:
         return out
@@ -215,6 +273,7 @@ def extract_run_spec_fields(run_spec_fpath: Path | str | None) -> dict[str, Any]
         scenario.get('class_name') if isinstance(scenario, dict) else None
     )
     out['benchmark_group'] = benchmark_group_from_run_name(run_spec_name)
+    out['judge_models'] = extract_judge_models(spec)
     return out
 
 
