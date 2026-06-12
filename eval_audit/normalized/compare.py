@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from eval_audit.helm import metrics as helm_metrics
+from eval_audit import metrics_taxonomy as helm_metrics
 from eval_audit.normalized.joins import (
     index_instances,
     join_instances,
@@ -95,7 +95,7 @@ def instance_level_core_rows(
     * ``stats["n_joined_pairs"] > 0`` but ``rows == []`` — data joined
       fine but every row was filtered by ``classify_metric`` (no
       :data:`metric_class` metrics survived). Analyzer-side gap:
-      :data:`eval_audit.helm.metrics.METRIC_PREFIXES.CORE_PREFIXES` is
+      :data:`eval_audit.metrics_taxonomy.METRIC_PREFIXES.CORE_PREFIXES` is
       missing a metric family.
 
     Downstream consumers (per-pair report → heatmap collector) use

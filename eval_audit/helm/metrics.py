@@ -1,117 +1,19 @@
-"""eval_audit.helm.metrics
+"""Re-export shim: the metric taxonomy moved to ``eval_audit.metrics_taxonomy``.
 
-Shared metric registries + categorization helpers.
-
-This is intentionally small and stable: both single-run analysis and run diffs
-use the same classification rules.
-
-Design preference
------------------
-Constants are encapsulated in a class so notebooks can monkeypatch / extend
-without import-time side effects.
+The classification rules are pure string-prefix logic over metric names
+— not HELM-specific — and the EEE-native comparison core needs them
+without importing ``eval_audit.helm.*`` (Phase 3 sub-stage 4.0). The
+implementation now lives in :mod:`eval_audit.metrics_taxonomy`; this
+module keeps the old import path working for the HELM-shaped consumers
+(``helm.analysis``, ``helm.diff``, ``reports.core_metrics``, ...).
 """
 
 from __future__ import annotations
 
-from functools import lru_cache
-from typing import Optional
-
-
-class METRIC_PREFIXES:
-    """Registry of metric prefixes we care about."""
-
-    CORE_PREFIXES: tuple[str, ...] = (
-        'exact_match',
-        'quasi_exact_match',
-        'prefix_exact_match',
-        'quasi_prefix_exact_match',
-        'classification_micro_f1',
-        'classification_macro_f1',
-        'f1_score',
-        'f1_set_match',
-        'exact_set_match',
-        'iou_set_match',
-        'rouge_l',
-        'bleu_',
-        'ifeval_strict_accuracy',
-        'wildbench_score',
-        'wildbench_score_rescaled',
-        'omni_math_accuracy',
-        'chain_of_thought_correctness',
-        'math_equiv',
-        'math_equiv_chain_of_thought',
-        'safety_score',
-        'safety_gpt_score',
-        'safety_llama_score',
-        'air_score',
-        'air_category_',
-    )
-
-    BOOKKEEPING_PREFIXES: tuple[str, ...] = (
-        # token/size/runtime / resource accounting
-        'num_',
-        'training_',
-        'inference_',
-        'batch_size',
-        'max_prob',
-        'logprob',
-        'num_perplexity_tokens',
-        'num_bytes',
-        'perplexity',
-        'bits_per_byte',
-        'logprob_per_byte',
-        # decoding / stopping bookkeeping
-        'finish_reason_',
-        'prompt_truncated',
-        # calibration / fitting plumbing
-        'ece_',
-        'platt_',
-        'selective_',
-        # meta / dataset sizing
-        'num_instances',
-        'num_train_',
-        'num_references',
-    )
-
-
-@lru_cache(maxsize=8192)
-def classify_metric(metric_name: Optional[str]) -> tuple[str, str | None]:
-    """Return (metric_class, matched_prefix).
-
-    metric_class ∈ {'core', 'bookkeeping', 'untracked'}
-
-    Cached: this function is called millions of times during pair
-    analysis (every joined (sample, metric) row triggers a lookup),
-    but the input domain is tiny — typically <50 distinct metric
-    names per run. The cache turns each call after the first into a
-    dict lookup. Cache size is generous so a multi-suite run never
-    evicts. Pure function; cache is safe for the lifetime of the
-    process.
-    """
-    if not metric_name:
-        return ('untracked', None)
-    for p in METRIC_PREFIXES.CORE_PREFIXES:
-        if metric_name.startswith(p):
-            return ('core', p)
-    for p in METRIC_PREFIXES.BOOKKEEPING_PREFIXES:
-        if metric_name.startswith(p):
-            return ('bookkeeping', p)
-    return ('untracked', None)
-
-
-def metric_family(metric_name: Optional[str]) -> str:
-    """A lightweight family heuristic used for summaries."""
-    if not metric_name:
-        return '?'
-    # hierarchical families
-    if metric_name.startswith('air_'):
-        return 'air'
-    if metric_name.startswith('bias_metric:'):
-        return 'bias_metric'
-    if metric_name.startswith('safety_'):
-        return 'safety'
-    if metric_name.startswith('bbq_'):
-        return 'bbq'
-    if '@' in metric_name:
-        return metric_name.split('@', 1)[0]
-    return metric_name.split('_', 1)[0].split(':', 1)[0]
+from eval_audit.metrics_taxonomy import (  # noqa: F401
+    METRIC_PREFIXES,
+    classify_judge_dependence,
+    classify_metric,
+    is_judge_dependent,
+    metric_family,
+)
