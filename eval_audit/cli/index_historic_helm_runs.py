@@ -176,6 +176,20 @@ class CompileHelmReproListConfig(scfg.DataConfig):
         help="If True, dedupe identical (suite, run_entry, max_eval_instances) rows.",
     )
 
+    allow_closed_judge_benchmarks = scfg.Value(
+        False,
+        isflag=True,
+        help=(
+            "Open-judge extension (Phase 3 / 4.9): admit benchmarks that "
+            "normally require a closed judge (CLOSED_JUDGE_BENCHMARKS) as "
+            "planned judge substitutions instead of excluding them. "
+            "Admitted runs flow through the distinct 'judge-substitution' "
+            "selection path in the filter report, and their run_details "
+            "rows carry judge_substitution_planned=True so the planner "
+            "declares the substitution on every comparison they join."
+        ),
+    )
+
     @classmethod
     def main(cls, argv=None, **kwargs):
         """
@@ -307,15 +321,23 @@ class CompileHelmReproListConfig(scfg.DataConfig):
         chosen_model_names = {r['name'] for r in chosen_model_rows}
         logger.info('Filter to {} / {} models', len(chosen_model_rows), len(model_rows))
 
+        allow_closed_judge = bool(config.allow_closed_judge_benchmarks)
         chosen_rows = []
         for row in rows:
             if row['model'] not in chosen_model_names:
                 continue
+            benchmark = describe_run_spec(row['run_spec_name'], row.get('scenario_class'))['benchmark']
             run_failure_reason_details = build_run_failure_reason_details(
-                benchmark=describe_run_spec(row['run_spec_name'], row.get('scenario_class'))['benchmark'],
+                benchmark=benchmark,
+                allow_closed_judge=allow_closed_judge,
             )
             if run_failure_reason_details:
                 continue
+            if allow_closed_judge and benchmark in CLOSED_JUDGE_BENCHMARKS:
+                # The flag rides run_details.yaml -> manifest 'detail'
+                # entries -> the local audit index, where the planner
+                # turns it into a declared judge substitution.
+                row = {**row, 'judge_substitution_planned': True}
             chosen_rows.append(row)
         logger.info('Filter to {} / {} runs', len(chosen_rows), len(rows))
 
@@ -428,6 +450,7 @@ class CompileHelmReproListConfig(scfg.DataConfig):
                 incomplete_rows=incomplete_rows,
                 model_filter_rows=model_filter_rows,
                 chosen_model_names=chosen_model_names,
+                allow_closed_judge=allow_closed_judge,
             )
             inventory_fpath = Path(config.out_inventory_json).expanduser().resolve()
             inventory_fpath.parent.mkdir(parents=True, exist_ok=True)

@@ -222,9 +222,16 @@ def build_failure_reason_details(
     return details
 
 
-def build_run_failure_reason_details(*, benchmark: str) -> dict[str, str]:
+def build_run_failure_reason_details(
+    *, benchmark: str, allow_closed_judge: bool = False
+) -> dict[str, str]:
     details: dict[str, str] = {}
-    if benchmark in CLOSED_JUDGE_BENCHMARKS:
+    if benchmark in CLOSED_JUDGE_BENCHMARKS and not allow_closed_judge:
+        # Open-judge extension (Phase 3 / 4.9): pass
+        # allow_closed_judge=True (--allow-closed-judge-benchmarks) to
+        # admit these runs as planned judge substitutions instead of
+        # excluding them; build_filter_inventory_rows then routes them
+        # through the distinct 'judge-substitution' selection path.
         details[CLOSED_JUDGE_REQUIRED_REASON] = (
             'Benchmark requires a proprietary / credentialed judge or annotator path; '
             'that closed-source evaluation dependency is currently out of scope for the '
@@ -332,6 +339,7 @@ def build_filter_inventory_rows(
     incomplete_rows: list[dict[str, Any]],
     model_filter_rows: list[dict[str, Any]],
     chosen_model_names: set[str],
+    allow_closed_judge: bool = False,
 ) -> list[dict[str, Any]]:
     model_info = {row['model']: row for row in model_filter_rows}
     registry = local_model_registry_by_name()
@@ -341,7 +349,9 @@ def build_filter_inventory_rows(
         model_meta = model_info.get(row['model'], {})
         model_failure_reasons = list(model_meta.get('failure_reasons', []))
         model_failure_reason_details = dict(model_meta.get('failure_reason_details', {}))
-        run_failure_reason_details = build_run_failure_reason_details(benchmark=info['benchmark'])
+        run_failure_reason_details = build_run_failure_reason_details(
+            benchmark=info['benchmark'], allow_closed_judge=allow_closed_judge,
+        )
         run_failure_reasons = list(run_failure_reason_details)
         failure_reasons = model_failure_reasons + [
             reason for reason in run_failure_reasons if reason not in model_failure_reasons
@@ -349,14 +359,47 @@ def build_filter_inventory_rows(
         failure_reason_details = model_failure_reason_details | run_failure_reason_details
         eligible_model = bool(model_meta.get('eligible', False))
         eligible_candidate = eligible_model and not run_failure_reasons
+        # A closed-judge benchmark admitted under the relax flag is a
+        # *planned judge substitution* — neither an ordinary selection
+        # nor an exclusion. It gets its own candidate pool so the
+        # selection-path table and sankeys show it as a distinct path
+        # (Phase 3 / 4.9). Fields are only emitted when the flag is on,
+        # keeping flag-off outputs byte-identical.
+        judge_substitution = (
+            allow_closed_judge and info['benchmark'] in CLOSED_JUDGE_BENCHMARKS
+        )
         candidate_pool = 'complete-run'
         if eligible_model:
             candidate_pool = 'eligible-model' if not run_failure_reasons else 'eligible-model-out-of-scope'
+            if judge_substitution:
+                candidate_pool = 'judge-substitution'
         selected = row['model'] in chosen_model_names and not run_failure_reasons
         reg_entry = registry.get(row['model'])
+        if selected and judge_substitution:
+            selection_explanation = (
+                'Selected as a planned judge substitution: the benchmark normally '
+                'requires a closed judge, and --allow-closed-judge-benchmarks admits '
+                'it for an open-judge re-run to be compared as a declared substitution.'
+            )
+        elif selected:
+            selection_explanation = (
+                'Selected because the run was structurally complete and its model passed all eligibility filters.'
+            )
+        else:
+            selection_explanation = (
+                'Excluded after consideration because the run failed the current reproduction filters: '
+                + '; '.join(
+                    failure_reason_details.get(reason, reason)
+                    for reason in failure_reasons
+                ) + '.'
+            )
+        judge_fields = (
+            {'judge_substitution_planned': True} if selected and judge_substitution else {}
+        )
         inventory_rows.append({
             **row,
             **info,
+            **judge_fields,
             'selection_status': 'selected' if selected else 'excluded',
             'outcome': 'selected' if selected else 'excluded',
             'considered_for_selection': True,
@@ -366,15 +409,7 @@ def build_filter_inventory_rows(
             'failure_reasons': failure_reasons,
             'failure_reason_details': failure_reason_details,
             'failure_reason_summary': 'selected' if selected else '|'.join(failure_reasons),
-            'selection_explanation': (
-                'Selected because the run was structurally complete and its model passed all eligibility filters.'
-                if selected else
-                'Excluded after consideration because the run failed the current reproduction filters: '
-                + '; '.join(
-                    failure_reason_details.get(reason, reason)
-                    for reason in failure_reasons
-                ) + '.'
-            ),
+            'selection_explanation': selection_explanation,
             'model_num_parameters': model_meta.get('num_parameters'),
             'model_access': model_meta.get('access'),
             'model_tags': model_meta.get('tags', []),
