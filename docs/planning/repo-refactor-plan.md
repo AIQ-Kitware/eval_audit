@@ -6,9 +6,10 @@ Each phase is independently shippable and ordered so earlier phases de-risk late
 **Validation gate** for the whole effort: `tests/test_end_to_end_summary.py`, `tests/test_eee_only_demo.py`,
 and the `reproduce/smoke` runbook must produce byte-identical reports before/after.
 
-**Plan-doc location decision:** plan docs live here in `docs/planning/`. The older
-`docs/agent_plans/` holds one file (`allow_closed_judge_flag_plan.md`); `git mv` it here when
-convenient and update the `docs/agent_plans/` reference in `CLAUDE.md`.
+**Plan-doc location decision:** plan docs live here in `docs/planning/`. (The older
+`docs/agent_plans/` and its `allow_closed_judge_flag_plan.md` were removed out-of-band; that file's
+intent — relaxing the closed-judge filter — is resurrected in the Phase 3 design's open-judge
+extension, sub-stage 4.9.)
 
 ---
 
@@ -236,53 +237,66 @@ wc -l eval_audit/reports/summary/*.py eval_audit/workflows/build_reports_summary
 ## Phase 3 — One comparison core, HELM + EEE as adapters
 *Effort: 1–2 weeks · Risk: high · Needs its own design pass before any code*
 
-**Status: DESIGNED 2026-06-11, not started.** The design pass this phase requires is written:
+**Status: DESIGNED 2026-06-11; revised same day for the new research program; not started.**
+The design pass this phase requires is written:
 
 - [`phase3-comparison-core-unification.md`](phase3-comparison-core-unification.md) — the design.
 - [`phase3-behavior-equivalence-matrix.md`](phase3-behavior-equivalence-matrix.md) — the test matrix
   that gates every sub-stage.
 
+**Research context (drives the revision — design doc §0):** the EEE reproducibility case study is
+concluding. The new program is (R1) reproducing published HELM results with verified open-weight
+models — needs **full HELM-level metadata** as a first-class feature; (R2) an **open-judge
+extension** — closed-judge benchmarks re-run with open judges and compared, a *deliberate recipe
+substitution* the current core can't express; (R3) the EEE-only path retained permanently as the
+**framework-portability layer** for when HELM is deprecated. The old hard-split import-isolation
+guardrails (paper-claim driven) are demoted to optional hygiene; both modes stay operable forever.
+
 **Problem:** the HELM-shaped and EEE-only paths run two forked comparison cores (`HelmRunDiff` vs
 `normalized.compare`) that produce overlapping agreement numbers, plus thrice-implemented EEE
 index-row synthesis. The planner, renderer, and aggregate are already shared — only the loader→diff
-segment is forked.
+segment is forked. Phase 3 ≡ the unstarted **Stage 4** of the in-flight normalized refactor
+([`dev/analysis/eee_refactor_stage1_map.md`](../../dev/analysis/eee_refactor_stage1_map.md)),
+executed under the revised priorities above.
 
-**The design pass corrected one thing in the sketch below.** Phase 3 ≡ the unstarted **Stage 4** of
-the in-flight normalized refactor ([`dev/analysis/eee_refactor_stage1_map.md`](../../dev/analysis/eee_refactor_stage1_map.md))
-**+** the enabling half of the **EEE-only hard split** ([`docs/eee-only-hard-split-todo.md`](../eee-only-hard-split-todo.md),
-owned by Jon). Those two prior efforts make the original "collapse the dual CLIs into one
-auto-detecting command" sketch **wrong**: the EEE entry points must stay *separately importable and
-HELM-free* so "the analysis used only EEE" is a checkable `grep`, not a code review. **Corrected
-goal: unify the core, keep the entry points thin and separate.** See the design doc §1.2.
-
-### Target architecture (corrected)
+### Target architecture (revised)
 
 ```
-            ┌─ helm_adapter (run_spec.json + HELM run dirs) ─┐
-inputs ─────┤                                                ├─► NormalizedRun ─► NormalizedDiff ─► reports
-            └─ eee_adapter  (every_eval_ever artifacts)      ─┘        │           (HELM-free core)
+            ┌─ helm_adapter (run_spec.json + HELM run dirs) ──┐
+inputs ─────┼─ eee_adapter  (every_eval_ever artifacts)  ─────┼─► NormalizedRun ─► NormalizedDiff ─► reports
+            └─ <future framework adapters — R3>  ─────────────┘        │          (framework-free core)
                                                                        └─► HelmRunDiff: run_spec semantic
-                                                                           diff only, HELM path only,
-                                                                           never imported by EEE entry points
+                                                                           diff — first-class for R1,
+                                                                           HELM-driven path only
 ```
 
 - **`NormalizedRun` is already the currency** ([`normalized/model.py`](../../eval_audit/normalized/model.py));
-  this phase promotes the Stage-3 `helm_compat` shim into a real `NormalizedDiff` and quarantines
-  `HelmRunDiff` to run_spec semantic diff + raw-evidence inspection.
-- **Keep two thin, separate entry points**, not one. The EEE renderer lives in a HELM-free
-  `eval_audit/eee_only/` namespace enforced by a `sys.modules` test (0 `eval_audit.helm.*` loaded).
-- **Preserve `comparability_unknown:*` collapse** — it's the honest "recipe unverifiable" signal
-  (CLAUDE.md). The comparability-facts machinery in the planner is already source-kind-agnostic and is
-  NOT touched.
-- Three HELM tendrils must be cut first (`helm.metrics` lift, module-level `HelmRunDiff` import, the
-  silent HELM fallback in the EEE loader) — see design doc §2.2.
+  this phase promotes the Stage-3 `helm_compat` shim into a real `NormalizedDiff`. `HelmRunDiff`
+  keeps the run_spec semantic diff — under R1 that is *promoted* (it's how "same recipe" is proven),
+  not legacy.
+- **Keep thin, separate entry points** — now justified by metadata-tier explicitness (the
+  HELM-driven entry point *fails loudly* on missing run_spec instead of degrading to `unknown`) and
+  by future framework adapters, not by import purity. The `eee_only/` isolation namespace is
+  deferred/optional; the binding gate is operability: EEE entry points build their full report tree
+  with **zero HELM artifacts on disk**.
+- **Preserve `comparability_unknown:*` collapse** — the honest "recipe unverifiable" signal
+  (CLAUDE.md). The comparability-facts machinery is *extended* for R2 (`same_judge`, declared
+  substitutions) but not restructured. Facts stay honest under substitution: a declared judge swap
+  re-labels the *diagnosis* (`intended_substitution:judge`), never the *fact*.
+- **Instance-source explicitness replaces the strict-mode flip**: the EEE loader's silent HELM
+  fallback becomes a declared per-entry-point policy (`helm-preferred` / `eee-only`), recorded as
+  `instance_source` provenance in every report — never disk-state-dependent.
 
 ### Sub-stages (full breakdown in the design doc §4)
 
-4.0 lift `helm.metrics` → 4.1 `recipe_facts` accessor → 4.2 `normalized/diagnose.py` (byte-match
-`_diagnose_repro`) → 4.3 `NormalizedDiff` (high-risk hinge) → 4.4 `eee_only/` HELM-free renderer →
-4.5 remove the silent HELM fallback → 4.6 point HELM path at `NormalizedDiff` → 4.7 native EEE
-`recipe_facts` (upstream coordination) → 4.8 docs + retire shims.
+4.0 lift + broaden metric taxonomy (adds judge-dependent class) → 4.1 `recipe_facts` accessor
+(+ judge identity) → 4.2 `normalized/diagnose.py` (byte-match `_diagnose_repro`, substitution-aware
+labels) → 4.3 `NormalizedDiff` (high-risk hinge) → 4.4 EEE-only operability (zero-HELM-on-disk gate)
+→ 4.5 instance-source explicitness → 4.6 point HELM path at `NormalizedDiff` → 4.7 native EEE
+`recipe_facts` (upstream; raised priority as the R3 keystone) → 4.8 docs + retire shims → **4.9
+open-judge extension enablement** (relax `CLOSED_JUDGE_BENCHMARKS` filter behind a flag, `same_judge`
+fact, declared substitutions, metric-class split reporting). 4.9 may be pulled ahead of 4.3–4.6 if
+the extension analysis schedule demands it.
 
 ### Why last
 
@@ -290,9 +304,10 @@ It's the only phase touching research-meaningful numbers, so it needs Phases 1�
 captured behavior baseline first. **Stop condition:** if at 4.3 or 4.6 the numbers move beyond the
 matrix tolerance, halt — the soft separation was load-bearing somewhere unaudited.
 
-**Exit criteria:** one `NormalizedDiff` core; `HelmRunDiff` quarantined to semantic-diff;
-`import eval_audit.cli.from_eee` loads 0 `eval_audit.helm.*`; behavior-equivalence matrix green;
-`tests/test_eee_only_demo.py` and `tests/test_compare_pair_eee.py` outputs unchanged.
+**Exit criteria:** one `NormalizedDiff` core; `HelmRunDiff` retained for semantic diff on the
+HELM-driven path; EEE-only mode builds its full report tree with zero HELM artifacts on disk;
+instance-source recorded everywhere; behavior-equivalence matrix green (incl. the F9/F10 judge
+fixtures); `tests/test_eee_only_demo.py` and `tests/test_compare_pair_eee.py` outputs unchanged.
 
 ---
 
