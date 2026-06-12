@@ -44,7 +44,7 @@ run_one() {
   echo "==================================================================="
 
   # 1. Bring the model up and wait for readiness.
-  infer-stack switch --profile "$profile" --apply
+  infer-stack switch --profile "$profile" --apply --yes
   infer-stack wait-ready
 
   # 2. Materialize the bundle (smoke + full manifests) from the preset, routing
