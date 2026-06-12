@@ -2015,3 +2015,65 @@ cutting the first the *measured* leakage pointed at `helm.hashers` —
 a module nobody had flagged — and showed the planned lazy-import fix
 was already moot. The plan's tendril list was a hypothesis; the
 `sys.modules` count was the test.
+
+## 2026-06-12 09:46:04 -0400
+
+**User intent.** Continue Phase 3 implementation (after 4.0–4.2 +
+baseline + 4.4 landed this morning), committing logical units.
+
+**Model/config.** Claude Fable 5 (claude-fable-5[1m]), Claude Code
+VSCode harness.
+
+**What landed (2 commits).**
+
+- *4.3 NormalizedDiff* (`a347eca`) — the unified comparison core,
+  built additive (nothing routes through it until 4.6). The row math
+  (`agreement_curve`, `group_quantiles`, `metric_quantiles`) relocated
+  from `reports/core_metric_curves` into `normalized/diff.py` with the
+  curves module re-importing under historical names; `NormalizedDiff`
+  assembles agreement rows (ncompare), the `_build_pair`-shaped
+  summary blocks, the 4.2 diagnosis driven by facts-grade semantic
+  inputs (a fact contributes only when BOTH sides carry it; unknown
+  stays neutral — no invented claims), `judge_fact_status`, and the
+  R2 `metric_class_split` (deterministic control vs judge-dependent
+  measurement). The decisive gate: NormalizedDiff's run/instance
+  blocks are *exactly equal* to the committed F3 baseline the current
+  renderer produced — zero delta, stronger than the atol=1e-9 budget.
+  Also classified a latent --run-slow failure in
+  `test_core_metrics_single_run` (fails identically at HEAD and
+  pre-Phase-3; synthetic fixture missing the raw loader's required
+  files) — pre-existing, tracked for the 4.6 pass.
+
+- *Judge-identity inventory* (`docs/planning/judge-identity-inventory.md`)
+  — the §9.2 spike, done against real public-mirror run_specs + the
+  vendored HELM annotator sources. Three findings that reshape 4.9:
+  (1) judge model identity is NOT in run_spec.json — annotators carry
+  empty args; identity is hard-coded per HELM version (gpt-4o +
+  llama-3.1-405b ensemble), so officials need a curated
+  class+version→models map; (2) the official ensemble already includes
+  an open judge with per-judge sub-scores as separate metrics
+  (safety_gpt_score / safety_llama_score) — the extension gains a
+  same-judge reproduction control *inside* the official data, and
+  substitutions are better framed per-metric than per-run; (3)
+  same_judge must be emitted only for declared-substitution
+  comparisons or it would spray comparability_unknown noise over every
+  legacy pair (the matrix's F1–F8 byte-identical gate for 4.9 already
+  implied this).
+
+**State.** Phase 3 sub-stages 4.0–4.4 complete (4.3 additive,
+4.4 done); full suite 160 passed + the same 10 pre-existing
+integration-boundary failures; F3/F4 baseline + slow EEE suites green.
+
+**Next steps.** 4.6 (flip the HELM renderer to NormalizedDiff +
+HelmRunDiff-semantic-diff-alongside; fix the latent single-run slow
+test while there), 4.5 (instance-source policies + F6 probe fixture),
+4.9 (now fully specifiable: curated judge map, per-metric judge
+attribution in metric_class_split, Stage-1 relax flag), 4.7 (file the
+upstream EEE recipe_facts issue, now including judge_models).
+
+**Design insight.** The inventory spike was an hour and invalidated a
+silent assumption baked into the design (that run_specs carry judge
+model identity) while *gifting* the extension a control group nobody
+had noticed (the open ensemble member's sub-scores). Cheap
+reality-checks against the actual corpus before specifying a feature
+beat another design iteration in the abstract.
