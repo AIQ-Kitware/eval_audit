@@ -19,6 +19,7 @@ from typing import Any
 
 from eval_audit.indexing.schema import (
     component_id_for_local,
+    extract_judge_models,
     extract_run_spec_fields,
     logical_run_key_for_local,
     logical_run_key_for_official,
@@ -454,6 +455,12 @@ def normalize_local_index_rows(
             tags.append("has_attempt_uuid")
         else:
             tags.append("fallback_attempt_identity")
+        # Open-judge extension (Phase 3 / 4.9): a row that Stage 1
+        # admitted under --allow-closed-judge-benchmarks carries this
+        # flag; the planner turns it into a declared judge substitution
+        # on every comparison the component participates in.
+        if _is_truthy_flag(row.get("judge_substitution_planned")):
+            tags.append("judge_substitution_planned")
         artifact_format, eee_artifact_path, explicit_artifact_format = _resolve_artifact_format(row)
         artifact_format, eee_artifact_path, eee_resolution = _apply_eee_resolution(
             row=row,
@@ -747,6 +754,32 @@ def _comparability_warning_lines(comparability_facts: dict[str, Any]) -> list[st
     return warnings
 
 
+def _is_truthy_flag(value: Any) -> bool:
+    return str(value if value is not None else "").strip().lower() in {"1", "true", "yes"}
+
+
+def _component_judge_descriptor(component: NormalizedPlannerComponent) -> str | None:
+    """Resolved judge identity of one component, as a comparable string.
+
+    Reads the component's run_spec (same pattern as
+    ``_component_instructions``), extracts judge identifiers, and
+    resolves official annotator class basenames through the curated
+    registry so they compare against locally-recorded judge model ids.
+    ``None`` = unknown; ``"(no-judges)"`` = explicitly judge-free.
+    """
+    from eval_audit.judge_registry import resolve_judge_models
+
+    run_spec = _read_run_spec(component.run_spec_fpath)
+    if not run_spec:
+        return None
+    resolved = resolve_judge_models(extract_judge_models(run_spec))
+    if resolved is None:
+        return None
+    if not resolved:
+        return "(no-judges)"
+    return " + ".join(resolved)
+
+
 def _comparison_payload(
     *,
     comparison_id: str,
@@ -759,10 +792,33 @@ def _comparison_payload(
     extra_fields: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     comparability_facts = build_comparability_facts(components)
+    # Open-judge extension (Phase 3 / 4.9, design §3.5): the same_judge
+    # fact is emitted ONLY for comparisons with a declared judge
+    # substitution — legacy HELM runs carry no annotators key, so
+    # unconditional emission would spray comparability_unknown noise
+    # over every existing pair (judge-identity inventory, finding 3).
+    substitutions: list[str] = []
+    if any("judge_substitution_planned" in (component.tags or []) for component in components):
+        substitutions.append("judge")
+        status, present_values = _fact_status(
+            [_component_judge_descriptor(component) for component in components]
+        )
+        comparability_facts["same_judge"] = {
+            "status": status,
+            "values": present_values,
+        }
     warnings = [
         *_comparability_warning_lines(comparability_facts),
         *itertools.chain.from_iterable(_component_warning_lines(component) for component in components),
     ]
+    if "judge" in substitutions:
+        # Facts stay honest (same_judge: no), but a DECLARED difference
+        # is not drift — the diagnosis re-labels it; conversely a
+        # declared substitution that the metadata says didn't happen is
+        # itself a finding.
+        warnings = [w for w in warnings if w != "comparability_drift:same_judge"]
+        if comparability_facts["same_judge"]["status"] == "yes":
+            warnings.append("substitution_not_observed:judge")
     payload = {
         "comparison_id": comparison_id,
         "comparison_kind": comparison_kind,
@@ -775,6 +831,10 @@ def _comparison_payload(
         "warnings": list(dict.fromkeys(warnings)),
         "caveats": _comparison_caveats(comparability_facts),
     }
+    if substitutions:
+        # Key added only when declared so non-extension manifests stay
+        # byte-identical (matrix 4.9 gate).
+        payload["substitutions"] = substitutions
     if extra_fields:
         payload.update(extra_fields)
     return payload

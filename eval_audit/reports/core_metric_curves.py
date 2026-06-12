@@ -23,6 +23,7 @@ from eval_audit.normalized import (
 )
 from eval_audit.normalized import compare as ncompare
 from eval_audit.normalized.helm_compat import helm_view
+from eval_audit.normalized.diagnose import apply_substitutions
 from eval_audit.normalized.loaders import INSTANCE_SOURCE_POLICY_KEY
 from eval_audit.utils.numeric import quantile as _quantile
 # Row math relocated to the unified comparison core (Phase 3 / 4.3);
@@ -430,6 +431,8 @@ def _build_pair(
     component_b: dict[str, Any] | None = None,
     component_cache: dict[str, NormalizedRun] | None = None,
     skip_diagnosis: bool = False,
+    substitutions: list[str] | None = None,
+    substitution_fact_status: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     # Stage-4 + Stage-5: the per-metric measurement core operates on the
     # EEE-normalized representation. When the planner has tagged a
@@ -483,6 +486,20 @@ def _build_pair(
             b_name=f'{label}:B',
         )
         pair['diagnosis'] = diff.summary_dict(level=20).get('diagnosis', {})
+    if substitutions:
+        # Open-judge extension (Phase 3 / 4.9): re-label declared
+        # substitutions in the diagnosis and attach the per-class
+        # split so the deterministic control and the judge-dependent
+        # measurement are never conflated. Only present when the
+        # comparison declares substitutions, so non-extension reports
+        # stay byte-identical.
+        pair['diagnosis'] = apply_substitutions(
+            pair.get('diagnosis'),
+            substitutions=substitutions,
+            substitution_fact_status=substitution_fact_status,
+        ) or {}
+        pair['substitutions'] = list(substitutions)
+        pair['metric_class_split'] = ndiff.metric_class_split()
     return pair
 
 

@@ -259,23 +259,9 @@ def diagnose_repro(
     # reason list keeps the original entries untouched; with no
     # declarations this whole block is a no-op and the output is
     # byte-identical to the HELM implementation.
-    fact_status = dict(substitution_fact_status or {})
-    for name in substitutions:
-        status = str(fact_status.get(name, 'unknown') or 'unknown')
-        if status == 'no':
-            add_reason(
-                f'intended_substitution:{name}',
-                0,
-                {'substitution': name, 'fact_status': status},
-            )
-        elif status == 'yes':
-            add_reason(
-                f'substitution_not_observed:{name}',
-                0,
-                {'substitution': name, 'fact_status': status},
-            )
-        # 'unknown': the planner's comparability_unknown:* warning
-        # already records the unverifiable axis; no diagnosis reason.
+    reasons.extend(
+        _substitution_reasons(substitutions, substitution_fact_status)
+    )
 
     if not reasons:
         add_reason(
@@ -287,6 +273,38 @@ def diagnose_repro(
             },
         )
 
+    return _finalize_reasons(reasons)
+
+
+def _substitution_reasons(
+    substitutions: Sequence[str],
+    substitution_fact_status: Mapping[str, str] | None,
+) -> list[dict[str, Any]]:
+    fact_status = dict(substitution_fact_status or {})
+    reasons: list[dict[str, Any]] = []
+    for name in substitutions:
+        status = str(fact_status.get(name, 'unknown') or 'unknown')
+        if status == 'no':
+            reason_name = f'intended_substitution:{name}'
+        elif status == 'yes':
+            reason_name = f'substitution_not_observed:{name}'
+        else:
+            # 'unknown': the planner's comparability_unknown:* warning
+            # already records the unverifiable axis; no diagnosis reason.
+            continue
+        reasons.append(
+            {
+                'name': reason_name,
+                'priority': 0,
+                'details': _json_compatible(
+                    {'substitution': name, 'fact_status': status}
+                ),
+            }
+        )
+    return reasons
+
+
+def _finalize_reasons(reasons: list[dict[str, Any]]) -> dict[str, Any]:
     reasons = sorted(
         reasons,
         key=lambda r: (
@@ -313,4 +331,32 @@ def diagnose_repro(
     }
 
 
-__all__ = ["diagnose_repro"]
+def apply_substitutions(
+    diagnosis: dict[str, Any] | None,
+    *,
+    substitutions: Sequence[str],
+    substitution_fact_status: Mapping[str, str] | None,
+) -> dict[str, Any] | None:
+    """Overlay declared-substitution reasons onto an existing diagnosis.
+
+    The HELM-driven renderer computes its diagnosis through
+    ``HelmRunDiff`` (which has no substitution concept); this helper
+    lets it re-label after the fact using the same reason/label logic
+    as :func:`diagnose_repro`. With no substitution reasons to add the
+    input is returned unchanged (including ``None``/``{}`` — an
+    intentionally skipped diagnosis stays skipped unless a declared
+    substitution introduces facts-derived reasons).
+    """
+    extra = _substitution_reasons(substitutions, substitution_fact_status)
+    if not extra:
+        return diagnosis
+    base_reasons = list((diagnosis or {}).get('reasons') or [])
+    # 'no_detected_drift' is the empty-marker reason; a real
+    # substitution reason replaces it rather than coexisting with it.
+    base_reasons = [
+        r for r in base_reasons if r.get('name') != 'no_detected_drift'
+    ]
+    return _finalize_reasons(base_reasons + extra)
+
+
+__all__ = ["apply_substitutions", "diagnose_repro"]

@@ -446,6 +446,16 @@ def main(argv: list[str] | None = None) -> None:
             or component_b.get('eee_artifact_path')
             or component_b['component_id']
         )
+        # Declared substitutions (open-judge extension, Phase 3 / 4.9):
+        # the planner emits them on the comparison together with the
+        # scoped same_judge fact; the pair builder re-labels the
+        # diagnosis and attaches the metric-class split.
+        comparison_substitutions = list(comparison.get('substitutions') or [])
+        substitution_fact_status = {
+            name.removeprefix('same_'): (fact or {}).get('status', 'unknown')
+            for name, fact in (comparison.get('comparability_facts') or {}).items()
+            if name.removeprefix('same_') in comparison_substitutions
+        }
         pair = _build_pair(
             run_a,
             run_b,
@@ -455,6 +465,8 @@ def main(argv: list[str] | None = None) -> None:
             component_b=component_b,
             component_cache=component_cache,
             skip_diagnosis=args.skip_diagnosis,
+            substitutions=comparison_substitutions,
+            substitution_fact_status=substitution_fact_status,
         )
         pair['artifact_formats'] = {
             component_ids[0]: component_a.get('artifact_format') or 'helm',
