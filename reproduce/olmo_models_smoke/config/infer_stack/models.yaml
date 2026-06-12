@@ -59,7 +59,7 @@ vllm_models:
     hf_model_id: allenai/OLMo-7B-hf                   # verify (-hf is the vLLM-loadable conversion)
     served_model_name: allenai/olmo-7b
     logical_model_name: allenai/olmo-7b
-    tokenizer_name: allenai/olmo-7b
+    tokenizer_name: allenai/olmo-7b           # HELM alias (no -hf suffix); see model_deployments.yaml
     family: olmo
     modalities: [text]
     supported_protocols: [completions]
@@ -78,7 +78,7 @@ vllm_models:
     hf_model_id: allenai/OLMo-1.7-7B-hf               # verify (-hf suffix + 1.7 naming)
     served_model_name: allenai/olmo-1.7-7b
     logical_model_name: allenai/olmo-1.7-7b
-    tokenizer_name: allenai/olmo-1.7-7b
+    tokenizer_name: allenai/OLMo-1.7-7B-hf    # HELM alias is case-sensitive; see model_deployments.yaml
     family: olmo
     modalities: [text]
     supported_protocols: [completions]
@@ -116,7 +116,7 @@ vllm_models:
     hf_model_id: allenai/OLMo-2-1124-13B-Instruct     # high confidence
     served_model_name: allenai/olmo-2-1124-13b-instruct
     logical_model_name: allenai/olmo-2-1124-13b-instruct
-    tokenizer_name: allenai/olmo-2-1124-13b-instruct
+    tokenizer_name: allenai/olmo-2-1124-7b-instruct   # HELM: 13B reuses the 7B tokenizer; see model_deployments.yaml
     family: olmo2
     modalities: [text]
     supported_protocols: [chat, completions]
