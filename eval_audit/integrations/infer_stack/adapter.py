@@ -425,9 +425,14 @@ def load_profile_contract(
 ) -> dict[str, Any]:
     root = (vllm_root or infer_stack_root()).resolve()
     contracts = _import_infer_stack_contracts(root)
+    # NOTE: ``root`` is consumed by _import_infer_stack_contracts above (it puts
+    # the vendored submodule on sys.path). The inner load_profile_contract no
+    # longer accepts a ``root`` kwarg — infer_stack dropped it in b844c9f
+    # ("Make config/data paths CWD-independent"), resolving config via
+    # config_root()/INFER_STACK_CONFIG_DIR instead. Passing root= here raised
+    # TypeError against the pinned submodule.
     return contracts.load_profile_contract(
         profile,
-        root=root,
         backend=backend,
         simulate_hardware_spec=simulate_hardware,
     )
