@@ -2140,3 +2140,72 @@ was a small diff whose gates were already standing. Inverting the
 usual order — build the replacement next to the incumbent, prove
 equivalence, then swap — turned the 'high-risk hinge' into two
 routine commits.
+
+## 2026-06-12 10:28:22 -0400
+
+**User intent.** Implement the rest of the Phase 3 plan without
+stopping (4.9 open-judge extension, 4.7 upstream draft, 4.8 docs),
+committing logical units.
+
+**Model/config.** Claude Fable 5 (claude-fable-5[1m]), Claude Code
+VSCode harness.
+
+**What landed (6 commits, `3ef5233`..`f099bb2`).** Phase 3 is now
+fully implemented:
+
+- *4.9a* — `eval_audit/judge_registry.py`: the curated annotator-class
+  → judge-models map the inventory showed is the only way to know an
+  official's judges (run_specs carry class names with empty args; the
+  models are hard-coded per HELM version). All six closed-judge
+  annotators → the GPT-4o + Llama-405B ensemble; resolution makes
+  official (class basename) vs local (recorded model ids) comparable;
+  `judge_fact_status` resolves both sides.
+- *4.9b+c* — planner + renderer: a `judge_substitution_planned` row
+  flag tags its component; comparisons containing one declare
+  `substitutions: ['judge']` and emit the same_judge fact (SCOPED to
+  declared comparisons — emitting it everywhere would spray
+  comparability_unknown noise over every legacy pair). Facts stay
+  honest; declared difference → no drift warning, diagnosis re-labeled
+  `intended_substitution:judge` via the new `apply_substitutions`
+  overlay (shared finalization extracted from `diagnose_repro`; the
+  17-case equivalence battery stayed green); declared-but-not-observed
+  → `substitution_not_observed:judge` warning. The rendered pair
+  attaches `metric_class_split` (deterministic control vs
+  judge-dependent measurement). All three outputs appear only when
+  declared — F9/F10 end-to-end tests plus the committed baseline prove
+  non-extension outputs byte-identical.
+- *4.9d* — Stage-1 `--allow-closed-judge-benchmarks`: admitted runs
+  flow through a distinct 'judge-substitution' candidate pool (the
+  selection-path table and pool-keyed sankeys show the path with zero
+  report-code changes) and the flag rides run_details → manifests →
+  audit index to the planner.
+- *4.7* — upstream EEE issue drafted ready-to-file
+  (docs/planning/upstream-eee-recipe-facts-issue.md): a typed
+  recipe_facts slot incl. judge_models; filing left to maintainers
+  (outward-facing).
+- *4.8* — pipeline.md Stage 3 rewrite, CLAUDE.md module table,
+  helm_compat marked LEGACY BRIDGE, design/plan docs → IMPLEMENTED.
+  One deliberate divergence recorded: --skip-diagnosis and
+  EVAL_AUDIT_EEE_STRICT deprecated, not removed (the cycle hasn't
+  elapsed; skip-diagnosis is load-bearing until facts-grade diagnosis
+  becomes the EEE path's default — a recorded follow-on alongside
+  Stage-6 provenance columns and per-metric judge attribution).
+
+**Renderer-test subtlety worth remembering.** EEE-only pairs get a
+noisy HELM-grade diagnosis through helm_compat's empty defaults
+(wrong_run_pair — pinned by the F3 baseline), so the F9 substitution
+assertion runs under --skip-diagnosis where the overlay stands alone.
+The follow-on (facts-grade diagnosis as the EEE default) makes that
+noise go away properly rather than by flag.
+
+**Final state.** Full suite 174 passed + the same 10 pre-existing
+infer_stack/kwdagger failures (untouched user workstream); the wide
+slow battery (47 tests incl. e2e summary) green. Working tree clean
+except the user's adapter.py wip.
+
+**Design insight.** Scoping a new signal is as much a design decision
+as computing it: same_judge is only honest *because* it is emitted
+solely on declared-substitution comparisons — the unconditional
+version would have been technically correct and operationally noise.
+The matrix's 'non-extension fixtures byte-identical' gate forced that
+decision early, before any code existed to defend.
