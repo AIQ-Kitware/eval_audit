@@ -254,12 +254,22 @@ def facts_semantic_inputs(
 def judge_fact_status(
     facts_a: RecipeFacts | None, facts_b: RecipeFacts | None
 ) -> str:
-    """``same_judge`` status from two RecipeFacts: yes / no / unknown."""
+    """``same_judge`` status from two RecipeFacts: yes / no / unknown.
+
+    Identities are resolved through the curated judge registry first so
+    an official side (annotator class basename — HELM hard-codes the
+    model) compares against a local side (explicit model ids) on equal
+    terms. See docs/planning/judge-identity-inventory.md.
+    """
+    from eval_audit.judge_registry import resolve_judge_models
+
     if facts_a is None or facts_b is None:
         return "unknown"
-    if facts_a.judge_models is None or facts_b.judge_models is None:
+    resolved_a = resolve_judge_models(facts_a.judge_models)
+    resolved_b = resolve_judge_models(facts_b.judge_models)
+    if resolved_a is None or resolved_b is None:
         return "unknown"
-    return "yes" if facts_a.judge_models == facts_b.judge_models else "no"
+    return "yes" if resolved_a == resolved_b else "no"
 
 
 # ---------------------------------------------------------------------------
