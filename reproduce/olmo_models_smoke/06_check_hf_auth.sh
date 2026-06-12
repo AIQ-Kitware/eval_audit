@@ -26,7 +26,7 @@ fi
 
 # Confirm the token actually authenticates (identity check, not access check).
 if command -v huggingface-cli >/dev/null 2>&1; then
-  if who="$(huggingface-cli whoami 2>/dev/null)"; then
+  if who="$(hf auth whoami 2>/dev/null)"; then
     echo "OK: authenticated to HuggingFace as: $who"
   else
     echo "FAIL: a token is set but 'huggingface-cli whoami' rejected it (expired/invalid)." >&2
