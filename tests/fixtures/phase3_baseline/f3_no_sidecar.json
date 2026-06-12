@@ -132,6 +132,7 @@
     "eee_artifact_path": "<LOCAL-DIR>",
     "eee_artifact_resolution": {},
     "experiment_name": "eee_only_pair",
+    "instance_source_policy": "eee-only",
     "job_path": null,
     "logical_run_key": "imdb:model=toy/m1-small",
     "machine_host": "eee_only_demo",
@@ -169,6 +170,7 @@
     "eee_artifact_path": "<OFFICIAL-DIR>",
     "eee_artifact_resolution": {},
     "experiment_name": null,
+    "instance_source_policy": "eee-only",
     "job_path": null,
     "logical_run_key": "imdb:model=toy/m1-small",
     "machine_host": null,
@@ -591,6 +593,10 @@
        }
       ]
      }
+    },
+    "instance_sources": {
+     "local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356": "eee",
+     "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>": "eee"
     },
     "label": "official_vs_local::official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>::local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
     "reference_component_id": "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",

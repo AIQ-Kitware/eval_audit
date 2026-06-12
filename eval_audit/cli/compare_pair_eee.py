@@ -355,6 +355,9 @@ def main(argv: list[str] | None = None) -> None:
         "--report-dpath", str(out_dir),
         "--components-manifest", str(out_dir / "components_manifest.json"),
         "--comparisons-manifest", str(out_dir / "comparisons_manifest.json"),
+        # EEE-only mode: never enrich instances from HELM origins
+        # (Phase 3 / 4.5 declared instance-source policy).
+        "--instance-source", "eee-only",
     ]
     if args.render_heavy_pairwise_plots:
         cmd.append("--render-heavy-pairwise-plots")

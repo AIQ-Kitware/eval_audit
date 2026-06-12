@@ -23,6 +23,7 @@ from eval_audit.normalized import (
 )
 from eval_audit.normalized import compare as ncompare
 from eval_audit.normalized.helm_compat import helm_view
+from eval_audit.normalized.loaders import INSTANCE_SOURCE_POLICY_KEY
 from eval_audit.utils.numeric import quantile as _quantile
 # Row math relocated to the unified comparison core (Phase 3 / 4.3);
 # re-imported under the historical names so this module's public
@@ -324,6 +325,7 @@ def _load_normalized(
     eee_artifact_path: str | Path | None = None,
     component_id: str | None = None,
     logical_run_key: str | None = None,
+    instance_source_policy: str | None = None,
 ) -> NormalizedRun:
     """Load a run as a :class:`NormalizedRun` honoring the manifest format.
 
@@ -331,7 +333,15 @@ def _load_normalized(
     pointed ``eee_artifact_path`` at a converted EEE artifact directory, the
     EEE loader is used and the raw HELM run becomes evidence-only. Otherwise
     we fall back to the in-memory HELM->EEE conversion against ``run_path``.
+
+    ``instance_source_policy`` (Phase 3 / 4.5) declares whether an EEE
+    load may enrich instances from the recorded HELM origin
+    ('helm-preferred') or must stay EEE-pure ('eee-only'); the loader
+    records the resulting ``instance_source`` on the ref.
     """
+    extra: dict[str, Any] = {}
+    if instance_source_policy:
+        extra[INSTANCE_SOURCE_POLICY_KEY] = instance_source_policy
     if artifact_format == "eee" and eee_artifact_path:
         ref = NormalizedRunRef.from_eee_artifact(
             eee_artifact_path,
@@ -339,6 +349,7 @@ def _load_normalized(
             helm_run_path=run_path,
             component_id=component_id,
             logical_run_key=logical_run_key,
+            extra=extra,
         )
     else:
         ref = NormalizedRunRef.from_helm_run(
@@ -346,8 +357,19 @@ def _load_normalized(
             source_kind=source_kind,
             component_id=component_id,
             logical_run_key=logical_run_key,
+            extra=extra,
         )
     return load_run(ref)
+
+
+def _run_instance_source(nrun: NormalizedRun) -> str:
+    """The instance source that actually backed this run's instances."""
+    recorded = (nrun.ref.extra or {}).get("instance_source")
+    if recorded:
+        return str(recorded)
+    # Raw HELM loads predate the recording seam; their instances are
+    # HELM-derived by construction.
+    return "helm" if nrun.ref.artifact_format.value == "helm" else "eee"
 
 
 def _component_source_kind(component: dict[str, Any] | None) -> SourceKind:
@@ -390,6 +412,7 @@ def _load_component_run(
         eee_artifact_path=component.get("eee_artifact_path"),
         component_id=component_id,
         logical_run_key=component.get("logical_run_key"),
+        instance_source_policy=component.get("instance_source_policy"),
     )
     if cache is not None and component_id:
         cache[component_id] = run
@@ -445,6 +468,13 @@ def _build_pair(
         run_b_path=str(Path(run_b).expanduser().resolve()),
         include_diagnosis=False,
     )
+    # Which instance source actually backed each side (recorded by the
+    # loader; 'helm' for raw HELM loads). main() re-keys this by
+    # component id next to artifact_formats.
+    pair['_instance_sources'] = {
+        'a': _run_instance_source(nrun_a),
+        'b': _run_instance_source(nrun_b),
+    }
     if not skip_diagnosis:
         diff = HelmRunDiff(
             helm_view(nrun_a),

@@ -118,6 +118,9 @@ def _render_packet(
         "--report-dpath", str(report_dpath),
         "--components-manifest", str(report_dpath / "components_manifest.json"),
         "--comparisons-manifest", str(report_dpath / "comparisons_manifest.json"),
+        # EEE-only mode: never enrich instances from HELM origins
+        # (Phase 3 / 4.5 declared instance-source policy).
+        "--instance-source", "eee-only",
     ]
     if render_heavy_plots:
         cmd.append("--render-heavy-pairwise-plots")

@@ -343,6 +343,20 @@ def main(argv: list[str] | None = None) -> None:
             'the default.'
         ),
     )
+    parser.add_argument(
+        '--instance-source',
+        choices=['helm-preferred', 'eee-only'],
+        default='helm-preferred',
+        help=(
+            'Declared instance-source policy for EEE-format components '
+            '(Phase 3 / 4.5): helm-preferred enriches instance joins from '
+            'the recorded HELM origin when readable (recording any '
+            'degradation); eee-only never reads HELM JSONs. The choice is '
+            'recorded per component as instance_sources in '
+            'core_metric_report.json — never inferred from disk state. '
+            'EEE-only entry points pass eee-only.'
+        ),
+    )
     # Distinct from HELM_AUDIT_SKIP_PLOTLY (which only affects Plotly /
     # Chromium PNG exports in build_reports_summary). All the heavyweight
     # per-pair figures in core_metrics are matplotlib — they were not
@@ -395,6 +409,11 @@ def main(argv: list[str] | None = None) -> None:
     all_comparisons = comparisons_manifest.get('comparisons') or []
     comparisons = [comparison for comparison in all_comparisons if comparison.get('enabled', True)]
     component_lookup = {component['component_id']: component for component in components}
+    # Stamp the declared instance-source policy onto every component so
+    # each _load_component_run call site (pairs, run-level tables, plot
+    # writers) honors it without per-site threading (Phase 3 / 4.5).
+    for component in components:
+        component.setdefault('instance_source_policy', args.instance_source)
     run_spec_name = _infer_run_spec_name(*(component['run_path'] for component in components))
 
     # Memoize NormalizedRun loads across the per-pair loop. A typical
@@ -440,6 +459,14 @@ def main(argv: list[str] | None = None) -> None:
         pair['artifact_formats'] = {
             component_ids[0]: component_a.get('artifact_format') or 'helm',
             component_ids[1]: component_b.get('artifact_format') or 'helm',
+        }
+        # Instance-source provenance recorded by the loader (Phase 3 /
+        # 4.5): which data actually backed each side's instance rows,
+        # under the declared --instance-source policy.
+        _inst_srcs = pair.pop('_instance_sources', {})
+        pair['instance_sources'] = {
+            component_ids[0]: _inst_srcs.get('a'),
+            component_ids[1]: _inst_srcs.get('b'),
         }
         pair['comparison_id'] = comparison['comparison_id']
         pair['comparison_kind'] = comparison.get('comparison_kind')
