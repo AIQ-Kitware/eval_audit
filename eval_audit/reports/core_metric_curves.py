@@ -28,6 +28,7 @@ from eval_audit.utils.numeric import quantile as _quantile
 # re-imported under the historical names so this module's public
 # surface (and the core_metrics facade re-exports) are unchanged.
 from eval_audit.normalized.diff import (
+    NormalizedDiff,
     agreement_curve as _agreement_curve,
     group_quantiles as _group_quantiles,
     metric_quantiles as _metric_quantiles,
@@ -431,60 +432,28 @@ def _build_pair(
         nrun_b = _load_component_run(component_b, cache=component_cache)
     else:
         nrun_b = _load_normalized(run_b, source_kind=SourceKind.LOCAL)
-    if skip_diagnosis:
-        diagnosis: dict[str, Any] = {}
-    else:
+    # Phase 3 / 4.6: the agreement blocks come from the unified core.
+    # NormalizedDiff.pair_summary emits the exact block shapes this
+    # function always returned (same arithmetic — the row math moved
+    # there in 4.3, this call is not a re-derivation). The HELM-grade
+    # diagnosis stays HelmRunDiff's: run_spec.json semantic diff is
+    # only meaningful with raw HELM artifacts, which this renderer (and
+    # not the EEE-only path) has.
+    ndiff = NormalizedDiff(nrun_a, nrun_b, label=label, thresholds=list(thresholds))
+    pair = ndiff.pair_summary(
+        run_a_path=str(Path(run_a).expanduser().resolve()),
+        run_b_path=str(Path(run_b).expanduser().resolve()),
+        include_diagnosis=False,
+    )
+    if not skip_diagnosis:
         diff = HelmRunDiff(
             helm_view(nrun_a),
             helm_view(nrun_b),
             a_name=f'{label}:A',
             b_name=f'{label}:B',
         )
-        diagnosis = diff.summary_dict(level=20).get('diagnosis', {})
-    run_rows = ncompare.run_level_core_rows(nrun_a, nrun_b)
-    inst_rows, inst_stats = ncompare.instance_level_core_rows(nrun_a, nrun_b)
-
-    # Calculate per-metric agreement curves for instance level
-    per_metric_curves = {}
-    if inst_rows:
-        by_metric = {}
-        for row in inst_rows:
-            metric = str(row.get('metric', 'unknown'))
-            if metric not in by_metric:
-                by_metric[metric] = []
-            by_metric[metric].append(row)
-        for metric, metric_rows in by_metric.items():
-            per_metric_curves[metric] = _agreement_curve(metric_rows, thresholds)
-
-    return {
-        'label': label,
-        'inputs': {
-            'run_a': str(Path(run_a).expanduser().resolve()),
-            'run_b': str(Path(run_b).expanduser().resolve()),
-        },
-        'diagnosis': diagnosis,
-        'core_metrics': sorted({str(r['metric']) for r in inst_rows}),
-        'run_level': {
-            'n_rows': len(run_rows),
-            'overall_quantiles': _group_quantiles(run_rows),
-            'by_metric': _metric_quantiles(run_rows),
-            'agreement_vs_abs_tol': _agreement_curve(run_rows, thresholds),
-        },
-        'instance_level': {
-            'n_rows': len(inst_rows),
-            # Pre-filter join count from join_instances. Lets the
-            # heatmap distinguish "no hash overlap" (n_joined_pairs==0)
-            # from "hashes overlapped but no core metrics survived
-            # classify_metric" (n_joined_pairs>0 && n_rows==0). See
-            # eval_audit.normalized.compare.instance_level_core_rows.
-            'n_joined_pairs': int(inst_stats.get('n_joined_pairs', 0)),
-            'overall_quantiles': _group_quantiles(inst_rows),
-            'by_metric': _metric_quantiles(inst_rows),
-            'agreement_vs_abs_tol': _agreement_curve(inst_rows, thresholds),
-            'per_metric_agreement': per_metric_curves,
-        },
-        '_instance_rows': inst_rows,
-    }
+        pair['diagnosis'] = diff.summary_dict(level=20).get('diagnosis', {})
+    return pair
 
 
 @profile

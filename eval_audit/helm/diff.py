@@ -770,215 +770,24 @@ class HelmRunDiff(ub.NiceRepr):
 
         Returns a primary label plus a full list of contributing reasons.
         Lower ``priority`` is earlier / more significant in the pipeline.
+
+        Phase 3 / 4.6: delegates to the single implementation in
+        :func:`eval_audit.normalized.diagnose.diagnose_repro` (ported
+        there in 4.2 and proven byte-identical by
+        ``tests/test_phase3_diagnose_equivalence.py`` while both copies
+        existed). The HELM-grade *inputs* — run_spec/scenario semantic
+        diff, dataset overlap — are still computed here from raw HELM
+        artifacts; only the input-to-label logic is shared.
         """
-        reasons: list[dict[str, Any]] = []
+        from eval_audit.normalized.diagnose import diagnose_repro
 
-        def add_reason(name: str, priority: int, details: dict[str, Any]) -> None:
-            reasons.append(
-                {
-                    'name': name,
-                    'priority': int(priority),
-                    'details': _json_compatible(details),
-                }
-            )
-
-        # Priority 0: run pairing / spec-level execution blockers
-        if not run_spec_name_ok:
-            add_reason(
-                'wrong_run_pair',
-                0,
-                {'run_spec_name_ok': False},
-            )
-
-        execution_ok = bool(run_spec_semantic.get('execution_ok', False))
-        execution_paths = run_spec_semantic.get('execution_paths', []) or []
-        deployment_paths = run_spec_semantic.get('deployment_paths', []) or []
-        non_deployment_execution_paths = [
-            p
-            for p in execution_paths
-            if not str(p).startswith('adapter_spec.model_deployment')
-        ]
-        if not execution_ok and non_deployment_execution_paths:
-            add_reason(
-                'execution_spec_drift',
-                0,
-                {
-                    'execution_paths': execution_paths,
-                    'execution_value_examples': run_spec_semantic.get(
-                        'execution_value_examples', []
-                    ),
-                    'counts': run_spec_semantic.get('counts', {}),
-                },
-            )
-
-        if bool(run_spec_semantic.get('deployment_changed', False)):
-            dep = run_spec_semantic.get('deployment', {}) or {}
-            add_reason(
-                'deployment_drift',
-                0,
-                {
-                    'a_value': dep.get('a', None),
-                    'b_value': dep.get('b', None),
-                    'execution_paths': [
-                        p
-                        for p in (
-                            execution_paths
-                        )
-                        if str(p).startswith('adapter_spec.model_deployment')
-                    ]
-                    or deployment_paths,
-                },
-            )
-
-        scen_known = bool(scenario_semantic.get('known', False))
-        scen_semantic_ok = scenario_semantic.get('semantic_ok', None)
-        if scen_known and not bool(scen_semantic_ok):
-            add_reason(
-                'scenario_spec_drift',
-                0,
-                {
-                    'semantic_paths': scenario_semantic.get(
-                        'semantic_paths', []
-                    ),
-                    'counts': scenario_semantic.get('counts', {}),
-                },
-            )
-
-        # Priority 1: dataset/request-state drift
-        if isinstance(dataset_overlap, dict):
-            if 'error' in dataset_overlap:
-                add_reason(
-                    'dataset_overlap_error',
-                    1,
-                    {'error': dataset_overlap.get('error', None)},
-                )
-            else:
-                base_iou = dataset_overlap.get('base_iou', None)
-                variant_iou = dataset_overlap.get('variant_iou', None)
-                if base_iou is not None and base_iou < 1.0:
-                    add_reason(
-                        'dataset_instance_drift',
-                        1,
-                        {
-                            'base_iou': base_iou,
-                            'base_coverage': dataset_overlap.get(
-                                'base_coverage', {}
-                            ),
-                        },
-                    )
-                if variant_iou is not None and variant_iou < 1.0:
-                    add_reason(
-                        'dataset_variant_drift',
-                        1,
-                        {
-                            'variant_iou': variant_iou,
-                            'variant_coverage': dataset_overlap.get(
-                                'variant_coverage', {}
-                            ),
-                        },
-                    )
-
-                ce = dataset_overlap.get('content_equality', {}) or {}
-                mex = dataset_overlap.get('mismatch_examples', {}) or {}
-                for field, reason_name, pr in [
-                    ('input', 'dataset_input_drift', 1),
-                    ('prompt', 'request_prompt_drift', 1),
-                    ('completion', 'completion_content_drift', 2),
-                ]:
-                    row = ce.get(field, {}) or {}
-                    eq = row.get('equal_ratio', None)
-                    if eq is not None and eq < 1.0:
-                        details = dict(row)
-                        examples = mex.get(field, None)
-                        if examples:
-                            details['examples'] = examples
-                        add_reason(reason_name, pr, details)
-
-        # Priority 2: evaluation schema / metric set drift
-        metric_specs_delta = (
-            run_spec_semantic.get('metric_specs_multiset_delta', {}) or {}
+        return diagnose_repro(
+            run_spec_name_ok=run_spec_name_ok,
+            run_spec_semantic=run_spec_semantic,
+            scenario_semantic=scenario_semantic,
+            dataset_overlap=dataset_overlap,
+            value_summary=value_summary,
         )
-        eval_paths = run_spec_semantic.get('evaluation_paths', []) or []
-        evaluation_changed = bool(eval_paths) or (
-            not bool(metric_specs_delta.get('equal_as_multiset', True))
-        )
-        if evaluation_changed:
-            details = {'evaluation_paths': eval_paths}
-            if not bool(metric_specs_delta.get('equal_as_multiset', True)):
-                details['metric_specs_multiset_delta'] = metric_specs_delta
-            add_reason(
-                'evaluation_spec_drift',
-                2,
-                details,
-            )
-
-        # Priority 3: value-level drift (may be downstream effect)
-        core = ((value_summary.get('by_class') or {}).get('core') or {})
-        book = ((value_summary.get('by_class') or {}).get('bookkeeping') or {})
-        core_ratio = core.get('agree_ratio', None)
-        book_ratio = book.get('agree_ratio', None)
-
-        if core_ratio is None:
-            add_reason(
-                'no_comparable_core_metrics',
-                3,
-                {'core': core},
-            )
-        else:
-            if core_ratio < 0.995:
-                add_reason(
-                    'core_metric_drift',
-                    3,
-                    {
-                        'core_agree_ratio': core_ratio,
-                        'core': core,
-                    },
-                )
-            elif (book_ratio is not None) and (book_ratio < 0.95):
-                add_reason(
-                    'bookkeeping_metric_drift',
-                    3,
-                    {
-                        'core_agree_ratio': core_ratio,
-                        'bookkeeping_agree_ratio': book_ratio,
-                        'bookkeeping': book,
-                    },
-                )
-
-        if not reasons:
-            add_reason(
-                'no_detected_drift',
-                0,
-                {
-                    'core_agree_ratio': core_ratio,
-                    'bookkeeping_agree_ratio': book_ratio,
-                },
-            )
-
-        reasons = sorted(
-            reasons,
-            key=lambda r: (
-                int(r.get('priority', 999)),
-                str(r.get('name', '')),
-            ),
-        )
-        min_priority = min(int(r['priority']) for r in reasons)
-        primary_reason_names = [
-            r['name'] for r in reasons if int(r['priority']) == min_priority
-        ]
-        if primary_reason_names == ['no_detected_drift']:
-            label = 'reproduced'
-        elif len(primary_reason_names) == 1:
-            label = primary_reason_names[0]
-        else:
-            label = 'multiple_primary_reasons'
-
-        return {
-            'label': label,
-            'primary_priority': min_priority,
-            'primary_reason_names': primary_reason_names,
-            'reasons': reasons,
-        }
 
     # ---------------------------------------------------------------------
     # Run-level mean agreement

@@ -293,24 +293,34 @@ def test_core_metrics_single_run_uses_manifests_and_writes_comparability_block(t
             "stats_means": {"num_output_tokens": {"test": 3.0}, "finish_reason_unknown": {"test": 0.0}},
         },
     )
-    monkeypatch.setattr(
-        core_metrics,
-        "_single_run_instance_core_rows",
-        lambda run_path, label, **_: pd.DataFrame(
-            [
-                {"run": label, "metric": "exact_match", "value": 1.0 if "local" in label else 0.5},
-                {"run": label, "metric": "exact_match", "value": 0.0},
-            ]
-        ),
+    _fake_instance_rows = lambda run_path, label, **_: pd.DataFrame(  # noqa: E731
+        [
+            {"run": label, "metric": "exact_match", "value": 1.0 if "local" in label else 0.5},
+            {"run": label, "metric": "exact_match", "value": 0.0},
+        ]
     )
-    monkeypatch.setattr(
-        core_metrics,
-        "_single_run_core_stat_index",
-        # Stage-5 added a ``component=`` kwarg so the loader can pick the
-        # EEE artifact when planner manifests carry one. Accept it here
-        # so the monkeypatched stand-in matches the real signature.
-        lambda run_path, **_: {"exact_match": SimpleNamespace(metric="exact_match", mean=1.0 if "local" in run_path else 0.5)},
-    )
+    monkeypatch.setattr(core_metrics, "_single_run_instance_core_rows", _fake_instance_rows)
+    # Same Phase 2 binding issue as _single_run_core_stat_index below:
+    # the figure writers in reports.core_metric_plots bind this from
+    # their own namespace.
+    from eval_audit.reports import core_metric_plots
+
+    monkeypatch.setattr(core_metric_plots, "_single_run_instance_core_rows", _fake_instance_rows)
+    # Stage-5 added a ``component=`` kwarg so the loader can pick the
+    # EEE artifact when planner manifests carry one. Accept it here
+    # so the monkeypatched stand-in matches the real signature.
+    _fake_stat_index = lambda run_path, **_: {  # noqa: E731
+        "exact_match": SimpleNamespace(metric="exact_match", mean=1.0 if "local" in run_path else 0.5)
+    }
+    monkeypatch.setattr(core_metrics, "_single_run_core_stat_index", _fake_stat_index)
+    # The run-level table writers moved to reports.core_metric_tables in
+    # the Phase 2 split and bind _single_run_core_stat_index from their
+    # own module namespace; patching only the facade no longer reaches
+    # them (this was a latent break — the synthetic runs here carry only
+    # run_spec.json, so the unpatched loader fails on required files).
+    from eval_audit.reports import core_metric_tables
+
+    monkeypatch.setattr(core_metric_tables, "_single_run_core_stat_index", _fake_stat_index)
 
     base_argv = [
         "--report-dpath", str(report_dpath),
