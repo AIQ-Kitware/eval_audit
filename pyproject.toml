@@ -41,15 +41,17 @@ dependencies = [
     "scikit-learn>=1.7.1",
     "scriptconfig>=0.8.4",
     "seaborn>=0.13",
-    # HELM tokenizer backends. The base crfm-helm pin does not pull these in,
-    # but local-execution runs load each model's HF tokenizer for prompt-window
-    # fitting; converting a slow tokenizer to fast needs one of these (e.g.
-    # allenai/olmo-7b — see submodules/helm tokenizer_configs.yaml note).
-    "sentencepiece>=0.2.0",
-    "tiktoken>=0.7",
     "typing-extensions>=4.0.0",
     "ubelt>=1.3.8",
 ]
+
+
+# HELM plugins: helm-run calls load_entry_point_plugins(group="helm") after it
+# registers its built-in + prod_env configs, so this module's registrations
+# override matching built-in entries (e.g. repointing the allenai/olmo-7b
+# tokenizer alias at the transformers-native -hf repo). See eval_audit/integrations/helm_plugins.py.
+[project.entry-points.helm]
+eval-audit-tokenizer-overrides = "eval_audit.integrations.helm_plugins"
 
 
 [project.scripts]
