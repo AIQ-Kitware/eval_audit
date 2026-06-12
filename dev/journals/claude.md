@@ -1940,3 +1940,78 @@ conclusion can outlive its first rationale. (2) "Remove the fallback"
 and "make the fallback explicit" are different fixes for the same
 bug; which one is right depends on whether the fallback's *data* is
 wanted (here: yes, under R1) or only its *silence* is the problem.
+
+## 2026-06-12 09:28:44 -0400
+
+**User intent.** Proceed with implementing the revised Phase 3 plan
+(comparison-core unification under the new research program),
+committing logical units.
+
+**Model/config.** Claude Fable 5 (claude-fable-5[1m]), Claude Code
+VSCode harness.
+
+**What landed (5 commits, `94c7fb4`..`426a211`).** The prerequisite
+tranche the design doc sequences first (4.0–4.2), the matrix's
+baseline capture, and 4.4:
+
+- *4.0* — `helm/metrics.py` → `eval_audit/metrics_taxonomy.py`
+  (framework-free; shim kept), plus the new judge-dependence
+  classification (`JUDGE_DEPENDENT_PREFIXES`,
+  `classify_judge_dependence`) seeded from the closed-judge benchmark
+  metrics. `normalized.compare` now imports zero `eval_audit.helm.*`.
+- *4.1* — `normalized/recipe_facts.py`: one resolver (native block in
+  the EEE aggregate → sidecar run_spec.json → unknown). The native
+  tier rides `source_metadata.additional_details["recipe_facts"]` as a
+  JSON string — works inside the schema's `extra='forbid'` today;
+  4.7 upstreams a proper slot. `extract_run_spec_fields` gained an
+  additive `judge_models` key via a conservative annotators-list
+  extractor.
+- *4.2* — `normalized/diagnose.py`: `_diagnose_repro` ported as a pure
+  function (the original never reads `self`), gated by a 17-case
+  branch-covering battery asserting deep equality against the live
+  `HelmRunDiff._diagnose_repro` — a real, non-tautological gate
+  because HelmRunDiff keeps its copy until 4.6. Substitution awareness
+  added: declared+observed → `intended_substitution:<name>` primary
+  label with drift reasons still recorded; declared+not-observed →
+  `substitution_not_observed:<name>`; unknown → no-op. With no
+  declarations the output is byte-identical (asserted).
+- *Baseline harness* — `tests/phase3_baseline_lib.py` +
+  `test_phase3_baseline.py` + committed F3/F4 snapshots. Key
+  normalization gotcha: the path-derived 12-char hashes appear as dict
+  *keys* (component_metadata, run_diagnostics), not just values; the
+  first capture failed its own determinism check until keys got the
+  same substitution. Verified deterministic across consecutive runs.
+- *4.4* — EEE synthesis library moved to `normalized/eee_sources.py`
+  (public names; from_eee keeps underscore aliases), and a tendril the
+  design doc missed: `helm/hashers.py` (generic ubelt hashing, the
+  *actual* last helm module in the EEE import chain after 4.0) lifted
+  to `utils/hashers.py`. Measured result: `from_eee` and
+  `compare_pair_eee` now import **zero** `eval_audit.helm.*` — the
+  demoted-to-optional isolation goal fell out for free. The planned
+  lazy-HelmRunDiff change proved unnecessary (Phase 2's split already
+  removed the renderer from the CLI import chain).
+
+**State of the gates.** Full suite: 151 passed + the same 10
+pre-existing infer_stack/kwdagger failures; slow EEE suites (24) and
+the F3/F4 baseline green at every commit.
+
+**Not done / next steps, in order.**
+- *4.3 NormalizedDiff* — the high-risk hinge. Needs the F8
+  mixed-format fixture, a port of `tolerance_sweep_summary` and
+  `dataset_overlap_from_request_states` onto `NormalizedRun.instances`,
+  and assembly with 4.2's diagnosis. Gate: §4 output equivalence on
+  F1–F8 at atol=1e-9, stop-if-moved.
+- *4.5 instance-source policies* — needs the F6 probe fixture (EEE
+  artifact with HELM origin and deliberately divergent instance ids).
+- *4.9 open-judge extension* — Stage-1 relax + `same_judge` fact can
+  be pulled ahead; the diagnosis half is ready (4.2 ships the labels).
+- §9 sign-offs remain open: judge-identity inventory across the six
+  closed-judge benchmarks (blocks `same_judge` specification), and the
+  upstream EEE `recipe_facts` issue (4.7).
+
+**Design insight.** Measure the import graph after every cut, not
+once at planning time: the design doc named three tendrils, but after
+cutting the first the *measured* leakage pointed at `helm.hashers` —
+a module nobody had flagged — and showed the planned lazy-import fix
+was already moot. The plan's tendril list was a hypothesis; the
+`sys.modules` count was the test.
