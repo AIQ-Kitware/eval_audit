@@ -181,13 +181,40 @@ turns the virtual-experiment compose output into individual analysis jobs.
 
 **What it does:** for each packet, loads both sides via the normalized
 loader ([`eval_audit/normalized/loaders.py`](../eval_audit/normalized/loaders.py)),
-runs the comparison
-([`eval_audit/normalized/compare.py`](../eval_audit/normalized/compare.py)),
-emits a per-packet core-metric report
+runs the **unified comparison core**
+([`eval_audit/normalized/diff.py`](../eval_audit/normalized/diff.py) —
+`NormalizedDiff`, assembling
+[`normalized/compare.py`](../eval_audit/normalized/compare.py) agreement rows,
+curves, and the framework-free diagnosis in
+[`normalized/diagnose.py`](../eval_audit/normalized/diagnose.py)),
+and emits a per-packet core-metric report
 ([`eval_audit/reports/core_metrics.py`](../eval_audit/reports/core_metrics.py))
 including per-instance ECDFs, agreement curves, comparability facts, and a
 diagnosis (`deployment_drift`, `execution_spec_drift`,
-`completion_content_drift`, `multiple_primary_reasons`, etc.).
+`completion_content_drift`, `multiple_primary_reasons`, etc.). On the
+HELM-driven path, `HelmRunDiff` additionally contributes the
+run_spec.json *semantic* diff — how "same recipe" is proven rather than
+asserted.
+
+Two per-component provenance controls (Phase 3):
+
+- `--instance-source {helm-preferred,eee-only}`: whether EEE-format
+  components may enrich instance joins from their recorded HELM origin
+  (`helm-preferred`, the default — degradations are recorded, never
+  silent) or must stay EEE-pure (`eee-only`, what the EEE-only CLIs
+  pass). The result is recorded per component as
+  `pairs[].instance_sources` in the report. Subsumes the deprecated
+  `EVAL_AUDIT_EEE_STRICT` env var.
+- **Declared judge substitutions** (open-judge extension): runs admitted
+  by `eval-audit-index-historic --allow-closed-judge-benchmarks` carry
+  `judge_substitution_planned`, which the planner turns into
+  `substitutions: ["judge"]` plus a scoped `same_judge` comparability
+  fact (judge identities resolved through
+  [`eval_audit/judge_registry.py`](../eval_audit/judge_registry.py)).
+  The rendered pair re-labels the declared difference as
+  `intended_substitution:judge` and attaches a `metric_class_split`
+  separating deterministic metrics (the reproduction control) from
+  judge-dependent metrics (the substitution measurement).
 
 **Output:**
 

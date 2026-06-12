@@ -1,6 +1,17 @@
 """Compatibility adapters that let legacy HELM-shape consumers use NormalizedRun.
 
-Stage-3 scope: the existing :class:`eval_audit.helm.diff.HelmRunDiff` and
+**LEGACY BRIDGE (post-Stage-4 status, 2026-06-12).** The comparison
+core itself is now :class:`eval_audit.normalized.diff.NormalizedDiff`
+(Phase 3 / 4.3–4.6); agreement numbers no longer flow through this
+module. What remains routed through here is the HELM-driven path's
+run_spec/scenario *semantic diff* — ``HelmRunDiff`` consuming a
+``HelmRunView`` — which is meaningful only when raw HELM artifacts
+exist. Do not add new consumers; new code reads
+:class:`NormalizedRun` (and recipe facts via
+``eval_audit.normalized.recipe_facts``) directly.
+
+Stage-3 scope (historical): the existing
+:class:`eval_audit.helm.diff.HelmRunDiff` and
 :class:`eval_audit.helm.analysis.HelmRunAnalysis` consume objects that look
 like ``compat.helm_outputs.HelmRun`` — i.e. they expose ``.json.run_spec()``,
 ``.json.scenario()``, ``.json.scenario_state()``, ``.json.stats()``,
@@ -11,8 +22,8 @@ on-disk artifacts and comparison logic) can be passed straight into
 
 The adapter prefers the in-memory raw HELM JSONs cached on the
 :class:`NormalizedRun`, and falls back to a lazy filesystem read via
-``Origin.helm_run_path`` when needed. Calling code that holds an EEE-only
-run with no HELM origin gets a clear error rather than silent fallthrough.
+``Origin.helm_run_path`` when needed. For pure-EEE runs the views
+return shape-correct empty defaults (see ``_NormalizedJsonView``).
 """
 
 from __future__ import annotations

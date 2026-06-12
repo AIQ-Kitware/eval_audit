@@ -281,17 +281,35 @@ recorded, never disk-state-dependent:
 Every sub-stage ends green against the [behavior-equivalence matrix](phase3-behavior-equivalence-matrix.md).
 Numbering continues the normalized-refactor stages.
 
-**Status 2026-06-12:** 4.0–4.6 **DONE** (commits `94c7fb4`..`e5f905c`); every gate green at each
-commit. Notes vs. the plan: 4.4 found and lifted a fourth tendril the §2.2 list missed
-(`helm/hashers.py` — the actual last `helm.*` module in the EEE import chain), after which the EEE
-CLIs import **zero** `eval_audit.helm.*` modules; the planned lazy-`HelmRunDiff` change proved
-unnecessary (Phase 2's split had already removed the renderer from the CLI import chain). 4.5's
-loader probe stages the real demo artifact rather than a synthetic aggregate (pydantic-valid by
-construction). The §9.2 judge-identity spike is done
-([`judge-identity-inventory.md`](judge-identity-inventory.md)) — its findings reshape 4.9
-(per-metric substitution framing; curated class+version→judge-model map; `same_judge` emitted only
-for declared-substitution comparisons). Remaining: **4.7** (upstream EEE issue), **4.8** (docs +
-retire `--skip-diagnosis`/`EVAL_AUDIT_EEE_STRICT`), **4.9** (open-judge extension enablement).
+**Status 2026-06-12 (end of day): ALL SUB-STAGES IMPLEMENTED** (commits `94c7fb4`..`HEAD`); every
+gate green at each commit.
+
+- 4.0–4.6 done. Notes vs. the plan: 4.4 found and lifted a fourth tendril the §2.2 list missed
+  (`helm/hashers.py` — the actual last `helm.*` module in the EEE import chain), after which the EEE
+  CLIs import **zero** `eval_audit.helm.*` modules; the planned lazy-`HelmRunDiff` change proved
+  unnecessary (Phase 2's split had already removed the renderer from the CLI import chain). 4.5's
+  loader probe stages the real demo artifact rather than a synthetic aggregate (pydantic-valid by
+  construction).
+- **4.9 done** (registry → planner → renderer → Stage-1 relax), shaped by the §9.2 spike
+  ([`judge-identity-inventory.md`](judge-identity-inventory.md)): curated annotator→judge-model map
+  (`eval_audit/judge_registry.py`); `same_judge` fact **scoped to declared-substitution
+  comparisons**; declared differences re-label as `intended_substitution:judge` with the
+  `metric_class_split` control/measurement separation; `--allow-closed-judge-benchmarks` admits the
+  closed-judge benchmarks through a distinct `judge-substitution` selection path. Non-extension
+  outputs verified byte-identical (matrix F9/F10 + committed baseline).
+- **4.7**: upstream issue drafted, ready to file —
+  [`upstream-eee-recipe-facts-issue.md`](upstream-eee-recipe-facts-issue.md).
+- **4.8 deliberate divergence:** `--skip-diagnosis` and `EVAL_AUDIT_EEE_STRICT` are **deprecated,
+  not removed** — EEE_STRICT's one-cycle deprecation (subsumed by the declared instance-source
+  policies) has not elapsed, and `--skip-diagnosis` remains load-bearing for the EEE render path
+  until the facts-grade diagnosis is wired as that path's default (follow-on). Docs updated
+  (`pipeline.md` Stage 3, CLAUDE.md module table, `helm_compat.py` marked legacy-bridge).
+
+**Follow-ons** (not Phase 3 blockers): wire `NormalizedDiff.diagnosis()` (facts-grade) as the EEE
+render path's default diagnosis, replacing the noisy HelmRunDiff-over-empty-defaults output the
+baseline currently pins; Stage-6 aggregate columns for `instance_source` / substitutions /
+metric-class split; per-metric judge attribution (inventory finding 2 — compare the open ensemble
+member's sub-scores as same-judge controls); retire the deprecated flags after one cycle.
 
 | # | Sub-stage | Risk | Deliverable | Gate |
 |---|---|---|---|---|

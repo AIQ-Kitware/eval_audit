@@ -105,21 +105,32 @@ instructions, max_eval_instances, benchmark family) collapse to
 `comparability_unknown:*` warnings — that's the correct behavior, not
 a bug. **Both EEE-driven CLIs auto-detect a sidecar `run_spec.json`
 next to the EEE artifact** (see `detect_helm_sidecars` in
-`eval_audit/cli/from_eee.py`); when present, the HELM-side
-comparability facts evaluate normally. Full mapping +
-recommendations: [`docs/eee-vs-helm-metadata.md`](docs/eee-vs-helm-metadata.md).
+`eval_audit/normalized/eee_sources.py`; `cli/from_eee.py` re-exports
+it for compatibility); when present, the HELM-side comparability
+facts evaluate normally. An EEE aggregate can also carry the facts
+natively (JSON-encoded `recipe_facts` under
+`source_metadata.additional_details` — see
+`eval_audit/normalized/recipe_facts.py` for the resolution order).
+Full mapping + recommendations:
+[`docs/eee-vs-helm-metadata.md`](docs/eee-vs-helm-metadata.md).
 
 ### Critical Modules
 
 | File | Purpose |
 |---|---|
 | `eval_audit/cli/index_historic_helm_runs.py` | Stage 1: filtering, filter-step analysis, sankey emission |
-| `eval_audit/cli/from_eee.py` | EEE-only tutorial path; skips Stages 1–2 and routes EEE artifacts straight into the planner + core-metrics + aggregate summary. Also exports `detect_helm_sidecars(artifact_dir)` for the sidecar `run_spec.json` pickup. |
+| `eval_audit/cli/from_eee.py` | EEE-only tutorial path; skips Stages 1–2 and routes EEE artifacts straight into the planner + core-metrics + aggregate summary. |
 | `eval_audit/cli/compare_pair_eee.py` | EEE-only single-pair comparison CLI; analogue of `eval-audit-compare-pair` |
 | `docs/eee-vs-helm-metadata.md` | HELM↔EEE field mapping + recommendations for shipping sidecar metadata |
-| `eval_audit/reports/core_metrics.py` | Per-metric agreement curves, tolerance thresholds, instance-level vs. run-level metrics |
-| `eval_audit/planning/core_report_planner.py` | Comparison-intent planner; pairs official + local components by logical run key, emits `local_repeat` for multi-attempt locals |
-| `eval_audit/normalized/helm_compat.py` | Adapter that lets HELM-shape consumers (HelmRunDiff) read EEE-only NormalizedRun via shape-correct empty defaults |
+| `eval_audit/normalized/diff.py` | **The unified comparison core** (`NormalizedDiff`): agreement rows/curves/quantiles, facts-grade diagnosis, judge-dependence metric-class split. Both render paths route through it. |
+| `eval_audit/normalized/diagnose.py` | Framework-free diagnosis (single input-to-label implementation; `HelmRunDiff` delegates here) incl. declared-substitution re-labeling |
+| `eval_audit/normalized/recipe_facts.py` | One resolver for "what recipe produced this run": native EEE block → sidecar `run_spec.json` → unknown |
+| `eval_audit/normalized/eee_sources.py` | EEE artifact discovery + planner index-row synthesis (incl. `detect_helm_sidecars`) |
+| `eval_audit/judge_registry.py` | Curated annotator-class → judge-model map for officials (open-judge extension); see `docs/planning/judge-identity-inventory.md` |
+| `eval_audit/metrics_taxonomy.py` | Framework-free metric classification (core/bookkeeping + judge-dependent vs deterministic) |
+| `eval_audit/reports/core_metrics.py` | Per-metric agreement curves, tolerance thresholds, instance-level vs. run-level metrics; `--instance-source` policy + declared-substitution rendering |
+| `eval_audit/planning/core_report_planner.py` | Comparison-intent planner; pairs official + local components by logical run key, emits `local_repeat` for multi-attempt locals and declared judge substitutions with the scoped `same_judge` fact |
+| `eval_audit/normalized/helm_compat.py` | Legacy bridge that lets HELM-shape consumers (HelmRunDiff semantic diff) read NormalizedRun via shape-correct empty defaults |
 | `eval_audit/workflows/build_reports_summary.py` | Aggregate reporting, README generation, symlink management; `--no-canonical-scan` for tutorial-scope runs |
 | `eval_audit/utils/sankey.py` | Sankey renderer (`emit_sankey_artifacts`), handles HTML+JPG sidecar generation |
 | `docs/pipeline.md` | User-facing pipeline documentation (start here for "how do I run this?") |

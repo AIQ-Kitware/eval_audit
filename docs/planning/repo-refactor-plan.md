@@ -237,8 +237,14 @@ wc -l eval_audit/reports/summary/*.py eval_audit/workflows/build_reports_summary
 ## Phase 3 — One comparison core, HELM + EEE as adapters
 *Effort: 1–2 weeks · Risk: high · Needs its own design pass before any code*
 
-**Status: DESIGNED 2026-06-11; revised same day for the new research program; not started.**
-The design pass this phase requires is written:
+**Status: IMPLEMENTED 2026-06-12.** All sub-stages landed (4.0–4.9; 4.7 = upstream issue drafted,
+ready to file; 4.8 retired-flags item deliberately deferred one deprecation cycle — see the design
+doc's §4 status block for details and follow-ons). One `NormalizedDiff` core serves both paths;
+EEE entry points import zero `eval_audit.helm.*`; instance-source is a declared, recorded policy;
+the open-judge extension is enabled end to end behind `--allow-closed-judge-benchmarks` with
+non-extension outputs verified byte-identical.
+
+The design pass this phase required is written:
 
 - [`phase3-comparison-core-unification.md`](phase3-comparison-core-unification.md) — the design.
 - [`phase3-behavior-equivalence-matrix.md`](phase3-behavior-equivalence-matrix.md) — the test matrix
