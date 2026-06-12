@@ -42,13 +42,13 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
-from eval_audit.cli.from_eee import (
-    _build_local_index_row,
-    _build_logical_run_key,
-    _build_official_index_row,
-    _packets_with_manifests,
-    _write_index_csv,
+from eval_audit.cli.from_eee import _packets_with_manifests
+from eval_audit.normalized.eee_sources import (
+    build_local_index_row as _build_local_index_row,
+    build_logical_run_key as _build_logical_run_key,
+    build_official_index_row as _build_official_index_row,
     detect_helm_sidecars,
+    write_index_csv as _write_index_csv,
 )
 from eval_audit.infra.logging import setup_cli_logging
 from eval_audit.planning.core_report_planner import build_planning_artifact

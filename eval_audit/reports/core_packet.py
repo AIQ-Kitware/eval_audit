@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from eval_audit.helm.hashers import stable_hash36
+from eval_audit.utils.hashers import stable_hash36
 from eval_audit.infra.fs_publish import safe_unlink, write_text_atomic
 
 

@@ -22,7 +22,7 @@ from typing import Any
 
 import safer
 
-from eval_audit.helm.hashers import stable_hash36
+from eval_audit.utils.hashers import stable_hash36
 from eval_audit.infra.paths import audit_store_root, repo_root
 from eval_audit.normalized.loaders import _eee_converter_name, _eee_converter_version
 

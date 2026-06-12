@@ -92,7 +92,7 @@ def run_case(case: str, work_dir: Path) -> dict[str, Any]:
 
 
 def _path_hash_replacements(official_dir: Path, local_dir: Path) -> list[tuple[str, str]]:
-    from eval_audit.cli.from_eee import _stable_short_hash
+    from eval_audit.normalized.eee_sources import stable_short_hash as _stable_short_hash
 
     return [
         (_stable_short_hash(str(official_dir)), "<OFFICIAL-HASH>"),

@@ -32,7 +32,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import safer
 
-from eval_audit.helm.hashers import stable_hash36
+from eval_audit.utils.hashers import stable_hash36
 from eval_audit.infra.fs_publish import write_text_atomic
 
 

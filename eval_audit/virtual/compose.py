@@ -35,12 +35,12 @@ from typing import Any, Iterable
 
 import kwutil
 
-from eval_audit.cli.from_eee import (
-    _build_local_index_row,
-    _build_official_index_row,
-    _discover_eee_artifacts,
-    _extract_artifact_meta,
+from eval_audit.normalized.eee_sources import (
+    build_local_index_row as _build_local_index_row,
+    build_official_index_row as _build_official_index_row,
     detect_helm_sidecars,
+    discover_eee_artifacts as _discover_eee_artifacts,
+    extract_artifact_meta as _extract_artifact_meta,
 )
 from eval_audit.virtual.manifest import (
     EeeRootSource,
