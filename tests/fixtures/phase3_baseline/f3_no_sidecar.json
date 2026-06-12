@@ -1,0 +1,866 @@
+{
+ "core_metric_report": {
+  "comparability": {
+   "component_metadata": {
+    "local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356": {
+     "adapter_instructions": null,
+     "base_model": null,
+     "deployment": null,
+     "max_eval_instances": null,
+     "scenario_class": null
+    },
+    "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>": {
+     "adapter_instructions": null,
+     "base_model": null,
+     "deployment": null,
+     "max_eval_instances": null,
+     "scenario_class": null
+    }
+   },
+   "facts": {
+    "same_benchmark_family": {
+     "status": "unknown",
+     "values": []
+    },
+    "same_deployment": {
+     "status": "unknown",
+     "values": []
+    },
+    "same_instructions": {
+     "status": "unknown",
+     "values": []
+    },
+    "same_max_eval_instances": {
+     "status": "unknown",
+     "values": []
+    },
+    "same_model": {
+     "status": "yes",
+     "values": [
+      "toy/m1-small"
+     ]
+    },
+    "same_scenario_class": {
+     "status": "unknown",
+     "values": []
+    },
+    "same_suite_or_track_version": {
+     "status": "yes",
+     "values": [
+      "eee_only_demo::v1"
+     ]
+    }
+   }
+  },
+  "comparisons": [
+   {
+    "caveats": [
+     "same_scenario_class=unknown",
+     "same_benchmark_family=unknown",
+     "same_deployment=unknown",
+     "same_instructions=unknown",
+     "same_max_eval_instances=unknown"
+    ],
+    "comparability_facts": {
+     "same_benchmark_family": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_deployment": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_instructions": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_max_eval_instances": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_model": {
+      "status": "yes",
+      "values": [
+       "toy/m1-small"
+      ]
+     },
+     "same_scenario_class": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_suite_or_track_version": {
+      "status": "yes",
+      "values": [
+       "eee_only_demo::v1"
+      ]
+     }
+    },
+    "comparison_id": "official_vs_local::official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>::local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+    "comparison_kind": "official_vs_local",
+    "component_ids": [
+     "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+     "local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356"
+    ],
+    "disabled_reason": null,
+    "enabled": true,
+    "notes": "planner first-pass official-vs-local comparison",
+    "reference_component_id": "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+    "warnings": [
+     "comparability_unknown:same_scenario_class",
+     "comparability_unknown:same_benchmark_family",
+     "comparability_unknown:same_deployment",
+     "comparability_unknown:same_instructions",
+     "comparability_unknown:same_max_eval_instances",
+     "missing_run_spec:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+     "missing_scenario_class:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+     "missing_run_spec:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+     "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356"
+    ]
+   }
+  ],
+  "comparisons_manifest_path": "<OUT>/comparisons_manifest.json",
+  "components": [
+   {
+    "artifact_format": "eee",
+    "attempt_fallback_key": null,
+    "attempt_identity": "imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+    "attempt_identity_kind": "eee_evaluation_id",
+    "attempt_uuid": "imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+    "benchmark_group": null,
+    "component_id": "local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+    "display_name": "local: local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+    "eee_artifact_path": "<LOCAL-DIR>",
+    "eee_artifact_resolution": {},
+    "experiment_name": "eee_only_pair",
+    "job_path": null,
+    "logical_run_key": "imdb:model=toy/m1-small",
+    "machine_host": "eee_only_demo",
+    "max_eval_instances": null,
+    "model": "toy/m1-small",
+    "model_deployment": null,
+    "provenance": {
+     "source_component_id": "local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+     "source_index_fpath": "<OUT>/_indexes/audit_results_index.csv",
+     "source_index_kind": "local",
+     "source_job_id": "job_<LOCAL-HASH>",
+     "source_row_index": 0
+    },
+    "public_track": null,
+    "run_entry": "imdb:model=toy/m1-small",
+    "run_path": null,
+    "scenario_class": null,
+    "source_kind": "local",
+    "status": "computed",
+    "suite": null,
+    "suite_version": null,
+    "tags": [
+     "local",
+     "has_attempt_uuid",
+     "eee_artifact_present"
+    ]
+   },
+   {
+    "artifact_format": "eee",
+    "attempt_identity": "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+    "attempt_uuid": null,
+    "benchmark_group": null,
+    "component_id": "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+    "display_name": "official: imdb:model=toy/m1-small",
+    "eee_artifact_path": "<OFFICIAL-DIR>",
+    "eee_artifact_resolution": {},
+    "experiment_name": null,
+    "job_path": null,
+    "logical_run_key": "imdb:model=toy/m1-small",
+    "machine_host": null,
+    "max_eval_instances": null,
+    "model": "toy/m1-small",
+    "model_deployment": null,
+    "provenance": {
+     "source_component_id": "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+     "source_index_fpath": "<OUT>/_indexes/official_public_index.csv",
+     "source_index_kind": "official",
+     "source_public_track": "eee_only_demo",
+     "source_row_index": 0,
+     "source_suite_version": "v1"
+    },
+    "public_track": "eee_only_demo",
+    "run_entry": null,
+    "run_name": "imdb:model=toy/m1-small",
+    "run_path": null,
+    "scenario_class": null,
+    "source_kind": "official",
+    "suite": null,
+    "suite_version": "v1",
+    "tags": [
+     "official",
+     "public_reference_candidate",
+     "eee_artifact_present"
+    ]
+   }
+  ],
+  "components_manifest_path": "<OUT>/components_manifest.json",
+  "diagnostic_flags": [],
+  "generated_utc": "<UTC>",
+  "official_selection": {},
+  "packet_caveats": [
+   "same_scenario_class=unknown",
+   "same_benchmark_family=unknown",
+   "same_deployment=unknown",
+   "same_instructions=unknown",
+   "same_max_eval_instances=unknown"
+  ],
+  "packet_id": "eee_only_pair--imdb-model-toy-m1-small",
+  "packet_warnings": [
+   "missing_run_spec:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+   "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+   "missing_run_spec:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+   "missing_scenario_class:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+   "comparability_unknown:same_scenario_class",
+   "comparability_unknown:same_benchmark_family",
+   "comparability_unknown:same_deployment",
+   "comparability_unknown:same_instructions",
+   "comparability_unknown:same_max_eval_instances"
+  ],
+  "pairs": [
+   {
+    "artifact_formats": {
+     "local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356": "eee",
+     "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>": "eee"
+    },
+    "caveats": [
+     "same_scenario_class=unknown",
+     "same_benchmark_family=unknown",
+     "same_deployment=unknown",
+     "same_instructions=unknown",
+     "same_max_eval_instances=unknown"
+    ],
+    "comparability_facts": {
+     "same_benchmark_family": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_deployment": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_instructions": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_max_eval_instances": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_model": {
+      "status": "yes",
+      "values": [
+       "toy/m1-small"
+      ]
+     },
+     "same_scenario_class": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_suite_or_track_version": {
+      "status": "yes",
+      "values": [
+       "eee_only_demo::v1"
+      ]
+     }
+    },
+    "comparison_id": "official_vs_local::official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>::local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+    "comparison_kind": "official_vs_local",
+    "component_ids": [
+     "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+     "local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356"
+    ],
+    "core_metrics": [
+     "exact_match",
+     "quasi_exact_match"
+    ],
+    "diagnosis": {
+     "label": "wrong_run_pair",
+     "primary_priority": 0,
+     "primary_reason_names": [
+      "wrong_run_pair"
+     ],
+     "reasons": [
+      {
+       "details": {
+        "run_spec_name_ok": false
+       },
+       "name": "wrong_run_pair",
+       "priority": 0
+      },
+      {
+       "details": {
+        "core": {
+         "agree_ratio": null,
+         "comparable": 0,
+         "mismatched": 0
+        }
+       },
+       "name": "no_comparable_core_metrics",
+       "priority": 3
+      }
+     ]
+    },
+    "inputs": {
+     "run_a": "<OFFICIAL-DIR>",
+     "run_b": "<LOCAL-DIR>"
+    },
+    "instance_level": {
+     "agreement_vs_abs_tol": [
+      {
+       "abs_tol": 0.0,
+       "agree_ratio": 0.0,
+       "count": 8,
+       "matched": 0
+      },
+      {
+       "abs_tol": 1e-12,
+       "agree_ratio": 0.0,
+       "count": 8,
+       "matched": 0
+      },
+      {
+       "abs_tol": 1e-09,
+       "agree_ratio": 0.0,
+       "count": 8,
+       "matched": 0
+      },
+      {
+       "abs_tol": 1e-06,
+       "agree_ratio": 0.0,
+       "count": 8,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.0001,
+       "agree_ratio": 0.0,
+       "count": 8,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.001,
+       "agree_ratio": 0.0,
+       "count": 8,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.01,
+       "agree_ratio": 0.0,
+       "count": 8,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.02,
+       "agree_ratio": 0.0,
+       "count": 8,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.05,
+       "agree_ratio": 0.0,
+       "count": 8,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.1,
+       "agree_ratio": 0.0,
+       "count": 8,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.25,
+       "agree_ratio": 0.0,
+       "count": 8,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.5,
+       "agree_ratio": 0.0,
+       "count": 8,
+       "matched": 0
+      },
+      {
+       "abs_tol": 1.0,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      }
+     ],
+     "by_metric": [
+      {
+       "abs_delta": {
+        "max": 1.0,
+        "min": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "p95": 1.0,
+        "p99": 1.0
+       },
+       "count": 4,
+       "metric": "exact_match"
+      },
+      {
+       "abs_delta": {
+        "max": 1.0,
+        "min": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "p95": 1.0,
+        "p99": 1.0
+       },
+       "count": 4,
+       "metric": "quasi_exact_match"
+      }
+     ],
+     "n_joined_pairs": 8,
+     "n_rows": 8,
+     "overall_quantiles": {
+      "abs_delta": {
+       "max": 1.0,
+       "min": 1.0,
+       "p50": 1.0,
+       "p90": 1.0,
+       "p95": 1.0,
+       "p99": 1.0
+      },
+      "count": 8
+     },
+     "per_metric_agreement": {
+      "exact_match": [
+       {
+        "abs_tol": 0.0,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 1e-12,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 1e-09,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 1e-06,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.0001,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.001,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.01,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.02,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.05,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.1,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.25,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.5,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 1.0,
+        "agree_ratio": 1.0,
+        "count": 4,
+        "matched": 4
+       }
+      ],
+      "quasi_exact_match": [
+       {
+        "abs_tol": 0.0,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 1e-12,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 1e-09,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 1e-06,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.0001,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.001,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.01,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.02,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.05,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.1,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.25,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 0.5,
+        "agree_ratio": 0.0,
+        "count": 4,
+        "matched": 0
+       },
+       {
+        "abs_tol": 1.0,
+        "agree_ratio": 1.0,
+        "count": 4,
+        "matched": 4
+       }
+      ]
+     }
+    },
+    "label": "official_vs_local::official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>::local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+    "reference_component_id": "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+    "run_level": {
+     "agreement_vs_abs_tol": [
+      {
+       "abs_tol": 0.0,
+       "agree_ratio": 0.0,
+       "count": 2,
+       "matched": 0
+      },
+      {
+       "abs_tol": 1e-12,
+       "agree_ratio": 0.0,
+       "count": 2,
+       "matched": 0
+      },
+      {
+       "abs_tol": 1e-09,
+       "agree_ratio": 0.0,
+       "count": 2,
+       "matched": 0
+      },
+      {
+       "abs_tol": 1e-06,
+       "agree_ratio": 0.0,
+       "count": 2,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.0001,
+       "agree_ratio": 0.0,
+       "count": 2,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.001,
+       "agree_ratio": 0.0,
+       "count": 2,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.01,
+       "agree_ratio": 0.0,
+       "count": 2,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.02,
+       "agree_ratio": 0.0,
+       "count": 2,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.05,
+       "agree_ratio": 0.0,
+       "count": 2,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.1,
+       "agree_ratio": 0.0,
+       "count": 2,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.25,
+       "agree_ratio": 0.0,
+       "count": 2,
+       "matched": 0
+      },
+      {
+       "abs_tol": 0.5,
+       "agree_ratio": 0.0,
+       "count": 2,
+       "matched": 0
+      },
+      {
+       "abs_tol": 1.0,
+       "agree_ratio": 1.0,
+       "count": 2,
+       "matched": 2
+      }
+     ],
+     "by_metric": [
+      {
+       "abs_delta": {
+        "max": 1.0,
+        "min": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "p95": 1.0,
+        "p99": 1.0
+       },
+       "count": 1,
+       "metric": "exact_match"
+      },
+      {
+       "abs_delta": {
+        "max": 1.0,
+        "min": 1.0,
+        "p50": 1.0,
+        "p90": 1.0,
+        "p95": 1.0,
+        "p99": 1.0
+       },
+       "count": 1,
+       "metric": "quasi_exact_match"
+      }
+     ],
+     "n_rows": 2,
+     "overall_quantiles": {
+      "abs_delta": {
+       "max": 1.0,
+       "min": 1.0,
+       "p50": 1.0,
+       "p90": 1.0,
+       "p95": 1.0,
+       "p99": 1.0
+      },
+      "count": 2
+     }
+    },
+    "warnings": [
+     "comparability_unknown:same_scenario_class",
+     "comparability_unknown:same_benchmark_family",
+     "comparability_unknown:same_deployment",
+     "comparability_unknown:same_instructions",
+     "comparability_unknown:same_max_eval_instances",
+     "missing_run_spec:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+     "missing_scenario_class:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+     "missing_run_spec:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+     "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356"
+    ]
+   }
+  ],
+  "planner_version": "core_report_packet_planner.v1",
+  "report_dpath": "<OUT>",
+  "run_diagnostics": {
+   "local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356": {
+    "empty_completion_count": 0,
+    "empty_completion_rate": null,
+    "n_request_states": 0,
+    "n_with_completions": 0,
+    "output_token_count": {
+     "max": null,
+     "mean": null,
+     "p50": null,
+     "p90": null
+    },
+    "stats_means": {}
+   },
+   "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>": {
+    "empty_completion_count": 0,
+    "empty_completion_rate": null,
+    "n_request_states": 0,
+    "n_with_completions": 0,
+    "output_token_count": {
+     "max": null,
+     "mean": null,
+     "p50": null,
+     "p90": null
+    },
+    "stats_means": {}
+   }
+  },
+  "run_entry": "imdb:model=toy/m1-small",
+  "run_spec_name": "unknown_run_spec",
+  "single_run_mode": true,
+  "thresholds": [
+   0.0,
+   1e-12,
+   1e-09,
+   1e-06,
+   0.0001,
+   0.001,
+   0.01,
+   0.02,
+   0.05,
+   0.1,
+   0.25,
+   0.5,
+   1.0
+  ],
+  "warnings_manifest_path": "<OUT>/warnings.json"
+ },
+ "warnings": {
+  "comparisons": [
+   {
+    "caveats": [
+     "same_scenario_class=unknown",
+     "same_benchmark_family=unknown",
+     "same_deployment=unknown",
+     "same_instructions=unknown",
+     "same_max_eval_instances=unknown"
+    ],
+    "comparability_facts": {
+     "same_benchmark_family": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_deployment": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_instructions": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_max_eval_instances": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_model": {
+      "status": "yes",
+      "values": [
+       "toy/m1-small"
+      ]
+     },
+     "same_scenario_class": {
+      "status": "unknown",
+      "values": []
+     },
+     "same_suite_or_track_version": {
+      "status": "yes",
+      "values": [
+       "eee_only_demo::v1"
+      ]
+     }
+    },
+    "comparison_id": "official_vs_local::official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>::local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+    "comparison_kind": "official_vs_local",
+    "disabled_reason": null,
+    "enabled": true,
+    "warnings": [
+     "comparability_unknown:same_scenario_class",
+     "comparability_unknown:same_benchmark_family",
+     "comparability_unknown:same_deployment",
+     "comparability_unknown:same_instructions",
+     "comparability_unknown:same_max_eval_instances",
+     "missing_run_spec:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+     "missing_scenario_class:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+     "missing_run_spec:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+     "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356"
+    ]
+   }
+  ],
+  "diagnostic_flags": [],
+  "official_selection": {},
+  "packet_caveats": [
+   "same_scenario_class=unknown",
+   "same_benchmark_family=unknown",
+   "same_deployment=unknown",
+   "same_instructions=unknown",
+   "same_max_eval_instances=unknown"
+  ],
+  "packet_id": "eee_only_pair--imdb-model-toy-m1-small",
+  "packet_warnings": [
+   "missing_run_spec:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+   "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+   "missing_run_spec:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+   "missing_scenario_class:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
+   "comparability_unknown:same_scenario_class",
+   "comparability_unknown:same_benchmark_family",
+   "comparability_unknown:same_deployment",
+   "comparability_unknown:same_instructions",
+   "comparability_unknown:same_max_eval_instances"
+  ],
+  "planner_version": "core_report_packet_planner.v1",
+  "report_dpath": "<OUT>",
+  "run_entry": "imdb:model=toy/m1-small"
+ }
+}
