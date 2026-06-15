@@ -19,11 +19,18 @@
 #
 # Default is fail-fast. Set OLMO_KEEP_GOING=1 to attempt every model and report
 # which ones failed at the end instead of stopping on the first error.
+#
+# eval-audit-run schedules through kwdagger with skip_existing=1, so a model
+# whose previous smoke run already wrote its DONE sentinel
+# ($AUDIT_RESULTS_ROOT/audit-<preset>-smoke/helm/.../DONE) is silently skipped on
+# a re-invocation. Set OLMO_FORCE_RERUN=1 to clear each model's prior result dir
+# before running so the smoke manifest re-executes from scratch.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
 
 KEEP_GOING="${OLMO_KEEP_GOING:-0}"
+FORCE_RERUN="${OLMO_FORCE_RERUN:-0}"
 failed=()
 
 # Resolve the LiteLLM gateway endpoint + master key from infer-stack.
@@ -56,7 +63,20 @@ run_one() {
     --base-url "${LITELLM_BASE_URL}/v1" \
     --api-key-value "$LITELLM_MASTER_KEY"
 
-  # 3. Run the smoke manifest.
+  # 3. Optionally clear a prior run so kwdagger's skip_existing doesn't no-op
+  #    this model. The smoke experiment_name is "audit-<preset>-smoke" and its
+  #    results (incl. the DONE sentinel) live under $RESULTS_ROOT/<experiment>.
+  if [[ "$FORCE_RERUN" == "1" ]]; then
+    local experiment result_dpath
+    experiment="$(olmo_experiment "$target")"
+    result_dpath="$RESULTS_ROOT/$experiment"
+    if [[ -d "$result_dpath" ]]; then
+      echo "OLMO_FORCE_RERUN=1: clearing prior results at $result_dpath"
+      rm -rf "$result_dpath"
+    fi
+  fi
+
+  # 4. Run the smoke manifest.
   eval-audit-run --run=1 "$bundle_root/smoke_manifest.yaml"
 }
 

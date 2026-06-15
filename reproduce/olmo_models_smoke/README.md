@@ -96,6 +96,10 @@ The grouping manifest is checked in at
 - `INFER_STACK_CONFIG_DIR` — infer-stack config providing the OLMo profiles
 - `OLMO_KEEP_GOING=1` — in `10_run_smoke_grid.sh`, attempt every model and report
   failures at the end instead of stopping on the first error (default: fail-fast)
+- `OLMO_FORCE_RERUN=1` — in `10_run_smoke_grid.sh`, clear each model's prior result
+  dir (`$AUDIT_RESULTS_ROOT/audit-<preset>-smoke`) before running. `eval-audit-run`
+  schedules with kwdagger `skip_existing=1`, so a model whose previous run already
+  wrote its `DONE` sentinel is otherwise skipped on re-invocation (default: reuse)
 - `EVAL_AUDIT_SKIP_LOCAL_REPEAT=1`, `EVAL_AUDIT_GROUP_STRIP=1` — set by `_lib.sh`,
   matching the e2e-test convention (one local attempt per model, group prefix
   stripped)
