@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Build the aggregate publication surface for the OLMo-smoke virtual experiment,
+# Build the aggregate publication surface for the OLMo-models virtual experiment,
 # running against the synthesized index slice produced by 30_compose.sh. This is
-# the single grouped report spanning all six OLMo smoke runs.
+# the single grouped report spanning all six OLMo full runs.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
@@ -22,7 +22,7 @@ if [[ ! -f "$INDEX_FPATH" ]]; then
   exit 1
 fi
 
-# The smoke manifest declares no pre_filter, so compose writes no scoped
+# The manifest declares no pre_filter, so compose writes no scoped
 # inventory; fall back to --no-filter-inventory. (If you enable the
 # official_public_index source, this branch picks up the scoped inventory.)
 if [[ -f "$SCOPED_FILTER_INVENTORY" ]]; then

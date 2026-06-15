@@ -1,13 +1,15 @@
-# OLMo models — smoke grid + grouped report
+# OLMo models — smoke + full grids + grouped report
 
-Runs the **smoke** manifest for the six AllenAI OLMo presets and folds the
-results into a **single grouped report** via a virtual experiment. The goal is a
-fast end-to-end exercise of the run path *and* the grouping path — not a full
-reproducibility sweep.
+Runs the OLMo presets for the six AllenAI models in two passes — a cheap
+**smoke** preflight and the **full** candidate sweep — and folds the **full**
+results into a **single grouped report** via a virtual experiment. The smoke grid
+is a fast end-to-end exercise of the run path; the full grid is the actual
+reproducibility batch, and the downstream index → compose → summary steps operate
+on it.
 
 The grouping is deliberately **additive**: each preset keeps its own
 `experiment_name`/`suite` and runs as an isolated job; the virtual experiment
-re-stamps their index rows under one name (`olmo-models-smoke`) for reporting.
+re-stamps their index rows under one name (`olmo-models`) for reporting.
 The six per-model experiments remain independently analyzable. (Sharing a literal
 `experiment_name` across the presets would be destructive — Stage 5 filters by
 exact `experiment_name`, so per-model reports would no longer be addressable.)
@@ -17,18 +19,19 @@ exact `experiment_name`, so per-model reports would no longer be addressable.)
 Each has an infer-stack profile `<preset>-single`. The presets declare
 `access_kind: vllm-direct`, but **this runbook routes through the LiteLLM gateway
 (openai-compatible)** — the run script overrides the access kind at export time
-(see below). Ordered smallest → largest (the grid runs them in this order):
+(see below). Ordered smallest → largest (the grids run them in this order). Each
+preset has a `-smoke` and a `-full` experiment; the grouped report uses `-full`:
 
-| preset | profile | smoke `experiment_name` |
+| preset | profile | full `experiment_name` |
 |---|---|---|
-| `allenai-olmoe-1b-7b-0125-instruct` | `allenai-olmoe-1b-7b-0125-instruct-single` | `audit-allenai-olmoe-1b-7b-0125-instruct-smoke` |
-| `allenai-olmo-7b` | `allenai-olmo-7b-single` | `audit-allenai-olmo-7b-smoke` |
-| `allenai-olmo-1-7-7b` | `allenai-olmo-1-7-7b-single` | `audit-allenai-olmo-1-7-7b-smoke` |
-| `allenai-olmo-2-1124-7b-instruct` | `allenai-olmo-2-1124-7b-instruct-single` | `audit-allenai-olmo-2-1124-7b-instruct-smoke` |
-| `allenai-olmo-2-1124-13b-instruct` | `allenai-olmo-2-1124-13b-instruct-single` | `audit-allenai-olmo-2-1124-13b-instruct-smoke` |
-| `allenai-olmo-2-0325-32b-instruct` | `allenai-olmo-2-0325-32b-instruct-single` | `audit-allenai-olmo-2-0325-32b-instruct-smoke` |
+| `allenai-olmoe-1b-7b-0125-instruct` | `allenai-olmoe-1b-7b-0125-instruct-single` | `audit-allenai-olmoe-1b-7b-0125-instruct-full` |
+| `allenai-olmo-7b` | `allenai-olmo-7b-single` | `audit-allenai-olmo-7b-full` |
+| `allenai-olmo-1-7-7b` | `allenai-olmo-1-7-7b-single` | `audit-allenai-olmo-1-7-7b-full` |
+| `allenai-olmo-2-1124-7b-instruct` | `allenai-olmo-2-1124-7b-instruct-single` | `audit-allenai-olmo-2-1124-7b-instruct-full` |
+| `allenai-olmo-2-1124-13b-instruct` | `allenai-olmo-2-1124-13b-instruct-single` | `audit-allenai-olmo-2-1124-13b-instruct-full` |
+| `allenai-olmo-2-0325-32b-instruct` | `allenai-olmo-2-0325-32b-instruct-single` | `audit-allenai-olmo-2-0325-32b-instruct-full` |
 
-The presets and their smoke `run_entries` already live in
+The presets and their smoke/full `run_entries` already live in
 [`eval_audit/integrations/infer_stack/adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py)
 — this runbook adds no preset code.
 
@@ -79,14 +82,19 @@ guidance if any is missing.
 ./00_check_env.sh         # eval-audit-check-env
 ./05_check_profiles.sh    # verify the six <preset>-single profiles are defined
 ./06_check_hf_auth.sh     # verify a HuggingFace token (gated gpqa dataset needs it)
-./10_run_smoke_grid.sh    # per model: switch profile -> wait-ready -> export bundle -> run smoke
-./20_index_local.sh       # eval-audit-index -> audit_results_index.csv
-./30_compose.sh           # build the virtual experiment (the grouping step)
+./10_run_smoke_grid.sh    # preflight: per model switch profile -> wait-ready -> export bundle -> run smoke
+./15_run_full_grid.sh     # per model: same, but run the FULL manifest (the reproducibility batch)
+./20_index_local.sh       # eval-audit-index -> audit_results_index.csv (verifies the -full run dirs)
+./30_compose.sh           # build the virtual experiment from the -full runs (the grouping step)
 ./40_build_summary.sh     # aggregate publication surface across all six
 ```
 
-The grouping manifest is checked in at
-[`configs/virtual-experiments/olmo-models-smoke.yaml`](../../configs/virtual-experiments/olmo-models-smoke.yaml).
+The smoke preflight (`10`) is optional once you trust the path — `15` is the run
+that feeds `20`/`30`/`40`. The grouping manifest is checked in at
+[`configs/virtual-experiments/olmo-models.yaml`](../../configs/virtual-experiments/olmo-models.yaml)
+(the `-smoke` variant,
+[`olmo-models-smoke.yaml`](../../configs/virtual-experiments/olmo-models-smoke.yaml),
+is kept for grouping the smoke preflight instead).
 
 ## Knobs (env vars)
 
@@ -94,12 +102,14 @@ The grouping manifest is checked in at
 - `AUDIT_RESULTS_ROOT` (default `/data/crfm-helm-audit`)
 - `VEXP_MANIFEST` — override the grouping manifest path
 - `INFER_STACK_CONFIG_DIR` — infer-stack config providing the OLMo profiles
-- `OLMO_KEEP_GOING=1` — in `10_run_smoke_grid.sh`, attempt every model and report
-  failures at the end instead of stopping on the first error (default: fail-fast)
-- `OLMO_FORCE_RERUN=1` — in `10_run_smoke_grid.sh`, clear each model's prior result
-  dir (`$AUDIT_RESULTS_ROOT/audit-<preset>-smoke`) before running. `eval-audit-run`
-  schedules with kwdagger `skip_existing=1`, so a model whose previous run already
-  wrote its `DONE` sentinel is otherwise skipped on re-invocation (default: reuse)
+- `OLMO_KEEP_GOING=1` — in `10_run_smoke_grid.sh` / `15_run_full_grid.sh`, attempt
+  every model and report failures at the end instead of stopping on the first
+  error (default: fail-fast)
+- `OLMO_FORCE_RERUN=1` — in `10_run_smoke_grid.sh` / `15_run_full_grid.sh`, clear
+  each model's prior result dir (`$AUDIT_RESULTS_ROOT/audit-<preset>-smoke` resp.
+  `-full`) before running. `eval-audit-run` schedules with kwdagger
+  `skip_existing=1`, so a model whose previous run already wrote its `DONE`
+  sentinel is otherwise skipped on re-invocation (default: reuse)
 - `EVAL_AUDIT_SKIP_LOCAL_REPEAT=1`, `EVAL_AUDIT_GROUP_STRIP=1` — set by `_lib.sh`,
   matching the e2e-test convention (one local attempt per model, group prefix
   stripped)
@@ -107,14 +117,15 @@ The grouping manifest is checked in at
 ## What this assumes / produces
 
 - **Local-only by default.** The manifest has no `official_public_index` source,
-  so the report is the union of the six local smoke runs; comparability facts a
+  so the report is the union of the six local full runs; comparability facts a
   public counterpart would supply collapse to `status=unknown` and surface as
-  `comparability_unknown:*` warnings — expected for a local-only smoke, not a bug.
+  `comparability_unknown:*` warnings — expected for a local-only batch, not a bug.
   To compare against public HELM, uncomment the `official_public_index` source in
   the manifest (needs the public index + Stage-1 filter inventory present).
-- **LiteLLM / openai-compatible transport.** `10_run_smoke_grid.sh` resolves the
-  LiteLLM endpoint + master key via `infer-stack env --key`, and overrides the
-  presets' declared `vllm-direct` access with
+- **LiteLLM / openai-compatible transport.** `10_run_smoke_grid.sh` /
+  `15_run_full_grid.sh` resolve the LiteLLM endpoint + master key via
+  `infer-stack env --key`, and override the presets' declared `vllm-direct`
+  access with
   `--access-kind openai-compatible --base-url <litellm>/v1 --api-key-value <key>`
   (mirrors `dev/e2e-tests/e2e-phi_2-vllm-philosophy.sh`). HELM talks to the
   LiteLLM gateway, which routes to each model's vLLM backend.
@@ -127,16 +138,16 @@ The grouping manifest is checked in at
   `HUGGING_FACE_HUB_TOKEN` from the env or a cached `huggingface-cli login` so
   HELM can download them; `06_check_hf_auth.sh` verifies a token is present. The
   token's account must have accepted the gated dataset's terms (e.g.
-  [Idavidrein/gpqa](https://huggingface.co/datasets/Idavidrein/gpqa)). The five
-  non-gated smoke entries still run without a token; only the
-  `olmo-2-1124-7b-instruct` smoke requires one.
+  [Idavidrein/gpqa](https://huggingface.co/datasets/Idavidrein/gpqa)). The
+  non-gated entries still run without a token; the gated ones (incl. the
+  `olmo-2-1124-7b-instruct` smoke) require one.
 
 ## Output layout
 
 ```
-$AUDIT_STORE_ROOT/virtual-experiments/olmo-models-smoke/
+$AUDIT_STORE_ROOT/virtual-experiments/olmo-models/
 ├── manifest.yaml
-├── indexes/                 # synthesized index slice (rows re-stamped olmo-models-smoke)
+├── indexes/                 # synthesized index slice (rows re-stamped olmo-models)
 ├── analysis/
 │   ├── core-reports/<one per model packet>/
 │   └── experiment_summary.{json,csv,txt}

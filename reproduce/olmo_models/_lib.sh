@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Shared definitions for the OLMo smoke grid + grouping runbook.
+# Shared definitions for the OLMo smoke + full grid and grouping runbook.
 # Source this from the numbered scripts: `source "$(dirname "$0")/_lib.sh"`.
 
-# Repo root (two levels up from reproduce/olmo_models_smoke/).
+# Repo root (two levels up from reproduce/olmo_models/).
 olmo_root() {
   cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd
 }
@@ -10,13 +10,16 @@ olmo_root() {
 ROOT="$(olmo_root)"
 STORE_ROOT="${AUDIT_STORE_ROOT:-/data/crfm-helm-audit-store}"
 RESULTS_ROOT="${AUDIT_RESULTS_ROOT:-/data/crfm-helm-audit}"
-VEXP_MANIFEST="${VEXP_MANIFEST:-$ROOT/configs/virtual-experiments/olmo-models-smoke.yaml}"
+# Grouping manifest for the downstream index -> compose -> summary steps. It
+# scopes to the FULL run experiments (audit-<preset>-full); the smoke grid is a
+# preflight only and is not folded into the grouped report.
+VEXP_MANIFEST="${VEXP_MANIFEST:-$ROOT/configs/virtual-experiments/olmo-models.yaml}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
 # infer-stack config providing the six OLMo models + <preset>-single profiles.
 # Defaults to the config dir shipped alongside this runbook; override to point
 # at your own infer-stack config if the OLMo profiles already live there.
-export INFER_STACK_CONFIG_DIR="${INFER_STACK_CONFIG_DIR:-$ROOT/reproduce/olmo_models_smoke/config/infer_stack}"
+export INFER_STACK_CONFIG_DIR="${INFER_STACK_CONFIG_DIR:-$ROOT/reproduce/olmo_models/config/infer_stack}"
 
 # Carry the e2e-test conventions: one local attempt per model (no repeat),
 # strip the run-group prefix so smoke rows pair cleanly.
@@ -47,7 +50,8 @@ unset HF_TOKEN_VALUE
 # The six OLMo presets, ordered smallest -> largest so a cheap model surfaces a
 # pipeline failure before the expensive 32B load. Each row is "preset:profile".
 # The infer-stack profile is the preset name with a "-single" suffix, and the
-# smoke experiment_name (used for indexing/grouping) is "audit-<preset>-smoke".
+# per-mode experiment_name is "audit-<preset>-smoke" / "audit-<preset>-full"
+# (smoke is a preflight; the full runs feed indexing/grouping).
 OLMO_TARGETS=(
   "allenai-olmoe-1b-7b-0125-instruct:allenai-olmoe-1b-7b-0125-instruct-single"
   "allenai-olmo-7b:allenai-olmo-7b-single"
@@ -59,5 +63,8 @@ OLMO_TARGETS=(
 
 olmo_preset()     { printf '%s\n' "${1%%:*}"; }
 olmo_profile()    { printf '%s\n' "${1##*:}"; }
-olmo_experiment() { printf 'audit-%s-smoke\n' "${1%%:*}"; }
+# Per-mode experiment names, matching the smoke_manifest / full_manifest blocks
+# in eval_audit/integrations/infer_stack/adapter.py.
+olmo_experiment_smoke() { printf 'audit-%s-smoke\n' "${1%%:*}"; }
+olmo_experiment_full()  { printf 'audit-%s-full\n' "${1%%:*}"; }
 olmo_bundle_root() { printf '%s\n' "$STORE_ROOT/local-bundles/${1%%:*}"; }

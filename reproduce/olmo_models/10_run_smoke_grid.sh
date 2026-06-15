@@ -68,7 +68,7 @@ run_one() {
   #    results (incl. the DONE sentinel) live under $RESULTS_ROOT/<experiment>.
   if [[ "$FORCE_RERUN" == "1" ]]; then
     local experiment result_dpath
-    experiment="$(olmo_experiment "$target")"
+    experiment="$(olmo_experiment_smoke "$target")"
     result_dpath="$RESULTS_ROOT/$experiment"
     if [[ -d "$result_dpath" ]]; then
       echo "OLMO_FORCE_RERUN=1: clearing prior results at $result_dpath"
@@ -100,4 +100,4 @@ fi
 
 echo
 echo "OK: all ${#OLMO_TARGETS[@]} OLMo smoke runs completed."
-echo "Next: ./20_index_local.sh"
+echo "Next: ./15_run_full_grid.sh"
