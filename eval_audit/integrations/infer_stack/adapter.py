@@ -430,13 +430,20 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 "legalbench:subset=function_of_decision_section,model=allenai/olmo-7b",
                 "legalbench:subset=international_citizenship_questions,model=allenai/olmo-7b",
                 "legalbench:subset=proa,model=allenai/olmo-7b",
-                "math:subject=algebra,level=1,use_official_examples=False,use_chain_of_thought=True,model=allenai/olmo-7b",
-                "math:subject=counting_and_probability,level=1,use_official_examples=False,use_chain_of_thought=True,model=allenai/olmo-7b",
-                "math:subject=geometry,level=1,use_official_examples=False,use_chain_of_thought=True,model=allenai/olmo-7b",
-                "math:subject=intermediate_algebra,level=1,use_official_examples=False,use_chain_of_thought=True,model=allenai/olmo-7b",
-                "math:subject=number_theory,level=1,use_official_examples=False,use_chain_of_thought=True,model=allenai/olmo-7b",
-                "math:subject=prealgebra,level=1,use_official_examples=False,use_chain_of_thought=True,model=allenai/olmo-7b",
-                "math:subject=precalculus,level=1,use_official_examples=False,use_chain_of_thought=True,model=allenai/olmo-7b",
+                # ── DISABLED: ``math:`` × 7 subjects (algebra,
+                # counting_and_probability, geometry, intermediate_algebra,
+                # number_theory, prealgebra, precalculus) at level=1,
+                # CoT=True. HELM's MATHScenario loads the
+                # ``hendrycks/competition_math`` HuggingFace dataset, which
+                # has been **disabled on the Hub** (API reports
+                # ``disabled: true``; file resolves return HTTP 401). The
+                # script-based loader therefore can't fetch
+                # ``competition_math.py`` and dies with
+                # ``LocalEntryNotFoundError`` ("Couldn't find a dataset
+                # script ... Couldn't find on the Hub either"). This is a
+                # recipe/environment failure (dataset unavailable), not a
+                # reproducibility failure — filtered out until a surviving
+                # mirror is wired in as a declared substitution.
                 "med_qa:model=allenai/olmo-7b",
                 "mmlu:subject=abstract_algebra,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=abstract_algebra,method=multiple_choice_joint,model=allenai/olmo-7b",
