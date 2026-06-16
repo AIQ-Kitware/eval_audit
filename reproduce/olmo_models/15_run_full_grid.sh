@@ -30,7 +30,9 @@
 # whose previous full run already wrote its DONE sentinel
 # ($AUDIT_RESULTS_ROOT/audit-<preset>-full/helm/.../DONE) is silently skipped on
 # a re-invocation. Set OLMO_FORCE_RERUN=1 to clear each model's prior result dir
-# before running so the full manifest re-executes from scratch.
+# before running so the full manifest re-executes from scratch. Unlike the smoke
+# grid (10_run_smoke_grid.sh), which force-reruns by default because it's a cheap
+# preflight, the full grid is expensive and so force-rerun is opt-in here.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"

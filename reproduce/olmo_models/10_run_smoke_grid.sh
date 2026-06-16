@@ -22,15 +22,18 @@
 #
 # eval-audit-run schedules through kwdagger with skip_existing=1, so a model
 # whose previous smoke run already wrote its DONE sentinel
-# ($AUDIT_RESULTS_ROOT/audit-<preset>-smoke/helm/.../DONE) is silently skipped on
-# a re-invocation. Set OLMO_FORCE_RERUN=1 to clear each model's prior result dir
-# before running so the smoke manifest re-executes from scratch.
+# ($AUDIT_RESULTS_ROOT/audit-<preset>-smoke/helm/.../DONE) would be silently
+# skipped on a re-invocation. Because the smoke grid is a cheap preflight whose
+# whole job is to re-validate the recipe on every invocation, it FORCE-RERUNS by
+# default (clears each model's prior result dir before running). Set
+# OLMO_FORCE_RERUN=0 to opt back into kwdagger's skip_existing no-op. (The full
+# grid in 15_run_full_grid.sh defaults the other way — expensive, opt-in only.)
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
 
 KEEP_GOING="${OLMO_KEEP_GOING:-0}"
-FORCE_RERUN="${OLMO_FORCE_RERUN:-0}"
+FORCE_RERUN="${OLMO_FORCE_RERUN:-1}"
 failed=()
 
 # Resolve the LiteLLM gateway endpoint + master key from infer-stack.
