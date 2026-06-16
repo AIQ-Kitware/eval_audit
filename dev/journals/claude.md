@@ -2275,3 +2275,106 @@ openai-compatible server, HELM's prompt-token budget is blind to the chat
 template the server applies — always reserve template overhead in
 `helm_max_sequence_and_generated_tokens_length`, and remember the flat-preset
 path only carries the overrides you explicitly thread through `_profile_specs`.
+
+## 2026-06-16 09:34:25 -0400
+
+**User intent.** A natural_qa OLMo full run failed with HTTP 403 fetching the
+NaturalQuestions dev shards. After confirming the diagnosis (the public
+`gs://natural_questions` bucket revoked *anonymous* reads — it now answers only
+authenticated callers), the user asked to "update the olmo run code to ensure
+the user has gcloud auth working." Scope was clarified to **auth check +
+pre-stage** (not auth-check-only), because of the key trap below.
+
+**Model/config.** Claude Opus 4.8 (1M context), claude-opus-4-8[1m], Claude Code
+harness.
+
+**The trap that shaped the design.** Verifying gcloud auth is *necessary but not
+sufficient*: HELM's `ensure_file_downloaded` fetches via an unauthenticated
+`urllib.request.urlretrieve`, so even a perfectly authenticated gcloud session
+does nothing for the run on its own. The auth only matters as a means to
+*pre-stage* the shards where HELM looks. An auth-check-only preflight would have
+gone green while the run kept 403-ing — a misleading signal. So the deliverable
+had to bridge auth → staged bytes → the run's cache path.
+
+**Why a shared scenario cache.** HELM caches scenario data at
+`<benchmark_output>/scenarios/<name>/data/` and skips the network when the target
+exists. But `out_dpath` (hence `benchmark_output`) is a per-run kwdagger
+content-hash dir (`helm_id_*`) created at schedule time — I can't pre-create it.
+The clean hook was the one `materialize_helm_run.py`'s own TODO (lines ~128-131)
+already proposed: route `benchmark_output/scenarios` at a shared dir. Added
+opt-in `_link_shared_scenarios_cache()` gated on `HELM_SHARED_SCENARIOS_CACHE`,
+non-destructive (never clobbers a real `scenarios` dir), called only in the
+compute branch (the reuse branch symlinks results and never runs scenarios).
+Side benefit: all scenarios (mmlu, etc.) now reuse one cache across the grid.
+
+**Pieces.**
+- `materialize_helm_run.py`: `_link_shared_scenarios_cache()` + call after the
+  compute-branch `benchmark_output` mkdir.
+- `_lib.sh`: export `HELM_SHARED_SCENARIOS_CACHE` (default
+  `$STORE_ROOT/scenario-cache`), `NQ_*` shard constants mirroring the scenario's
+  own base_url/file_list, and `olmo_resolve_gcloud_token` (env →
+  `gcloud auth print-access-token` → ADC).
+- `07_check_gcloud_auth.sh`: idempotent — short-circuits if all 5 shards present;
+  else resolves a token (clean FAIL with setup guidance if none), stages each
+  missing shard (gsutil if present, else authed curl with the bearer token),
+  `gzip -t` integrity-checks each, atomic `mv` from `.tmp`. `OLMO_SKIP_GCS_CHECK=1`
+  opts out (treat natural_qa as a dataset-access blocker to filter — the
+  research-correct framing: recipe/environment failure, not a repro failure).
+- README + `15_run_full_grid.sh` header documented; new env knobs listed.
+
+**Confidence / risks.** Verified: bash `-n`, `py_compile`, and the 07 no-auth /
+skip / already-staged paths all behave. *Not* exercised here (no gcloud on this
+box): the actual authed download + the env-var propagation from `_lib.sh`
+through `eval-audit-run` → kwdagger workers → the materialize subprocess. The
+propagation should hold (exported env inherits), but if kwdagger sanitizes env
+for workers, `HELM_SHARED_SCENARIOS_CACHE` won't reach `materialize_helm_run` and
+the symlink won't be created — worth confirming on first real olmo-7b run by
+checking for the "Routing scenario cache ... -> ..." log line. Also untested:
+whether the authenticated identity actually has read access (bucket may have
+dropped allAuthenticatedUsers too) — the script fails loudly with that exact
+hypothesis if the GET 403s.
+
+**Reusable insight.** A "make auth work" request often really means "make the
+data reachable by the consumer." Trace who actually performs the fetch (here:
+HELM, anonymously) before assuming auth at the operator layer fixes anything —
+otherwise you ship a green preflight over a still-broken run.
+
+## 2026-06-16 09:45:10 -0400
+
+**Follow-up to the prior entry — same goal, hard constraint added.** User: do the
+natural_qa gcloud-auth + pre-stage fix **without touching any submodule**, only
+scripts under `reproduce/olmo_models/`. So I reverted the aiq-magnet
+`materialize_helm_run.py` edit (the `_link_shared_scenarios_cache` hook +
+`HELM_SHARED_SCENARIOS_CACHE`) and re-implemented the wiring script-side.
+
+**The script-only interception point: a `helm-run` PATH shim.** The only moment a
+runbook-owned script has `cwd == out_dpath` (the per-run kwdagger hash dir, where
+`./benchmark_output/scenarios/natural_qa/data` resolves) is *inside* the
+`helm-run` process — because `materialize_helm_run` calls `ub.cmd(['helm-run',
+...], cwd=out_dpath)` and resolves the name via PATH. So I ship
+`reproduce/olmo_models/bin/helm-run`: it symlinks the pre-staged shards into
+`$PWD/benchmark_output/scenarios/natural_qa/data`, then `exec`s the real
+helm-run. `_lib.sh` resolves the real entry point *before* prepending the shim
+dir (exports `EVAL_AUDIT_REAL_HELM_RUN` so the shim can delegate without
+recursing) and prepends `bin/` to PATH. Per-file symlinks (not a dir symlink) so
+HELM's per-file `.lock` files land in the run tree, not the shared stage dir.
+
+**Why this is robust enough.** Sourcing is idempotent across the numbered scripts:
+the `REAL` guard refuses to bind to the shim itself, and the PATH prepend is
+`:$PATH:`-guarded against duplication. Fresh script processes start without the
+shim on PATH, so `command -v helm-run` finds the real one. Verified: shim seeds +
+delegates with original argv; `_lib.sh` wires correctly with a fake helm-run and
+degrades gracefully when none is present (this box has no helm-run).
+
+**Same residual risk as before, now on PATH.** The shim only fires if the
+prepended PATH (and `EVAL_AUDIT_*` vars) survive `eval-audit-run` → kwdagger →
+(maybe tmux) → the materialize subprocess. Exported env normally inherits, but a
+tmux worker that re-sources the user's rc could reorder/reset PATH and drop the
+shim. First real olmo-7b run: confirm `command -v helm-run` inside the worker is
+the shim, or just check the staged symlinks appear under the run's
+`benchmark_output/scenarios/natural_qa/data`.
+
+**Reusable insight.** When you can't edit the callee, intercept the call: a PATH
+shim named after the subprocess the callee shells out to gives you a hook with
+the callee's exact cwd/argv — submodule-free. Resolve the real target before
+shadowing it, and keep the shim a transparent pass-through for every other case.

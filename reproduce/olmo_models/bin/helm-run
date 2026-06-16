@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# helm-run PATH shim (script-only natural_qa data fix; no submodule edits).
+#
+# materialize_helm_run invokes `helm-run` with cwd=out_dpath (the per-run kwdagger
+# hash dir), and HELM writes its scenario cache under
+# ./benchmark_output/scenarios/<name>/. The NaturalQuestions dev shards live
+# behind a GCS bucket that refuses anonymous reads, but HELM downloads them
+# anonymously — so before delegating to the real helm-run we symlink the shards
+# that 07_check_gcloud_auth.sh pre-staged into ./benchmark_output/scenarios/
+# natural_qa/data. HELM's ensure_file_downloaded then finds them and skips the
+# (failing) network fetch. For every other scenario this is a transparent
+# pass-through.
+#
+# Wiring (see reproduce/olmo_models/_lib.sh):
+#   EVAL_AUDIT_REAL_HELM_RUN  absolute path to the real helm-run entry point
+#   EVAL_AUDIT_NQ_STAGE_DIR   dir holding the staged nq-dev-0X.jsonl.gz shards
+set -euo pipefail
+
+src="${EVAL_AUDIT_NQ_STAGE_DIR:-}"
+if [[ -n "$src" && -d "$src" ]]; then
+  dst="$PWD/benchmark_output/scenarios/natural_qa/data"
+  mkdir -p "$dst"
+  # Per-file symlinks (not a dir symlink) so HELM's per-file .lock files land in
+  # this run's tree, not the shared stage dir. ensure_file_downloaded keys on
+  # target existence, which a symlink to a real file satisfies.
+  shopt -s nullglob
+  for f in "$src"/nq-dev-*.jsonl.gz; do
+    ln -sf "$f" "$dst/$(basename "$f")"
+  done
+  shopt -u nullglob
+fi
+
+real="${EVAL_AUDIT_REAL_HELM_RUN:-}"
+if [[ -z "$real" || ! -x "$real" ]]; then
+  echo "olmo helm-run shim: EVAL_AUDIT_REAL_HELM_RUN is unset or not executable" >&2
+  echo "  (expected _lib.sh to resolve the real helm-run before prepending the shim)" >&2
+  exit 127
+fi
+exec "$real" "$@"

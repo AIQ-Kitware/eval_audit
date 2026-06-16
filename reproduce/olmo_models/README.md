@@ -82,6 +82,7 @@ guidance if any is missing.
 ./00_check_env.sh         # eval-audit-check-env
 ./05_check_profiles.sh    # verify the six <preset>-single profiles are defined
 ./06_check_hf_auth.sh     # verify a HuggingFace token (gated gpqa dataset needs it)
+./07_check_gcloud_auth.sh # verify gcloud auth + pre-stage natural_qa data (olmo-7b full)
 ./10_run_smoke_grid.sh    # preflight: per model switch profile -> wait-ready -> export bundle -> run smoke
 ./15_run_full_grid.sh     # per model: same, but run the FULL manifest (the reproducibility batch)
 ./20_index_local.sh       # eval-audit-index -> audit_results_index.csv (verifies the -full run dirs)
@@ -102,6 +103,14 @@ is kept for grouping the smoke preflight instead).
 - `AUDIT_RESULTS_ROOT` (default `/data/crfm-helm-audit`)
 - `VEXP_MANIFEST` — override the grouping manifest path
 - `INFER_STACK_CONFIG_DIR` — infer-stack config providing the OLMo profiles
+- `EVAL_AUDIT_NQ_STAGE_DIR` (default `$AUDIT_STORE_ROOT/scenario-cache/natural_qa/data`)
+  — where `07_check_gcloud_auth.sh` stages the `natural_qa` shards and the
+  `bin/helm-run` shim links them from
+- `OLMO_SKIP_GCS_CHECK=1` — in `07_check_gcloud_auth.sh`, skip the gcloud auth
+  check + `natural_qa` pre-stage entirely (treat `natural_qa` as a dataset-access
+  blocker to be filtered out)
+- `GOOGLE_OAUTH_ACCESS_TOKEN` — explicit GCS access token for the `natural_qa`
+  stage when `gcloud auth print-access-token` isn't available in the env
 - `OLMO_KEEP_GOING=1` — in `10_run_smoke_grid.sh` / `15_run_full_grid.sh`, attempt
   every model and report failures at the end instead of stopping on the first
   error (default: fail-fast)
@@ -131,6 +140,26 @@ is kept for grouping the smoke preflight instead).
   LiteLLM gateway, which routes to each model's vLLM backend.
 - **One model at a time.** `infer-stack switch` tears down the previous model;
   the grid spans a 1B-active MoE to a 32B dense model, which will not co-host.
+- **`natural_qa` needs gcloud auth + a pre-staged cache.** The `allenai-olmo-7b`
+  full manifest has `natural_qa:mode=closedbook` and `mode=openbook_longans`,
+  which fetch the NaturalQuestions dev shards from a public GCS bucket. That
+  bucket revoked **anonymous** reads (HTTP 403); it now serves only
+  authenticated callers, but HELM downloads anonymously via `urllib`, so the run
+  can't fetch them itself. `07_check_gcloud_auth.sh` verifies gcloud auth and
+  **pre-stages** the five `nq-dev-0X.jsonl.gz` shards into `EVAL_AUDIT_NQ_STAGE_DIR`
+  (default `$AUDIT_STORE_ROOT/scenario-cache/natural_qa/data`). This is wired in
+  **entirely from this folder** (no submodule edits): `_lib.sh` puts a `helm-run`
+  PATH shim ([`bin/helm-run`](bin/helm-run)) first on `PATH`, and since
+  `materialize_helm_run` invokes `helm-run` with `cwd=out_dpath`, the shim
+  symlinks the staged shards into that run's
+  `benchmark_output/scenarios/natural_qa/data` before `exec`-ing the real
+  `helm-run`. HELM's `ensure_file_downloaded` skips the network when the target
+  exists — so the staged shards are found locally. Only `olmo-7b` needs this;
+  the other five presets have no `natural_qa` entries. If you'd rather treat
+  `natural_qa` as a dataset-access failure (a recipe/environment blocker, not a
+  reproducibility failure) and drop it, set `OLMO_SKIP_GCS_CHECK=1` and it's
+  skipped. See [the debugging session](../../dev/journals/claude.md) for the
+  full diagnosis of the 403.
 - **Gated datasets need HuggingFace auth.** The presets include every candidate
   run from `candidate_runs.json`, including ones tagged `requires-gated-dataset`
   — `gpqa` on the OLMo-2 / OLMoE instruct models (and the **smoke** entry for

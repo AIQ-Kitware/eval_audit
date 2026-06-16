@@ -52,6 +52,66 @@ if [[ -n "$HF_TOKEN_VALUE" ]]; then
 fi
 unset HF_TOKEN_VALUE
 
+# natural_qa data staging (script-only; no submodule edits).
+#
+# HELM's natural_qa scenario downloads the NaturalQuestions dev shards from a
+# public GCS bucket that now refuses ANONYMOUS reads (HTTP 403); HELM fetches
+# anonymously, so the run can't get them itself. We can't pre-seed the run's
+# benchmark_output because out_dpath is a per-run kwdagger hash dir created at
+# run time. Instead we ship a `helm-run` PATH shim (bin/helm-run): materialize
+# invokes `helm-run` with cwd=out_dpath, so the shim — running in that cwd —
+# seeds the pre-staged shards into ./benchmark_output/scenarios/natural_qa/data
+# (exactly where get_instances() looks) and then exec's the real helm-run.
+# HELM's ensure_file_downloaded skips the network when the target file exists.
+#
+# Stage location (the shim's source); 07_check_gcloud_auth.sh fills it.
+export EVAL_AUDIT_NQ_STAGE_DIR="${EVAL_AUDIT_NQ_STAGE_DIR:-$STORE_ROOT/scenario-cache/natural_qa/data}"
+
+# The natural_questions dev shards HELM's natural_qa scenario fetches — mirrors
+# the scenario's own base_url/file_list (helm .../scenarios/natural_qa_scenario.py).
+# natural_qa appears in the allenai-olmo-7b FULL manifest (mode=closedbook and
+# mode=openbook_longans), so only that preset depends on these.
+NQ_GCS_BUCKET="natural_questions"
+NQ_GCS_PREFIX="v1.0/dev"
+NQ_FILES=(nq-dev-00.jsonl.gz nq-dev-01.jsonl.gz nq-dev-02.jsonl.gz nq-dev-03.jsonl.gz nq-dev-04.jsonl.gz)
+# Where 07 stages the shards (== the shim's source dir).
+NQ_CACHE_DATA_DIR="$EVAL_AUDIT_NQ_STAGE_DIR"
+
+# Put the `helm-run` shim first on PATH so the run path hits it instead of the
+# real entry point. Resolve the REAL helm-run BEFORE prepending so the shim can
+# delegate to it without recursing. Both are exported so they survive into the
+# materialize subprocess eval-audit-run schedules. If the real helm-run isn't on
+# PATH yet (env not fully set up), skip the shim — the run would fail anyway and
+# 00_check_env.sh covers entry-point presence.
+OLMO_SHIM_DIR="$ROOT/reproduce/olmo_models/bin"
+if [[ -z "${EVAL_AUDIT_REAL_HELM_RUN:-}" ]]; then
+  _real_helm_run="$(command -v helm-run 2>/dev/null || true)"
+  if [[ -n "$_real_helm_run" && "$_real_helm_run" != "$OLMO_SHIM_DIR/helm-run" ]]; then
+    export EVAL_AUDIT_REAL_HELM_RUN="$_real_helm_run"
+  fi
+  unset _real_helm_run
+fi
+if [[ -n "${EVAL_AUDIT_REAL_HELM_RUN:-}" && ":$PATH:" != *":$OLMO_SHIM_DIR:"* ]]; then
+  export PATH="$OLMO_SHIM_DIR:$PATH"
+fi
+
+# Resolve a Google OAuth access token for authenticated GCS reads, without
+# requiring gsutil. Order: explicit env -> gcloud user creds -> gcloud ADC.
+# Empty if none — 07_check_gcloud_auth.sh reports that before staging.
+olmo_resolve_gcloud_token() {
+  if [[ -n "${GOOGLE_OAUTH_ACCESS_TOKEN:-}" ]]; then printf '%s' "$GOOGLE_OAUTH_ACCESS_TOKEN"; return; fi
+  if command -v gcloud >/dev/null 2>&1; then
+    local tok
+    if tok="$(gcloud auth print-access-token 2>/dev/null)" && [[ -n "$tok" ]]; then
+      printf '%s' "$tok"; return
+    fi
+    if tok="$(gcloud auth application-default print-access-token 2>/dev/null)" && [[ -n "$tok" ]]; then
+      printf '%s' "$tok"; return
+    fi
+  fi
+  printf ''
+}
+
 # The six OLMo presets, ordered smallest -> largest so a cheap model surfaces a
 # pipeline failure before the expensive 32B load. Each row is "preset:profile".
 # The infer-stack profile is the preset name with a "-single" suffix, and the
