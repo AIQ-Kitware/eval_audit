@@ -508,8 +508,18 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 "mmlu:subject=virology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=world_religions,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "narrative_qa:model=allenai/olmo-7b",
-                "natural_qa:mode=closedbook,model=allenai/olmo-7b",
-                "natural_qa:mode=openbook_longans,model=allenai/olmo-7b",
+                # ── DISABLED: ``natural_qa:`` × 2 modes (closedbook,
+                # openbook_longans). HELM's NaturalQuestions scenario fetches
+                # the dev shards (``nq-dev-0X.jsonl.gz``) from the public
+                # ``gs://natural_questions`` GCS bucket, which has **revoked
+                # anonymous reads** (HTTP 403 ``AccessDenied``). HELM downloads
+                # them with an unauthenticated ``urllib`` request, and the
+                # bucket denies even *authenticated* callers (it dropped
+                # ``allAuthenticatedUsers`` too — confirmed by an authenticated
+                # GET), so there is no credential that unblocks the fetch. This
+                # is a recipe/environment failure (dataset access-restricted),
+                # not a reproducibility failure — filtered out until a
+                # surviving mirror is wired in as a declared substitution.
                 "wmt_14:language_pair=cs-en,model=allenai/olmo-7b",
                 "wmt_14:language_pair=de-en,model=allenai/olmo-7b",
                 "wmt_14:language_pair=fr-en,model=allenai/olmo-7b",

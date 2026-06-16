@@ -23,13 +23,6 @@
 # inherits, so HELM can pull gated datasets — the full run-entry sets include
 # gpqa on the OLMo-2 / OLMoE instruct models. Run ./06_check_hf_auth.sh first.
 #
-# natural_qa data: the allenai-olmo-7b full manifest fetches NaturalQuestions
-# from a GCS bucket that now refuses anonymous reads. Run ./07_check_gcloud_auth.sh
-# first — it stages the shards into EVAL_AUDIT_NQ_STAGE_DIR, and the bin/helm-run
-# PATH shim (put first on PATH by _lib.sh) links them into each run's scenario
-# cache so HELM finds the data locally instead of 403-ing. This is wired entirely
-# from this folder; no submodule edits. (OLMO_SKIP_GCS_CHECK=1 opts out.)
-#
 # Default is fail-fast. Set OLMO_KEEP_GOING=1 to attempt every model and report
 # which ones failed at the end instead of stopping on the first error.
 #
