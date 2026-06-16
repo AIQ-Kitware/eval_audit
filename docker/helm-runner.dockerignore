@@ -1,0 +1,12 @@
+# Safety-net ignore for the staged build context (copied to <staging>/.dockerignore
+# by docker/build.sh). The committed-state staging already excludes .git and
+# untracked files; this trims obvious caches that could slip into a worktree build.
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.ipynb_checkpoints
+**/*.egg-info
+**/.venv

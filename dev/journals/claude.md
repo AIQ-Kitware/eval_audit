@@ -2209,3 +2209,75 @@ solely on declared-substitution comparisons — the unconditional
 version would have been technically correct and operationally noise.
 The matrix's 'non-extension fixtures byte-identical' gate forced that
 decision early, before any code existed to defend.
+
+## 2026-06-16 12:14:22 -0400
+
+**Goal.** Add an opt-in path for Stage 3 (`eval-audit-run`) to execute each HELM
+run-entry inside a pinned Docker image instead of the host venv, and record the
+image digest so the *environment* stops being an uncontrolled variable in the
+reproducibility audit. Model: claude-opus-4-8[1m] (Claude Code).
+
+**Design (confirmed with the user via AskUserQuestion).** (1) Container runs as
+**root**; a thin entrypoint chowns the output dir back to `HOST_UID:HOST_GID` on
+exit — keeps `/hf-cache` + `prod_env` writes working while leaving kwdagger able
+to own results. (2) A **brand-new, independent** Dockerfile (not an extension of
+the legacy uv/magnet/magnet-heim chain): multi-stage CUDA devel→runtime, uv from
+the official pinned image, venv at `/opt/venv`, **Python 3.11** (HELM declares
+`>=3.10` and its pyproject comment lists 3.10/3.11/3.12; only `seahelm`/pyonmttok
+is excluded at 3.12, which the local-HF recipe doesn't use; magnet's ruff target
+is already `py311`). (3) Resolve the image tag → `sha256` digest **once at
+schedule time** and pin every node to `<repo>@sha256:…`. (4) The docker-wrapping
+kwdagger node + orchestration live in **eval_audit**; the aiq-magnet submodule is
+untouched.
+
+**Source provenance.** `docker/build.sh` stages pristine *committed* state via
+`git archive` of each submodule (helm, aiq-magnet) at its gitlink sha — no
+remote dependency, no `.git`/junk leakage, shas → OCI labels. A
+`BUILD_FROM=worktree` escape hatch copies the live tree (`-dirty` tag) for fast
+iteration. Verified neither package needs `.git` for versioning (magnet reads
+`magnet.__version__`, helm has a static version), so the archive approach is
+clean.
+
+**Implementation.** `docker/{helm-runner.dockerfile,entrypoint.sh,build.sh,
+helm-runner.dockerignore,README.md}`. eval_audit side:
+`MaterializeHelmRunDockerNode` subclasses the magnet `MaterializeHelmRunNode`
+(inheriting `name='helm'`, `out_paths`, `primary_out_key`, inner `executable`)
+and overrides only `command` to emit the `docker run …` wrapper; container knobs
+go in algo/perf params (`container_image` in algo so a new image ⇒ new job).
+`docker_provenance.py` resolves the digest (RepoDigests, falls back to `.Id`
+with a non-reproducible warning) and writes provenance records.
+`kwdagger_bridge.py` switches the pipeline factory + adds the docker matrix keys
+when `container_image` is set, resolves HF-cache/precomputed paths to absolute
+(creating the HF cache host-owned so the bind mount isn't root-created), and
+writes the experiment-level `container_provenance.json` on execute.
+`--container-image` CLI override threads through `run_from_manifest`.
+
+**Validated the two risky integration points** before building: `final_config`
+merges `final_out_paths`, so the node `command` property sees the absolute
+`out_dpath` at render time (mount it at the same path → DONE/symlinks resolve on
+host); and cmd_queue's tmux backend sets `CUDA_VISIBLE_DEVICES` per worker, so
+`--gpus "device=$CUDA_VISIBLE_DEVICES"` exposes exactly the assigned GPU(s).
+Also confirmed `_classvar_init` falls back to subclass class-attribute
+`algo_params`/`perf_params`, so the subclass dict-merge is honored.
+
+**Reusable insight.** When wrapping an existing kwdagger node in a new execution
+substrate, *subclass + override `command`* rather than reimplementing: the
+`out_paths`/`primary_out_key`/DONE contract is the load-bearing part and is
+free via inheritance. Keep the wrapper's own params out of the inner CLI args by
+explicitly subtracting a `_CONTAINER_KEYS` set from `final_config` before
+rendering the inner command — `final_config` indiscriminately surfaces every
+configured key.
+
+**Confidence / risks.** High on the orchestration wiring and command rendering
+(unit-testable on a CPU host; 7 tests added). The image *build* and a full GPU
+end-to-end run need a GPU host with buildx (this dev host has docker but no
+buildx and no nvidia-smi). Open question to watch on first real build: uv's
+resolver vs HELM's opencv-python / opencv-python-headless split — the legacy
+magnet-heim needed a graph hack; uv may resolve it cleanly or may need an
+explicit override.
+
+**Next steps.** Build the image on a buildx+GPU host (`./docker/build.sh`), run
+the CPU permission smoke (`container_gpus: "none"`, tiny gpt2 run; confirm DONE
++ host-owned outputs + `container_provenance.json`), then a real GPU run via
+`configs/container_smoke_manifest.yaml`. Follow-up: surface
+`container_provenance.json` in the Stage 4 index for digest-drift detection.

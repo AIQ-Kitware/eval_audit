@@ -21,6 +21,7 @@ def run_from_manifest(
     devices: str | None = None,
     tmux_workers: int | None = None,
     backend: str | None = None,
+    container_image: str | None = None,
 ) -> dict[str, Any]:
     manifest = load_manifest(manifest_fpath)
     request = prepare_schedule_request(
@@ -31,6 +32,7 @@ def run_from_manifest(
         devices=devices,
         tmux_workers=tmux_workers,
         backend=backend,
+        container_image=container_image,
     )
     info: dict[str, Any] = {
         "experiment_name": str(manifest["experiment_name"]),
@@ -44,6 +46,8 @@ def run_from_manifest(
         "argv": kwdagger_schedule_argv(request),
         "command": kwdagger_schedule_command_text(request),
     }
+    if request.resolved_image is not None:
+        info["container_image"] = request.resolved_image.to_dict()
     if request.runtime.run:
         proc = run_kwdagger_schedule(request)
         info["returncode"] = proc.returncode

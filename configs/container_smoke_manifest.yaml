@@ -1,0 +1,38 @@
+schema_version: 1
+experiment_name: audit-smoke-container
+description: >-
+  Smoke-test batch for HELM reproduction auditing, executed inside the pinned
+  eval-audit-helm-runner Docker image instead of the host venv. See
+  docs/container-execution.md.
+run_entries:
+  - mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=eleutherai/pythia-6.9b,data_augmentation=canonical
+  - boolq:model=eleutherai/pythia-6.9b,data_augmentation=canonical
+max_eval_instances: 100
+suite: audit-smoke-container
+mode: compute_if_missing
+materialize: symlink
+backend: tmux
+devices: 0,1
+tmux_workers: 2
+local_path: prod_env
+precomputed_root: null
+require_per_instance_stats: true
+model_deployments_fpath: null
+enable_huggingface_models: []
+enable_local_huggingface_models: []
+
+# --- Containerized execution -------------------------------------------------
+# Build the image first with ./docker/build.sh. For cross-machine reproducibility
+# push it and reference it by digest (the pipeline resolves+pins the digest at
+# schedule time regardless). `eval-audit-helm-runner:dev` is the local alias the
+# build script tags.
+container_image: eval-audit-helm-runner:dev
+container_runtime: docker
+# Dedicated audit HF cache (NOT your personal ~/.cache/huggingface): the
+# container runs as root, so a dedicated dir keeps downloaded files consistently
+# owned. Created at schedule time if missing.
+hf_cache_dir: ~/.cache/eval-audit-hf
+container_shm_size: 32g
+container_ipc_host: false
+# container_gpus: null   # null => follow scheduler's $CUDA_VISIBLE_DEVICES per worker
+# container_mounts: []   # extra "host:dst[:ro]" bind mounts

@@ -6,12 +6,24 @@ import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from eval_audit.infra.api import audit_root
 from eval_audit.infra.yaml_io import dump_yaml, load_manifest
 from eval_audit.infra.paths import experiment_result_dpath
+from eval_audit.integrations.docker_provenance import (
+    ResolvedImage,
+    resolve_image_digest,
+    runtime_version,
+    write_container_provenance,
+)
+
+_BARE_PIPELINE = "magnet.backends.helm.pipeline.helm_single_run_pipeline()"
+_DOCKER_PIPELINE = (
+    "eval_audit.pipelines.helm_docker_pipeline.helm_single_run_docker_pipeline()"
+)
 
 
 def _detect_virtualenv_cmd() -> str | None:
@@ -66,6 +78,9 @@ class KWDaggerScheduleRequest:
     manifest: dict[str, Any]
     runtime: KWDaggerRuntime
     params_text: str
+    # Populated only for containerized (``container_image``) manifests.
+    resolved_image: ResolvedImage | None = None
+    container_provenance: dict[str, Any] | None = None
 
 
 def _resolve_manifest_override_path(value: str | None) -> str | None:
@@ -77,7 +92,16 @@ def _resolve_manifest_override_path(value: str | None) -> str | None:
     return str(path.resolve())
 
 
-def build_schedule_params(manifest: dict[str, Any]) -> dict[str, Any]:
+def build_schedule_params(
+    manifest: dict[str, Any],
+    resolved_image: ResolvedImage | None = None,
+) -> dict[str, Any]:
+    """Build the ``kwdagger schedule --params`` payload from a manifest.
+
+    When ``resolved_image`` is provided the containerized pipeline is selected
+    and the docker-runner matrix knobs are added; otherwise the historic
+    bare-python pipeline is used unchanged.
+    """
     matrix = {
         "helm.run_entry": list(manifest["run_entries"]),
         "helm.max_eval_instances": [manifest["max_eval_instances"]],
@@ -99,10 +123,24 @@ def build_schedule_params(manifest: dict[str, Any]) -> dict[str, Any]:
     enable_local_hf = manifest.get("enable_local_huggingface_models", [])
     if enable_local_hf:
         matrix["helm.enable_local_huggingface_models"] = [json.dumps(enable_local_hf)]
-    return {
-        "pipeline": "magnet.backends.helm.pipeline.helm_single_run_pipeline()",
-        "matrix": matrix,
-    }
+
+    if resolved_image is None:
+        return {"pipeline": _BARE_PIPELINE, "matrix": matrix}
+
+    # Containerized execution: pin the (already-resolved) image and pass the
+    # docker-runner knobs through to MaterializeHelmRunDockerNode.
+    matrix["helm.container_image"] = [resolved_image.run_ref]
+    matrix["helm.container_shm_size"] = [str(manifest.get("container_shm_size", "32g"))]
+    if manifest.get("hf_cache_dir"):
+        matrix["helm.hf_cache_dir"] = [manifest["hf_cache_dir"]]
+    if manifest.get("container_gpus"):
+        matrix["helm.container_gpus"] = [manifest["container_gpus"]]
+    if manifest.get("container_ipc_host"):
+        matrix["helm.container_ipc_host"] = [True]
+    container_mounts = manifest.get("container_mounts") or []
+    if container_mounts:
+        matrix["helm.container_mounts"] = [json.dumps(container_mounts)]
+    return {"pipeline": _DOCKER_PIPELINE, "matrix": matrix}
 
 
 def prepare_schedule_request(
@@ -114,6 +152,7 @@ def prepare_schedule_request(
     devices: str | None = None,
     tmux_workers: int | None = None,
     backend: str | None = None,
+    container_image: str | None = None,
 ) -> KWDaggerScheduleRequest:
     manifest_path = Path(manifest_fpath).expanduser().resolve()
     manifest = load_manifest(manifest_path)
@@ -125,7 +164,15 @@ def prepare_schedule_request(
     runtime_queue_name = (queue_name or f"audit-{experiment_name}").translate(
         str.maketrans({c: "-" for c in " !@#$%^&*()+={}[]|\\:;\"'<>,?/~`"})
     )
-    params = build_schedule_params(manifest)
+
+    # Containerized execution (opt-in). A CLI override wins over the manifest.
+    if container_image is not None:
+        manifest["container_image"] = container_image
+    resolved_image, container_provenance = _prepare_container_execution(
+        manifest, experiment_name
+    )
+
+    params = build_schedule_params(manifest, resolved_image=resolved_image)
     runtime = KWDaggerRuntime(
         queue_name=runtime_queue_name,
         root_dpath=(
@@ -147,7 +194,51 @@ def prepare_schedule_request(
         manifest=manifest,
         runtime=runtime,
         params_text=dump_yaml(params),
+        resolved_image=resolved_image,
+        container_provenance=container_provenance,
     )
+
+
+def _prepare_container_execution(
+    manifest: dict[str, Any],
+    experiment_name: str,
+) -> tuple[ResolvedImage | None, dict[str, Any] | None]:
+    """Resolve+pin the container image and build the experiment provenance record.
+
+    Mutates ``manifest`` in place to hold absolute host paths for the HF cache
+    and precomputed root (so the docker node can bind-mount them at identical
+    paths). Returns ``(None, None)`` for the bare-python path.
+    """
+    container_image = manifest.get("container_image")
+    if not container_image:
+        return None, None
+
+    runtime_name = str(manifest.get("container_runtime", "docker"))
+
+    # HF cache: resolve to an absolute path and create it as the host user so the
+    # bind mount does not materialize a root-owned source dir under the container.
+    hf_cache_dir = manifest.get("hf_cache_dir")
+    if hf_cache_dir:
+        hf_path = Path(hf_cache_dir).expanduser().resolve()
+        hf_path.mkdir(parents=True, exist_ok=True)
+        manifest["hf_cache_dir"] = str(hf_path)
+
+    # precomputed_root is bind-mounted at the same absolute path inside the
+    # container, so resolve it now.
+    precomputed_root = manifest.get("precomputed_root")
+    if precomputed_root:
+        manifest["precomputed_root"] = str(Path(precomputed_root).expanduser().resolve())
+
+    resolved_image = resolve_image_digest(str(container_image), runtime=runtime_name)
+    provenance = {
+        "schema": "eval-audit/container-provenance/1",
+        "experiment_name": experiment_name,
+        "container_runtime": runtime_name,
+        "runtime_version": runtime_version(runtime_name),
+        "image": resolved_image.to_dict(),
+        "resolved_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return resolved_image, provenance
 
 
 def kwdagger_schedule_argv(request: KWDaggerScheduleRequest) -> list[str]:
@@ -187,6 +278,10 @@ def kwdagger_schedule_command_text(request: KWDaggerScheduleRequest) -> str:
 
 def run_kwdagger_schedule(request: KWDaggerScheduleRequest) -> subprocess.CompletedProcess[str]:
     request.runtime.root_dpath.mkdir(parents=True, exist_ok=True)
+    # Record the experiment-level container provenance (requested → resolved
+    # digest) alongside the results so the image is auditable after the fact.
+    if request.container_provenance is not None:
+        write_container_provenance(request.runtime.root_dpath, request.container_provenance)
     return subprocess.run(
         kwdagger_schedule_argv(request),
         check=True,

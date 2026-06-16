@@ -292,7 +292,9 @@ Both Stage 2 and Stage 4 read from two indexes:
 ## What this pipeline does *not* cover
 
 - Building execution manifests from scratch (`eval-audit-make-manifest`).
-- Scheduling local HELM runs (`eval-audit-run`, `kwdagger`).
+- Scheduling local HELM runs (`eval-audit-run`, `kwdagger`). For running those
+  inside a pinned, auditable Docker image, see
+  [`docs/container-execution.md`](container-execution.md).
 - Standing up vLLM / KubeAI / LiteLLM serving for those runs.
 - Refreshing the public-HELM mirror at `/data/crfm-helm-public/`.
 
