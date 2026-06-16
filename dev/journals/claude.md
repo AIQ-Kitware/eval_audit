@@ -2281,3 +2281,61 @@ the CPU permission smoke (`container_gpus: "none"`, tiny gpt2 run; confirm DONE
 + host-owned outputs + `container_provenance.json`), then a real GPU run via
 `configs/container_smoke_manifest.yaml`. Follow-up: surface
 `container_provenance.json` in the Stage 4 index for digest-drift detection.
+
+## 2026-06-16 15:58:39 -0400
+
+**Model/harness:** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude
+Code VSCode extension.
+
+**Intent.** (1) Rewrite the `dev/e2e-tests/` scripts into the
+`reproduce/olmo_models/` shape; (2) land that refactor on a new branch cut from
+`main` (rather than the `olmo-reproduction` feature branch it was authored on),
+so it sits on top of `main`'s new containerized-HELM-execution path ("the docker
+pipeline", commit `5d02e12`) — the substrate for an upcoming "vLLM + container"
+e2e variant.
+
+**The e2e refactor (this branch's commit).** Replaced the three monolithic
+`e2e-phi_2-*.sh` scripts with the olmo numbered layout under `dev/e2e-tests/`:
+`_lib.sh` (an `E2E_TARGETS` array + `e2e_*` helpers + carried
+`EVAL_AUDIT_SKIP_LOCAL_REPEAT`/`GROUP_STRIP` exports), `00_check_env` →
+`05_check_profiles` → `10_run_smoke_grid` → `15_run_full_grid` →
+`20_index_local` → `30_compose` → `40_build_summary`, and a README. Added the
+grouping configs `configs/virtual-experiments/e2e-phi2{,-smoke}.yaml` (local-only;
+the three `-full`/`-smoke` experiments re-stamped under `e2e-phi2`). Split the
+single `manifests/hf-manifest.yaml` into `-smoke` (max_eval=5) / `-full`
+(max_eval=1000) variants. The one real divergence from olmo's uniform grid: each
+`E2E_TARGETS` row carries a `transport` field (`vllm`|`hf`) and `run_one`
+branches — `vllm` does switch→wait-ready→export-bundle→run (no `--access-kind`
+override, since the phi-2 presets already declare `openai-compatible`), `hf`
+skips infer-stack and runs the checked-in manifest. No `06_check_hf_auth.sh`
+(phi-2/MMLU are public). Validation: `bash -n` on all scripts, `_lib.sh` helper
+parsing, YAML parse, and a cross-check that each grouping config's
+`include_experiments` exactly equals the grid-produced experiment names.
+
+**Branch surgery.** Authored on `olmo-reproduction`; the user wanted it on a
+branch off `main`. `main` (`5d02e12`) and `olmo-reproduction` diverge at
+`aaa2c92` — `main` added only the docker pipeline; `olmo-reproduction` added the
+OLMo work, including `reproduce/olmo_models/` (absent on `main`). So before
+switching I discarded my two main-incompatible working-tree edits: (a) the
+`reproduce/olmo_models/*` cross-ref tweaks — they pointed olmo at the *new* e2e
+script names, but on `olmo-reproduction` the *old* scripts still exist, so the
+original comments are correct there and my edits would have dangled; (b) the
+journal edit (different base). Verified the old `dev/e2e-tests` tree and the
+submodule gitlinks are identical between the two branches, so `git switch -c
+e2e-refactor main` carried the e2e/configs changes (and the pre-existing
+submodule pointer mods) cleanly. Re-authored this journal entry on `main`'s
+journal base.
+
+**Known wart (flagged, not fixed).** The e2e README still links
+`reproduce/olmo_models/…`, which doesn't exist on `main` — those links dangle on
+this branch until `olmo-reproduction` (or olmo_models) merges to `main`. Left
+as-is pending the user's call.
+
+**Reusable insight.** When relocating uncommitted work from feature branch A to a
+branch cut from B, the blockers are exactly the paths that differ between A and B:
+files present only on A (here `reproduce/olmo_models/*`) and divergent shared
+files (the journal). Discard/neutralize *those* before `git switch`; everything
+identical across A and B (verified via `git diff A B -- <path>` and matching
+submodule gitlinks) rides along untouched. Don't stash blindly — a pathspec'd
+discard of the incompatible edits is cleaner than a full stash/pop that would
+conflict on the A-only files.

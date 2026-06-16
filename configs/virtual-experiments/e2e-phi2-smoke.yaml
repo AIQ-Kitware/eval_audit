@@ -1,0 +1,39 @@
+schema_version: 1
+name: e2e-phi2-smoke
+description: >
+  Smoke-suite variant of e2e-phi2: the three phi-2 e2e scenarios grouped into one
+  virtual experiment, scoped to the cheap SMOKE runs (<name>-smoke,
+  max_eval_instances=5) instead of the full batch. Validates the run + grouping
+  path end-to-end. Local-only by default: there is no official_public_index
+  source, so the report is the union of the three local smoke runs re-stamped
+  under a single experiment name. Comparability facts that the planner would
+  otherwise derive from a public counterpart collapse to status=unknown and
+  surface as comparability_unknown:* warnings — expected for a local-only smoke,
+  not a bug.
+
+scope:
+  # All three scenarios run microsoft/phi-2. The include_experiments list below
+  # is the hard bound; this regex is a second, defensive narrowing on the model
+  # axis.
+  models:
+    - "regex:^microsoft/phi-2"
+
+sources:
+  - kind: audit_index
+    fpath: /data/crfm-helm-audit-store/indexes/audit_results_index.csv
+    include_experiments:
+      - e2e-phi_2-vllm-philosophy-smoke
+      - e2e-phi_2-vllm-philosophy-incomparable-smoke
+      - e2e-phi_2-huggingface-philosophy-smoke
+
+  # Optional comparison side. Uncomment to compare the local smoke runs against
+  # public HELM rows (requires the public index + Stage-1 filter inventory to
+  # exist). For a pure pipeline smoke this is intentionally left off.
+  # - kind: official_public_index
+  #   fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
+  #   pre_filter:
+  #     kind: helm_stage1
+  #     inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
+
+output:
+  root: /data/crfm-helm-audit-store/virtual-experiments/e2e-phi2-smoke

@@ -1,0 +1,17 @@
+schema_version: 1
+experiment_name: e2e-phi_2-huggingface-philosophy-smoke
+description: e2e smoke test with Microsoft Phi-2 deployed directly from huggingface
+run_entries:
+- mmlu:subject=philosophy,method=multiple_choice_joint,model=microsoft/phi-2,eval_split=test
+max_eval_instances: 5
+suite: e2e-phi_2-huggingface-philosophy-smoke
+mode: compute_if_missing
+materialize: symlink
+backend: tmux
+devices: '0'
+tmux_workers: 1
+local_path: prod_env
+precomputed_root:
+require_per_instance_stats: true
+enable_huggingface_models: ["microsoft/phi-2"]
+enable_local_huggingface_models: []
