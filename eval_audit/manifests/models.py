@@ -22,6 +22,17 @@ class ManifestSpec:
     model_deployments_fpath: str | None = None
     enable_huggingface_models: list[str] = field(default_factory=list)
     enable_local_huggingface_models: list[str] = field(default_factory=list)
+    # Containerized execution (opt-in). When ``container_image`` is set, Stage 3
+    # runs each HELM run-entry inside a pinned Docker image instead of the host
+    # venv, and records which image (by sha256 digest) produced each run. When
+    # it is None the historic bare-python execution path is used unchanged.
+    container_image: str | None = None
+    container_runtime: str = "docker"
+    hf_cache_dir: str | None = None
+    container_gpus: str | None = None
+    container_shm_size: str = "32g"
+    container_ipc_host: bool = False
+    container_mounts: list[str] = field(default_factory=list)
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:

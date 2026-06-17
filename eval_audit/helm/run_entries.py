@@ -96,6 +96,48 @@ def canonicalize_kv(kv: dict[str, object], benchmark: str | None = None) -> dict
     return kv
 
 
+# Tokens that appear in a HELM logical run key but carry no comparison-relevant
+# identity. ``groups=mmlu_<subject>`` is HELM's leaderboard-aggregation grouping
+# metadata; ``model_deployment`` is a machine/serving-stack detail with no
+# public counterpart. Dropping them when canonicalizing loses no information
+# that distinguishes two genuinely different runs.
+BOOKKEEPING_TOKENS: tuple[str, ...] = ("groups", "model_deployment")
+
+
+def canonical_logical_key(
+    key: str | None,
+    *,
+    drop_tokens: Iterable[str] = BOOKKEEPING_TOKENS,
+) -> str | None:
+    """Return the order-insensitive canonical form of a HELM logical run key.
+
+    Two keys describing the same logical run must compare equal regardless of
+    token order or non-semantic bookkeeping tokens. This is the single
+    equivalence the planner groups by, and it is a *symmetric* relation (the
+    right tool for bucketing), unlike :func:`run_dir_matches_requested`'s
+    asymmetric subset test (the right tool for "does this candidate satisfy
+    this request").
+
+    Pipeline: ``parse_run_name_to_kv`` -> drop ``drop_tokens`` -> ``canonicalize_kv``
+    (model ``/``<->``_``, ``mmlu_pro`` ``subject``->``subset``) -> re-serialize with
+    the kv pairs **sorted by key**. Token order and ``groups=``/``model_deployment=``
+    no longer affect equality; every semantic token (``eval_split``, ``method``,
+    ``subject``, ``model``, ...) is preserved, so distinct recipes stay distinct.
+
+    Returns the input unchanged when it has no ``benchmark:`` prefix (nothing to
+    canonicalize) and ``None`` for ``None``/empty input.
+    """
+    if not key:
+        return key
+    drop = set(drop_tokens)
+    bench, kv = parse_run_name_to_kv(key)
+    if not bench:
+        return key
+    kv = {k: v for k, v in kv.items() if k not in drop}
+    kv = canonicalize_kv(kv, benchmark=bench)
+    return format_run_name_from_kv(bench, {k: kv[k] for k in sorted(kv)})
+
+
 def run_dir_matches_requested(run_dir_name: str, requested_desc: str) -> bool:
     req_bench, req_kv = parse_run_name_to_kv(requested_desc)
     cand_bench, cand_kv = parse_run_name_to_kv(run_dir_name)

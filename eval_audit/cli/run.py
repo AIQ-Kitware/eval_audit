@@ -30,6 +30,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--devices", default=None)
     parser.add_argument("--tmux-workers", type=int, default=None)
     parser.add_argument("--backend", default=None)
+    parser.add_argument(
+        "--container-image",
+        default=None,
+        help=(
+            "Run each HELM run-entry inside this Docker image (tag or digest "
+            "ref). Overrides the manifest's container_image. The digest is "
+            "resolved and pinned at schedule time."
+        ),
+    )
     args = parser.parse_args(argv)
     info = run_from_manifest(
         args.manifest,
@@ -39,6 +48,7 @@ def main(argv: list[str] | None = None) -> None:
         devices=args.devices,
         tmux_workers=args.tmux_workers,
         backend=args.backend,
+        container_image=args.container_image,
     )
     print(json.dumps(info, indent=2))
 

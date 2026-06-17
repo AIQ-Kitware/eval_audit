@@ -1,0 +1,187 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from eval_audit.integrations import kwdagger_bridge
+from eval_audit.integrations.docker_provenance import (
+    ResolvedImage,
+    resolve_image_digest,
+)
+from eval_audit.pipelines.helm_docker_pipeline import (
+    helm_single_run_docker_pipeline,
+)
+
+PINNED = "ghcr.io/aiq-kitware/eval-audit-helm-runner@sha256:" + "a" * 64
+
+
+def _render(config: dict, tmp_path: Path) -> str:
+    pipe = helm_single_run_docker_pipeline()
+    pipe.configure(config, root_dpath=str(tmp_path / "results"))
+    return pipe.node_dict["materialize_helm_run"].command
+
+
+def test_docker_node_command_renders_expected(tmp_path: Path):
+    cmd = _render(
+        {
+            "helm.run_entry": "mmlu:subject=philosophy,model=openai/gpt2",
+            "helm.suite": "audit-smoke",
+            "helm.max_eval_instances": 10,
+            "helm.precomputed_root": "/data/crfm-helm-public",
+            "helm.container_image": PINNED,
+            "helm.hf_cache_dir": "/data/hf-audit",
+            "helm.container_shm_size": "32g",
+        },
+        tmp_path,
+    )
+    # Wrapper shape
+    assert cmd.startswith("docker run --rm")
+    assert '--gpus "device=${CUDA_VISIBLE_DEVICES:-all}"' in cmd
+    assert "--shm-size=32g" in cmd
+    assert "-e HOST_UID=$(id -u) -e HOST_GID=$(id -g)" in cmd
+    assert "-e HF_HOME=/hf-cache" in cmd
+    assert "-e HF_TOKEN -e HUGGING_FACE_HUB_TOKEN" in cmd
+    # Digest pinned + recorded as env for provenance
+    assert PINNED in cmd
+    assert f"-e EVAL_AUDIT_CONTAINER_DIGEST=sha256:{'a' * 64}" in cmd
+    # HF cache + precomputed mounts
+    assert "-v /data/hf-audit:/hf-cache" in cmd
+    assert "-v /data/crfm-helm-public:/data/crfm-helm-public:ro" in cmd
+    # Inner command present, container knobs NOT leaked into the inner CLI
+    assert "python -m magnet.backends.helm.cli.materialize_helm_run" in cmd
+    assert "--run_entry=mmlu:subject=philosophy,model=openai/gpt2" in cmd
+    assert "--container_image" not in cmd
+    assert "--hf_cache_dir" not in cmd
+    assert "--container_shm_size" not in cmd
+
+
+def test_out_dpath_mounted_at_same_absolute_path(tmp_path: Path):
+    cmd = _render(
+        {
+            "helm.run_entry": "boolq:model=openai/gpt2",
+            "helm.container_image": PINNED,
+        },
+        tmp_path,
+    )
+    # The node dir is bind-mounted at the identical absolute path and is the
+    # working dir, so kwdagger's DONE check + reuse symlinks resolve on the host.
+    node_dpath = str((tmp_path / "results").resolve())
+    # find the rendered out_dpath token
+    out_lines = [ln for ln in cmd.splitlines() if "--out_dpath=" in ln]
+    assert out_lines, cmd
+    out_dpath = out_lines[0].split("--out_dpath=", 1)[1].strip().rstrip(" \\")
+    assert out_dpath.startswith(node_dpath)
+    assert f"-v {out_dpath}:{out_dpath}" in cmd
+    assert f"-w {out_dpath}" in cmd
+
+
+def test_cpu_variant_omits_gpus(tmp_path: Path):
+    cmd = _render(
+        {
+            "helm.run_entry": "boolq:model=openai/gpt2",
+            "helm.container_image": PINNED,
+            "helm.container_gpus": "none",
+        },
+        tmp_path,
+    )
+    assert "--gpus" not in cmd
+
+
+def test_ipc_host_variant(tmp_path: Path):
+    cmd = _render(
+        {
+            "helm.run_entry": "boolq:model=openai/gpt2",
+            "helm.container_image": PINNED,
+            "helm.container_ipc_host": True,
+        },
+        tmp_path,
+    )
+    assert "--ipc=host" in cmd
+    assert "--shm-size" not in cmd
+
+
+def test_resolve_image_digest_already_pinned_is_pure():
+    # An already-pinned ref needs no docker calls and is returned unchanged.
+    resolved = resolve_image_digest(PINNED)
+    assert resolved.pinned is True
+    assert resolved.run_ref == PINNED
+    assert resolved.digest == "sha256:" + "a" * 64
+    assert resolved.digest_kind == "already_pinned"
+
+
+def _write_container_manifest(tmp_path: Path) -> Path:
+    manifest_fpath = tmp_path / "manifest.yaml"
+    manifest_fpath.write_text(
+        "\n".join(
+            [
+                "experiment_name: demo-container",
+                "description: demo",
+                "run_entries:",
+                "  - boolq:model=openai/gpt2,data_augmentation=canonical",
+                "suite: audit-smoke",
+                "max_eval_instances: 10",
+                "container_image: eval-audit-helm-runner:dev",
+                f"hf_cache_dir: {tmp_path / 'hf'}",
+            ]
+        )
+        + "\n"
+    )
+    return manifest_fpath
+
+
+def test_prepare_schedule_request_container(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        kwdagger_bridge,
+        "resolve_image_digest",
+        lambda image, runtime="docker": ResolvedImage(
+            requested=image,
+            run_ref=PINNED,
+            digest="sha256:" + "a" * 64,
+            digest_kind="repo_digest",
+            pinned=True,
+        ),
+    )
+    monkeypatch.setattr(kwdagger_bridge, "runtime_version", lambda runtime="docker": "29.0.0")
+
+    manifest_fpath = _write_container_manifest(tmp_path)
+    request = kwdagger_bridge.prepare_schedule_request(
+        manifest_fpath, run=False, root_dpath=tmp_path / "results"
+    )
+
+    # Pipeline switched to the docker factory and the pinned image is in params.
+    assert "helm_single_run_docker_pipeline()" in request.params_text
+    assert "helm.container_image" in request.params_text
+    assert PINNED in request.params_text
+    # Resolved image + provenance carried on the request.
+    assert request.resolved_image is not None
+    assert request.resolved_image.run_ref == PINNED
+    assert request.container_provenance is not None
+    assert request.container_provenance["image"]["run_ref"] == PINNED
+    # HF cache dir was resolved to an absolute path and created host-owned.
+    assert (tmp_path / "hf").is_dir()
+
+
+def test_prepare_schedule_request_bare_path_unchanged(tmp_path: Path):
+    # No container_image => historic bare-python pipeline, no resolution.
+    manifest_fpath = tmp_path / "manifest.yaml"
+    manifest_fpath.write_text(
+        "\n".join(
+            [
+                "experiment_name: demo-bare",
+                "description: demo",
+                "run_entries:",
+                "  - boolq:model=openai/gpt2,data_augmentation=canonical",
+                "suite: audit-smoke",
+                "max_eval_instances: 10",
+            ]
+        )
+        + "\n"
+    )
+    request = kwdagger_bridge.prepare_schedule_request(
+        manifest_fpath, run=False, root_dpath=tmp_path / "results"
+    )
+    assert "helm_single_run_pipeline()" in request.params_text
+    assert "helm_single_run_docker_pipeline()" not in request.params_text
+    assert request.resolved_image is None
+    assert request.container_provenance is None

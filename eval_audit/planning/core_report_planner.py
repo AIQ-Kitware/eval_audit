@@ -17,6 +17,7 @@ from pathlib import Path
 import re
 from typing import Any
 
+from eval_audit.helm.run_entries import canonical_logical_key
 from eval_audit.indexing.schema import (
     component_id_for_local,
     extract_judge_models,
@@ -48,12 +49,26 @@ def _clean_optional_text(value: Any) -> str | None:
 
 PLANNER_VERSION = "core_report_packet_planner.v1"
 OFFICIAL_SELECTION_POLICY = "latest_suite_version_per_public_track"
-# When set to 1/true/yes, generate additional normalized key variants that
-# strip non-essential key=value suffix tokens (currently `groups=`) so the
-# prefiltering can match official/local runs that differ only by those tokens.
-GROUP_STRIP = os.environ.get(
-    "EVAL_AUDIT_GROUP_STRIP", ""
-).strip().lower() in {"1", "true", "yes"}
+
+# DEPRECATED no-op (2026-06). Matching now always runs through
+# ``canonical_logical_key`` (order-insensitive + groups=/model_deployment=
+# stripping), which strictly supersedes the old groups-only stripping this
+# flag used to gate. Order-sensitivity is never desirable, so canonicalization
+# is unconditionally on. The env var is read solely to warn if a runbook still
+# tries to opt OUT (``=0``), which is no longer honored; setting it has no
+# effect. Tracked runbooks only ever set it to 1.
+_GROUP_STRIP_ENV = os.environ.get("EVAL_AUDIT_GROUP_STRIP", "").strip().lower()
+if _GROUP_STRIP_ENV in {"0", "false", "no"}:
+    import warnings as _warnings
+
+    _warnings.warn(
+        "EVAL_AUDIT_GROUP_STRIP is deprecated and ignored: logical-key "
+        "canonicalization (order-insensitive matching) is always on; opting "
+        "out is no longer supported.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
 
 def _coerce_float(value: Any) -> float:
     try:
@@ -211,7 +226,10 @@ def _logical_key_variants(key: str | None) -> set[str]:
 
     The indexes sometimes substitute '/' with '_' or '-' (or vice versa).
     Generate the common permutations so prefiltering and grouping are
-    resilient to that sanitization.
+    resilient to that sanitization, plus the order-insensitive
+    ``canonical_logical_key`` form so two keys that are the same token set in
+    a different order (or differ only by bookkeeping tokens like ``groups=``)
+    intersect here for free.
     """
     if not key:
         return set()
@@ -227,47 +245,13 @@ def _logical_key_variants(key: str | None) -> set[str]:
         variants.add(key.replace("-", "/"))
         variants.add(key.replace("-", "_"))
 
-    # Extended normalization: optionally strip non-essential key=value
-    # suffixes (e.g. `groups=...`) and add variants of the stripped form.
-    if GROUP_STRIP:
-        try:
-            # Split on commas to isolate `key=value` style tokens and
-            # filter ones we consider non-essential for matching.
-            tokens = [t for t in key.split(",")]
-            stripped_tokens = [t for t in tokens if not t.strip().startswith("groups=")]
-            if len(stripped_tokens) < len(tokens):
-                stripped = ",".join(stripped_tokens)
-                variants.add(stripped)
-                # also add separator permutations for the stripped form
-                if "/" in stripped:
-                    variants.add(stripped.replace("/", "_"))
-                    variants.add(stripped.replace("/", "-"))
-                if "_" in stripped:
-                    variants.add(stripped.replace("_", "/"))
-                    variants.add(stripped.replace("_", "-"))
-                if "-" in stripped:
-                    variants.add(stripped.replace("-", "/"))
-                    variants.add(stripped.replace("-", "_"))
-        except Exception:
-            # Don't allow diagnostics/normalization to raise and break planning
-            pass
+    # Order-insensitive canonical form. Supersedes the old, order-blind
+    # `groups=`-stripping variant: it drops `groups=`/`model_deployment=` AND
+    # sorts tokens, so order/separator permutations all map to one string.
+    canonical = canonical_logical_key(key)
+    if canonical:
+        variants.add(canonical)
     return variants
-
-
-def _strip_groups_token(s: str | None) -> str | None:
-    """Return a copy of the logical key with any `groups=...` tokens removed.
-
-    Returns None when input is falsy. This mirrors the fallback stripping
-    logic used in `_prefilter_index_rows` so canonicalization is consistent
-    across planner stages.
-    """
-    if not s:
-        return s
-    try:
-        parts = [p for p in s.split(",") if not p.strip().startswith("groups=")]
-        return ",".join(parts)
-    except Exception:
-        return s
 
 
 @profile
@@ -319,46 +303,22 @@ def _prefilter_index_rows(
         scoped_official_rows = official_rows
 
     # Diagnostics to help when no official candidates are retained.
+    # ``canonicalized_wanted_keys`` counts how many wanted keys were normalized
+    # by ``canonical_logical_key`` (order/separator/groups changes) — the
+    # variant set above already includes those canonical forms, so the plain
+    # intersection covers what the old GROUP_STRIP fallback used to.
+    canonicalized_wanted = {
+        canonical_logical_key(k)
+        for k in wanted_keys
+        if canonical_logical_key(k) and canonical_logical_key(k) != k
+    }
     diagnostics: dict[str, Any] = {
         "original_official_count": len(official_rows),
         "scoped_official_count": len(scoped_official_rows),
         "wanted_keys_count": len(wanted_keys),
         "wanted_keys_sample": sorted(list(wanted_keys))[:20],
-        "prefilter_fallback_used": False,
-        "prefilter_fallback_matches": [],
+        "canonicalized_wanted_keys_count": len(canonicalized_wanted),
     }
-
-    # If no official rows matched but extended normalization is enabled,
-    # attempt a fallback matching that strips `groups=...` tokens and
-    # compares stripped key forms. This catches cases where the only
-    # difference is non-essential extra tokens.
-    if wanted_keys and not scoped_official_rows and GROUP_STRIP:
-        def _strip_groups_token(s: str | None) -> str | None:
-            if not s:
-                return s
-            parts = [p for p in s.split(",") if not p.strip().startswith("groups=")]
-            return ",".join(parts)
-
-        wanted_stripped = {_strip_groups_token(k) for k in wanted_keys}
-        fallback_matches: list[dict[str, Any]] = []
-        for row in official_rows:
-            row_keys = _row_logical_keys(row)
-            row_stripped = {_strip_groups_token(k) for k in row_keys}
-            if row_stripped & wanted_stripped:
-                fallback_matches.append(row)
-        if fallback_matches:
-            diagnostics["prefilter_fallback_used"] = True
-            diagnostics["prefilter_fallback_matches"] = [
-                {
-                    "run_name": _clean_optional_text(row.get("run_name")),
-                    "logical_run_key": _clean_optional_text(row.get("logical_run_key")),
-                    "component_id": _clean_optional_text(row.get("component_id")),
-                }
-                for row in fallback_matches[:50]
-            ]
-            scoped_official_rows = fallback_matches
-
-    diagnostics["scoped_official_count"] = len(scoped_official_rows)
 
     return scoped_local_rows, scoped_official_rows, diagnostics
 
@@ -969,12 +929,13 @@ def _packet_payload(
             )
     # Canonicalization debug plumbing removed: do not attach internal
     # `official_selection` diagnostics to packet/ comparison objects.
-    # If grouping canonicalization stripped `groups=...` tokens for this
-    # packet, surface a compact warning so downstream consumers can see
-    # which original keys were canonicalized.
+    # If grouping canonicalization changed the logical key for any member of
+    # this packet (token reorder, separator swap, or a dropped bookkeeping
+    # token), surface a compact warning so downstream consumers can see which
+    # original keys merged into the canonical group.
     if canonicalized_original_keys:
         try:
-            note = f"canonicalization_stripped_groups:original_keys={canonicalized_original_keys}"
+            note = f"keys_canonicalized:original_keys={canonicalized_original_keys}"
             # Attach to official_vs_local comparisons so reviewers can see
             # which comparisons were affected.
             for comp in comparisons:
@@ -1068,24 +1029,20 @@ def build_packet_intents(
         ]
 
     grouped: dict[str, list[NormalizedPlannerComponent]] = {}
-    # Track original raw keys that were canonicalized so we can surface a
-    # compact warning when the groups= token was stripped for any member of
-    # a packet.
+    # Track original raw keys that were normalized so we can surface a compact
+    # warning when canonicalization changed the grouping key for any member of
+    # a packet (token reorder, separator swap, or a dropped bookkeeping token).
     original_keys_by_group: dict[str, set[str]] = {}
     for component in filtered:
         raw_key = component.logical_run_key or component.run_entry or component.component_id
-        # Canonicalize grouping keys so non-essential suffixes like
-        # `groups=...` do not split otherwise-identical runs into separate
-        # packets. Honor the global extended-normalization flag so this
-        # behaviour is opt-in and consistent with `_logical_key_variants`.
-        if GROUP_STRIP:
-            stripped = _strip_groups_token(raw_key) or raw_key
-            canonical_key = stripped
-            # Record when we actually changed the key so we can warn later.
-            if raw_key and stripped != raw_key:
-                original_keys_by_group.setdefault(canonical_key, set()).add(raw_key)
-        else:
-            canonical_key = raw_key
+        # The decisive matching site: bucket by the order-insensitive canonical
+        # key so two runs that are the same token set in a different order (or
+        # differ only by `groups=`/`model_deployment=`) land in one packet.
+        # Always on — order-sensitivity is never desirable.
+        canonical_key = canonical_logical_key(raw_key) or raw_key
+        # Record when canonicalization actually changed the key so we can warn.
+        if raw_key and canonical_key != raw_key:
+            original_keys_by_group.setdefault(canonical_key, set()).add(raw_key)
         grouped.setdefault(canonical_key, []).append(component)
 
     packets: list[dict[str, Any]] = []
