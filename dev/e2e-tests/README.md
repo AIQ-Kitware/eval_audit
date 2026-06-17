@@ -57,16 +57,60 @@ The vLLM scenarios use the infer-stack profile `phi2-single`, shipped here:
 `_lib.sh` sets `INFER_STACK_CONFIG_DIR` to that dir by default.
 `05_check_profiles.sh` validates the profile is present before the grid runs.
 
+## Containerized execution example (opt-in)
+
+One extra scenario exercises the **containerized HELM execution** path (Stage 3
+runs each HELM run-entry inside the pinned `eval-audit-helm-runner` image instead
+of the host venv; see [`docs/container-execution.md`](../../docs/container-execution.md)).
+It is **opt-in** via `E2E_INCLUDE_CONTAINER=1` because it needs the image built
+first (`./docker/build.sh`) and a working docker:
+
+| scenario (`name`) | transport | full `experiment_name` | container networking |
+|---|---|---|---|
+| `e2e-phi_2-vllm-philosophy-container` | vllm | `…-container-full` | **`--network host`** |
+
+This is the intended containerized workflow: the **model is served on the host**
+(phi-2 on vLLM behind LiteLLM, published on the host's `localhost`) and HELM runs
+in the container. A default-bridge container's `localhost` is its own namespace,
+not the host's, so the HELM client could not reach the endpoint; **`--network
+host`** shares the host namespace so the baked-in `localhost` base URL resolves.
+(Why this is the right fix vs. `host.docker.internal` or a shared docker network:
+host is Linux-only but matches our GPU run hosts, keeps a single base URL
+identical to the host-venv run, and avoids coupling to infer-stack's compose
+internals.)
+
+It reuses the existing `vllm` `run_one` branch **unchanged** — the container
+opt-in is entirely declarative. The container fields (incl. `container_network:
+host`) are declared by the `e2e-phi_2-vllm-philosophy-container` **preset** in
+`adapter.py`, so `export-benchmark-bundle` writes them into the generated bundle
+manifest. The image tag is `eval-audit-helm-runner:dev`; for cross-machine
+pinning, push it and override with `eval-audit-run --container-image <digest>`
+(and set `E2E_CONTAINER_IMAGE` to match for the preflight). This groups via
+[`configs/virtual-experiments/e2e-phi2-container.yaml`](../../configs/virtual-experiments/e2e-phi2-container.yaml)
+(point `VEXP_MANIFEST` at it for `30`/`40`).
+
+```bash
+# build the runner image once, then run the container example + its report:
+./docker/build.sh
+E2E_INCLUDE_CONTAINER=1 ./06_check_container_image.sh
+E2E_INCLUDE_CONTAINER=1 ./10_run_smoke_grid.sh      # (or 15 for the full batch)
+VEXP_MANIFEST="$PWD/../../configs/virtual-experiments/e2e-phi2-container.yaml" \
+  ./30_compose.sh && \
+VEXP_MANIFEST="$PWD/../../configs/virtual-experiments/e2e-phi2-container.yaml" \
+  ./40_build_summary.sh
+```
+
 ## Steps
 
 ```bash
-./00_check_env.sh         # eval-audit-check-env
-./05_check_profiles.sh    # verify the phi2-single profile is defined (vLLM scenarios)
-./10_run_smoke_grid.sh    # preflight: per scenario -> (vllm: switch -> wait-ready -> export bundle) -> run smoke
-./15_run_full_grid.sh     # per scenario: same, but run the FULL manifest (the batch)
-./20_index_local.sh       # eval-audit-index -> audit_results_index.csv (verifies the -full run dirs)
-./30_compose.sh           # build the virtual experiment from the -full runs (the grouping step)
-./40_build_summary.sh     # aggregate publication surface across all three
+./00_check_env.sh             # eval-audit-check-env
+./05_check_profiles.sh        # verify the phi2-single profile is defined (vLLM scenarios)
+./06_check_container_image.sh # if E2E_INCLUDE_CONTAINER=1: verify the runner image exists (else no-op)
+./10_run_smoke_grid.sh        # preflight: per scenario -> (vllm: switch -> wait-ready -> export bundle) -> run smoke
+./15_run_full_grid.sh         # per scenario: same, but run the FULL manifest (the batch)
+./20_index_local.sh           # eval-audit-index -> audit_results_index.csv (verifies the -full run dirs)
+./30_compose.sh               # build the virtual experiment from the -full runs (the grouping step)
+./40_build_summary.sh         # aggregate publication surface across the grid
 ```
 
 The smoke preflight (`10`) is optional once you trust the path — `15` is the run
@@ -94,6 +138,15 @@ is kept for grouping the smoke preflight instead — point `VEXP_MANIFEST` at it
 - `EVAL_AUDIT_SKIP_LOCAL_REPEAT=1`, `EVAL_AUDIT_GROUP_STRIP=1` — set by `_lib.sh`,
   carried verbatim from the original e2e scripts (one local attempt per scenario,
   group prefix stripped)
+- `E2E_INCLUDE_CONTAINER=1` — add the opt-in containerized example
+  (vllm-container) to the grid. Needs the `eval-audit-helm-runner` image built
+  (`./docker/build.sh`) and docker available.
+- `E2E_CONTAINER_IMAGE` (default `eval-audit-helm-runner:dev`) — image tag the
+  `06_check_container_image.sh` preflight verifies; set to a pushed digest for
+  cross-machine pinning.
+- `E2E_HF_CACHE_DIR` (default `$HOME/.cache/eval-audit-hf`) — dedicated audit HF
+  cache for the container runs (the container runs as root; keeps downloads
+  consistently owned).
 
 ## What this assumes / produces
 
@@ -109,9 +162,9 @@ is kept for grouping the smoke preflight instead — point `VEXP_MANIFEST` at it
   and hand them to `export-benchmark-bundle`. HELM talks to the LiteLLM gateway,
   which routes to phi-2's vLLM backend.
 - **No HuggingFace token required.** `microsoft/phi-2` and the MMLU dataset are
-  public, so neither the HF-direct scenario nor the vLLM scenarios need a token
-  (this is why there is no `06_check_hf_auth.sh`, unlike `reproduce/olmo_models`,
-  whose gated `gpqa` runs do).
+  public, so no scenario needs a token — there is no HF-auth preflight, unlike
+  `reproduce/olmo_models`, whose gated `gpqa` runs do. (The `06` slot here is
+  instead the container-image preflight.)
 
 ## Output layout
 

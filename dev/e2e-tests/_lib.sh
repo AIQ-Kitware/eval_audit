@@ -58,6 +58,33 @@ E2E_TARGETS=(
   "e2e-phi_2-huggingface-philosophy:hf:-"
 )
 
+# Containerized-execution example (opt-in via E2E_INCLUDE_CONTAINER=1). Runs HELM
+# inside the pinned eval-audit-helm-runner image (build with ./docker/build.sh
+# first) instead of the host venv — the new "docker pipeline" (Stage 3
+# containerized execution; see docs/container-execution.md). Opt-in because it
+# needs the built image + a working docker.
+#
+# This is the intended containerized workflow: the model is SERVED on the host
+# (phi-2 on vLLM behind LiteLLM) and HELM runs in the container, reaching the host
+# endpoint via --network host. It reuses transport "vllm" unchanged — the
+# container opt-in (incl. container_network: host) is declared by the
+# e2e-phi_2-vllm-philosophy-container PRESET, so the generated bundle manifest
+# carries it. (An in-process HF-in-container flavor — the model loaded inside the
+# container — is intentionally not included: it is self-contained and needs no
+# host endpoint, which is not the served workflow this exercises.)
+if [[ "${E2E_INCLUDE_CONTAINER:-0}" == "1" ]]; then
+  E2E_TARGETS+=(
+    "e2e-phi_2-vllm-philosophy-container:vllm:phi2-single"
+  )
+fi
+
+# The pinned HELM-runner image + a dedicated audit HF cache (the container runs
+# as root, so a dedicated dir keeps downloads consistently owned). These match
+# the e2e-phi_2-*-container preset / manifest defaults and are used by
+# 06_check_container_image.sh; override to point at a pushed digest / other cache.
+export E2E_CONTAINER_IMAGE="${E2E_CONTAINER_IMAGE:-eval-audit-helm-runner:dev}"
+export E2E_HF_CACHE_DIR="${E2E_HF_CACHE_DIR:-$HOME/.cache/eval-audit-hf}"
+
 e2e_name()       { printf '%s\n' "${1%%:*}"; }
 e2e_transport()  { local rest="${1#*:}"; printf '%s\n' "${rest%%:*}"; }
 e2e_serving()    { printf '%s\n' "${1##*:}"; }

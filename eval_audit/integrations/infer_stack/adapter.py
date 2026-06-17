@@ -398,6 +398,60 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             "max_eval_instances": 1000,
         },
     },
+    # Same recipe as e2e-phi_2-vllm-philosophy (phi-2 served on vLLM, behind the
+    # LiteLLM gateway), but HELM itself runs inside the pinned
+    # eval-audit-helm-runner image instead of the host venv. The container opt-in
+    # lives in the smoke/full manifest specs below (forwarded verbatim into the
+    # generated bundle manifest by _manifest_doc). A distinct experiment_name keeps
+    # it independently addressable from the host-venv run and lets the two be
+    # grouped side-by-side (configs/virtual-experiments/e2e-phi2-container.yaml).
+    #
+    # container_network: host is REQUIRED here: the model is SERVED on the host
+    # (vLLM behind LiteLLM), so the in-container HELM client must reach the
+    # endpoint published on the host's localhost, which a default bridge container
+    # cannot see. See docs/container-execution.md and
+    # dev/e2e-tests/README.md. Build the image first with ./docker/build.sh
+    # (`eval-audit-helm-runner:dev` is its local tag); override with a pushed
+    # digest via `eval-audit-run --container-image ...` for cross-machine pinning.
+    "e2e-phi_2-vllm-philosophy-container": {
+        "profile": "phi2-single",
+        "bundle_name": "e2e-phi_2-vllm-philosophy-container",
+        "access_kind": "openai-compatible",
+        "model_deployment_name": "vllm/phi-2-local",
+        "profiles": [
+            {
+                "profile": "phi2-single",
+                "model_deployment_name": "vllm/phi-2-local",
+                "helm_model_name": "microsoft/phi-2",
+                "helm_tokenizer_name": "microsoft/phi-2",
+                "helm_max_sequence_and_generated_tokens_length": 2048,
+            }
+        ],
+        "smoke_manifest": {
+            "experiment_name": "e2e-phi_2-vllm-philosophy-container-smoke",
+            "description": "Smoke-test for phi-2 on vLLM, HELM executed in-container.",
+            "run_entries": [
+                "mmlu:subject=philosophy,method=multiple_choice_joint,model=microsoft/phi-2,eval_split=test"
+            ],
+            "suite": "e2e-phi_2-vllm-philosophy-container-smoke",
+            "max_eval_instances": 5,
+            "container_image": "eval-audit-helm-runner:dev",
+            "container_network": "host",
+            "hf_cache_dir": "~/.cache/eval-audit-hf",
+        },
+        "full_manifest": {
+            "experiment_name": "e2e-phi_2-vllm-philosophy-container-full",
+            "description": "Full HELM batch for phi-2 on vLLM, HELM executed in-container.",
+            "run_entries": [
+                "mmlu:subject=philosophy,method=multiple_choice_joint,model=microsoft/phi-2,eval_split=test"
+            ],
+            "suite": "e2e-phi_2-vllm-philosophy-container-full",
+            "max_eval_instances": 1000,
+            "container_image": "eval-audit-helm-runner:dev",
+            "container_network": "host",
+            "hf_cache_dir": "~/.cache/eval-audit-hf",
+        },
+    },
 }
 
 
@@ -585,12 +639,28 @@ def _maybe_repo_relative(target: Path) -> str:
         return str(target.resolve())
 
 
+# Containerized-execution opt-in fields a preset's smoke/full manifest spec may
+# declare; when present they are forwarded verbatim into the generated bundle
+# manifest so Stage 3 runs HELM inside the pinned image (see
+# eval_audit/manifests/models.py and docs/container-execution.md).
+_CONTAINER_SPEC_KEYS = (
+    "container_image",
+    "container_runtime",
+    "hf_cache_dir",
+    "container_gpus",
+    "container_shm_size",
+    "container_ipc_host",
+    "container_mounts",
+    "container_network",
+)
+
+
 def _manifest_doc(
     *,
     spec: dict[str, Any],
     model_deployments_fpath: str,
 ) -> dict[str, Any]:
-    return {
+    doc = {
         "schema_version": 1,
         "experiment_name": spec["experiment_name"],
         "description": spec["description"],
@@ -609,6 +679,10 @@ def _manifest_doc(
         "enable_huggingface_models": [],
         "enable_local_huggingface_models": [],
     }
+    for key in _CONTAINER_SPEC_KEYS:
+        if key in spec:
+            doc[key] = spec[key]
+    return doc
 
 
 def _write_yaml(path: Path, data: Any) -> None:

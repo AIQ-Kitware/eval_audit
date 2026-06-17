@@ -48,6 +48,7 @@ _CONTAINER_KEYS = frozenset(
         "container_shm_size",
         "container_ipc_host",
         "container_mounts",
+        "container_network",
     }
 )
 
@@ -93,6 +94,7 @@ class MaterializeHelmRunDockerNode(MaterializeHelmRunNode):
         "container_shm_size": "32g",
         "container_ipc_host": False,
         "container_mounts": None,
+        "container_network": None,
     }
 
     def _render_inner_command(self, cfg: dict[str, Any]) -> str:
@@ -133,8 +135,16 @@ class MaterializeHelmRunDockerNode(MaterializeHelmRunNode):
         gpus = cfg.get("container_gpus")
         shm_size = cfg.get("container_shm_size") or "32g"
         ipc_host = bool(cfg.get("container_ipc_host"))
+        network = cfg.get("container_network")
 
         lines: list[str] = ["docker run --rm"]
+
+        # Network namespace. Omitted => Docker's default bridge (correct when
+        # HELM loads the model in-process). "host" => share the host namespace
+        # so the in-container HELM client can reach a model server published on
+        # the host's localhost (e.g. a vLLM/LiteLLM endpoint).
+        if network is not None and str(network).strip():
+            lines.append(f"--network {q(str(network))}")
 
         # GPU exposure. None => follow the scheduler's per-worker assignment;
         # "none"/"" => omit (CPU runs / local smoke tests); else use verbatim.

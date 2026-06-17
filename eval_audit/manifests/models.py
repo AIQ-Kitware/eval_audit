@@ -33,6 +33,13 @@ class ManifestSpec:
     container_shm_size: str = "32g"
     container_ipc_host: bool = False
     container_mounts: list[str] = field(default_factory=list)
+    # Docker ``--network`` for the run container. None => Docker's default
+    # bridge network (correct when HELM loads the model in-process, e.g. the
+    # enable_huggingface_models path). Set to "host" when HELM must reach a
+    # model server published on the host's localhost (e.g. a vLLM/LiteLLM
+    # endpoint) — a bridge container's localhost is its own namespace, not the
+    # host's. See docs/container-execution.md.
+    container_network: str | None = None
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:

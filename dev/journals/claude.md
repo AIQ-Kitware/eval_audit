@@ -2339,3 +2339,56 @@ identical across A and B (verified via `git diff A B -- <path>` and matching
 submodule gitlinks) rides along untouched. Don't stash blindly — a pathspec'd
 discard of the incompatible edits is cleaner than a full stash/pop that would
 conflict on the A-only files.
+
+## 2026-06-17 09:27:57 -0400
+
+**Model/harness:** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude
+Code VSCode extension.
+
+**Intent.** Add a containerized phi-2 e2e example on top of the e2e refactor: the
+intended containerized workflow — phi-2 **served on the host** (vLLM behind
+LiteLLM), HELM running inside the pinned eval-audit-helm-runner image — for the
+new containerized-HELM-execution path (main's `5d02e12`).
+
+**The networking crux.** The docker pipeline's `docker run` emits no `--network`
+flag → default bridge → the container's `localhost` is its own namespace. Because
+the model is served on the host, the in-container HELM client must reach the
+LiteLLM endpoint published on the host's `localhost`, which a bridge container
+can't see. Chose `--network host` (over `host.docker.internal` or a shared compose
+network) because the run hosts are Linux, it keeps ONE base URL identical to the
+host-venv run, and it avoids coupling to infer-stack's compose internals.
+
+**Design — container-ness is declarative, not a new code path.** The existing
+`run_one` `vllm` branch is reused **unchanged**; the container opt-in lives
+entirely in the manifest/preset. So the only new transport-layer work was the
+`container_network` field:
+- `manifests/models.py`: `container_network: str | None = None`.
+- `kwdagger_bridge.build_schedule_params`: forward it into the docker matrix.
+- `helm_docker_pipeline.py`: add to `_CONTAINER_KEYS` + `perf_params`, render
+  `--network <v>` (omitted when None).
+- `adapter._manifest_doc`: forward any `_CONTAINER_SPEC_KEYS` a preset's
+  smoke/full spec declares into the generated bundle manifest.
+- `adapter.py`: new preset `e2e-phi_2-vllm-philosophy-container` (same recipe as
+  the host vLLM preset, distinct `-container` experiment names, declaring
+  `container_image`/`container_network: host`/`hf_cache_dir`).
+
+The target is **opt-in** via `E2E_INCLUDE_CONTAINER=1` (needs `./docker/build.sh`
++ docker), appended to `E2E_TARGETS` in `_lib.sh`; `06_check_container_image.sh`
+preflights the image; `configs/virtual-experiments/e2e-phi2-container.yaml` groups
+it (host counterpart commented in for a host-vs-container repro demo).
+
+**Verification.** Container tests 8/8 (added `test_network_host_variant` + a
+default-omits-`--network` assertion + bridge param-flow assert). py_compile on the
+five Python files; confirmed the new preset registers and `_manifest_doc` forwards
+container fields for the container preset but does NOT leak them for the host-venv
+preset; `bash -n` on all scripts; `E2E_INCLUDE_CONTAINER=1` expands the grid 3→4
+with correct experiment names; YAML + ManifestSpec round-trips. Two pre-existing
+failures (`test_run_surface` argv-ordering, `test_infer_stack_integration` kubeai
+export) fail identically with my changes stashed — not mine; flagged, not fixed.
+
+**Reusable insight.** When a feature's variation is purely *configuration* (which
+container, what network), push it into the declarative artifact (manifest /
+preset) and forward it generically rather than branching the executor. One new
+optional field + one passthrough loop covered the example; `run_one` didn't grow a
+case. The only irreducible code was the field plumbing from manifest → kwdagger
+matrix → `docker run`.
