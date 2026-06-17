@@ -1,0 +1,162 @@
+name: local-llm-stack
+backend: compose
+active_profile: smollm2-135m-single
+catalog:
+  builtin_models: true
+  builtin_profiles: true
+  user_models_file: models.yaml
+policy:
+  require_fit_validation: true
+  reserve_display_gpu: auto
+  forbid_reserved_gpu_use: false
+  require_homogeneous_multi_gpu_groups: true
+  minimum_vram_headroom_gib: 2
+  allow_unsupported_render: false
+runtime:
+  compose_cmd: docker compose
+  target_inventory: auto
+providers:
+  ollama:
+    enabled: auto
+  vllm:
+    enabled: auto
+gateways:
+  litellm:
+    enabled: auto
+frontends:
+  open_webui:
+    enabled: auto
+  reverse_proxy:
+    enabled: false
+ollama:
+  publish_port: false
+  host: 0.0.0.0:11434
+  keep_alive: 2m
+  context_length: 4096
+  num_parallel: 1
+  max_loaded_models: 1
+  max_queue: 8
+  gpu_indices: auto
+  extra_env: {}
+  env_file: []
+  extra_volumes: []
+  extra_hosts: []
+  labels: {}
+ports:
+  litellm: 14042
+  open_webui: 13000
+  postgres: 15432
+  ollama: 11434
+  reverse_proxy_http: 80
+  reverse_proxy_https: 443
+images:
+  postgres: postgres:16.8
+  open_webui: ghcr.io/open-webui/open-webui:v0.8.6
+  litellm: ghcr.io/berriai/litellm:v1.82.3-stable
+  vllm: vllm/vllm-openai:v0.19.1
+  ollama: ollama/ollama:latest
+  nginx: nginx:1.29.7-alpine
+state:
+  hf_cache: /data/service/docker/vllm-stack/hf-cache
+  vllm_cache: /data/service/docker/vllm-stack/vllm-cache
+  torch_cache: /data/service/docker/vllm-stack/torch-cache
+  triton_cache: /data/service/docker/vllm-stack/triton-cache
+  cuda_cache: /data/service/docker/vllm-stack/cuda-cache
+  open_webui: /data/service/docker/vllm-stack/open-webui
+  postgres_open_webui: /data/service/docker/vllm-stack/postgres-open-webui
+  postgres_litellm: /data/service/docker/vllm-stack/postgres-litellm
+  ollama: /data/service/docker/vllm-stack/ollama
+  runtime: /data/service/docker/vllm-stack/runtime
+output:
+  generated_dir: /data/service/docker/vllm-stack/generated
+open_webui:
+  auth: false
+  provider: auto
+  publish_port: true
+  extra_env: {}
+  env_file: []
+  extra_volumes: []
+  extra_hosts: []
+  labels: {}
+  ldap:
+    enabled: false
+reverse_proxy:
+  enabled: false
+  image: ''
+  container_name: reverse-proxy
+  target: open_webui
+  server_name: localhost
+  publish_http: true
+  publish_https: true
+  http_port: null
+  https_port: null
+  http_bind_host: ''
+  https_bind_host: ''
+  force_https: true
+  client_max_body_size: 1G
+  proxy_connect_timeout: 60s
+  proxy_read_timeout: 600s
+  proxy_send_timeout: 600s
+  proxy_buffer_size: 128k
+  proxy_buffers: 4 256k
+  proxy_busy_buffers_size: 256k
+  proxy_buffering: null
+  proxy_cache: null
+  resolver: []
+  resolver_timeout: 5s
+  hsts:
+    enabled: true
+    max_age: 63072000
+    include_subdomains: true
+    preload: false
+  ssl:
+    enabled: true
+    certificate: ''
+    certificate_key: ''
+    dhparam: ''
+    certificate_container_path: /etc/ssl/certs/infer-stack-site.crt
+    certificate_key_container_path: /etc/ssl/private/infer-stack-site.key
+    dhparam_container_path: /etc/ssl/certs/dhparam.pem
+    protocols: TLSv1.2 TLSv1.3
+    ciphers: ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384
+    prefer_server_ciphers: true
+    session_cache: shared:SSL:10m
+    ecdh_curve: secp384r1
+    session_tickets: false
+    stapling: true
+    stapling_verify: true
+  config_path: ''
+  extra_config: ''
+  extra_env: {}
+  env_file: []
+  extra_volumes: []
+  extra_hosts: []
+  labels: {}
+cluster:
+  namespace: kubeai
+  kubeai_release_name: kubeai
+  kubeai_chart: kubeai/kubeai
+  service_name: kubeai
+  ingress:
+    enabled: false
+    class_name: traefik
+    host: ''
+    path_prefix: /
+    tls_secret_name: ''
+resource_profiles:
+  gpu-single-default:
+    limits:
+      nvidia.com/gpu: 1
+    requests:
+      nvidia.com/gpu: 1
+  gpu-tp2-balanced:
+    limits:
+      nvidia.com/gpu: 2
+    requests:
+      nvidia.com/gpu: 2
+  gpu-tp2-maxctx:
+    limits:
+      nvidia.com/gpu: 2
+    requests:
+      nvidia.com/gpu: 2
+profiles: {}

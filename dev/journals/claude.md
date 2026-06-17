@@ -2210,6 +2210,101 @@ version would have been technically correct and operationally noise.
 The matrix's 'non-extension fixtures byte-identical' gate forced that
 decision early, before any code existed to defend.
 
+## 2026-06-16 08:56:51 -0400
+
+**User intent.** Reproductions in `reproduce/olmo_models` failed with
+`litellm.ContextWindowExceededError: ... maximum context length is 4096
+tokens. However, you requested 2048 output tokens and your prompt contains
+at least 2049 input tokens, for a total of at least 4097 tokens.`
+
+**Model/config.** Claude Opus 4.8 (1M context), claude-opus-4-8[1m], Claude
+Code CLI / VSCode extension harness.
+
+**Diagnosis.** The offending run_entries are the `num_output_tokens=2048`
+ones (gpqa / mmlu_pro / ifeval, all CoT) on the 4096-context chat models.
+HELM's `LocalWindowService` truncates the prompt to
+`max_sequence_and_generated_tokens_length - expected_completion`
+= `4096 - 2048 = 2048` tokens — but it counts the *raw* prompt, before the
+chat template is applied. The bundle routes through LiteLLM/vLLM
+(openai-compatible chat), where the OLMo-2 / OLMoE chat template wraps the
+prompt and adds tokens HELM never saw. I measured the wrapper overhead with
+the actual tokenizers: **12 tokens (OLMo-2), 13 (OLMoE)** for a single-turn
+user message. So `2048 (prompt) + ~13 (template) + 2048 (gen) = ~4109 > 4096`
+and vLLM hard-rejects. The "at least 2049" in the error is vLLM's lower-bound
+count (it stops once the budget is blown).
+
+**Fix.** Followed the existing sanctioned knob — the Vicuna chat path at
+`adapter.py:160-162` already reserves 8 tokens via
+`helm_max_sequence_and_generated_tokens_length` for exactly this "live vLLM
+needs a few reserved tokens beyond HELM's nominal budget" reason. Two changes:
+
+1. `_profile_specs` flat-form branch was *silently dropping*
+   `helm_max_sequence_and_generated_tokens_length` (and helm_model/tokenizer
+   aliases) — only the `profiles:` list form propagated them. All six OLMo
+   presets are flat, so the knob was unreachable. Now propagated.
+2. Set a 32-token reserve on each OLMo preset:
+   `4096 - 32 = 4064` for the five 4096-ctx models, `2048 - 32 = 2016` for
+   `allenai-olmo-7b`. 32 comfortably covers the measured ~13-token template
+   overhead plus truncate→decode→re-encode drift, while costing at most 32
+   tokens of prompt content on the long-prompt instances that actually get
+   truncated.
+
+**Why 32, not 8 (Vicuna).** OLMo-2's template overhead is ~12-13 vs Vicuna's
+smaller wrapper, and the decode/re-encode round trip in `truncate_from_right`
+can drift a few tokens; 32 is a clean, safe margin. Verified the value reaches
+the deployment via `_profile_specs` for all six presets.
+
+**Operational note for the user.** The run scripts re-run
+`export-benchmark-bundle` each invocation (step 2 of `run_one`), so simply
+re-running `10_run_smoke_grid.sh` / `15_run_full_grid.sh` regenerates
+`<bundle>/model_deployments.yaml` with the new budget — no manual bundle
+cleanup needed. The failed runs erred out (no DONE sentinel) so kwdagger
+won't skip them; if any partial result dir lingers, `OLMO_FORCE_RERUN=1`
+clears it.
+
+**Confidence / risks.** Confident on the mechanism (measured overhead +
+read `LocalWindowService._effective_prompt_token_budget`). Hardcoding the
+absolute budget per preset couples it to `models.yaml` max_model_len — the
+same coupling phi-2 already accepts — mitigated by a comment saying "keep
+<= models.yaml max_model_len". Considered a computed-headroom field instead
+but rejected it: a second knob for the same job hurts coherence vs. the
+established `helm_max_sequence_and_generated_tokens_length`.
+
+**Reusable insight.** When HELM drives a chat model through an
+openai-compatible server, HELM's prompt-token budget is blind to the chat
+template the server applies — always reserve template overhead in
+`helm_max_sequence_and_generated_tokens_length`, and remember the flat-preset
+path only carries the overrides you explicitly thread through `_profile_specs`.
+
+## 2026-06-16 10:05:00 -0400
+
+**Outcome of the natural_qa gcloud effort: access is genuinely gone; disable the
+runs.** Over the prior turns I diagnosed the natural_qa 403 (the public
+`gs://natural_questions` bucket revoked anonymous reads) and built a script-only
+fix — `07_check_gcloud_auth.sh` to authenticate + pre-stage the dev shards, and a
+`helm-run` PATH shim (`bin/helm-run`) to seed them into each per-run scenario
+cache, since HELM downloads anonymously and `out_dpath` is a per-run kwdagger
+hash dir. The user then tested with real gcloud credentials and confirmed the
+bucket denies **authenticated** callers too (it dropped `allAuthenticatedUsers`,
+not just `allUsers`). So no credential unblocks it — staging was moot.
+
+**Action.** Reverted the machinery commit (`git revert 8cb5eb7`: removes
+`07_check_gcloud_auth.sh`, `bin/helm-run`, and the `_lib.sh`/`15`/`README`
+additions) and disabled the two `natural_qa:*` entries in the `allenai-olmo-7b`
+full manifest in `adapter.py`, mirroring the user's immediately-prior
+`competition_math` disable (commit `01a6888`): a commented block tagged
+DISABLED with the recipe/environment-failure rationale, left in place for a
+future declared-substitution mirror. natural_qa now joins MATH and gpqa as a
+documented dataset-access blocker rather than a reproducibility result.
+
+**Reusable insight.** Validate the *access assumption* before building the
+plumbing that depends on it. The whole shim/stage design hinged on
+"authenticated reads work"; one `curl` with a real token would have falsified it
+up front. For an access-restricted dataset, the cheap first move is to confirm
+*some* credential can read *one* object — only then is staging worth wiring.
+Otherwise the correct, taxonomy-honest outcome is to disable the run as an
+environment failure, exactly as we did for MATH.
+
 ## 2026-06-16 12:14:22 -0400
 
 **Goal.** Add an opt-in path for Stage 3 (`eval-audit-run`) to execute each HELM
