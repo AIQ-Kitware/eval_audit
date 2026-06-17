@@ -1,0 +1,258 @@
+# infer-stack user models + serving profiles for the six OLMo smoke presets.
+#
+# Wiring: this file is referenced by ../config.yaml as `user_models_file:
+# models.yaml`. The reproduce scripts point INFER_STACK_CONFIG_DIR at the
+# enclosing directory (config/infer_stack). To use it elsewhere, set
+# `user_models_file` in your own infer-stack config to this path.
+#
+# ⚠️ FIELDS TO VERIFY before a real run (best-effort defaults below):
+#   * hf_model_id      — the canonical AllenAI HF repo for each model. The
+#                        OLMo-2 / OLMoE ids follow AllenAI's consistent scheme
+#                        and are high-confidence; the OLMo-1 / OLMo-1.7 "-hf"
+#                        suffixes are LOWER confidence — confirm on HF Hub.
+#   * memory_class_gib / preferred_gpu_count — sized at ~2 bytes/param (bf16)
+#                        plus headroom; confirm against your actual GPU VRAM.
+#                        The 32B is set to tp=2; drop to 1 GPU if you have an
+#                        80GB card.
+#   * context_window / max_model_len — set conservatively; raise if your run
+#                        needs longer prompts (smoke entries are short).
+#   * protocol_mode    — base models => completions (set explicitly), instruct
+#                        models => chat (left as the resolver default, matching
+#                        the builtin qwen instruct profiles).
+#
+# The logical_model_name / served_model_name values are NOT guesses: they are
+# the exact HELM model aliases the presets' run_entries reference
+# (model=allenai/olmo-7b, etc.) and must already be registered in HELM's
+# submodules/helm config/model_metadata.yaml + tokenizer_configs.yaml
+# (export-benchmark-bundle asserts this via _assert_helm_aliases_exist).
+#
+# Transport: this runbook routes HELM through the LiteLLM gateway
+# (openai-compatible), NOT vllm-direct. The profiles therefore use the simple
+# services:/router: form (precedent: the builtin phi2-single / pythia-160m-single
+# profiles): the compose backend brings each model up on vLLM and fronts it with
+# LiteLLM, and the bundle's default access is openai-compatible. Because the OLMo
+# presets in adapter.py still declare access_kind: vllm-direct, the run script
+# overrides it at export time with `--access-kind openai-compatible` plus the
+# LiteLLM base-url + master key (see 10_run_smoke_grid.sh).
+
+vllm_models:
+  olmoe-1b-7b-0125-instruct:
+    hf_model_id: allenai/OLMoE-1B-7B-0125-Instruct   # verify
+    served_model_name: allenai/olmoe-1b-7b-0125-instruct
+    logical_model_name: allenai/olmoe-1b-7b-0125-instruct
+    tokenizer_name: allenai/olmoe-1b-7b-0125-instruct
+    family: olmoe
+    modalities: [text]
+    supported_protocols: [chat, completions]
+    memory_class_gib: 20      # ~6.9B total MoE params at bf16 + activation
+    min_vram_gib_per_replica: 20
+    preferred_gpu_count: 1
+    context_window: 4096
+    defaults:
+      max_model_len: 4096
+      gpu_memory_utilization: 0.85
+      enable_prefix_caching: true
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+
+  olmo-7b:
+    hf_model_id: allenai/OLMo-7B-hf                   # verify (-hf is the vLLM-loadable conversion)
+    served_model_name: allenai/olmo-7b
+    logical_model_name: allenai/olmo-7b
+    tokenizer_name: allenai/olmo-7b           # HELM alias (no -hf suffix); see model_deployments.yaml
+    family: olmo
+    modalities: [text]
+    supported_protocols: [completions]
+    memory_class_gib: 18
+    min_vram_gib_per_replica: 18
+    preferred_gpu_count: 1
+    context_window: 2048
+    defaults:
+      max_model_len: 2048
+      gpu_memory_utilization: 0.85
+      enable_prefix_caching: true
+      max_num_batched_tokens: 2048
+      max_num_seqs: 16
+
+  olmo-1.7-7b:
+    hf_model_id: allenai/OLMo-1.7-7B-hf               # verify (-hf suffix + 1.7 naming)
+    served_model_name: allenai/olmo-1.7-7b
+    logical_model_name: allenai/olmo-1.7-7b
+    tokenizer_name: allenai/OLMo-1.7-7B-hf    # HELM alias is case-sensitive; see model_deployments.yaml
+    family: olmo
+    modalities: [text]
+    supported_protocols: [completions]
+    memory_class_gib: 18
+    min_vram_gib_per_replica: 18
+    preferred_gpu_count: 1
+    context_window: 4096
+    defaults:
+      max_model_len: 4096
+      gpu_memory_utilization: 0.85
+      enable_prefix_caching: true
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+
+  olmo-2-1124-7b-instruct:
+    hf_model_id: allenai/OLMo-2-1124-7B-Instruct      # high confidence
+    served_model_name: allenai/olmo-2-1124-7b-instruct
+    logical_model_name: allenai/olmo-2-1124-7b-instruct
+    tokenizer_name: allenai/olmo-2-1124-7b-instruct
+    family: olmo2
+    modalities: [text]
+    supported_protocols: [chat, completions]
+    memory_class_gib: 18
+    min_vram_gib_per_replica: 18
+    preferred_gpu_count: 1
+    context_window: 4096
+    defaults:
+      max_model_len: 4096
+      gpu_memory_utilization: 0.85
+      enable_prefix_caching: true
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+
+  olmo-2-1124-13b-instruct:
+    hf_model_id: allenai/OLMo-2-1124-13B-Instruct     # high confidence
+    served_model_name: allenai/olmo-2-1124-13b-instruct
+    logical_model_name: allenai/olmo-2-1124-13b-instruct
+    tokenizer_name: allenai/olmo-2-1124-7b-instruct   # HELM: 13B reuses the 7B tokenizer; see model_deployments.yaml
+    family: olmo2
+    modalities: [text]
+    supported_protocols: [chat, completions]
+    memory_class_gib: 30
+    min_vram_gib_per_replica: 30
+    preferred_gpu_count: 1
+    context_window: 4096
+    defaults:
+      max_model_len: 4096
+      gpu_memory_utilization: 0.9
+      enable_prefix_caching: true
+      max_num_batched_tokens: 4096
+      max_num_seqs: 8
+
+  olmo-2-0325-32b-instruct:
+    hf_model_id: allenai/OLMo-2-0325-32B-Instruct     # high confidence
+    served_model_name: allenai/olmo-2-0325-32b-instruct
+    logical_model_name: allenai/olmo-2-0325-32b-instruct
+    tokenizer_name: allenai/olmo-2-0325-32b-instruct
+    family: olmo2
+    modalities: [text]
+    supported_protocols: [chat, completions]
+    memory_class_gib: 72      # ~32B at bf16 (~64GB) + headroom; needs tp=2 on <80GB cards
+    min_vram_gib_per_replica: 72
+    preferred_gpu_count: 2
+    context_window: 4096
+    defaults:
+      max_model_len: 4096
+      gpu_memory_utilization: 0.9
+      enable_prefix_caching: true
+      max_num_batched_tokens: 4096
+      max_num_seqs: 8
+
+# Simple services:/router: form — each profile brings its model up on vLLM and
+# fronts it with the LiteLLM gateway. No benchmark_transport block: the bundle's
+# default openai-compatible access (the LiteLLM router) is what this runbook
+# uses. Base models pin protocol_mode: completions; instruct models leave it as
+# the resolver default (chat). Precedent: builtin phi2-single / pythia-160m-single
+# (single GPU) and test-multi-gpu (tp=2).
+profiles:
+  allenai-olmoe-1b-7b-0125-instruct-single:
+    description: allenai/olmoe-1b-7b-0125-instruct on one GPU, behind LiteLLM.
+    vllm:
+      enable_responses_api_store: false
+      logging_level: INFO
+    services:
+    - service_name: chat
+      model: olmoe-1b-7b-0125-instruct
+      placement:
+        strategy: first_fit
+        gpu_count: 1
+    router:
+      aliases:
+        olmoe-1b-7b-0125-instruct: chat
+
+  allenai-olmo-7b-single:
+    description: allenai/olmo-7b (base/completions) on one GPU, behind LiteLLM.
+    vllm:
+      enable_responses_api_store: false
+      logging_level: INFO
+    services:
+    - service_name: chat
+      protocol_mode: completions
+      model: olmo-7b
+      placement:
+        strategy: first_fit
+        gpu_count: 1
+    router:
+      aliases:
+        olmo-7b: chat
+
+  allenai-olmo-1-7-7b-single:
+    description: allenai/olmo-1.7-7b (base/completions) on one GPU, behind LiteLLM.
+    vllm:
+      enable_responses_api_store: false
+      logging_level: INFO
+    services:
+    - service_name: chat
+      protocol_mode: completions
+      model: olmo-1.7-7b
+      placement:
+        strategy: first_fit
+        gpu_count: 1
+    router:
+      aliases:
+        olmo-1.7-7b: chat
+
+  allenai-olmo-2-1124-7b-instruct-single:
+    description: allenai/olmo-2-1124-7b-instruct on one GPU, behind LiteLLM.
+    vllm:
+      enable_responses_api_store: false
+      logging_level: INFO
+    services:
+    - service_name: chat
+      model: olmo-2-1124-7b-instruct
+      placement:
+        strategy: first_fit
+        gpu_count: 1
+    router:
+      aliases:
+        olmo-2-1124-7b-instruct: chat
+
+  allenai-olmo-2-1124-13b-instruct-single:
+    description: allenai/olmo-2-1124-13b-instruct on one GPU, behind LiteLLM.
+    vllm:
+      enable_responses_api_store: false
+      logging_level: INFO
+    services:
+    - service_name: chat
+      model: olmo-2-1124-13b-instruct
+      placement:
+        strategy: first_fit
+        gpu_count: 1
+    router:
+      aliases:
+        olmo-2-1124-13b-instruct: chat
+
+  allenai-olmo-2-0325-32b-instruct-single:
+    description: allenai/olmo-2-0325-32b-instruct on two GPUs (tp=2), behind LiteLLM.
+    vllm:
+      enable_responses_api_store: false
+      logging_level: INFO
+    services:
+    - service_name: chat
+      model: olmo-2-0325-32b-instruct
+      placement:
+        strategy: first_fit
+        gpu_count: 2
+      topology:
+        tensor_parallel_size: 2
+      runtime:
+        max_model_len: 4096
+        gpu_memory_utilization: 0.9
+        max_num_batched_tokens: 4096
+        max_num_seqs: 8
+        enable_prefix_caching: true
+    router:
+      aliases:
+        olmo-2-0325-32b-instruct: chat

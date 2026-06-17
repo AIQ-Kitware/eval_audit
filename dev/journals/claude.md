@@ -2210,6 +2210,101 @@ version would have been technically correct and operationally noise.
 The matrix's 'non-extension fixtures byte-identical' gate forced that
 decision early, before any code existed to defend.
 
+## 2026-06-16 08:56:51 -0400
+
+**User intent.** Reproductions in `reproduce/olmo_models` failed with
+`litellm.ContextWindowExceededError: ... maximum context length is 4096
+tokens. However, you requested 2048 output tokens and your prompt contains
+at least 2049 input tokens, for a total of at least 4097 tokens.`
+
+**Model/config.** Claude Opus 4.8 (1M context), claude-opus-4-8[1m], Claude
+Code CLI / VSCode extension harness.
+
+**Diagnosis.** The offending run_entries are the `num_output_tokens=2048`
+ones (gpqa / mmlu_pro / ifeval, all CoT) on the 4096-context chat models.
+HELM's `LocalWindowService` truncates the prompt to
+`max_sequence_and_generated_tokens_length - expected_completion`
+= `4096 - 2048 = 2048` tokens — but it counts the *raw* prompt, before the
+chat template is applied. The bundle routes through LiteLLM/vLLM
+(openai-compatible chat), where the OLMo-2 / OLMoE chat template wraps the
+prompt and adds tokens HELM never saw. I measured the wrapper overhead with
+the actual tokenizers: **12 tokens (OLMo-2), 13 (OLMoE)** for a single-turn
+user message. So `2048 (prompt) + ~13 (template) + 2048 (gen) = ~4109 > 4096`
+and vLLM hard-rejects. The "at least 2049" in the error is vLLM's lower-bound
+count (it stops once the budget is blown).
+
+**Fix.** Followed the existing sanctioned knob — the Vicuna chat path at
+`adapter.py:160-162` already reserves 8 tokens via
+`helm_max_sequence_and_generated_tokens_length` for exactly this "live vLLM
+needs a few reserved tokens beyond HELM's nominal budget" reason. Two changes:
+
+1. `_profile_specs` flat-form branch was *silently dropping*
+   `helm_max_sequence_and_generated_tokens_length` (and helm_model/tokenizer
+   aliases) — only the `profiles:` list form propagated them. All six OLMo
+   presets are flat, so the knob was unreachable. Now propagated.
+2. Set a 32-token reserve on each OLMo preset:
+   `4096 - 32 = 4064` for the five 4096-ctx models, `2048 - 32 = 2016` for
+   `allenai-olmo-7b`. 32 comfortably covers the measured ~13-token template
+   overhead plus truncate→decode→re-encode drift, while costing at most 32
+   tokens of prompt content on the long-prompt instances that actually get
+   truncated.
+
+**Why 32, not 8 (Vicuna).** OLMo-2's template overhead is ~12-13 vs Vicuna's
+smaller wrapper, and the decode/re-encode round trip in `truncate_from_right`
+can drift a few tokens; 32 is a clean, safe margin. Verified the value reaches
+the deployment via `_profile_specs` for all six presets.
+
+**Operational note for the user.** The run scripts re-run
+`export-benchmark-bundle` each invocation (step 2 of `run_one`), so simply
+re-running `10_run_smoke_grid.sh` / `15_run_full_grid.sh` regenerates
+`<bundle>/model_deployments.yaml` with the new budget — no manual bundle
+cleanup needed. The failed runs erred out (no DONE sentinel) so kwdagger
+won't skip them; if any partial result dir lingers, `OLMO_FORCE_RERUN=1`
+clears it.
+
+**Confidence / risks.** Confident on the mechanism (measured overhead +
+read `LocalWindowService._effective_prompt_token_budget`). Hardcoding the
+absolute budget per preset couples it to `models.yaml` max_model_len — the
+same coupling phi-2 already accepts — mitigated by a comment saying "keep
+<= models.yaml max_model_len". Considered a computed-headroom field instead
+but rejected it: a second knob for the same job hurts coherence vs. the
+established `helm_max_sequence_and_generated_tokens_length`.
+
+**Reusable insight.** When HELM drives a chat model through an
+openai-compatible server, HELM's prompt-token budget is blind to the chat
+template the server applies — always reserve template overhead in
+`helm_max_sequence_and_generated_tokens_length`, and remember the flat-preset
+path only carries the overrides you explicitly thread through `_profile_specs`.
+
+## 2026-06-16 10:05:00 -0400
+
+**Outcome of the natural_qa gcloud effort: access is genuinely gone; disable the
+runs.** Over the prior turns I diagnosed the natural_qa 403 (the public
+`gs://natural_questions` bucket revoked anonymous reads) and built a script-only
+fix — `07_check_gcloud_auth.sh` to authenticate + pre-stage the dev shards, and a
+`helm-run` PATH shim (`bin/helm-run`) to seed them into each per-run scenario
+cache, since HELM downloads anonymously and `out_dpath` is a per-run kwdagger
+hash dir. The user then tested with real gcloud credentials and confirmed the
+bucket denies **authenticated** callers too (it dropped `allAuthenticatedUsers`,
+not just `allUsers`). So no credential unblocks it — staging was moot.
+
+**Action.** Reverted the machinery commit (`git revert 8cb5eb7`: removes
+`07_check_gcloud_auth.sh`, `bin/helm-run`, and the `_lib.sh`/`15`/`README`
+additions) and disabled the two `natural_qa:*` entries in the `allenai-olmo-7b`
+full manifest in `adapter.py`, mirroring the user's immediately-prior
+`competition_math` disable (commit `01a6888`): a commented block tagged
+DISABLED with the recipe/environment-failure rationale, left in place for a
+future declared-substitution mirror. natural_qa now joins MATH and gpqa as a
+documented dataset-access blocker rather than a reproducibility result.
+
+**Reusable insight.** Validate the *access assumption* before building the
+plumbing that depends on it. The whole shim/stage design hinged on
+"authenticated reads work"; one `curl` with a real token would have falsified it
+up front. For an access-restricted dataset, the cheap first move is to confirm
+*some* credential can read *one* object — only then is staging worth wiring.
+Otherwise the correct, taxonomy-honest outcome is to disable the run as an
+environment failure, exactly as we did for MATH.
+
 ## 2026-06-16 12:14:22 -0400
 
 **Goal.** Add an opt-in path for Stage 3 (`eval-audit-run`) to execute each HELM
@@ -2392,3 +2487,75 @@ preset) and forward it generically rather than branching the executor. One new
 optional field + one passthrough loop covered the example; `run_one` didn't grow a
 case. The only irreducible code was the field plumbing from manifest → kwdagger
 matrix → `docker run`.
+
+## 2026-06-17 14:38:13 -0400
+
+**User intent.** Take the new `docs/planning/core-report-planner-robust-matching-plan.md`
+onto its own branch and implement it, committing each logical unit. Model:
+claude-opus-4-8 (1M context), Claude Code CLI.
+
+**What I built.** Replaced the planner's order-sensitive, string-variant
+logical-key matching with a single canonical-key equivalence. New
+`canonical_logical_key` in `eval_audit/helm/run_entries.py`: parse
+`benchmark:k=v,...` -> drop bookkeeping tokens (`groups`, `model_deployment`)
+-> `canonicalize_kv` (model `/`<->`_`, `mmlu_pro` subject->subset) -> serialize
+with kv **sorted by key**. Wired it into the planner's three matching sites:
+`_logical_key_variants` now emits the canonical form (so the prefilter and the
+`build_packet_intents` official filter intersect on it for free), and the
+decisive grouping key in `build_packet_intents` buckets by
+`canonical_logical_key(raw_key)`. Retired the dead `groups=`-stripping paths
+(the `GROUP_STRIP` variant branch, the prefilter fallback, both
+`_strip_groups_token` defs), generalized the diagnostic
+`canonicalization_stripped_groups` -> `keys_canonicalized`, and deprecated
+`EVAL_AUDIT_GROUP_STRIP` to a no-op (explicit `=0` opt-out now warns).
+
+**Why canonicalization beat the variant approach.** The old matcher generated
+separator permutations and (under a flag) a groups-stripped variant, but never
+canonicalized *token order*. The OLMo MMLU keys are the same token set in a
+different order, so the variant sets had an empty intersection -> 114
+`missing_official_component` packets even though the public counterparts exist.
+Sorting tokens is the missing operation; once you sort, the groups-strip and
+separator permutations all fold into one deterministic string, so keeping both
+matchers would have re-created the two-competing-normalizers divergence the
+plan set out to end. A symmetric equivalence is the correct tool for *grouping*;
+I deliberately left `run_dir_matches_requested`'s asymmetric subset test in
+place for `compare_batch` ("does this candidate satisfy this request"), which is
+a different question.
+
+**Decisions / deviations.**
+- *compare_batch stretch:* skipped the behavioral rewrite. Its subset matcher
+  is the correct asymmetric tool (a request lacking `eval_split=test`/`groups=`
+  should still match a candidate that has them); forcing symmetric equality
+  there would break it. The shared helper now lives in `run_entries.py` and is
+  importable by both, which satisfies the "don't let the two pipelines drift"
+  intent at the helper level. Tagged out-of-scope per the plan.
+- *Test placement:* the plan said add the OLMo characterization to
+  `tests/test_plan_core_report_packets.py`, but that module is `pytest.mark.slow`
+  (every test there triggers ~10-20s of EEE conversion via
+  `build_planning_artifact`). A characterization test that "must fail before the
+  fix" is worthless if it's skipped by default, so I targeted
+  `build_packet_intents` directly in a new fast module
+  `tests/test_core_report_planner_matching.py` (and unit-tested the helper in
+  `tests/test_run_entries.py`). Both run in the default suite.
+- *Diagnostic breadth:* `keys_canonicalized` now also fires on pure separator
+  normalization (e.g. `model=meta/llama-3-8b` -> `meta_llama-3-8b`), which is
+  noisier than the old groups-only signal but is exactly the broadening the plan
+  asked for — it now reports order/separator normalization, not just `groups=`.
+
+**Confidence / risk.** High on the unit + grouping characterization (12 + 4
+fast tests green; negative controls prove distinct subjects, eval_split
+test-vs-valid, and lite-vs-full-sweep stay distinct). The default suite shows
+two pre-existing failures (`test_infer_stack_integration`,
+`test_run_surface`) that reproduce with my planner change stashed — they trace
+to the dirty `submodules/infer_stack` and kwdagger argv ordering, not this
+work. **Not yet done:** the real-data validation from the plan (re-run
+`reproduce/olmo_models/30_compose.sh` on aiq-gpu, expect `n_skipped` 114 -> ~0,
+`n_built` 35 -> ~149, plus the before/after matched-pair diff and the three
+other official-enabled manifests). That needs GPU-host execution; left for a
+follow-up turn on aiq-gpu.
+
+**Reusable insight.** When two keys "should match but don't," check whether the
+matcher canonicalizes *order* before adding more string variants — N separator
+permutations still can't cross a token reorder, and each new variant rule is
+another normalizer to keep in sync. One sorted, deterministic canonical form
+collapses the whole permutation space and removes the drift surface entirely.

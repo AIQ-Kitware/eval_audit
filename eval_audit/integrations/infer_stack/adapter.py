@@ -452,6 +452,340 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             "hf_cache_dir": "~/.cache/eval-audit-hf",
         },
     },
+    "allenai-olmo-7b": {
+        "profile": "allenai-olmo-7b-single",
+        "bundle_name": "allenai-olmo-7b",
+        "access_kind": "vllm-direct",
+        "model_deployment_name": "vllm/allenai-olmo-7b",
+        # Reserve 32 tokens below max-model-len (2048) so the live vLLM path
+        # never trips its hard prompt+generation budget: HELM truncates the
+        # *raw* prompt to this budget, but the served client adds a few tokens
+        # (BOS / chat-template wrapper) HELM can't see. Without the reserve,
+        # num_output_tokens-heavy run_entries overflow by ~1-13 tokens and vLLM
+        # returns ContextWindowExceededError. Keep <= models.yaml max_model_len.
+        "helm_max_sequence_and_generated_tokens_length": 2016,
+        "smoke_manifest": {
+            "experiment_name": "audit-allenai-olmo-7b-smoke",
+            "description": "Smoke-test batch for allenai/olmo-7b; run_entries from candidate_runs.json.",
+            "run_entries": [
+                "commonsense:method=multiple_choice_joint,dataset=openbookqa,model=allenai/olmo-7b",
+            ],
+            "suite": "audit-allenai-olmo-7b-smoke",
+            "max_eval_instances": 5,
+        },
+        "full_manifest": {
+            "experiment_name": "audit-allenai-olmo-7b-full",
+            "description": "Full local-reproduction batch for allenai/olmo-7b; run_entries sourced from candidate_runs.json.",
+            "run_entries": [
+                "commonsense:method=multiple_choice_joint,dataset=openbookqa,model=allenai/olmo-7b",
+                "gsm:model=allenai/olmo-7b",
+                "legalbench:subset=abercrombie,model=allenai/olmo-7b",
+                "legalbench:subset=corporate_lobbying,model=allenai/olmo-7b",
+                "legalbench:subset=function_of_decision_section,model=allenai/olmo-7b",
+                "legalbench:subset=international_citizenship_questions,model=allenai/olmo-7b",
+                "legalbench:subset=proa,model=allenai/olmo-7b",
+                # ── DISABLED: ``math:`` × 7 subjects (algebra,
+                # counting_and_probability, geometry, intermediate_algebra,
+                # number_theory, prealgebra, precalculus) at level=1,
+                # CoT=True. HELM's MATHScenario loads the
+                # ``hendrycks/competition_math`` HuggingFace dataset, which
+                # has been **disabled on the Hub** (API reports
+                # ``disabled: true``; file resolves return HTTP 401). The
+                # script-based loader therefore can't fetch
+                # ``competition_math.py`` and dies with
+                # ``LocalEntryNotFoundError`` ("Couldn't find a dataset
+                # script ... Couldn't find on the Hub either"). This is a
+                # recipe/environment failure (dataset unavailable), not a
+                # reproducibility failure — filtered out until a surviving
+                # mirror is wired in as a declared substitution.
+                "med_qa:model=allenai/olmo-7b",
+                "mmlu:subject=abstract_algebra,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=abstract_algebra,method=multiple_choice_joint,model=allenai/olmo-7b",
+                "mmlu:subject=anatomy,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=astronomy,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=business_ethics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=clinical_knowledge,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=college_biology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=college_chemistry,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=college_chemistry,method=multiple_choice_joint,model=allenai/olmo-7b",
+                "mmlu:subject=college_computer_science,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=college_mathematics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=college_medicine,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=college_physics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=computer_security,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=computer_security,method=multiple_choice_joint,model=allenai/olmo-7b",
+                "mmlu:subject=conceptual_physics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=econometrics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=econometrics,method=multiple_choice_joint,model=allenai/olmo-7b",
+                "mmlu:subject=electrical_engineering,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=elementary_mathematics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=formal_logic,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=global_facts,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_biology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_chemistry,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_computer_science,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_european_history,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_geography,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_government_and_politics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_macroeconomics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_mathematics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_microeconomics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_physics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_psychology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_statistics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_us_history,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=high_school_world_history,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=human_aging,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=human_sexuality,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=international_law,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=jurisprudence,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=logical_fallacies,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=machine_learning,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=management,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=marketing,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=medical_genetics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=miscellaneous,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=moral_disputes,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=moral_scenarios,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=nutrition,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=philosophy,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=prehistory,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=professional_accounting,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=professional_law,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=professional_medicine,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=professional_psychology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=public_relations,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=security_studies,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=sociology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=us_foreign_policy,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=allenai/olmo-7b",
+                "mmlu:subject=virology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "mmlu:subject=world_religions,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+                "narrative_qa:model=allenai/olmo-7b",
+                # ── DISABLED: ``natural_qa:`` × 2 modes (closedbook,
+                # openbook_longans). HELM's NaturalQuestions scenario fetches
+                # the dev shards (``nq-dev-0X.jsonl.gz``) from the public
+                # ``gs://natural_questions`` GCS bucket, which has **revoked
+                # anonymous reads** (HTTP 403 ``AccessDenied``). HELM downloads
+                # them with an unauthenticated ``urllib`` request, and the
+                # bucket denies even *authenticated* callers (it dropped
+                # ``allAuthenticatedUsers`` too — confirmed by an authenticated
+                # GET), so there is no credential that unblocks the fetch. This
+                # is a recipe/environment failure (dataset access-restricted),
+                # not a reproducibility failure — filtered out until a
+                # surviving mirror is wired in as a declared substitution.
+                "wmt_14:language_pair=cs-en,model=allenai/olmo-7b",
+                "wmt_14:language_pair=de-en,model=allenai/olmo-7b",
+                "wmt_14:language_pair=fr-en,model=allenai/olmo-7b",
+                "wmt_14:language_pair=hi-en,model=allenai/olmo-7b",
+                "wmt_14:language_pair=ru-en,model=allenai/olmo-7b",
+            ],
+            "suite": "audit-allenai-olmo-7b-full",
+            "max_eval_instances": 1000,
+        },
+    },
+    "allenai-olmo-2-0325-32b-instruct": {
+        "profile": "allenai-olmo-2-0325-32b-instruct-single",
+        "bundle_name": "allenai-olmo-2-0325-32b-instruct",
+        "access_kind": "vllm-direct",
+        "model_deployment_name": "vllm/allenai-olmo-2-0325-32b-instruct",
+        # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
+        # The chat-template wrapper adds ~12 tokens HELM doesn't count, so the
+        # num_output_tokens=2048 run_entries (gpqa/mmlu_pro/ifeval) overflow
+        # 4096 without it.
+        "helm_max_sequence_and_generated_tokens_length": 4064,
+        "smoke_manifest": {
+            "experiment_name": "audit-allenai-olmo-2-0325-32b-instruct-smoke",
+            "description": "Smoke-test batch for allenai/olmo-2-0325-32b-instruct; run_entries from candidate_runs.json.",
+            "run_entries": [
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmo-2-0325-32b-instruct",
+            ],
+            "suite": "audit-allenai-olmo-2-0325-32b-instruct-smoke",
+            "max_eval_instances": 5,
+        },
+        "full_manifest": {
+            "experiment_name": "audit-allenai-olmo-2-0325-32b-instruct-full",
+            "description": "Full local-reproduction batch for allenai/olmo-2-0325-32b-instruct; run_entries sourced from candidate_runs.json. Includes 1 gated-dataset run(s) (require HuggingFace auth).",
+            "run_entries": [
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmo-2-0325-32b-instruct",
+                "gpqa:subset=gpqa_main,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-0325-32b-instruct",
+                "ifeval:num_output_tokens=2048,model=allenai/olmo-2-0325-32b-instruct",
+                "mmlu_pro:subject=all,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-0325-32b-instruct",
+            ],
+            "suite": "audit-allenai-olmo-2-0325-32b-instruct-full",
+            "max_eval_instances": 1000,
+        },
+    },
+    "allenai-olmo-1-7-7b": {
+        "profile": "allenai-olmo-1-7-7b-single",
+        "bundle_name": "allenai-olmo-1-7-7b",
+        "access_kind": "vllm-direct",
+        "model_deployment_name": "vllm/allenai-olmo-1-7-7b",
+        # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
+        "helm_max_sequence_and_generated_tokens_length": 4064,
+        "smoke_manifest": {
+            "experiment_name": "audit-allenai-olmo-1-7-7b-smoke",
+            "description": "Smoke-test batch for allenai/olmo-1.7-7b; run_entries from candidate_runs.json.",
+            "run_entries": [
+                "mmlu:subject=abstract_algebra,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+            ],
+            "suite": "audit-allenai-olmo-1-7-7b-smoke",
+            "max_eval_instances": 5,
+        },
+        "full_manifest": {
+            "experiment_name": "audit-allenai-olmo-1-7-7b-full",
+            "description": "Full local-reproduction batch for allenai/olmo-1.7-7b; run_entries sourced from candidate_runs.json.",
+            "run_entries": [
+                "mmlu:subject=abstract_algebra,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=anatomy,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=astronomy,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=business_ethics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=clinical_knowledge,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=college_biology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=college_chemistry,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=college_computer_science,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=college_mathematics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=college_medicine,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=college_physics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=computer_security,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=conceptual_physics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=econometrics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=electrical_engineering,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=elementary_mathematics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=formal_logic,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=global_facts,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_biology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_chemistry,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_computer_science,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_european_history,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_geography,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_government_and_politics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_macroeconomics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_mathematics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_microeconomics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_physics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_psychology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_statistics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_us_history,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=high_school_world_history,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=human_aging,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=human_sexuality,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=international_law,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=jurisprudence,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=logical_fallacies,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=machine_learning,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=management,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=marketing,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=medical_genetics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=miscellaneous,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=moral_disputes,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=moral_scenarios,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=nutrition,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=philosophy,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=prehistory,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=professional_accounting,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=professional_law,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=professional_medicine,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=professional_psychology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=public_relations,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=security_studies,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=sociology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=us_foreign_policy,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=virology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+                "mmlu:subject=world_religions,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
+            ],
+            "suite": "audit-allenai-olmo-1-7-7b-full",
+            "max_eval_instances": 1000,
+        },
+    },
+    "allenai-olmo-2-1124-13b-instruct": {
+        "profile": "allenai-olmo-2-1124-13b-instruct-single",
+        "bundle_name": "allenai-olmo-2-1124-13b-instruct",
+        "access_kind": "vllm-direct",
+        "model_deployment_name": "vllm/allenai-olmo-2-1124-13b-instruct",
+        # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
+        "helm_max_sequence_and_generated_tokens_length": 4064,
+        "smoke_manifest": {
+            "experiment_name": "audit-allenai-olmo-2-1124-13b-instruct-smoke",
+            "description": "Smoke-test batch for allenai/olmo-2-1124-13b-instruct; run_entries from candidate_runs.json.",
+            "run_entries": [
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmo-2-1124-13b-instruct",
+            ],
+            "suite": "audit-allenai-olmo-2-1124-13b-instruct-smoke",
+            "max_eval_instances": 5,
+        },
+        "full_manifest": {
+            "experiment_name": "audit-allenai-olmo-2-1124-13b-instruct-full",
+            "description": "Full local-reproduction batch for allenai/olmo-2-1124-13b-instruct; run_entries sourced from candidate_runs.json. Includes 1 gated-dataset run(s) (require HuggingFace auth).",
+            "run_entries": [
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmo-2-1124-13b-instruct",
+                "gpqa:subset=gpqa_main,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-1124-13b-instruct",
+                "ifeval:num_output_tokens=2048,model=allenai/olmo-2-1124-13b-instruct",
+                "mmlu_pro:subject=all,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-1124-13b-instruct",
+            ],
+            "suite": "audit-allenai-olmo-2-1124-13b-instruct-full",
+            "max_eval_instances": 1000,
+        },
+    },
+    "allenai-olmo-2-1124-7b-instruct": {
+        "profile": "allenai-olmo-2-1124-7b-instruct-single",
+        "bundle_name": "allenai-olmo-2-1124-7b-instruct",
+        "access_kind": "vllm-direct",
+        "model_deployment_name": "vllm/allenai-olmo-2-1124-7b-instruct",
+        # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
+        "helm_max_sequence_and_generated_tokens_length": 4064,
+        "smoke_manifest": {
+            "experiment_name": "audit-allenai-olmo-2-1124-7b-instruct-smoke",
+            "description": "Smoke-test batch for allenai/olmo-2-1124-7b-instruct; run_entries from candidate_runs.json.",
+            "run_entries": [
+                "gpqa:subset=gpqa_main,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-1124-7b-instruct",
+            ],
+            "suite": "audit-allenai-olmo-2-1124-7b-instruct-smoke",
+            "max_eval_instances": 5,
+        },
+        "full_manifest": {
+            "experiment_name": "audit-allenai-olmo-2-1124-7b-instruct-full",
+            "description": "Full local-reproduction batch for allenai/olmo-2-1124-7b-instruct; run_entries sourced from candidate_runs.json. Includes 1 gated-dataset run(s) (require HuggingFace auth).",
+            "run_entries": [
+                "gpqa:subset=gpqa_main,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-1124-7b-instruct",
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmo-2-1124-7b-instruct",
+                "ifeval:num_output_tokens=2048,model=allenai/olmo-2-1124-7b-instruct",
+                "mmlu_pro:subject=all,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-1124-7b-instruct",
+            ],
+            "suite": "audit-allenai-olmo-2-1124-7b-instruct-full",
+            "max_eval_instances": 1000,
+        },
+    },
+    "allenai-olmoe-1b-7b-0125-instruct": {
+        "profile": "allenai-olmoe-1b-7b-0125-instruct-single",
+        "bundle_name": "allenai-olmoe-1b-7b-0125-instruct",
+        "access_kind": "vllm-direct",
+        "model_deployment_name": "vllm/allenai-olmoe-1b-7b-0125-instruct",
+        # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
+        # OLMoE's chat template adds ~13 tokens HELM doesn't count.
+        "helm_max_sequence_and_generated_tokens_length": 4064,
+        "smoke_manifest": {
+            "experiment_name": "audit-allenai-olmoe-1b-7b-0125-instruct-smoke",
+            "description": "Smoke-test batch for allenai/olmoe-1b-7b-0125-instruct; run_entries from candidate_runs.json.",
+            "run_entries": [
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmoe-1b-7b-0125-instruct",
+            ],
+            "suite": "audit-allenai-olmoe-1b-7b-0125-instruct-smoke",
+            "max_eval_instances": 5,
+        },
+        "full_manifest": {
+            "experiment_name": "audit-allenai-olmoe-1b-7b-0125-instruct-full",
+            "description": "Full local-reproduction batch for allenai/olmoe-1b-7b-0125-instruct; run_entries sourced from candidate_runs.json. Includes 1 gated-dataset run(s) (require HuggingFace auth).",
+            "run_entries": [
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmoe-1b-7b-0125-instruct",
+                "gpqa:subset=gpqa_main,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmoe-1b-7b-0125-instruct",
+                "ifeval:num_output_tokens=2048,model=allenai/olmoe-1b-7b-0125-instruct",
+                "mmlu_pro:subject=all,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmoe-1b-7b-0125-instruct",
+            ],
+            "suite": "audit-allenai-olmoe-1b-7b-0125-instruct-full",
+            "max_eval_instances": 1000,
+        },
+    },
 }
 
 
@@ -625,10 +959,21 @@ def _profile_specs(profile: str, preset_cfg: dict[str, Any]) -> list[dict[str, A
     preset_profiles = preset_cfg.get("profiles")
     if preset_profiles:
         return [dict(item) for item in preset_profiles]
+    # Single-profile (flat) presets carry the same HELM overrides the
+    # `profiles:` list form does — propagate them so a flat preset can pin a
+    # HELM model/tokenizer alias and, importantly, reserve headroom below
+    # max-model-len via `helm_max_sequence_and_generated_tokens_length` (the
+    # live vLLM chat path needs a few tokens beyond HELM's nominal budget for
+    # the chat-template wrapper; see the OLMo presets).
     return [{
         "profile": preset_cfg.get("profile", profile),
         "access_kind": preset_cfg.get("access_kind"),
         "model_deployment_name": preset_cfg.get("model_deployment_name"),
+        "helm_model_name": preset_cfg.get("helm_model_name"),
+        "helm_tokenizer_name": preset_cfg.get("helm_tokenizer_name"),
+        "helm_max_sequence_and_generated_tokens_length": preset_cfg.get(
+            "helm_max_sequence_and_generated_tokens_length"
+        ),
     }]
 
 
