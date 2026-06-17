@@ -2281,3 +2281,75 @@ the CPU permission smoke (`container_gpus: "none"`, tiny gpt2 run; confirm DONE
 + host-owned outputs + `container_provenance.json`), then a real GPU run via
 `configs/container_smoke_manifest.yaml`. Follow-up: surface
 `container_provenance.json` in the Stage 4 index for digest-drift detection.
+
+## 2026-06-17 14:38:13 -0400
+
+**User intent.** Take the new `docs/planning/core-report-planner-robust-matching-plan.md`
+onto its own branch and implement it, committing each logical unit. Model:
+claude-opus-4-8 (1M context), Claude Code CLI.
+
+**What I built.** Replaced the planner's order-sensitive, string-variant
+logical-key matching with a single canonical-key equivalence. New
+`canonical_logical_key` in `eval_audit/helm/run_entries.py`: parse
+`benchmark:k=v,...` -> drop bookkeeping tokens (`groups`, `model_deployment`)
+-> `canonicalize_kv` (model `/`<->`_`, `mmlu_pro` subject->subset) -> serialize
+with kv **sorted by key**. Wired it into the planner's three matching sites:
+`_logical_key_variants` now emits the canonical form (so the prefilter and the
+`build_packet_intents` official filter intersect on it for free), and the
+decisive grouping key in `build_packet_intents` buckets by
+`canonical_logical_key(raw_key)`. Retired the dead `groups=`-stripping paths
+(the `GROUP_STRIP` variant branch, the prefilter fallback, both
+`_strip_groups_token` defs), generalized the diagnostic
+`canonicalization_stripped_groups` -> `keys_canonicalized`, and deprecated
+`EVAL_AUDIT_GROUP_STRIP` to a no-op (explicit `=0` opt-out now warns).
+
+**Why canonicalization beat the variant approach.** The old matcher generated
+separator permutations and (under a flag) a groups-stripped variant, but never
+canonicalized *token order*. The OLMo MMLU keys are the same token set in a
+different order, so the variant sets had an empty intersection -> 114
+`missing_official_component` packets even though the public counterparts exist.
+Sorting tokens is the missing operation; once you sort, the groups-strip and
+separator permutations all fold into one deterministic string, so keeping both
+matchers would have re-created the two-competing-normalizers divergence the
+plan set out to end. A symmetric equivalence is the correct tool for *grouping*;
+I deliberately left `run_dir_matches_requested`'s asymmetric subset test in
+place for `compare_batch` ("does this candidate satisfy this request"), which is
+a different question.
+
+**Decisions / deviations.**
+- *compare_batch stretch:* skipped the behavioral rewrite. Its subset matcher
+  is the correct asymmetric tool (a request lacking `eval_split=test`/`groups=`
+  should still match a candidate that has them); forcing symmetric equality
+  there would break it. The shared helper now lives in `run_entries.py` and is
+  importable by both, which satisfies the "don't let the two pipelines drift"
+  intent at the helper level. Tagged out-of-scope per the plan.
+- *Test placement:* the plan said add the OLMo characterization to
+  `tests/test_plan_core_report_packets.py`, but that module is `pytest.mark.slow`
+  (every test there triggers ~10-20s of EEE conversion via
+  `build_planning_artifact`). A characterization test that "must fail before the
+  fix" is worthless if it's skipped by default, so I targeted
+  `build_packet_intents` directly in a new fast module
+  `tests/test_core_report_planner_matching.py` (and unit-tested the helper in
+  `tests/test_run_entries.py`). Both run in the default suite.
+- *Diagnostic breadth:* `keys_canonicalized` now also fires on pure separator
+  normalization (e.g. `model=meta/llama-3-8b` -> `meta_llama-3-8b`), which is
+  noisier than the old groups-only signal but is exactly the broadening the plan
+  asked for — it now reports order/separator normalization, not just `groups=`.
+
+**Confidence / risk.** High on the unit + grouping characterization (12 + 4
+fast tests green; negative controls prove distinct subjects, eval_split
+test-vs-valid, and lite-vs-full-sweep stay distinct). The default suite shows
+two pre-existing failures (`test_infer_stack_integration`,
+`test_run_surface`) that reproduce with my planner change stashed — they trace
+to the dirty `submodules/infer_stack` and kwdagger argv ordering, not this
+work. **Not yet done:** the real-data validation from the plan (re-run
+`reproduce/olmo_models/30_compose.sh` on aiq-gpu, expect `n_skipped` 114 -> ~0,
+`n_built` 35 -> ~149, plus the before/after matched-pair diff and the three
+other official-enabled manifests). That needs GPU-host execution; left for a
+follow-up turn on aiq-gpu.
+
+**Reusable insight.** When two keys "should match but don't," check whether the
+matcher canonicalizes *order* before adding more string variants — N separator
+permutations still can't cross a token reorder, and each new variant rule is
+another normalizer to keep in sync. One sorted, deterministic canonical form
+collapses the whole permutation space and removes the drift surface entirely.

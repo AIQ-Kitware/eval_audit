@@ -176,6 +176,25 @@ A "packet" is one local-run / public-row pairing being compared. The packet
 planner ([`eval_audit/planning/core_report_planner.py`](../eval_audit/planning/core_report_planner.py))
 turns the virtual-experiment compose output into individual analysis jobs.
 
+**How local and official runs are paired.** The planner buckets components by
+the **order-insensitive canonical logical key**
+([`canonical_logical_key`](../eval_audit/helm/run_entries.py)): parse the
+`benchmark:k=v,...` run name, drop bookkeeping-only tokens
+(`groups=`, `model_deployment=`), canonicalize values (model `/`<->`_`,
+`mmlu_pro` `subject`->`subset`), then re-serialize with the kv pairs **sorted
+by key**. Two runs that are the same token set in a different order — or differ
+only by `groups=` — collapse to one key, while every semantic token
+(`eval_split`, `method`, `subject`, `model`, ...) is preserved, so lite vs
+full-sweep recipes and different subjects stay distinct. This is a *symmetric*
+equivalence (the right tool for grouping), distinct from
+`run_dir_matches_requested`'s asymmetric subset test (the right tool for "does
+this candidate satisfy this request", used by `compare_batch`). It replaced an
+order-sensitive, string-variant matcher that left runs like OLMo MMLU unpaired
+purely because the official key listed the same tokens in a different order.
+When canonicalization changes a key, the affected packet carries a
+`keys_canonicalized:original_keys=...` warning. (`EVAL_AUDIT_GROUP_STRIP` is a
+deprecated no-op — canonicalization is always on.)
+
 **CLI:** `eval-audit-analyze-experiment` for a single experiment;
 `eval-audit-analyze-many` to batch across experiments.
 
