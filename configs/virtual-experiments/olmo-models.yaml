@@ -31,11 +31,11 @@ sources:
   # Optional comparison side. Uncomment to compare the local full runs against
   # public HELM rows (requires the public index + Stage-1 filter inventory to
   # exist).
-  # - kind: official_public_index
-  #   fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
-  #   pre_filter:
-  #     kind: helm_stage1
-  #     inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
+  - kind: official_public_index
+    fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
+    pre_filter:
+      kind: helm_stage1
+      inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
 
 output:
   root: /data/crfm-helm-audit-store/virtual-experiments/olmo-models
