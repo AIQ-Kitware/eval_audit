@@ -2559,3 +2559,41 @@ matcher canonicalizes *order* before adding more string variants — N separator
 permutations still can't cross a token reorder, and each new variant rule is
 another normalizer to keep in sync. One sorted, deterministic canonical form
 collapses the whole permutation space and removes the drift surface entirely.
+
+## 2026-06-18 09:26:09 -0400
+
+**User intent.** On the e2e-refactor branch, make the containerized phi-2 e2e
+example run by default (it was opt-in via `E2E_INCLUDE_CONTAINER=1`). Model:
+claude-opus-4-8[1m], Claude Code CLI.
+
+**What I did.** Flipped the gate from opt-in to **opt-out**: the
+`E2E_INCLUDE_CONTAINER` default goes `0 -> 1`, so `_lib.sh` appends the
+`e2e-phi_2-vllm-philosophy-container` row to `E2E_TARGETS` unless
+`E2E_INCLUDE_CONTAINER=0`, and `06_check_container_image.sh` runs its
+docker+image preflight by default (no-op only when explicitly disabled). Updated
+the README section header, the prose, the worked example, the steps comment, and
+the env-var table to match.
+
+**Why opt-out, not unconditional.** The scenario has hard external prerequisites
+the rest of the grid lacks — the pinned `eval-audit-helm-runner` image
+(`./docker/build.sh`, needs buildx) and a working docker. Removing the flag
+entirely would strand any host without docker; keeping it as an opt-out
+preserves the escape hatch while satisfying "run by default." The preflight
+still fails loudly (with a build/skip hint) when enabled-but-no-image, so the
+default is honest rather than silently degrading.
+
+**Deliberate non-change: report grouping.** I left the default grouping manifest
+`e2e-phi2.yaml` untouched (it still scopes the three host-venv experiments). The
+container scenario keeps its own `e2e-phi2-container.yaml`. Folding the container
+experiment into `e2e-phi2.yaml` would couple the *default report* to docker
+availability — someone who opts out (no docker) would have the report reference a
+missing experiment. So "runs by default" means it executes in the 10/15 grid by
+default; viewing it in a grouped report stays a deliberate `VEXP_MANIFEST` choice.
+Flagged this to the user as a separate decision.
+
+**Reusable insight.** "Make X run by default" for a step with external
+prerequisites is best done as a default-on flag with an opt-out, not by deleting
+the flag — the escape hatch is what keeps the default safe on under-provisioned
+hosts. And watch the blast radius: flipping the *run* default is cheap, but
+pulling the artifact into a shared downstream report silently couples that
+report to the same prerequisites.

@@ -57,13 +57,14 @@ The vLLM scenarios use the infer-stack profile `phi2-single`, shipped here:
 `_lib.sh` sets `INFER_STACK_CONFIG_DIR` to that dir by default.
 `05_check_profiles.sh` validates the profile is present before the grid runs.
 
-## Containerized execution example (opt-in)
+## Containerized execution example (on by default)
 
 One extra scenario exercises the **containerized HELM execution** path (Stage 3
 runs each HELM run-entry inside the pinned `eval-audit-helm-runner` image instead
 of the host venv; see [`docs/container-execution.md`](../../docs/container-execution.md)).
-It is **opt-in** via `E2E_INCLUDE_CONTAINER=1` because it needs the image built
-first (`./docker/build.sh`) and a working docker:
+It runs **by default**; set `E2E_INCLUDE_CONTAINER=0` to skip it. Because it needs
+the image built first (`./docker/build.sh`) and a working docker, opt out on hosts
+that lack them (otherwise `06_check_container_image.sh` fails the preflight):
 
 | scenario (`name`) | transport | full `experiment_name` | container networking |
 |---|---|---|---|
@@ -80,7 +81,7 @@ identical to the host-venv run, and avoids coupling to infer-stack's compose
 internals.)
 
 It reuses the existing `vllm` `run_one` branch **unchanged** — the container
-opt-in is entirely declarative. The container fields (incl. `container_network:
+behavior is entirely declarative. The container fields (incl. `container_network:
 host`) are declared by the `e2e-phi_2-vllm-philosophy-container` **preset** in
 `adapter.py`, so `export-benchmark-bundle` writes them into the generated bundle
 manifest. The image tag is `eval-audit-helm-runner:dev`; for cross-machine
@@ -90,10 +91,13 @@ pinning, push it and override with `eval-audit-run --container-image <digest>`
 (point `VEXP_MANIFEST` at it for `30`/`40`).
 
 ```bash
-# build the runner image once, then run the container example + its report:
+# The container scenario runs as part of the normal grid (10/15) by default;
+# just build the runner image first. To view ITS dedicated report (the
+# container run on its own, rather than folded into the combined grid report),
+# point VEXP_MANIFEST at e2e-phi2-container.yaml for 30/40:
 ./docker/build.sh
-E2E_INCLUDE_CONTAINER=1 ./06_check_container_image.sh
-E2E_INCLUDE_CONTAINER=1 ./10_run_smoke_grid.sh      # (or 15 for the full batch)
+./06_check_container_image.sh
+./10_run_smoke_grid.sh      # (or 15 for the full batch)
 VEXP_MANIFEST="$PWD/../../configs/virtual-experiments/e2e-phi2-container.yaml" \
   ./30_compose.sh && \
 VEXP_MANIFEST="$PWD/../../configs/virtual-experiments/e2e-phi2-container.yaml" \
@@ -105,7 +109,7 @@ VEXP_MANIFEST="$PWD/../../configs/virtual-experiments/e2e-phi2-container.yaml" \
 ```bash
 ./00_check_env.sh             # eval-audit-check-env
 ./05_check_profiles.sh        # verify the phi2-single profile is defined (vLLM scenarios)
-./06_check_container_image.sh # if E2E_INCLUDE_CONTAINER=1: verify the runner image exists (else no-op)
+./06_check_container_image.sh # verify the runner image exists (no-op only if E2E_INCLUDE_CONTAINER=0)
 ./10_run_smoke_grid.sh        # preflight: per scenario -> (vllm: switch -> wait-ready -> export bundle) -> run smoke
 ./15_run_full_grid.sh         # per scenario: same, but run the FULL manifest (the batch)
 ./20_index_local.sh           # eval-audit-index -> audit_results_index.csv (verifies the -full run dirs)
@@ -138,9 +142,10 @@ is kept for grouping the smoke preflight instead — point `VEXP_MANIFEST` at it
 - `EVAL_AUDIT_SKIP_LOCAL_REPEAT=1`, `EVAL_AUDIT_GROUP_STRIP=1` — set by `_lib.sh`,
   carried verbatim from the original e2e scripts (one local attempt per scenario,
   group prefix stripped)
-- `E2E_INCLUDE_CONTAINER=1` — add the opt-in containerized example
-  (vllm-container) to the grid. Needs the `eval-audit-helm-runner` image built
-  (`./docker/build.sh`) and docker available.
+- `E2E_INCLUDE_CONTAINER=0` — skip the containerized example (vllm-container),
+  which is **on by default**. The default needs the `eval-audit-helm-runner`
+  image built (`./docker/build.sh`) and docker available; set this to `0` on
+  hosts without them.
 - `E2E_CONTAINER_IMAGE` (default `eval-audit-helm-runner:dev`) — image tag the
   `06_check_container_image.sh` preflight verifies; set to a pushed digest for
   cross-machine pinning.

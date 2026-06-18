@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# Preflight for the OPT-IN containerized example (E2E_INCLUDE_CONTAINER=1): the
-# vllm-container target runs HELM inside the pinned eval-audit-helm-runner image,
-# which must be built first (./docker/build.sh). This verifies docker is present
-# and the image exists locally, and points at the build script otherwise. It is a
-# no-op when the container example is not enabled.
+# Preflight for the containerized example (ON BY DEFAULT; E2E_INCLUDE_CONTAINER=0
+# to skip): the vllm-container target runs HELM inside the pinned
+# eval-audit-helm-runner image, which must be built first (./docker/build.sh).
+# This verifies docker is present and the image exists locally, and points at the
+# build script otherwise. It is a no-op only when the container example is
+# disabled (E2E_INCLUDE_CONTAINER=0).
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
 
-if [[ "${E2E_INCLUDE_CONTAINER:-0}" != "1" ]]; then
-  echo "E2E_INCLUDE_CONTAINER != 1: container example not enabled; skipping."
-  echo "  (set E2E_INCLUDE_CONTAINER=1 to add the vllm-container target)"
+if [[ "${E2E_INCLUDE_CONTAINER:-1}" == "0" ]]; then
+  echo "E2E_INCLUDE_CONTAINER=0: container example disabled; skipping."
   exit 0
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
-  echo "FAIL: docker not found on PATH, but the container example is enabled." >&2
-  echo "  Install docker, or run without E2E_INCLUDE_CONTAINER." >&2
+  echo "FAIL: docker not found on PATH, but the container example is enabled by default." >&2
+  echo "  Install docker, or set E2E_INCLUDE_CONTAINER=0 to skip the container example." >&2
   exit 1
 fi
 
