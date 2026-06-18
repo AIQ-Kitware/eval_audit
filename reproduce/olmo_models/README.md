@@ -178,6 +178,12 @@ host venv, leaving the presets' container fields inert.
   `comparability_unknown:*` warnings — expected for a local-only batch, not a bug.
   To compare against public HELM, uncomment the `official_public_index` source in
   the manifest (needs the public index + Stage-1 filter inventory present).
+  - **BBQ prompt drift (recipe hurdle).** When comparing against public HELM, the
+    BBQ runs on the four instruct models flag `comparability_drift:same_instructions`
+    because public HELM injects an `output_format_instructions` run-expander that is
+    invisible in the run name. The presets now match it; see
+    [`NOTES-bbq-instructions-drift.md`](NOTES-bbq-instructions-drift.md) for the full
+    write-up and the generalizable "the run name is not the recipe" lesson.
 - **LiteLLM / openai-compatible transport.** `10_run_smoke_grid.sh` /
   `15_run_full_grid.sh` resolve the LiteLLM endpoint + master key via
   `infer-stack env --key`, and override the presets' declared `vllm-direct`
