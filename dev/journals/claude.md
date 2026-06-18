@@ -2377,6 +2377,117 @@ the CPU permission smoke (`container_gpus: "none"`, tiny gpt2 run; confirm DONE
 `configs/container_smoke_manifest.yaml`. Follow-up: surface
 `container_provenance.json` in the Stage 4 index for digest-drift detection.
 
+## 2026-06-16 15:58:39 -0400
+
+**Model/harness:** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude
+Code VSCode extension.
+
+**Intent.** (1) Rewrite the `dev/e2e-tests/` scripts into the
+`reproduce/olmo_models/` shape; (2) land that refactor on a new branch cut from
+`main` (rather than the `olmo-reproduction` feature branch it was authored on),
+so it sits on top of `main`'s new containerized-HELM-execution path ("the docker
+pipeline", commit `5d02e12`) — the substrate for an upcoming "vLLM + container"
+e2e variant.
+
+**The e2e refactor (this branch's commit).** Replaced the three monolithic
+`e2e-phi_2-*.sh` scripts with the olmo numbered layout under `dev/e2e-tests/`:
+`_lib.sh` (an `E2E_TARGETS` array + `e2e_*` helpers + carried
+`EVAL_AUDIT_SKIP_LOCAL_REPEAT`/`GROUP_STRIP` exports), `00_check_env` →
+`05_check_profiles` → `10_run_smoke_grid` → `15_run_full_grid` →
+`20_index_local` → `30_compose` → `40_build_summary`, and a README. Added the
+grouping configs `configs/virtual-experiments/e2e-phi2{,-smoke}.yaml` (local-only;
+the three `-full`/`-smoke` experiments re-stamped under `e2e-phi2`). Split the
+single `manifests/hf-manifest.yaml` into `-smoke` (max_eval=5) / `-full`
+(max_eval=1000) variants. The one real divergence from olmo's uniform grid: each
+`E2E_TARGETS` row carries a `transport` field (`vllm`|`hf`) and `run_one`
+branches — `vllm` does switch→wait-ready→export-bundle→run (no `--access-kind`
+override, since the phi-2 presets already declare `openai-compatible`), `hf`
+skips infer-stack and runs the checked-in manifest. No `06_check_hf_auth.sh`
+(phi-2/MMLU are public). Validation: `bash -n` on all scripts, `_lib.sh` helper
+parsing, YAML parse, and a cross-check that each grouping config's
+`include_experiments` exactly equals the grid-produced experiment names.
+
+**Branch surgery.** Authored on `olmo-reproduction`; the user wanted it on a
+branch off `main`. `main` (`5d02e12`) and `olmo-reproduction` diverge at
+`aaa2c92` — `main` added only the docker pipeline; `olmo-reproduction` added the
+OLMo work, including `reproduce/olmo_models/` (absent on `main`). So before
+switching I discarded my two main-incompatible working-tree edits: (a) the
+`reproduce/olmo_models/*` cross-ref tweaks — they pointed olmo at the *new* e2e
+script names, but on `olmo-reproduction` the *old* scripts still exist, so the
+original comments are correct there and my edits would have dangled; (b) the
+journal edit (different base). Verified the old `dev/e2e-tests` tree and the
+submodule gitlinks are identical between the two branches, so `git switch -c
+e2e-refactor main` carried the e2e/configs changes (and the pre-existing
+submodule pointer mods) cleanly. Re-authored this journal entry on `main`'s
+journal base.
+
+**Known wart (flagged, not fixed).** The e2e README still links
+`reproduce/olmo_models/…`, which doesn't exist on `main` — those links dangle on
+this branch until `olmo-reproduction` (or olmo_models) merges to `main`. Left
+as-is pending the user's call.
+
+**Reusable insight.** When relocating uncommitted work from feature branch A to a
+branch cut from B, the blockers are exactly the paths that differ between A and B:
+files present only on A (here `reproduce/olmo_models/*`) and divergent shared
+files (the journal). Discard/neutralize *those* before `git switch`; everything
+identical across A and B (verified via `git diff A B -- <path>` and matching
+submodule gitlinks) rides along untouched. Don't stash blindly — a pathspec'd
+discard of the incompatible edits is cleaner than a full stash/pop that would
+conflict on the A-only files.
+
+## 2026-06-17 09:27:57 -0400
+
+**Model/harness:** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude
+Code VSCode extension.
+
+**Intent.** Add a containerized phi-2 e2e example on top of the e2e refactor: the
+intended containerized workflow — phi-2 **served on the host** (vLLM behind
+LiteLLM), HELM running inside the pinned eval-audit-helm-runner image — for the
+new containerized-HELM-execution path (main's `5d02e12`).
+
+**The networking crux.** The docker pipeline's `docker run` emits no `--network`
+flag → default bridge → the container's `localhost` is its own namespace. Because
+the model is served on the host, the in-container HELM client must reach the
+LiteLLM endpoint published on the host's `localhost`, which a bridge container
+can't see. Chose `--network host` (over `host.docker.internal` or a shared compose
+network) because the run hosts are Linux, it keeps ONE base URL identical to the
+host-venv run, and it avoids coupling to infer-stack's compose internals.
+
+**Design — container-ness is declarative, not a new code path.** The existing
+`run_one` `vllm` branch is reused **unchanged**; the container opt-in lives
+entirely in the manifest/preset. So the only new transport-layer work was the
+`container_network` field:
+- `manifests/models.py`: `container_network: str | None = None`.
+- `kwdagger_bridge.build_schedule_params`: forward it into the docker matrix.
+- `helm_docker_pipeline.py`: add to `_CONTAINER_KEYS` + `perf_params`, render
+  `--network <v>` (omitted when None).
+- `adapter._manifest_doc`: forward any `_CONTAINER_SPEC_KEYS` a preset's
+  smoke/full spec declares into the generated bundle manifest.
+- `adapter.py`: new preset `e2e-phi_2-vllm-philosophy-container` (same recipe as
+  the host vLLM preset, distinct `-container` experiment names, declaring
+  `container_image`/`container_network: host`/`hf_cache_dir`).
+
+The target is **opt-in** via `E2E_INCLUDE_CONTAINER=1` (needs `./docker/build.sh`
++ docker), appended to `E2E_TARGETS` in `_lib.sh`; `06_check_container_image.sh`
+preflights the image; `configs/virtual-experiments/e2e-phi2-container.yaml` groups
+it (host counterpart commented in for a host-vs-container repro demo).
+
+**Verification.** Container tests 8/8 (added `test_network_host_variant` + a
+default-omits-`--network` assertion + bridge param-flow assert). py_compile on the
+five Python files; confirmed the new preset registers and `_manifest_doc` forwards
+container fields for the container preset but does NOT leak them for the host-venv
+preset; `bash -n` on all scripts; `E2E_INCLUDE_CONTAINER=1` expands the grid 3→4
+with correct experiment names; YAML + ManifestSpec round-trips. Two pre-existing
+failures (`test_run_surface` argv-ordering, `test_infer_stack_integration` kubeai
+export) fail identically with my changes stashed — not mine; flagged, not fixed.
+
+**Reusable insight.** When a feature's variation is purely *configuration* (which
+container, what network), push it into the declarative artifact (manifest /
+preset) and forward it generically rather than branching the executor. One new
+optional field + one passthrough loop covered the example; `run_one` didn't grow a
+case. The only irreducible code was the field plumbing from manifest → kwdagger
+matrix → `docker run`.
+
 ## 2026-06-17 14:38:13 -0400
 
 **User intent.** Take the new `docs/planning/core-report-planner-robust-matching-plan.md`
@@ -2448,3 +2559,221 @@ matcher canonicalizes *order* before adding more string variants — N separator
 permutations still can't cross a token reorder, and each new variant rule is
 another normalizer to keep in sync. One sorted, deterministic canonical form
 collapses the whole permutation space and removes the drift surface entirely.
+
+## 2026-06-18 09:26:09 -0400
+
+**User intent.** On the e2e-refactor branch, make the containerized phi-2 e2e
+example run by default (it was opt-in via `E2E_INCLUDE_CONTAINER=1`). Model:
+claude-opus-4-8[1m], Claude Code CLI.
+
+**What I did.** Flipped the gate from opt-in to **opt-out**: the
+`E2E_INCLUDE_CONTAINER` default goes `0 -> 1`, so `_lib.sh` appends the
+`e2e-phi_2-vllm-philosophy-container` row to `E2E_TARGETS` unless
+`E2E_INCLUDE_CONTAINER=0`, and `06_check_container_image.sh` runs its
+docker+image preflight by default (no-op only when explicitly disabled). Updated
+the README section header, the prose, the worked example, the steps comment, and
+the env-var table to match.
+
+**Why opt-out, not unconditional.** The scenario has hard external prerequisites
+the rest of the grid lacks — the pinned `eval-audit-helm-runner` image
+(`./docker/build.sh`, needs buildx) and a working docker. Removing the flag
+entirely would strand any host without docker; keeping it as an opt-out
+preserves the escape hatch while satisfying "run by default." The preflight
+still fails loudly (with a build/skip hint) when enabled-but-no-image, so the
+default is honest rather than silently degrading.
+
+**Deliberate non-change: report grouping.** I left the default grouping manifest
+`e2e-phi2.yaml` untouched (it still scopes the three host-venv experiments). The
+container scenario keeps its own `e2e-phi2-container.yaml`. Folding the container
+experiment into `e2e-phi2.yaml` would couple the *default report* to docker
+availability — someone who opts out (no docker) would have the report reference a
+missing experiment. So "runs by default" means it executes in the 10/15 grid by
+default; viewing it in a grouped report stays a deliberate `VEXP_MANIFEST` choice.
+Flagged this to the user as a separate decision.
+
+**Reusable insight.** "Make X run by default" for a step with external
+prerequisites is best done as a default-on flag with an opt-out, not by deleting
+the flag — the escape hatch is what keeps the default safe on under-provisioned
+hosts. And watch the blast radius: flipping the *run* default is cheap, but
+pulling the artifact into a shared downstream report silently couples that
+report to the same prerequisites.
+
+## 2026-06-18 10:03:46 -0400
+
+**Symptom.** Running 15_run_full_grid.sh with the container example, the
+in-container command died at the entrypoint's `"$@"` with
+`eval-audit-entrypoint.sh: line 80: python: command not found`. Model:
+claude-opus-4-8[1m], Claude Code CLI.
+
+**Root cause (docker/helm-runner.dockerfile).** The builder does
+`uv venv /opt/venv --python=3.11 --seed` on an Ubuntu 22.04 CUDA base that has no
+system Python 3.11, so uv downloads a *managed* standalone CPython under
+`~/.local/share/uv/python/...` and the venv's `bin/python` symlinks point there.
+The final stage copies only `/opt/venv` (+ `/opt/src`), NOT the managed
+interpreter — so `/opt/venv/bin/python` is a dangling symlink in the runtime
+image, and a dangling symlink on PATH reports as "command not found". The
+builder's own `python -c "import helm, magnet"` sanity check passed because the
+interpreter still exists *in the builder*; nothing guarded the shipped stage.
+
+**Fix.** (1) Pin `UV_PYTHON_INSTALL_DIR=/opt/uv/python` and add
+`--python-preference only-managed` to the `uv venv` call, so the interpreter
+lands at a fixed, copyable path and the venv symlinks point at it. (2)
+`COPY --from=builder /opt/uv/python /opt/uv/python` into the final stage (same
+path → symlinks resolve) and set the same env there. (3) Add a final-stage
+`RUN python --version && python -c "import helm, magnet"` so THIS class of bug
+fails the build loudly in the stage that actually ships, not just the builder.
+No host-side change: `helm_docker_pipeline` still renders `python -m magnet…`,
+which the fixed image now provides; the digest is runtime-resolved from the
+`:dev` tag, so a rebuild re-pins it automatically.
+
+**Unverified here.** This dev host has docker installed but the daemon is
+unreachable without sudo (and no buildx), so I could not build/run to confirm.
+The added final-stage import check is the verification gate: `./docker/build.sh`
+will now fail at that RUN if the interpreter is still broken, instead of
+producing another image that only dies at run time.
+
+**Reusable insight.** uv-managed (standalone) Python + multi-stage Docker = copy
+the interpreter, not just the venv. Pin `UV_PYTHON_INSTALL_DIR` to a path you
+control and `COPY` it alongside `/opt/venv`. And put the smoke test in the stage
+that ships: a sanity check in the builder is blind to exactly the
+copy-something-into-final mistakes that only surface at run time.
+
+## 2026-06-18 10:31:40 -0400
+
+**User intent.** In the phi-2 e2e grid, spin vLLM down at the start and run the
+HF scenario first so the GPU has room. Model: claude-opus-4-8[1m], Claude Code.
+
+**What I did.** (1) Added `e2e_spin_down_serving` to `_lib.sh` (`infer-stack
+down` → re-render + `docker compose down`; best-effort, non-fatal) and call it at
+the top of both `10_run_smoke_grid.sh` and `15_run_full_grid.sh`, before the
+loop. (2) Reordered `E2E_TARGETS` so the hf target is first, then the two vLLM
+scenarios; the container target still appends last. Updated the README ordering
+note/table.
+
+**Why.** The hf scenario makes HELM load `microsoft/phi-2` onto the GPU directly
+(no infer-stack), while the vLLM scenarios stand up a GPU-resident server. If a
+vLLM stack from a prior run is still up — or if hf ran after the vLLM ones — the
+direct load competes with vLLM for VRAM and can OOM. Tearing serving down first
+and running hf on a free GPU removes the contention; the vLLM scenarios then
+bring serving up and the container scenario (last) reuses it via `--network
+host`. Chose `down` (removes containers, frees VRAM) over `stop`, and made it
+non-fatal so a clean host with nothing to tear down doesn't abort the grid.
+
+**Reusable insight.** Order GPU jobs by how they acquire memory: a
+load-it-yourself batch job and a long-lived resident server can't share one GPU,
+so run the transient loader while the resident server is down, then stand the
+server up for the jobs that talk to it. Make the pre-run teardown idempotent and
+non-fatal — "ensure X is down" should succeed when X was never up.
+
+## 2026-06-18 11:17:15 -0400
+
+**Symptom.** e2e report showed "planner could not find an official component
+after policy reduction" — read as the OLMo canonical-key bug recurring. Model:
+claude-opus-4-8[1m], Claude Code.
+
+**Diagnosis (not the canonical bug).** Verified against the real `/data` indexes
+(shared with the run host): the public index HAS the microsoft/phi-2
+mmlu:philosophy run, and `canonical_logical_key` collapses the local baseline
+(`…model=microsoft/phi-2,eval_split=test`) and the official
+(`…model=microsoft_phi-2,…,groups=mmlu_philosophy`) to the SAME key — matching
+works. The real cause: `configs/virtual-experiments/e2e-phi2.yaml` had the
+`official_public_index` source commented out (local-only by design, always had
+been), so the planner loaded zero officials → every packet is
+missing_official_component. Fix: uncomment the source (+ updated the
+description). All prerequisites exist on disk (public index, filter inventory,
+the public run dir).
+
+**Red herring worth recording.** The phi-2/philosophy row is
+`selection_status: excluded` in the Stage-1 filter inventory
+(`too-large` [oddly reports 13.0B] + `no-local-helm-deployment`). That looked
+like it would block the comparison via the source's `pre_filter: helm_stage1`.
+It does NOT: `compose.py` gates official comparison rows ONLY by `_scope_match`
+(model/benchmark scope); the `pre_filter` merely re-stamps a SEPARATE scoped
+inventory for Sankey A (Universe→Scope). Stage-1 "eligibility" answers "should we
+RUN this locally" (budget ≤10B), which is irrelevant to comparing an
+already-run local result against its public counterpart.
+
+**Reusable insight.** "missing_official_component" has two very different
+causes: officials-exist-but-don't-match (the matcher bug — check canonical keys)
+vs no-officials-loaded (a source toggle / scope / artifact-resolution issue —
+check the manifest first). Confirm which before assuming a regression. And a
+filter inventory's `excluded` status is about local-run selection, not
+comparison eligibility — don't conflate the two.
+
+## 2026-06-18 12:05:17 -0400
+
+**User intent.** The single grouped e2e-phi2 report collapsed all three phi-2
+scenarios (vllm / hf / incomparable) into one packet — same canonical key
+(deployment + temperature aren't in the logical key). Rather than re-architect
+the planner to split local-bucketing from official-attachment, split the e2e
+into one virtual experiment PER scenario. Model: claude-opus-4-8[1m], Claude
+Code.
+
+**Why per-scenario over a planner change.** I measured the planner change's
+blast radius against the real master index: 28 canonical keys span >1
+experiment, and the discriminator choice is decisive — `source_experiment_name`
+would split 11 TRUE-repeat groups (e.g. `pythia-mmlu-stress`'s r1/r2,
+`heatmap`'s vicuna r1/r2), breaking the local_repeat noise measurement that is
+those reports' whole point; a recipe discriminator protects repeats but still
+changes `open-helm-models-reproducibility` (qwen across together/vllm/kubeai)
+and has empty-`model_deployment` edge cases. Per-scenario composition sidesteps
+all of it: the collapse only happens because the composer pools scenarios into
+one index before the planner runs; compose one scenario at a time → one local
+recipe → clean pairing with the public run. Zero change to shared planner logic,
+zero blast radius on other reports.
+
+**What I did.** Added static per-scenario manifests
+`configs/virtual-experiments/e2e-phi2-{vllm,incomparable,hf}.yaml` (each =
+one `include_experiments` + the `official_public_index` source); the container
+already had `e2e-phi2-container.yaml`. Deleted the grouped `e2e-phi2.yaml` and
+`e2e-phi2-smoke.yaml`. `_lib.sh` drops the `VEXP_MANIFEST` default and gains
+`e2e_vexp_manifest` (target → per-scenario manifest, a case map kept in sync with
+E2E_TARGETS). `30_compose.sh` / `40_build_summary.sh` now loop over E2E_TARGETS
+(honoring E2E_INCLUDE_CONTAINER), composing/summarizing each scenario into its
+own report dir; `VEXP_MANIFEST=<path>` still does a single one. README + the
+20/30/40 headers updated; the now-stale "local-only" / "grouped report" notes
+corrected.
+
+**Tradeoff (flagged to user).** N separate reports, not one aggregate table
+across the three. Fine for "show them separately"; a unified cross-scenario view
+would still need the planner split.
+
+**Reusable insight.** When a grouping key over-merges, the cheapest fix is often
+upstream of the grouper: feed it a narrower input set (one scenario per compose)
+instead of teaching the grouper a finer key. Re-keying shared logic has a blast
+radius across every consumer; narrowing the input is local and reversible. Always
+measure the blast radius against real data before touching a shared key — the
+"obvious" discriminator (`source_experiment_name`) was the one that silently
+breaks the repeat-comparison reports.
+
+## 2026-06-18 12:17:43 -0400
+
+**Symptom.** `40_build_summary.sh` core-dumped during figure rendering:
+`RuntimeError: main thread is not in main loop`, `Tcl_AsyncDelete: async handler
+deleted by the wrong thread`, then `Illegal instruction (core dumped)`. Model:
+claude-opus-4-8[1m], Claude Code.
+
+**Cause.** No matplotlib backend was forced anywhere, so it auto-selected the
+interactive `TkAgg`. The aggregate-report path realizes/tears down figures off
+the main thread (and on a headless host), and Tk objects destroyed on the wrong
+thread crash the interpreter. Of the five pyplot importers, only
+`reports/eee_heatmap_render.py` already called `matplotlib.use("Agg")`; the
+other four (`utils/labels`, `reports/core_metrics`, `reports/core_metric_plots`,
+`reports/summary/plots`) imported pyplot with no backend pin.
+
+**Fix.** Added `eval_audit/infra/mpl_backend.py` (mirrors the existing
+`infra/plotly_env.py`): on import it forces `Agg` (`matplotlib.use("Agg",
+force=True`) unless an explicit `MPLBACKEND` override is set. Imported it before
+the pyplot import in the four unguarded modules. `Agg` renders straight to PNG
+with no event loop, so the Tk teardown path never runs. Verified: importing the
+report modules pins `get_backend()=='agg'` even with `MPLBACKEND` empty, an
+explicit override is respected, and the reports/summary test slice stays green
+(52 passed). Library-level, so it fixes every report path (olmo + e2e), not just
+the e2e runbook.
+
+**Reusable insight.** Any batch/headless/threaded matplotlib must pin a
+non-interactive backend (`Agg`) *before* pyplot is imported — the default
+interactive backend's Tk teardown across threads is a hard interpreter crash,
+not a Python exception you can catch. Force it once in a shared module and
+import that module ahead of pyplot, rather than leaving each call site to
+remember.

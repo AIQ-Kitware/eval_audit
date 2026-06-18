@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 import kwutil
+import eval_audit.infra.mpl_backend  # noqa: F401  (force headless Agg before pyplot)
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd

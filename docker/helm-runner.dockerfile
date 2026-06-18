@@ -62,9 +62,16 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 # copy it and any uid can use it.
 ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
+    UV_PYTHON_INSTALL_DIR=/opt/uv/python \
     VIRTUAL_ENV=/opt/venv \
     PATH=/opt/venv/bin:$PATH
-RUN uv venv /opt/venv --python=${PYTHON_VERSION} --seed
+# The base image has no Python 3.11, so uv downloads a standalone (managed)
+# CPython. Pin where it lands (UV_PYTHON_INSTALL_DIR=/opt/uv/python) and force a
+# managed interpreter, so the venv's bin/python symlinks point at a path we can
+# copy verbatim into the final stage. Without this the interpreter lives under
+# ~/.local/share/uv and is left behind, leaving /opt/venv/bin/python a dangling
+# symlink in the runtime image ("python: command not found").
+RUN uv venv /opt/venv --python=${PYTHON_VERSION} --python-preference only-managed --seed
 
 # Pristine source trees (staged by build.sh). Editable installs need them on
 # disk at a stable path that is identical in the final stage.
@@ -105,11 +112,22 @@ EOF
 # Bring over the prebuilt environment and source (editable install points here).
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /opt/src /opt/src
+# The venv interpreter is a uv-managed standalone CPython; /opt/venv/bin/python
+# symlinks into UV_PYTHON_INSTALL_DIR. Copy that interpreter to the SAME path or
+# the symlink dangles here ("python: command not found" at run time).
+COPY --from=builder /opt/uv/python /opt/uv/python
 
 ENV VIRTUAL_ENV=/opt/venv \
     PATH=/opt/venv/bin:$PATH \
+    UV_PYTHON_INSTALL_DIR=/opt/uv/python \
     UV_COMPILE_BYTECODE=1 \
     PYTHONUNBUFFERED=1
+
+# Fail the build in THIS stage (the one that ships) if the interpreter is broken
+# — e.g. a dangling venv python symlink. The builder's own import check passes
+# even when the final image is broken, because the managed interpreter still
+# exists there; this check is what actually guards the shipped image.
+RUN python --version && python -c "import helm, magnet; print('final-stage import ok')"
 
 # HuggingFace cache lives at a mount point, NOT baked into the image. The
 # eval_audit node bind-mounts a host directory here at run time. Setting HF_HOME

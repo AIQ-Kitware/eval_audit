@@ -137,6 +137,8 @@ def build_schedule_params(
         matrix["helm.container_gpus"] = [manifest["container_gpus"]]
     if manifest.get("container_ipc_host"):
         matrix["helm.container_ipc_host"] = [True]
+    if manifest.get("container_network"):
+        matrix["helm.container_network"] = [manifest["container_network"]]
     container_mounts = manifest.get("container_mounts") or []
     if container_mounts:
         matrix["helm.container_mounts"] = [json.dumps(container_mounts)]

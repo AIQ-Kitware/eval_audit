@@ -54,6 +54,8 @@ def test_docker_node_command_renders_expected(tmp_path: Path):
     assert "--container_image" not in cmd
     assert "--hf_cache_dir" not in cmd
     assert "--container_shm_size" not in cmd
+    # Default network is Docker's bridge => no --network flag emitted.
+    assert "--network" not in cmd
 
 
 def test_out_dpath_mounted_at_same_absolute_path(tmp_path: Path):
@@ -86,6 +88,23 @@ def test_cpu_variant_omits_gpus(tmp_path: Path):
         tmp_path,
     )
     assert "--gpus" not in cmd
+
+
+def test_network_host_variant(tmp_path: Path):
+    # container_network: host => --network host, so the in-container HELM client
+    # can reach a model server (e.g. vLLM/LiteLLM) published on the host's
+    # localhost. (A default bridge container's localhost is its own namespace.)
+    cmd = _render(
+        {
+            "helm.run_entry": "mmlu:subject=philosophy,model=microsoft/phi-2",
+            "helm.container_image": PINNED,
+            "helm.container_network": "host",
+        },
+        tmp_path,
+    )
+    assert "--network host" in cmd
+    # A container knob, not forwarded to the inner materialize CLI.
+    assert "--container_network" not in cmd
 
 
 def test_ipc_host_variant(tmp_path: Path):
@@ -122,6 +141,7 @@ def _write_container_manifest(tmp_path: Path) -> Path:
                 "suite: audit-smoke",
                 "max_eval_instances: 10",
                 "container_image: eval-audit-helm-runner:dev",
+                "container_network: host",
                 f"hf_cache_dir: {tmp_path / 'hf'}",
             ]
         )
@@ -152,6 +172,7 @@ def test_prepare_schedule_request_container(tmp_path: Path, monkeypatch: pytest.
     # Pipeline switched to the docker factory and the pinned image is in params.
     assert "helm_single_run_docker_pipeline()" in request.params_text
     assert "helm.container_image" in request.params_text
+    assert "helm.container_network" in request.params_text
     assert PINNED in request.params_text
     # Resolved image + provenance carried on the request.
     assert request.resolved_image is not None

@@ -158,6 +158,7 @@ def _write_plotly_bar(
         plotly_error = "skipped plotly bar rendering by configuration"
     if os.environ.get("HELM_AUDIT_SKIP_STATIC_IMAGES", "") not in {"1", "true", "yes"}:
         try:
+            import eval_audit.infra.mpl_backend  # noqa: F401  (force headless Agg before pyplot)
             import matplotlib.pyplot as plt
 
             if rows:
