@@ -2597,3 +2597,43 @@ the flag — the escape hatch is what keeps the default safe on under-provisione
 hosts. And watch the blast radius: flipping the *run* default is cheap, but
 pulling the artifact into a shared downstream report silently couples that
 report to the same prerequisites.
+
+## 2026-06-18 10:03:46 -0400
+
+**Symptom.** Running 15_run_full_grid.sh with the container example, the
+in-container command died at the entrypoint's `"$@"` with
+`eval-audit-entrypoint.sh: line 80: python: command not found`. Model:
+claude-opus-4-8[1m], Claude Code CLI.
+
+**Root cause (docker/helm-runner.dockerfile).** The builder does
+`uv venv /opt/venv --python=3.11 --seed` on an Ubuntu 22.04 CUDA base that has no
+system Python 3.11, so uv downloads a *managed* standalone CPython under
+`~/.local/share/uv/python/...` and the venv's `bin/python` symlinks point there.
+The final stage copies only `/opt/venv` (+ `/opt/src`), NOT the managed
+interpreter — so `/opt/venv/bin/python` is a dangling symlink in the runtime
+image, and a dangling symlink on PATH reports as "command not found". The
+builder's own `python -c "import helm, magnet"` sanity check passed because the
+interpreter still exists *in the builder*; nothing guarded the shipped stage.
+
+**Fix.** (1) Pin `UV_PYTHON_INSTALL_DIR=/opt/uv/python` and add
+`--python-preference only-managed` to the `uv venv` call, so the interpreter
+lands at a fixed, copyable path and the venv symlinks point at it. (2)
+`COPY --from=builder /opt/uv/python /opt/uv/python` into the final stage (same
+path → symlinks resolve) and set the same env there. (3) Add a final-stage
+`RUN python --version && python -c "import helm, magnet"` so THIS class of bug
+fails the build loudly in the stage that actually ships, not just the builder.
+No host-side change: `helm_docker_pipeline` still renders `python -m magnet…`,
+which the fixed image now provides; the digest is runtime-resolved from the
+`:dev` tag, so a rebuild re-pins it automatically.
+
+**Unverified here.** This dev host has docker installed but the daemon is
+unreachable without sudo (and no buildx), so I could not build/run to confirm.
+The added final-stage import check is the verification gate: `./docker/build.sh`
+will now fail at that RUN if the interpreter is still broken, instead of
+producing another image that only dies at run time.
+
+**Reusable insight.** uv-managed (standalone) Python + multi-stage Docker = copy
+the interpreter, not just the venv. Pin `UV_PYTHON_INSTALL_DIR` to a path you
+control and `COPY` it alongside `/opt/venv`. And put the smoke test in the stage
+that ships: a sanity check in the builder is blind to exactly the
+copy-something-into-final mistakes that only surface at run time.
