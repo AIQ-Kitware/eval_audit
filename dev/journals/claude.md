@@ -2745,3 +2745,35 @@ radius across every consumer; narrowing the input is local and reversible. Alway
 measure the blast radius against real data before touching a shared key — the
 "obvious" discriminator (`source_experiment_name`) was the one that silently
 breaks the repeat-comparison reports.
+
+## 2026-06-18 12:17:43 -0400
+
+**Symptom.** `40_build_summary.sh` core-dumped during figure rendering:
+`RuntimeError: main thread is not in main loop`, `Tcl_AsyncDelete: async handler
+deleted by the wrong thread`, then `Illegal instruction (core dumped)`. Model:
+claude-opus-4-8[1m], Claude Code.
+
+**Cause.** No matplotlib backend was forced anywhere, so it auto-selected the
+interactive `TkAgg`. The aggregate-report path realizes/tears down figures off
+the main thread (and on a headless host), and Tk objects destroyed on the wrong
+thread crash the interpreter. Of the five pyplot importers, only
+`reports/eee_heatmap_render.py` already called `matplotlib.use("Agg")`; the
+other four (`utils/labels`, `reports/core_metrics`, `reports/core_metric_plots`,
+`reports/summary/plots`) imported pyplot with no backend pin.
+
+**Fix.** Added `eval_audit/infra/mpl_backend.py` (mirrors the existing
+`infra/plotly_env.py`): on import it forces `Agg` (`matplotlib.use("Agg",
+force=True`) unless an explicit `MPLBACKEND` override is set. Imported it before
+the pyplot import in the four unguarded modules. `Agg` renders straight to PNG
+with no event loop, so the Tk teardown path never runs. Verified: importing the
+report modules pins `get_backend()=='agg'` even with `MPLBACKEND` empty, an
+explicit override is respected, and the reports/summary test slice stays green
+(52 passed). Library-level, so it fixes every report path (olmo + e2e), not just
+the e2e runbook.
+
+**Reusable insight.** Any batch/headless/threaded matplotlib must pin a
+non-interactive backend (`Agg`) *before* pyplot is imported — the default
+interactive backend's Tk teardown across threads is a hard interpreter crash,
+not a Python exception you can catch. Force it once in a shared module and
+import that module ahead of pyplot, rather than leaving each call site to
+remember.

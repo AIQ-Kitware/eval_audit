@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import warnings
 from pathlib import Path
 from typing import Any
+import eval_audit.infra.mpl_backend  # noqa: F401  (force headless Agg before pyplot)
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
