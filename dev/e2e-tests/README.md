@@ -16,13 +16,17 @@ and the run is **local-only** (no public-HELM comparison side).
 
 Each keeps its own `experiment_name`/`suite` and runs as an isolated job; the
 virtual experiment re-stamps their index rows under one name (`e2e-phi2`) for
-reporting. Ordered comparable baseline → incomparable control → HF-direct:
+reporting. **Ordered HF-direct first, then the vLLM scenarios:** the HF target
+loads `microsoft/phi-2` onto the GPU itself, so it runs while the GPU is free —
+the grids tear down any vLLM stack at the start (`infer-stack down`) and
+run HF before bringing vLLM up, so the direct load can't OOM against a
+GPU-resident server.
 
 | scenario (`name`) | transport | full `experiment_name` | what it exercises |
 |---|---|---|---|
+| `e2e-phi_2-huggingface-philosophy` | hf | `e2e-phi_2-huggingface-philosophy-full` | HELM loads `microsoft/phi-2` directly from HuggingFace (no infer-stack); runs first, on a free GPU |
 | `e2e-phi_2-vllm-philosophy` | vllm | `e2e-phi_2-vllm-philosophy-full` | comparable baseline: phi-2 on vLLM via LiteLLM |
 | `e2e-phi_2-vllm-philosophy-incomparable` | vllm | `e2e-phi_2-vllm-philosophy-incomparable-full` | negative control: same, but `temperature=1` (a deliberate recipe deviation the planner should flag) |
-| `e2e-phi_2-huggingface-philosophy` | hf | `e2e-phi_2-huggingface-philosophy-full` | HELM loads `microsoft/phi-2` directly from HuggingFace (no infer-stack) |
 
 The two vLLM presets and their smoke/full `run_entries` live in
 [`eval_audit/integrations/infer_stack/adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py);

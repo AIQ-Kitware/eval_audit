@@ -2637,3 +2637,30 @@ the interpreter, not just the venv. Pin `UV_PYTHON_INSTALL_DIR` to a path you
 control and `COPY` it alongside `/opt/venv`. And put the smoke test in the stage
 that ships: a sanity check in the builder is blind to exactly the
 copy-something-into-final mistakes that only surface at run time.
+
+## 2026-06-18 10:31:40 -0400
+
+**User intent.** In the phi-2 e2e grid, spin vLLM down at the start and run the
+HF scenario first so the GPU has room. Model: claude-opus-4-8[1m], Claude Code.
+
+**What I did.** (1) Added `e2e_spin_down_serving` to `_lib.sh` (`infer-stack
+down` → re-render + `docker compose down`; best-effort, non-fatal) and call it at
+the top of both `10_run_smoke_grid.sh` and `15_run_full_grid.sh`, before the
+loop. (2) Reordered `E2E_TARGETS` so the hf target is first, then the two vLLM
+scenarios; the container target still appends last. Updated the README ordering
+note/table.
+
+**Why.** The hf scenario makes HELM load `microsoft/phi-2` onto the GPU directly
+(no infer-stack), while the vLLM scenarios stand up a GPU-resident server. If a
+vLLM stack from a prior run is still up — or if hf ran after the vLLM ones — the
+direct load competes with vLLM for VRAM and can OOM. Tearing serving down first
+and running hf on a free GPU removes the contention; the vLLM scenarios then
+bring serving up and the container scenario (last) reuses it via `--network
+host`. Chose `down` (removes containers, frees VRAM) over `stop`, and made it
+non-fatal so a clean host with nothing to tear down doesn't abort the grid.
+
+**Reusable insight.** Order GPU jobs by how they acquire memory: a
+load-it-yourself batch job and a long-lived resident server can't share one GPU,
+so run the transient loader while the resident server is down, then stand the
+server up for the jobs that talk to it. Make the pre-run teardown idempotent and
+non-fatal — "ensure X is down" should succeed when X was never up.

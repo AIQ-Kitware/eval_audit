@@ -33,6 +33,14 @@ KEEP_GOING="${E2E_KEEP_GOING:-0}"
 FORCE_RERUN="${E2E_FORCE_RERUN:-1}"
 failed=()
 
+# Start from a clean GPU: tear down any vLLM stack left up by a prior run so the
+# hf scenario (first in the grid) has the full GPU to load phi-2 onto. Best-effort
+# — `infer-stack down` (re-render + `docker compose down`) is a no-op when nothing
+# is up, and a clean host shouldn't abort the grid just for having nothing to tear
+# down.
+echo "Spinning down any vLLM stack to free the GPU (infer-stack down)…"
+infer-stack down || echo "WARN: 'infer-stack down' returned nonzero (nothing to tear down?); continuing." >&2
+
 # Resolve the LiteLLM gateway endpoint + master key from infer-stack (used by the
 # vLLM scenarios; harmless to resolve up front).
 LITELLM_PORT="$(infer-stack env --key INFER_STACK_LITELLM_PORT)"

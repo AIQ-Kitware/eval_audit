@@ -48,14 +48,19 @@ export EVAL_AUDIT_GROUP_STRIP="${EVAL_AUDIT_GROUP_STRIP:-1}"
 #   * serving   — vllm: the infer-stack profile to switch into.
 #                 hf:   unused ("-"); the manifest path is derived from the
 #                       experiment name (manifests/<experiment>.yaml).
-# Ordered comparable baseline -> incomparable control -> HF-direct deployment:
-# the temperature=1 "incomparable" scenario is a negative control (a deliberate
-# recipe deviation the planner should flag); the HF target exercises the
-# direct-from-HuggingFace deployment path instead of the LiteLLM gateway.
+# Ordered HF-direct FIRST, then the vLLM scenarios. The hf target makes HELM load
+# microsoft/phi-2 onto the GPU itself (no infer-stack), so it must run while the
+# GPU is free — before any vLLM stack is up holding the memory (otherwise the HF
+# load can OOM). The grid scripts run `infer-stack down` at the start to
+# guarantee that clean state, and running hf first keeps the GPU clear for it.
+# After hf, the vLLM comparable baseline and its temperature=1 "incomparable"
+# negative control (a deliberate recipe deviation the planner should flag) run
+# against the served LiteLLM endpoint. The container scenario (appended below) is
+# vLLM-served too and runs last, reusing the already-up stack.
 E2E_TARGETS=(
+  "e2e-phi_2-huggingface-philosophy:hf:-"
   "e2e-phi_2-vllm-philosophy:vllm:phi2-single"
   "e2e-phi_2-vllm-philosophy-incomparable:vllm:phi2-single"
-  "e2e-phi_2-huggingface-philosophy:hf:-"
 )
 
 # Containerized-execution example (ON BY DEFAULT; set E2E_INCLUDE_CONTAINER=0 to
