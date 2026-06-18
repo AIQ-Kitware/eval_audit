@@ -1,22 +1,28 @@
-# phi-2 e2e — smoke + full grids + grouped report
+# phi-2 e2e — smoke + full grids + per-scenario reports
 
 End-to-end exercises of the audit pipeline on Microsoft **phi-2**, restructured
 into the same shape as [`reproduce/olmo_models/`](../../reproduce/olmo_models/)
 (which was itself derived from these scripts). Runs the three phi-2 scenarios in
-two passes — a cheap **smoke** preflight and the **full** batch — and folds the
-**full** results into a **single grouped report** via a virtual experiment. The
+two passes — a cheap **smoke** preflight and the **full** batch — then composes
+and reports the **full** results as **one virtual experiment per scenario**. The
 smoke grid is a fast end-to-end exercise of the run path; the full grid is the
 batch the downstream index → compose → summary steps operate on.
 
 These are pipeline tests, not a reproducibility claim: phi-2 + MMLU-philosophy is
-small and fast, the comparable/incomparable pair is a positive/negative control,
-and the run is **local-only** (no public-HELM comparison side).
+small and fast, and the comparable/incomparable pair is a positive/negative
+control. Each scenario is compared against the public microsoft/phi-2
+mmlu:philosophy run (via the `official_public_index` source in its manifest).
 
 ## The three scenarios
 
-Each keeps its own `experiment_name`/`suite` and runs as an isolated job; the
-virtual experiment re-stamps their index rows under one name (`e2e-phi2`) for
-reporting. **Ordered HF-direct first, then the vLLM scenarios:** the HF target
+Each keeps its own `experiment_name`/`suite` and runs as an isolated job, and is
+composed + reported as its **own** virtual experiment (one static manifest per
+scenario in [`configs/virtual-experiments/`](../../configs/virtual-experiments/):
+`e2e-phi2-vllm`, `e2e-phi2-incomparable`, `e2e-phi2-hf`, `e2e-phi2-container`).
+Composing one scenario at a time keeps a single local recipe per report, so each
+pairs cleanly with the public run instead of all three pooling into one packet
+(same model + scenario → same canonical key). **Ordered HF-direct first, then the
+vLLM scenarios:** the HF target
 loads `microsoft/phi-2` onto the GPU itself, so it runs while the GPU is free —
 the grids tear down any vLLM stack at the start (`infer-stack down`) and
 run HF before bringing vLLM up, so the direct load can't OOM against a
@@ -33,7 +39,7 @@ The two vLLM presets and their smoke/full `run_entries` live in
 the HF scenario is driven by the checked-in manifests under
 [`manifests/`](manifests/). Each scenario has a `-smoke`
 (`max_eval_instances=5`) and a `-full` (`max_eval_instances=1000`) experiment;
-the grouped report uses `-full`.
+the per-scenario reports use `-full`.
 
 ## Transports
 
@@ -95,10 +101,10 @@ pinning, push it and override with `eval-audit-run --container-image <digest>`
 (point `VEXP_MANIFEST` at it for `30`/`40`).
 
 ```bash
-# The container scenario runs as part of the normal grid (10/15) by default;
-# just build the runner image first. To view ITS dedicated report (the
-# container run on its own, rather than folded into the combined grid report),
-# point VEXP_MANIFEST at e2e-phi2-container.yaml for 30/40:
+# The container scenario runs as part of the normal grid (10/15) by default, and
+# 30/40 compose/summarize it (along with the other scenarios) by default too.
+# To run JUST the container scenario's compose+report, point VEXP_MANIFEST at
+# e2e-phi2-container.yaml for 30/40:
 ./docker/build.sh
 ./06_check_container_image.sh
 ./10_run_smoke_grid.sh      # (or 15 for the full batch)
@@ -117,22 +123,25 @@ VEXP_MANIFEST="$PWD/../../configs/virtual-experiments/e2e-phi2-container.yaml" \
 ./10_run_smoke_grid.sh        # preflight: per scenario -> (vllm: switch -> wait-ready -> export bundle) -> run smoke
 ./15_run_full_grid.sh         # per scenario: same, but run the FULL manifest (the batch)
 ./20_index_local.sh           # eval-audit-index -> audit_results_index.csv (verifies the -full run dirs)
-./30_compose.sh               # build the virtual experiment from the -full runs (the grouping step)
-./40_build_summary.sh         # aggregate publication surface across the grid
+./30_compose.sh               # compose ONE virtual experiment per scenario (loops E2E_TARGETS)
+./40_build_summary.sh         # build one publication surface per scenario
 ```
 
 The smoke preflight (`10`) is optional once you trust the path — `15` is the run
-that feeds `20`/`30`/`40`. The grouping manifest is checked in at
-[`configs/virtual-experiments/e2e-phi2.yaml`](../../configs/virtual-experiments/e2e-phi2.yaml)
-(the `-smoke` variant,
-[`e2e-phi2-smoke.yaml`](../../configs/virtual-experiments/e2e-phi2-smoke.yaml),
-is kept for grouping the smoke preflight instead — point `VEXP_MANIFEST` at it).
+that feeds `20`/`30`/`40`. `30`/`40` loop over the scenarios in `E2E_TARGETS`,
+composing/summarizing each scenario's own manifest
+([`e2e-phi2-vllm.yaml`](../../configs/virtual-experiments/e2e-phi2-vllm.yaml),
+[`-incomparable`](../../configs/virtual-experiments/e2e-phi2-incomparable.yaml),
+[`-hf`](../../configs/virtual-experiments/e2e-phi2-hf.yaml),
+[`-container`](../../configs/virtual-experiments/e2e-phi2-container.yaml)) into its
+own report dir. Set `VEXP_MANIFEST=<path>` to compose/summarize just one.
 
 ## Knobs (env vars)
 
 - `AUDIT_STORE_ROOT` (default `/data/crfm-helm-audit-store`)
 - `AUDIT_RESULTS_ROOT` (default `/data/crfm-helm-audit`)
-- `VEXP_MANIFEST` — override the grouping manifest path (e.g. the `-smoke` variant)
+- `VEXP_MANIFEST` — compose/summarize a single per-scenario manifest instead of
+  looping over all scenarios in `E2E_TARGETS` (e.g. just `e2e-phi2-container.yaml`)
 - `INFER_STACK_CONFIG_DIR` — infer-stack config providing the `phi2-single` profile
 - `E2E_KEEP_GOING=1` — in `10_run_smoke_grid.sh` / `15_run_full_grid.sh`, attempt
   every scenario and report failures at the end instead of stopping on the first
@@ -159,13 +168,15 @@ is kept for grouping the smoke preflight instead — point `VEXP_MANIFEST` at it
 
 ## What this assumes / produces
 
-- **Local-only by default.** The grouping manifest has no `official_public_index`
-  source, so the report is the union of the three local full runs; comparability
-  facts a public counterpart would supply collapse to `status=unknown` and
-  surface as `comparability_unknown:*` warnings — expected for a local-only batch,
-  not a bug. The incomparable scenario additionally deviates the recipe
-  (`temperature=1`), which the planner flags per-packet. To compare against public
-  HELM, uncomment the `official_public_index` source in the manifest.
+- **Public comparison, one report per scenario.** Each per-scenario manifest
+  declares an `official_public_index` source, so every scenario is paired against
+  the public microsoft/phi-2 mmlu:philosophy run by canonical logical key. Each
+  scenario is composed alone, so the three never pool into one packet. The
+  incomparable scenario deviates the recipe (`temperature=1`) — HELM doesn't
+  encode temperature in the run name, so it still matches the public run, and the
+  comparison is the intended recipe-drift check (the planner flags the deviation
+  per-packet). To make a scenario local-only, drop the `official_public_index`
+  source from its manifest.
 - **LiteLLM / openai-compatible transport for the vLLM scenarios.**
   `10`/`15` resolve the LiteLLM endpoint + master key via `infer-stack env --key`
   and hand them to `export-benchmark-bundle`. HELM talks to the LiteLLM gateway,

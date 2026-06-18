@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Re-index the local audit results so the three phi-2 full experiments land in
 # $AUDIT_STORE_ROOT/indexes/audit_results_index.csv, which the virtual-experiment
-# composer reads in the next step. The grouped report is built from the FULL runs
-# (<name>-full); the smoke grid is a preflight only.
+# composer reads in the next step. The per-scenario reports are built from the
+# FULL runs (<name>-full); the smoke grid is a preflight only.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"

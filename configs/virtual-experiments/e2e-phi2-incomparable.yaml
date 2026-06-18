@@ -1,0 +1,30 @@
+schema_version: 1
+name: e2e-phi2-incomparable
+description: >
+  The temperature=1 "incomparable" phi-2 e2e scenario as its OWN virtual
+  experiment — the negative control (a deliberate recipe deviation the planner
+  should flag). Composed alone so it appears as its own run. It still matches the
+  public microsoft/phi-2 mmlu:philosophy row by canonical key (HELM does not
+  encode temperature in the run name), so the comparison is the intended
+  recipe-drift check rather than a clean reproduction.
+
+scope:
+  models:
+    - "regex:^microsoft/phi-2"
+
+sources:
+  - kind: audit_index
+    fpath: /data/crfm-helm-audit-store/indexes/audit_results_index.csv
+    include_experiments:
+      - e2e-phi_2-vllm-philosophy-incomparable-full
+
+  # Public comparison side: match the local run against the public HELM row by
+  # canonical logical key (requires the public index + Stage-1 filter inventory).
+  - kind: official_public_index
+    fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
+    pre_filter:
+      kind: helm_stage1
+      inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
+
+output:
+  root: /data/crfm-helm-audit-store/virtual-experiments/e2e-phi2-incomparable

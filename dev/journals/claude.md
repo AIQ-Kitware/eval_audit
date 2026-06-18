@@ -2699,3 +2699,49 @@ vs no-officials-loaded (a source toggle / scope / artifact-resolution issue —
 check the manifest first). Confirm which before assuming a regression. And a
 filter inventory's `excluded` status is about local-run selection, not
 comparison eligibility — don't conflate the two.
+
+## 2026-06-18 12:05:17 -0400
+
+**User intent.** The single grouped e2e-phi2 report collapsed all three phi-2
+scenarios (vllm / hf / incomparable) into one packet — same canonical key
+(deployment + temperature aren't in the logical key). Rather than re-architect
+the planner to split local-bucketing from official-attachment, split the e2e
+into one virtual experiment PER scenario. Model: claude-opus-4-8[1m], Claude
+Code.
+
+**Why per-scenario over a planner change.** I measured the planner change's
+blast radius against the real master index: 28 canonical keys span >1
+experiment, and the discriminator choice is decisive — `source_experiment_name`
+would split 11 TRUE-repeat groups (e.g. `pythia-mmlu-stress`'s r1/r2,
+`heatmap`'s vicuna r1/r2), breaking the local_repeat noise measurement that is
+those reports' whole point; a recipe discriminator protects repeats but still
+changes `open-helm-models-reproducibility` (qwen across together/vllm/kubeai)
+and has empty-`model_deployment` edge cases. Per-scenario composition sidesteps
+all of it: the collapse only happens because the composer pools scenarios into
+one index before the planner runs; compose one scenario at a time → one local
+recipe → clean pairing with the public run. Zero change to shared planner logic,
+zero blast radius on other reports.
+
+**What I did.** Added static per-scenario manifests
+`configs/virtual-experiments/e2e-phi2-{vllm,incomparable,hf}.yaml` (each =
+one `include_experiments` + the `official_public_index` source); the container
+already had `e2e-phi2-container.yaml`. Deleted the grouped `e2e-phi2.yaml` and
+`e2e-phi2-smoke.yaml`. `_lib.sh` drops the `VEXP_MANIFEST` default and gains
+`e2e_vexp_manifest` (target → per-scenario manifest, a case map kept in sync with
+E2E_TARGETS). `30_compose.sh` / `40_build_summary.sh` now loop over E2E_TARGETS
+(honoring E2E_INCLUDE_CONTAINER), composing/summarizing each scenario into its
+own report dir; `VEXP_MANIFEST=<path>` still does a single one. README + the
+20/30/40 headers updated; the now-stale "local-only" / "grouped report" notes
+corrected.
+
+**Tradeoff (flagged to user).** N separate reports, not one aggregate table
+across the three. Fine for "show them separately"; a unified cross-scenario view
+would still need the planner split.
+
+**Reusable insight.** When a grouping key over-merges, the cheapest fix is often
+upstream of the grouper: feed it a narrower input set (one scenario per compose)
+instead of teaching the grouper a finer key. Re-keying shared logic has a blast
+radius across every consumer; narrowing the input is local and reversible. Always
+measure the blast radius against real data before touching a shared key — the
+"obvious" discriminator (`source_experiment_name`) was the one that silently
+breaks the repeat-comparison reports.

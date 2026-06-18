@@ -17,11 +17,12 @@ ROOT="$(e2e_root)"
 E2E_DIR="$ROOT/dev/e2e-tests"
 STORE_ROOT="${AUDIT_STORE_ROOT:-/data/crfm-helm-audit-store}"
 RESULTS_ROOT="${AUDIT_RESULTS_ROOT:-/data/crfm-helm-audit}"
-# Grouping manifest for the downstream index -> compose -> summary steps. It
-# scopes to the FULL run experiments (<name>-full); the smoke grid is a
-# preflight only and is not folded into the grouped report. Point VEXP_MANIFEST
-# at e2e-phi2-smoke.yaml to group the smoke preflight instead.
-VEXP_MANIFEST="${VEXP_MANIFEST:-$ROOT/configs/virtual-experiments/e2e-phi2.yaml}"
+# Each scenario composes as its OWN virtual experiment via a static per-scenario
+# manifest (configs/virtual-experiments/e2e-phi2-<scenario>.yaml; resolved by
+# e2e_vexp_manifest below). 30_compose.sh / 40_build_summary.sh loop over the
+# scenarios in E2E_TARGETS by default, producing one report per scenario — each
+# pairs cleanly with the public run instead of pooling all scenarios into one
+# packet. Set VEXP_MANIFEST=<path> to compose/summarize a single manifest only.
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
 # infer-stack config providing the phi2 model + the phi2-single profile (the
@@ -115,4 +116,19 @@ e2e_clear_results() {
     echo "force-rerun: clearing prior results at $result_dpath"
     rm -rf "$result_dpath"
   fi
+}
+
+# Resolve a target's per-scenario virtual-experiment manifest. Each scenario is
+# composed as its own virtual experiment (one local recipe) so it pairs cleanly
+# with the public run instead of pooling with the others. Keep this in sync with
+# E2E_TARGETS. $1 = an E2E_TARGETS row (or bare scenario name).
+e2e_vexp_manifest() {
+  local d="$ROOT/configs/virtual-experiments"
+  case "$(e2e_name "$1")" in
+    e2e-phi_2-vllm-philosophy)              printf '%s\n' "$d/e2e-phi2-vllm.yaml" ;;
+    e2e-phi_2-vllm-philosophy-incomparable) printf '%s\n' "$d/e2e-phi2-incomparable.yaml" ;;
+    e2e-phi_2-huggingface-philosophy)       printf '%s\n' "$d/e2e-phi2-hf.yaml" ;;
+    e2e-phi_2-vllm-philosophy-container)    printf '%s\n' "$d/e2e-phi2-container.yaml" ;;
+    *) echo "e2e_vexp_manifest: no manifest mapped for '$(e2e_name "$1")'" >&2; return 1 ;;
+  esac
 }
