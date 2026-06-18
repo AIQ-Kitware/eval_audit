@@ -2664,3 +2664,38 @@ load-it-yourself batch job and a long-lived resident server can't share one GPU,
 so run the transient loader while the resident server is down, then stand the
 server up for the jobs that talk to it. Make the pre-run teardown idempotent and
 non-fatal — "ensure X is down" should succeed when X was never up.
+
+## 2026-06-18 11:17:15 -0400
+
+**Symptom.** e2e report showed "planner could not find an official component
+after policy reduction" — read as the OLMo canonical-key bug recurring. Model:
+claude-opus-4-8[1m], Claude Code.
+
+**Diagnosis (not the canonical bug).** Verified against the real `/data` indexes
+(shared with the run host): the public index HAS the microsoft/phi-2
+mmlu:philosophy run, and `canonical_logical_key` collapses the local baseline
+(`…model=microsoft/phi-2,eval_split=test`) and the official
+(`…model=microsoft_phi-2,…,groups=mmlu_philosophy`) to the SAME key — matching
+works. The real cause: `configs/virtual-experiments/e2e-phi2.yaml` had the
+`official_public_index` source commented out (local-only by design, always had
+been), so the planner loaded zero officials → every packet is
+missing_official_component. Fix: uncomment the source (+ updated the
+description). All prerequisites exist on disk (public index, filter inventory,
+the public run dir).
+
+**Red herring worth recording.** The phi-2/philosophy row is
+`selection_status: excluded` in the Stage-1 filter inventory
+(`too-large` [oddly reports 13.0B] + `no-local-helm-deployment`). That looked
+like it would block the comparison via the source's `pre_filter: helm_stage1`.
+It does NOT: `compose.py` gates official comparison rows ONLY by `_scope_match`
+(model/benchmark scope); the `pre_filter` merely re-stamps a SEPARATE scoped
+inventory for Sankey A (Universe→Scope). Stage-1 "eligibility" answers "should we
+RUN this locally" (budget ≤10B), which is irrelevant to comparing an
+already-run local result against its public counterpart.
+
+**Reusable insight.** "missing_official_component" has two very different
+causes: officials-exist-but-don't-match (the matcher bug — check canonical keys)
+vs no-officials-loaded (a source toggle / scope / artifact-resolution issue —
+check the manifest first). Confirm which before assuming a regression. And a
+filter inventory's `excluded` status is about local-run selection, not
+comparison eligibility — don't conflate the two.

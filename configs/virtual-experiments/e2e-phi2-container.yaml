@@ -5,10 +5,12 @@ description: >
   inside the pinned eval-audit-helm-runner image (Stage 3 containerized
   execution): phi-2 is served on the host (vLLM behind LiteLLM) and HELM runs in
   the container, reaching the LiteLLM endpoint via --network host. Produced by the
-  opt-in vllm-container target of the dev/e2e-tests grid (E2E_INCLUDE_CONTAINER=1).
-  Local-only by default: comparability facts a public counterpart would supply
-  collapse to status=unknown and surface as comparability_unknown:* warnings —
-  expected.
+  vllm-container target of the dev/e2e-tests grid (on by default; set
+  E2E_INCLUDE_CONTAINER=0 to skip). Compares the container run against public HELM
+  rows via the official_public_index source below: it shares the host-venv
+  baseline's recipe (model=microsoft/phi-2, mmlu:subject=philosophy,
+  eval_split=test), so it matches the public microsoft/phi-2 mmlu:philosophy run
+  by canonical logical key.
 
 scope:
   models:
@@ -23,13 +25,15 @@ sources:
       # also run the host grid and add its counterpart here:
       #   - e2e-phi_2-vllm-philosophy-full
 
-  # Optional comparison side. Uncomment to compare against public HELM rows
-  # (requires the public index + Stage-1 filter inventory to exist).
-  # - kind: official_public_index
-  #   fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
-  #   pre_filter:
-  #     kind: helm_stage1
-  #     inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
+  # Public comparison side: compare the container run against public HELM rows.
+  # Same recipe as the host-venv baseline (model=microsoft/phi-2,
+  # mmlu:subject=philosophy, eval_split=test), so it matches the public
+  # microsoft/phi-2 mmlu:philosophy run by canonical logical key.
+  - kind: official_public_index
+    fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
+    pre_filter:
+      kind: helm_stage1
+      inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
 
 output:
   root: /data/crfm-helm-audit-store/virtual-experiments/e2e-phi2-container

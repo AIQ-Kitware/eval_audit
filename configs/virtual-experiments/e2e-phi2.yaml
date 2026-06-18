@@ -5,13 +5,12 @@ description: >
   comparable vLLM baseline, the temperature=1 "incomparable" negative control,
   and the HuggingFace-direct deployment. Each runs its full manifest
   (<name>-full); the smoke grid is a preflight only and is not folded in here
-  (see e2e-phi2-smoke.yaml for that). Local-only by default: there is no
-  official_public_index source, so the report is the union of the three local
-  full runs re-stamped under a single experiment name. Comparability facts that
-  the planner would otherwise derive from a public counterpart collapse to
-  status=unknown and surface as comparability_unknown:* warnings — expected for a
-  local-only batch, not a bug. The incomparable scenario additionally deviates
-  the recipe (temperature=1), which the planner flags per-packet.
+  (see e2e-phi2-smoke.yaml for that). Compares against public HELM rows via the
+  official_public_index source below: the baseline / HF-direct / container
+  scenarios match the public microsoft/phi-2 mmlu:philosophy run by canonical
+  logical key, so each gets an official_vs_local comparison. The temperature=1
+  "incomparable" scenario deliberately deviates the recipe and so has no public
+  match (the planner flags it per-packet) — the intended negative control.
 
 scope:
   # All three scenarios run microsoft/phi-2. The include_experiments list below
@@ -28,14 +27,17 @@ sources:
       - e2e-phi_2-vllm-philosophy-incomparable-full
       - e2e-phi_2-huggingface-philosophy-full
 
-  # Optional comparison side. Uncomment to compare the local full runs against
-  # public HELM rows (requires the public index + Stage-1 filter inventory to
-  # exist).
-  # - kind: official_public_index
-  #   fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
-  #   pre_filter:
-  #     kind: helm_stage1
-  #     inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
+  # Public comparison side: compare the local full runs against public HELM rows.
+  # The baseline / HF-direct / container scenarios all share the same recipe
+  # (model=microsoft/phi-2, mmlu:subject=philosophy, eval_split=test) and match
+  # the public microsoft/phi-2 mmlu:philosophy run by canonical logical key; the
+  # temperature=1 "incomparable" scenario deliberately does NOT match (its recipe
+  # deviates), which is the intended negative control.
+  - kind: official_public_index
+    fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
+    pre_filter:
+      kind: helm_stage1
+      inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
 
 output:
   root: /data/crfm-helm-audit-store/virtual-experiments/e2e-phi2
