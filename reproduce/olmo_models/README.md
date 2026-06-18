@@ -79,15 +79,20 @@ guidance if any is missing.
 ## Steps
 
 ```bash
+./docker/build.sh         # build eval-audit-helm-runner:dev (containerized HELM is ON by default)
 ./00_check_env.sh         # eval-audit-check-env
 ./05_check_profiles.sh    # verify the six <preset>-single profiles are defined
 ./06_check_hf_auth.sh     # verify a HuggingFace token (gated gpqa dataset needs it)
+./07_check_container_image.sh  # verify docker + the container image (no-op when OLMO_CONTAINER=0)
 ./10_run_smoke_grid.sh    # preflight: per model switch profile -> wait-ready -> export bundle -> run smoke
 ./15_run_full_grid.sh     # per model: same, but run the FULL manifest (the reproducibility batch)
 ./20_index_local.sh       # eval-audit-index -> audit_results_index.csv (verifies the -full run dirs)
 ./30_compose.sh           # build the virtual experiment from the -full runs (the grouping step)
 ./40_build_summary.sh     # aggregate publication surface across all six
 ```
+
+`./docker/build.sh` is a prerequisite only for the default containerized path
+(see below); skip it if you run with `OLMO_CONTAINER=0`.
 
 The smoke preflight (`10`) is optional once you trust the path — `15` is the run
 that feeds `20`/`30`/`40`. The grouping manifest is checked in at
@@ -96,8 +101,59 @@ that feeds `20`/`30`/`40`. The grouping manifest is checked in at
 [`olmo-models-smoke.yaml`](../../configs/virtual-experiments/olmo-models-smoke.yaml),
 is kept for grouping the smoke preflight instead).
 
+## Containerized HELM ("docker pipeline") — ON by default
+
+By default this runbook runs **HELM inside the pinned `eval-audit-helm-runner`
+image** (Stage 3 containerized execution, the "docker pipeline") instead of the
+host venv. This pins HELM's software environment so it stops being a confounding
+variable in the reproducibility comparison (the core research question — see
+[`docs/helm-reproduction-research-journal.md`](../../docs/helm-reproduction-research-journal.md)).
+Full background:
+[`docs/container-execution.md`](../../docs/container-execution.md).
+
+**The model is still served on the host.** vLLM behind the LiteLLM gateway runs
+on the host exactly as before; only *where HELM runs* changes. The in-container
+HELM client reaches the host LiteLLM endpoint via Docker `--network host`, which a
+default bridge container could not see. This is declared by the presets'
+`container_network: host` (in
+[`eval_audit/integrations/infer_stack/adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py));
+the same blocks set `container_gpus: none` because the OLMo run entries
+(commonsense / gsm / legalbench / med_qa / mmlu / gpqa) are
+multiple-choice / exact-match / classification metrics with **no LLM-judge
+annotator that loads a local HF model** — so the HELM container needs no GPU and
+must stay off the serving GPUs (`INFER_STACK_ALLOWED_GPUS`, default 2,3).
+
+The experiment names are unchanged (`audit-<preset>-{smoke,full}`), so the
+downstream index → compose → summary stages need no changes — runs just gain a
+per-run `container_provenance.json` sidecar.
+
+**How the toggle works.** The recipe-level container fields live in the presets
+but are *inert* until a run supplies an image; the **image is the on/off switch**,
+passed at run time via the existing `eval-audit-run --container-image` flag:
+
+| `OLMO_CONTAINER` | grid passes | HELM runs in |
+|---|---|---|
+| `1` (default) | `eval-audit-run … --container-image "$OLMO_CONTAINER_IMAGE"` | the **container** ("docker pipeline") |
+| `0` | `eval-audit-run …` (no flag) | the **host venv** (container fields inert) |
+
+Build the image first with `./docker/build.sh`; `07_check_container_image.sh`
+verifies it is present (and is a no-op when `OLMO_CONTAINER=0`). The gated **gpqa**
+dataset still works in-container: `_lib.sh` exports `HF_TOKEN` /
+`HUGGING_FACE_HUB_TOKEN`, which the docker pipeline forwards into the container.
+
+To run on a host without docker (or to A/B the container against the host venv),
+set `OLMO_CONTAINER=0` — the grids omit `--container-image` and HELM runs in the
+host venv, leaving the presets' container fields inert.
+
 ## Knobs (env vars)
 
+- `OLMO_CONTAINER` (default `1`) — `1` runs HELM in the pinned container ("docker
+  pipeline", the default); `0` runs HELM in the host venv (the fallback). The
+  model is served on the host either way; only where HELM runs changes (see the
+  containerized-execution section above)
+- `OLMO_CONTAINER_IMAGE` (default `eval-audit-helm-runner:dev`) — the image
+  passed to `eval-audit-run --container-image` when `OLMO_CONTAINER=1`; build it
+  with `./docker/build.sh`, or point at a pushed digest for cross-machine pinning
 - `AUDIT_STORE_ROOT` (default `/data/crfm-helm-audit-store`)
 - `AUDIT_RESULTS_ROOT` (default `/data/crfm-helm-audit`)
 - `VEXP_MANIFEST` — override the grouping manifest path
