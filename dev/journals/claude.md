@@ -2777,3 +2777,76 @@ interactive backend's Tk teardown across threads is a hard interpreter crash,
 not a Python exception you can catch. Force it once in a shared module and
 import that module ahead of pyplot, rather than leaving each call site to
 remember.
+
+## 2026-06-22 17:12:35 -0400
+
+**Model/harness.** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code.
+
+**User intent.** Implement `docs/planning/infer-stack-cli-api-migration.md`:
+the `submodules/infer_stack` pointer bumped 045a31f → 0344636, a breaking
+rewrite from the profile/contract world to a catalog (models + endpoints) +
+leasing world (`contracts.py`/`resolver.py`/`profiles:` all deleted). Scope per
+the plan's §0: fix only the two in-scope runbooks — `dev/e2e-tests/` (phi-2) and
+`reproduce/olmo_models/` (six OLMo); everything else (gpt-oss/qwen/kubeai) stays
+frozen/archival. Commit logical units.
+
+**What I did (4 commits on branch `infer-stack-cli-api-migration`).**
+1. *Adapter.* Replaced `load_profile_contract()` (over the deleted
+   `infer_stack.contracts`) with `resolve_serving_facts()`, a pure-static
+   resolver over `infer_stack.leasing.Catalog`. It returns only the three facts
+   the catalog actually owns — `served_model_name`, `hf_model_id`,
+   `max_model_len` (a frozen `ServingFacts` dataclass). Everything else is
+   preset- or caller-supplied. Folded in G1 (backfilled
+   `helm_model_name`/`helm_tokenizer_name` into the six OLMo presets out of the
+   deleted models.yaml — incl. the case-sensitive `allenai/OLMo-1.7-7B-hf`
+   tokenizer repo and the 13B-reuses-7B-tokenizer alias) and G2 (explicit
+   `protocol_mode`: phi-2 + OLMo base = completions, OLMo instruct = chat
+   default). `describe-contract` → `describe-endpoint`; `--vllm-root` →
+   deprecated alias for `--config-dir`; `--simulate-hardware` accept-and-ignore.
+   Rewrote the integration test against a `catalog.yaml` fixture (10 pass).
+2. *Config dirs.* Reschema'd both shipped config dirs from
+   `config.yaml`+`models.yaml` → `settings.yaml`+`catalog.yaml`. Pinned
+   `litellm: true`/`ui: false` (C-4); kept the old `<...>-single` names as the
+   catalog endpoint names (so the presets' `profile` fields, the `*_TARGETS`
+   arrays, and `05_check_profiles.sh` are untouched, and each doubles as the
+   LiteLLM model_name HELM requests — C-3); 32B keeps `tensor_parallel_size: 2`
+   (C-5).
+3. *Scripts.* `list-profiles`→`catalog endpoint list`, `switch … --apply
+   --yes`→`serve … --yes`, `wait-ready`→`wait`, `down`→`release --all --evict`.
+   C-1: insert a per-iteration `release --all --evict` before each OLMo `serve`
+   (serve *accumulates*, unlike the old replacing `switch`). The managed `.env`
+   has no port key and doesn't exist until the first `serve`, so the master key
+   is read with positional `env LITELLM_MASTER_KEY` *after* serve; gateway port
+   is the fixed 14042 default. C-2: pinned `INFER_STACK_DATA_DIR` in both
+   `_lib.sh`.
+4. *Docs.* Refreshed both runbook READMEs to the endpoint/catalog vocabulary +
+   a migration banner on the historical planning doc.
+
+**Key design call: endpoint naming.** The plan suggested renaming endpoints to
+the bare model (`phi-2`). I kept the old `<preset>-single` names instead — the
+served name is internally consistent either way (C-3 holds since the LiteLLM
+gateway registers each model under its endpoint name, confirmed in
+`compose.py:_litellm_model_list`), and reusing the names collapsed the diff
+across presets/TARGETS/check-scripts to near zero. Lower blast radius beat
+cosmetic vocabulary.
+
+**Validated (static).** py_compile, the 10-test integration suite, `bash -n` on
+all 8 scripts, the CLI `describe-endpoint`, and end-to-end
+`export-benchmark-bundle` against the *real shipped catalogs* for phi-2 (openai
+completions), OLMo-7B (both gateway-override and default vllm-direct), and
+OLMo-2-13B (chat + the 7B-tokenizer-reuse). All produced the expected
+`model_deployments.yaml`.
+
+**Not done (needs a GPU box).** §6's live runs — the phi-2 smoke grid end-to-end
+and the OLMo ≥2-model grid (which is what actually exercises C-1's per-iteration
+release and C-2's `.env` discovery against a served stack). Couldn't run here
+(no GPU/docker/served infer-stack). Also untouched per §0: the frozen
+`reproduce/{gpt_oss_*,qwen2_72b_vllm,finish_qwen25_gptoss,small_models_kubeai}`
+dirs (left broken with notes), G4/G6.
+
+**Reusable insight.** When a dependency's "name chain" fractures across layers
+(catalog model ≠ endpoint alias ≠ gateway-registered name ≠ what the client
+requests), the safe move is to make ONE layer authoritative and assert the
+others equal it — here `openai_model_name == served_name == endpoint name`,
+verified against the gateway's own `model_list` generator rather than assumed.
+A mismatch there is a silent 404 with empty results, not a crash.
