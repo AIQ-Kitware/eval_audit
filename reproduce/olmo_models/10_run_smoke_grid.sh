@@ -36,37 +36,51 @@ KEEP_GOING="${OLMO_KEEP_GOING:-0}"
 FORCE_RERUN="${OLMO_FORCE_RERUN:-1}"
 failed=()
 
-# Resolve the LiteLLM gateway endpoint + master key from infer-stack.
-LITELLM_PORT="$(infer-stack env --key INFER_STACK_LITELLM_PORT)"
+# The LiteLLM gateway host port is a fixed default in the new CLI (14042;
+# override via LITELLM_PORT). The master key lives in the managed .env, which
+# does not exist until the first `serve` brings the gateway up — so it is read
+# per-model inside run_one (after serve), NOT up front.
+LITELLM_PORT="${LITELLM_PORT:-14042}"
 LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:$LITELLM_PORT}"
-LITELLM_MASTER_KEY="$(infer-stack env --key LITELLM_MASTER_KEY)"
 
 run_one() {
   local target="$1"
-  local preset profile bundle_root
+  local preset endpoint bundle_root master_key
   preset="$(olmo_preset "$target")"
-  profile="$(olmo_profile "$target")"
+  endpoint="$(olmo_profile "$target")"
   bundle_root="$(olmo_bundle_root "$target")"
 
   echo
   echo "==================================================================="
-  echo "== ${preset}  (profile: ${profile})"
+  echo "== ${preset}  (endpoint: ${endpoint})"
   echo "==================================================================="
 
-  # 1. Bring the model up and wait for readiness.
-  infer-stack switch --profile "$profile" --apply --yes
-  infer-stack wait-ready
+  # 1. C-1: serve/acquire ACCUMULATE (demand is ref-counted) — unlike the old
+  #    `switch`, which replaced. The six models span a 1B-active MoE up to a 32B
+  #    dense model and will not co-host, so release the previous model's GPUs
+  #    before standing up the next or they pile up and OOM. release --all --evict
+  #    frees idle deployments; the standing LiteLLM gateway stays up.
+  infer-stack release --all --evict || echo "WARN: 'infer-stack release --all --evict' returned nonzero (nothing to free?); continuing." >&2
 
-  # 2. Materialize the bundle (smoke + full manifests) from the preset, routing
+  # 2. Bring this model up as a standing lease and wait for readiness. `serve`
+  #    renders + applies + waits; the explicit `wait` is belt-and-suspenders.
+  infer-stack serve "$endpoint" --yes
+  infer-stack wait "$endpoint"
+
+  # serve writes the managed LiteLLM master key into the .env on first bring-up;
+  # read it now (positional `env KEY`) for the export below.
+  master_key="$(infer-stack env LITELLM_MASTER_KEY)"
+
+  # 3. Materialize the bundle (smoke + full manifests) from the preset, routing
   #    through LiteLLM (override the preset's vllm-direct access kind).
   "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
     --preset "$preset" \
     --bundle-root "$bundle_root" \
     --access-kind openai-compatible \
     --base-url "${LITELLM_BASE_URL}/v1" \
-    --api-key-value "$LITELLM_MASTER_KEY"
+    --api-key-value "$master_key"
 
-  # 3. Optionally clear a prior run so kwdagger's skip_existing doesn't no-op
+  # 4. Optionally clear a prior run so kwdagger's skip_existing doesn't no-op
   #    this model. The smoke experiment_name is "audit-<preset>-smoke" and its
   #    results (incl. the DONE sentinel) live under $RESULTS_ROOT/<experiment>.
   if [[ "$FORCE_RERUN" == "1" ]]; then
@@ -79,7 +93,7 @@ run_one() {
     fi
   fi
 
-  # 4. Run the smoke manifest.
+  # 5. Run the smoke manifest.
   eval-audit-run --run=1 "$bundle_root/smoke_manifest.yaml"
 }
 

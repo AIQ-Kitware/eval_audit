@@ -25,10 +25,20 @@ RESULTS_ROOT="${AUDIT_RESULTS_ROOT:-/data/crfm-helm-audit}"
 # packet. Set VEXP_MANIFEST=<path> to compose/summarize a single manifest only.
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
-# infer-stack config providing the phi2 model + the phi2-single profile (the
+# infer-stack catalog providing the phi-2 model + the phi2-single endpoint (the
 # vLLM targets need it; the huggingface target does not). Defaults to the config
-# dir shipped alongside this runbook; override to point at your own config.
+# dir shipped alongside this runbook (settings.yaml + catalog.yaml); override to
+# point at your own config.
 export INFER_STACK_CONFIG_DIR="${INFER_STACK_CONFIG_DIR:-$E2E_DIR/config/infer_stack}"
+
+# C-2: config_root and data_root are SEPARATE in the leasing world. The managed
+# LiteLLM .env + the lease ledger live under data_root()/leasing/, and the grid
+# runners read the master key via `infer-stack env LITELLM_MASTER_KEY` — that
+# read and the serve-time write must resolve the same data_root, so pin it here
+# (every infer-stack call in the runbook then agrees). Defaults to the XDG
+# location; override to a big-disk path on hosts where weights/state shouldn't
+# land under $HOME.
+export INFER_STACK_DATA_DIR="${INFER_STACK_DATA_DIR:-$HOME/.local/share/infer_stack}"
 
 # e2e-test conventions, carried verbatim from the original scripts: one local
 # attempt per scenario (no repeat), strip the run-group prefix so rows pair
@@ -46,14 +56,14 @@ export EVAL_AUDIT_GROUP_STRIP="${EVAL_AUDIT_GROUP_STRIP:-1}"
 #                 gateway (openai-compatible); the bundle is materialized from
 #                 the preset. "hf": HELM loads microsoft/phi-2 directly from
 #                 HuggingFace (no infer-stack); the run is a checked-in manifest.
-#   * serving   — vllm: the infer-stack profile to switch into.
+#   * serving   — vllm: the infer-stack catalog endpoint to serve.
 #                 hf:   unused ("-"); the manifest path is derived from the
 #                       experiment name (manifests/<experiment>.yaml).
 # Ordered HF-direct FIRST, then the vLLM scenarios. The hf target makes HELM load
 # microsoft/phi-2 onto the GPU itself (no infer-stack), so it must run while the
 # GPU is free — before any vLLM stack is up holding the memory (otherwise the HF
-# load can OOM). The grid scripts run `infer-stack down` at the start to
-# guarantee that clean state, and running hf first keeps the GPU clear for it.
+# load can OOM). The grid scripts run `infer-stack release --all --evict` at the
+# start to guarantee that clean state, and running hf first keeps the GPU clear.
 # After hf, the vLLM comparable baseline and its temperature=1 "incomparable"
 # negative control (a deliberate recipe deviation the planner should flag) run
 # against the served LiteLLM endpoint. The container scenario (appended below) is

@@ -21,10 +21,20 @@ PYTHON_BIN="${PYTHON_BIN:-python}"
 # the 32B tp=2 profile. Override per-host; unset = use whatever infer-stack detects.
 export INFER_STACK_ALLOWED_GPUS="${INFER_STACK_ALLOWED_GPUS:-2,3}"
 
-# infer-stack config providing the six OLMo models + <preset>-single profiles.
-# Defaults to the config dir shipped alongside this runbook; override to point
-# at your own infer-stack config if the OLMo profiles already live there.
+# infer-stack catalog providing the six OLMo models + <preset>-single endpoints.
+# Defaults to the config dir shipped alongside this runbook (settings.yaml +
+# catalog.yaml); override to point at your own infer-stack config if the OLMo
+# endpoints already live there.
 export INFER_STACK_CONFIG_DIR="${INFER_STACK_CONFIG_DIR:-$ROOT/reproduce/olmo_models/config/infer_stack}"
+
+# C-2: config_root and data_root are SEPARATE in the leasing world. The managed
+# LiteLLM .env + the lease ledger live under data_root()/leasing/, and the grid
+# runners read the master key via `infer-stack env LITELLM_MASTER_KEY` — that
+# read and the serve-time write must resolve the same data_root, so pin it here.
+# Defaults to the XDG location; override to a big-disk path on hosts where
+# weights/state shouldn't land under $HOME (the old config used
+# /data/service/docker/vllm-stack).
+export INFER_STACK_DATA_DIR="${INFER_STACK_DATA_DIR:-$HOME/.local/share/infer_stack}"
 
 # Carry the e2e-test conventions: one local attempt per model (no repeat),
 # strip the run-group prefix so smoke rows pair cleanly.
@@ -53,10 +63,10 @@ fi
 unset HF_TOKEN_VALUE
 
 # The six OLMo presets, ordered smallest -> largest so a cheap model surfaces a
-# pipeline failure before the expensive 32B load. Each row is "preset:profile".
-# The infer-stack profile is the preset name with a "-single" suffix, and the
-# per-mode experiment_name is "audit-<preset>-smoke" / "audit-<preset>-full"
-# (smoke is a preflight; the full runs feed indexing/grouping).
+# pipeline failure before the expensive 32B load. Each row is "preset:endpoint".
+# The infer-stack catalog endpoint is the preset name with a "-single" suffix,
+# and the per-mode experiment_name is "audit-<preset>-smoke" /
+# "audit-<preset>-full" (smoke is a preflight; the full runs feed indexing).
 OLMO_TARGETS=(
   "allenai-olmoe-1b-7b-0125-instruct:allenai-olmoe-1b-7b-0125-instruct-single"
   "allenai-olmo-7b:allenai-olmo-7b-single"

@@ -33,23 +33,24 @@ KEEP_GOING="${E2E_KEEP_GOING:-0}"
 FORCE_RERUN="${E2E_FORCE_RERUN:-1}"
 failed=()
 
-# Start from a clean GPU: tear down any vLLM stack left up by a prior run so the
-# hf scenario (first in the grid) has the full GPU to load phi-2 onto. Best-effort
-# — `infer-stack down` (re-render + `docker compose down`) is a no-op when nothing
-# is up, and a clean host shouldn't abort the grid just for having nothing to tear
-# down.
-echo "Spinning down any vLLM stack to free the GPU (infer-stack down)…"
-infer-stack down || echo "WARN: 'infer-stack down' returned nonzero (nothing to tear down?); continuing." >&2
+# Start from a clean GPU: release any standing leases + evict idle models left up
+# by a prior run so the hf scenario (first in the grid) has the full GPU to load
+# phi-2 onto. Best-effort — `release --all --evict` is a no-op when nothing is
+# leased, and a clean host shouldn't abort the grid just for having nothing to
+# free. (The leasing CLI replaced the old `infer-stack down`.)
+echo "Releasing leases + evicting idle models to free the GPU (infer-stack release --all --evict)…"
+infer-stack release --all --evict || echo "WARN: 'infer-stack release --all --evict' returned nonzero (nothing to free?); continuing." >&2
 
-# Resolve the LiteLLM gateway endpoint + master key from infer-stack (used by the
-# vLLM scenarios; harmless to resolve up front).
-LITELLM_PORT="$(infer-stack env --key INFER_STACK_LITELLM_PORT)"
+# The LiteLLM gateway host port is a fixed default in the new CLI (14042;
+# override via LITELLM_PORT). The master key lives in the managed .env, which
+# does not exist until the first `serve` brings the gateway up — so it is read
+# per-scenario inside run_one (after serve), NOT up front.
+LITELLM_PORT="${LITELLM_PORT:-14042}"
 LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:$LITELLM_PORT}"
-LITELLM_MASTER_KEY="$(infer-stack env --key LITELLM_MASTER_KEY)"
 
 run_one() {
   local target="$1"
-  local name transport experiment serving bundle_root manifest
+  local name transport experiment endpoint bundle_root manifest master_key
   name="$(e2e_name "$target")"
   transport="$(e2e_transport "$target")"
   experiment="$(e2e_experiment_smoke "$target")"
@@ -61,18 +62,24 @@ run_one() {
 
   case "$transport" in
     vllm)
-      serving="$(e2e_serving "$target")"
+      endpoint="$(e2e_serving "$target")"
       bundle_root="$(e2e_bundle_root "$target")"
-      # 1. Bring phi-2 up and wait for readiness.
-      infer-stack switch --profile "$serving" --apply --yes
-      infer-stack wait-ready
+      # 1. Bring phi-2 up as a standing lease and wait for readiness. `serve`
+      #    renders + applies + waits; the explicit `wait` is belt-and-suspenders.
+      #    The two vLLM scenarios share the phi2-single endpoint, so the second
+      #    `serve` just coalesces onto the live deployment (ref-count++).
+      infer-stack serve "$endpoint" --yes
+      infer-stack wait "$endpoint"
+      # serve writes the managed LiteLLM master key into the .env on first
+      # bring-up; read it now (positional `env KEY`) for the export below.
+      master_key="$(infer-stack env LITELLM_MASTER_KEY)"
       # 2. Materialize the bundle (smoke + full manifests) from the preset,
       #    routing through the LiteLLM gateway.
       "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
         --preset "$name" \
         --bundle-root "$bundle_root" \
         --base-url "${LITELLM_BASE_URL}/v1" \
-        --api-key-value "$LITELLM_MASTER_KEY"
+        --api-key-value "$master_key"
       manifest="$bundle_root/smoke_manifest.yaml"
       ;;
     hf)
