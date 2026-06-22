@@ -1,46 +1,52 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 from pathlib import Path
 
-from .adapter import export_benchmark_bundle, load_profile_contract
+from .adapter import export_benchmark_bundle, resolve_serving_facts
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        description="eval_audit integration layer for consuming infer_stack serving profiles."
+        description="eval_audit integration layer for consuming infer_stack serving endpoints."
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("describe-contract")
-    s.add_argument("profile")
-    s.add_argument("--backend", default=None)
-    s.add_argument("--simulate-hardware", default=None)
-    s.add_argument("--vllm-root", default=None)
-    s.set_defaults(cmd_name="describe-contract")
+    # Renamed from `describe-contract`: the contract module is gone, so this now
+    # prints the catalog-resolved serving facts for one endpoint (served name,
+    # backing HF model, served context window). Kept for debugging.
+    s = sub.add_parser("describe-endpoint", aliases=["describe-contract"])
+    s.add_argument("profile", help="Catalog endpoint name to resolve.")
+    s.add_argument("--config-dir", default=None, help="infer-stack config dir holding catalog.yaml.")
+    # Deprecated aliases — accepted so existing call sites don't break.
+    s.add_argument("--vllm-root", default=None, help="Deprecated alias for --config-dir.")
+    s.add_argument("--backend", default=None, help="Deprecated; accepted and ignored.")
+    s.add_argument("--simulate-hardware", default=None, help="Deprecated; accepted and ignored.")
+    s.set_defaults(cmd_name="describe-endpoint")
 
     s = sub.add_parser("export-benchmark-bundle")
     s.add_argument("profile", nargs="?", default=None)
     s.add_argument("--preset", default=None)
     s.add_argument("--bundle-root", default=None)
-    s.add_argument("--backend", default=None)
-    s.add_argument("--simulate-hardware", default=None)
-    s.add_argument("--vllm-root", default=None)
+    s.add_argument("--config-dir", default=None, help="infer-stack config dir holding catalog.yaml.")
+    s.add_argument("--backend", default=None, help="Deprecated; accepted and ignored.")
+    s.add_argument("--simulate-hardware", default=None, help="Deprecated; accepted and ignored.")
+    s.add_argument("--vllm-root", default=None, help="Deprecated alias for --config-dir.")
     s.add_argument("--access-kind", default=None)
     s.add_argument("--base-url", default=None)
     s.add_argument("--api-key-value", default=None)
     s.set_defaults(cmd_name="export-benchmark-bundle")
 
     args = parser.parse_args(argv)
-    if args.cmd_name == "describe-contract":
-        data = load_profile_contract(
+    config_dir = args.config_dir or args.vllm_root
+    if args.cmd_name == "describe-endpoint":
+        facts = resolve_serving_facts(
             args.profile,
-            backend=args.backend,
-            simulate_hardware=args.simulate_hardware,
-            vllm_root=Path(args.vllm_root) if args.vllm_root else None,
+            config_dir=Path(config_dir) if config_dir else None,
         )
-        print(json.dumps(data, indent=2))
+        print(json.dumps(dataclasses.asdict(facts), indent=2))
         return
 
     if args.profile is None and args.preset is None:
@@ -50,8 +56,7 @@ def main(argv: list[str] | None = None) -> None:
         preset=args.preset,
         bundle_root=Path(args.bundle_root) if args.bundle_root else None,
         backend=args.backend,
-        simulate_hardware=args.simulate_hardware,
-        vllm_root=Path(args.vllm_root) if args.vllm_root else None,
+        config_dir=Path(config_dir) if config_dir else None,
         access_kind=args.access_kind,
         base_url=args.base_url,
         api_key_value=args.api_key_value,

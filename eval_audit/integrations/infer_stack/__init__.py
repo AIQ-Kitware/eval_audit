@@ -1,11 +1,13 @@
 from .adapter import (
+    ServingFacts,
     export_benchmark_bundle,
-    load_profile_contract,
     materialize_benchmark_bundle,
+    resolve_serving_facts,
 )
 
 __all__ = [
+    "ServingFacts",
     "export_benchmark_bundle",
-    "load_profile_contract",
     "materialize_benchmark_bundle",
+    "resolve_serving_facts",
 ]

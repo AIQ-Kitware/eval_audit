@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
@@ -8,193 +7,203 @@ import yaml
 
 from eval_audit.integrations.infer_stack.adapter import (
     export_benchmark_bundle,
-    load_profile_contract,
+    resolve_serving_facts,
 )
 
 
-def _import_infer_stack_config():
-    submodule_root = Path(__file__).resolve().parents[1] / "submodules" / "infer_stack"
-    if str(submodule_root) not in sys.path:
-        sys.path.insert(0, str(submodule_root))
-    from infer_stack.config import initial_config, save_yaml
-
-    return initial_config, save_yaml
-
-
-def _make_infer_stack_root(tmp_path: Path, *, backend: str = "compose") -> Path:
-    initial_config, save_yaml = _import_infer_stack_config()
-    root = tmp_path / "infer_stack_root"
-    root.mkdir()
-    cfg = initial_config()
-    cfg["backend"] = backend
-    cfg["state"] = {
-        "hf_cache": "state/hf-cache",
-        "open_webui": "state/open-webui",
-        "postgres": "state/postgres",
-        "runtime": "state/runtime",
-    }
-    save_yaml(root / "config.yaml", cfg)
-    save_yaml(root / "models.yaml", {"models": {}, "profiles": {}})
-    return root
-
-
-def test_load_profile_contract_from_infer_stack(tmp_path: Path) -> None:
-    vllm_root = _make_infer_stack_root(tmp_path)
-    contract = load_profile_contract(
-        "qwen2-72b-instruct-tp2-balanced",
-        simulate_hardware="2x96",
-        vllm_root=vllm_root,
-    )
-    assert contract["kind"] == "serving-profile-contract"
-    assert contract["profile"]["public_name"] == "qwen2-72b-instruct-tp2-balanced"
-    assert contract["services"][0]["model"]["logical_model_name"] == "qwen/qwen2-72b-instruct"
+# A minimal new-schema infer-stack config: just the catalog.yaml the resolver
+# reads (models + endpoints). Endpoint names match the in-scope presets'
+# `profile` fields (adapter.PRESET_CONFIGS), since a catalog endpoint is what
+# `resolve_serving_facts` resolves. The served name defaults to the endpoint
+# name, which is also what the LiteLLM gateway registers (C-3).
+_CATALOG = {
+    "models": {
+        "phi-2": {"source": "hf://microsoft/phi-2"},
+        "olmo-7b": {"source": "hf://allenai/OLMo-7B-hf"},
+        "olmo-2-1124-13b-instruct": {"source": "hf://allenai/OLMo-2-1124-13B-Instruct"},
+    },
+    "endpoints": {
+        "phi2-single": {
+            "engine": "vllm",
+            "model": "phi-2",
+            "runtime": {"max_model_len": 2048},
+        },
+        "allenai-olmo-7b-single": {
+            "engine": "vllm",
+            "model": "olmo-7b",
+            "runtime": {"max_model_len": 2048},
+        },
+        "allenai-olmo-2-1124-13b-instruct-single": {
+            "engine": "vllm",
+            "model": "olmo-2-1124-13b-instruct",
+            "runtime": {"tensor_parallel_size": 1, "max_model_len": 4096},
+        },
+    },
+}
 
 
-def test_export_bundle_distinguishes_gpt_oss_chat_vs_completions(tmp_path: Path) -> None:
-    vllm_root = _make_infer_stack_root(tmp_path)
-    completions = export_benchmark_bundle(
-        "gpt-oss-20b-completions",
-        bundle_root=tmp_path / "gpt-oss-completions",
-        simulate_hardware="1x96",
-        vllm_root=vllm_root,
-        api_key_value="explicit-test-key",
-    )
-    chat = export_benchmark_bundle(
-        "gpt-oss-20b-chat",
-        bundle_root=tmp_path / "gpt-oss-chat",
-        simulate_hardware="1x96",
-        vllm_root=vllm_root,
-        api_key_value="explicit-test-key",
-    )
-    completions_doc = yaml.safe_load(completions["model_deployments_path"].read_text())["model_deployments"][0]
-    chat_doc = yaml.safe_load(chat["model_deployments_path"].read_text())["model_deployments"][0]
-    assert completions_doc["client_spec"]["class_name"].endswith("OpenAILegacyCompletionsClient")
-    assert chat_doc["client_spec"]["class_name"].endswith("OpenAIClient")
+def _make_config_dir(tmp_path: Path) -> Path:
+    config_dir = tmp_path / "infer_stack_config"
+    config_dir.mkdir()
+    (config_dir / "catalog.yaml").write_text(yaml.safe_dump(_CATALOG), encoding="utf-8")
+    return config_dir
 
 
-def test_export_bundle_uses_qwen_direct_vllm_convention(tmp_path: Path) -> None:
-    vllm_root = _make_infer_stack_root(tmp_path)
+def _deployment(result: dict) -> dict:
+    return yaml.safe_load(result["model_deployments_path"].read_text())["model_deployments"][0]
+
+
+def test_resolve_serving_facts_reads_catalog(tmp_path: Path) -> None:
+    config_dir = _make_config_dir(tmp_path)
+    facts = resolve_serving_facts("phi2-single", config_dir=config_dir)
+    assert facts.served_model_name == "phi2-single"
+    assert facts.hf_model_id == "microsoft/phi-2"
+    assert facts.max_model_len == 2048
+
+
+def test_resolve_serving_facts_rejects_unknown_endpoint(tmp_path: Path) -> None:
+    config_dir = _make_config_dir(tmp_path)
+    with pytest.raises(Exception):
+        resolve_serving_facts("does-not-exist", config_dir=config_dir)
+
+
+def test_phi2_export_uses_openai_completions_client(tmp_path: Path) -> None:
+    config_dir = _make_config_dir(tmp_path)
     result = export_benchmark_bundle(
-        "qwen2-72b-instruct-tp2-balanced",
-        preset="qwen2_72b_vllm",
-        bundle_root=tmp_path / "qwen-bundle",
-        simulate_hardware="2x96",
-        vllm_root=vllm_root,
-    )
-    deployment = yaml.safe_load(result["model_deployments_path"].read_text())["model_deployments"][0]
-    assert deployment["name"] == "vllm/qwen2-72b-instruct-local"
-    assert deployment["client_spec"]["class_name"].endswith("VLLMChatClient")
-    assert deployment["client_spec"]["args"]["vllm_model_name"] == "Qwen/Qwen2-72B-Instruct"
-
-
-def test_machine_local_bundle_uses_absolute_model_deployments_path(tmp_path: Path) -> None:
-    vllm_root = _make_infer_stack_root(tmp_path)
-    bundle_root = tmp_path / "machine-local-bundle"
-    result = export_benchmark_bundle(
-        "gpt-oss-20b-completions",
-        preset="gpt_oss_20b_vllm",
-        bundle_root=bundle_root,
-        simulate_hardware="1x96",
-        vllm_root=vllm_root,
+        "",
+        preset="e2e-phi_2-vllm-philosophy",
+        bundle_root=tmp_path / "phi2-bundle",
+        config_dir=config_dir,
+        base_url="http://localhost:14042/v1",
         api_key_value="explicit-test-key",
     )
-    smoke = yaml.safe_load(result["benchmark_smoke_manifest_path"].read_text())
-    assert smoke["model_deployments_fpath"] == str((bundle_root / "model_deployments.yaml").resolve())
+    dep = _deployment(result)
+    # phi-2 declares protocol_mode=completions + access_kind=openai-compatible.
+    assert dep["client_spec"]["class_name"].endswith("OpenAILegacyCompletionsClient")
+    assert dep["name"] == "vllm/phi-2-local"
+    # HELM aliases come from the preset, NOT the catalog hf_model_id.
+    assert dep["model_name"] == "microsoft/phi-2"
+    assert dep["tokenizer_name"] == "microsoft/phi-2"
+    # The client must request the served name == endpoint name (C-3).
+    assert dep["client_spec"]["args"]["openai_model_name"] == "phi2-single"
+    assert dep["client_spec"]["args"]["base_url"] == "http://localhost:14042/v1"
+    assert dep["max_sequence_length"] == 2048
+    assert dep["max_sequence_and_generated_tokens_length"] == 2048
 
 
-def test_export_bundle_fails_fast_when_openai_auth_is_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    vllm_root = _make_infer_stack_root(tmp_path)
+def test_phi2_export_fails_fast_when_openai_auth_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_dir = _make_config_dir(tmp_path)
     monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
     with pytest.raises(ValueError, match="LITELLM_MASTER_KEY"):
         export_benchmark_bundle(
-            "gpt-oss-20b-completions",
-            preset="gpt_oss_20b_vllm",
+            "",
+            preset="e2e-phi_2-vllm-philosophy",
             bundle_root=tmp_path / "missing-auth",
-            simulate_hardware="1x96",
-            vllm_root=vllm_root,
+            config_dir=config_dir,
         )
     assert not (tmp_path / "missing-auth" / "bundle.yaml").exists()
 
 
-def test_export_bundle_uses_env_auth_when_available(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    vllm_root = _make_infer_stack_root(tmp_path)
+def test_phi2_export_uses_env_auth_when_available(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_dir = _make_config_dir(tmp_path)
     monkeypatch.setenv("LITELLM_MASTER_KEY", "env-test-key")
     result = export_benchmark_bundle(
-        "gpt-oss-20b-completions",
-        preset="gpt_oss_20b_vllm",
+        "",
+        preset="e2e-phi_2-vllm-philosophy",
         bundle_root=tmp_path / "env-auth",
-        simulate_hardware="1x96",
-        vllm_root=vllm_root,
+        config_dir=config_dir,
     )
-    deployment = yaml.safe_load(result["model_deployments_path"].read_text())["model_deployments"][0]
-    assert deployment["client_spec"]["args"]["api_key"] == "env-test-key"
+    assert _deployment(result)["client_spec"]["args"]["api_key"] == "env-test-key"
 
 
-def test_export_bundle_uses_explicit_auth_when_available(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    vllm_root = _make_infer_stack_root(tmp_path)
+def test_phi2_export_uses_explicit_auth_over_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_dir = _make_config_dir(tmp_path)
     monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
-    result = export_benchmark_bundle(
-        "gpt-oss-20b-completions",
-        preset="gpt_oss_20b_vllm",
-        bundle_root=tmp_path / "explicit-auth",
-        simulate_hardware="1x96",
-        vllm_root=vllm_root,
-        api_key_value="explicit-test-key",
-    )
-    deployment = yaml.safe_load(result["model_deployments_path"].read_text())["model_deployments"][0]
-    assert deployment["client_spec"]["args"]["api_key"] == "explicit-test-key"
-
-
-def test_qwen_direct_vllm_export_does_not_require_litellm_auth(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    vllm_root = _make_infer_stack_root(tmp_path)
-    monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
-    result = export_benchmark_bundle(
-        "qwen2-72b-instruct-tp2-balanced",
-        preset="qwen2_72b_vllm",
-        bundle_root=tmp_path / "qwen-direct",
-        simulate_hardware="2x96",
-        vllm_root=vllm_root,
-    )
-    deployment = yaml.safe_load(result["model_deployments_path"].read_text())["model_deployments"][0]
-    assert "api_key" not in deployment["client_spec"]["args"]
-
-
-def test_export_bundle_supports_multi_model_kubeai_overnight_preset(tmp_path: Path) -> None:
-    vllm_root = _make_infer_stack_root(tmp_path)
     result = export_benchmark_bundle(
         "",
-        preset="small_models_kubeai_overnight",
-        bundle_root=tmp_path / "small-models-kubeai",
-        vllm_root=vllm_root,
+        preset="e2e-phi_2-vllm-philosophy",
+        bundle_root=tmp_path / "explicit-auth",
+        config_dir=config_dir,
+        api_key_value="explicit-test-key",
     )
-    deployments = yaml.safe_load(result["model_deployments_path"].read_text())["model_deployments"]
-    assert [item["name"] for item in deployments] == [
-        "kubeai/qwen2-5-7b-instruct-turbo-default-local",
-        "kubeai/vicuna-7b-v1-3-no-chat-template-local",
-    ]
-    assert deployments[0]["model_name"] == "qwen/qwen2.5-7b-instruct-turbo"
-    assert deployments[0]["tokenizer_name"] == "qwen/qwen2.5-7b-instruct"
-    assert deployments[0]["tokenizer_name"] != "qwen/qwen2.5-7b-instruct-turbo"
-    assert deployments[0]["client_spec"]["class_name"].endswith("OpenAIClient")
-    assert deployments[0]["client_spec"]["args"]["base_url"] == "http://127.0.0.1:8000/openai/v1"
-    assert deployments[0]["client_spec"]["args"]["openai_model_name"] == "qwen2-5-7b-instruct-turbo-default"
-    assert deployments[0]["max_sequence_and_generated_tokens_length"] == 32768
-    assert deployments[1]["model_name"] == "lmsys/vicuna-7b-v1.3"
-    assert deployments[1]["tokenizer_name"] == "hf-internal-testing/llama-tokenizer"
-    assert deployments[1]["tokenizer_name"] != "lmsys/vicuna-7b-v1.3"
-    assert deployments[1]["client_spec"]["class_name"].endswith("VLLMClient")
-    assert deployments[1]["client_spec"]["args"]["vllm_model_name"] == "vicuna-7b-v1-3-no-chat-template"
-    assert "api_key" not in deployments[1]["client_spec"]["args"]
-    assert deployments[1]["max_sequence_length"] == 2048
-    assert deployments[1]["max_sequence_and_generated_tokens_length"] == 2040
+    assert _deployment(result)["client_spec"]["args"]["api_key"] == "explicit-test-key"
 
-    bundle = yaml.safe_load(result["bundle_path"].read_text())
-    assert [item["public_name"] for item in bundle["profiles"]] == [
-        "qwen2-5-7b-instruct-turbo-default",
-        "vicuna-7b-v1-3-no-chat-template",
-    ]
 
-    overnight = yaml.safe_load(result["benchmark_full_manifest_path"].read_text())
-    assert overnight["experiment_name"] == "audit-small-models-kubeai-overnight"
-    assert any("model_deployment=kubeai/qwen2-5-7b-instruct-turbo-default-local" in entry for entry in overnight["run_entries"])
-    assert any("model_deployment=kubeai/vicuna-7b-v1-3-no-chat-template-local" in entry for entry in overnight["run_entries"])
+def test_olmo_base_preset_defaults_to_direct_vllm(tmp_path: Path) -> None:
+    # With no --access-kind override, the OLMo base preset's declared
+    # access_kind=vllm-direct + protocol_mode=completions yields a direct
+    # VLLMClient with no gateway auth.
+    config_dir = _make_config_dir(tmp_path)
+    result = export_benchmark_bundle(
+        "",
+        preset="allenai-olmo-7b",
+        bundle_root=tmp_path / "olmo-direct",
+        config_dir=config_dir,
+    )
+    dep = _deployment(result)
+    assert dep["name"] == "vllm/allenai-olmo-7b"
+    assert dep["client_spec"]["class_name"].endswith("VLLMClient")
+    assert dep["client_spec"]["args"]["vllm_model_name"] == "allenai-olmo-7b-single"
+    assert "api_key" not in dep["client_spec"]["args"]
+    assert dep["model_name"] == "allenai/olmo-7b"
+    assert dep["tokenizer_name"] == "allenai/olmo-7b"
+    # The preset reserves headroom below max-model-len.
+    assert dep["max_sequence_length"] == 2048
+    assert dep["max_sequence_and_generated_tokens_length"] == 2016
+
+
+def test_olmo_base_preset_routed_through_gateway(tmp_path: Path) -> None:
+    # This mirrors what the smoke/full grid runners do: override the preset's
+    # vllm-direct access kind with openai-compatible + the LiteLLM gateway.
+    config_dir = _make_config_dir(tmp_path)
+    result = export_benchmark_bundle(
+        "",
+        preset="allenai-olmo-7b",
+        bundle_root=tmp_path / "olmo-gateway",
+        config_dir=config_dir,
+        access_kind="openai-compatible",
+        base_url="http://localhost:14042/v1",
+        api_key_value="gateway-key",
+    )
+    dep = _deployment(result)
+    assert dep["client_spec"]["class_name"].endswith("OpenAILegacyCompletionsClient")
+    assert dep["client_spec"]["args"]["openai_model_name"] == "allenai-olmo-7b-single"
+    assert dep["client_spec"]["args"]["api_key"] == "gateway-key"
+    assert dep["client_spec"]["args"]["base_url"] == "http://localhost:14042/v1"
+
+
+def test_olmo_instruct_reuses_sibling_tokenizer_alias(tmp_path: Path) -> None:
+    # The 13B instruct model intentionally reuses the 7B tokenizer alias, and is
+    # a chat model (vllm-direct default -> VLLMChatClient).
+    config_dir = _make_config_dir(tmp_path)
+    result = export_benchmark_bundle(
+        "",
+        preset="allenai-olmo-2-1124-13b-instruct",
+        bundle_root=tmp_path / "olmo-13b",
+        config_dir=config_dir,
+    )
+    dep = _deployment(result)
+    assert dep["client_spec"]["class_name"].endswith("VLLMChatClient")
+    assert dep["model_name"] == "allenai/olmo-2-1124-13b-instruct"
+    assert dep["tokenizer_name"] == "allenai/olmo-2-1124-7b-instruct"
+    assert dep["tokenizer_name"] != dep["model_name"]
+
+
+def test_machine_local_bundle_uses_absolute_model_deployments_path(tmp_path: Path) -> None:
+    config_dir = _make_config_dir(tmp_path)
+    bundle_root = tmp_path / "machine-local-bundle"
+    result = export_benchmark_bundle(
+        "",
+        preset="e2e-phi_2-vllm-philosophy",
+        bundle_root=bundle_root,
+        config_dir=config_dir,
+        api_key_value="explicit-test-key",
+    )
+    smoke = yaml.safe_load(result["benchmark_smoke_manifest_path"].read_text())
+    assert smoke["model_deployments_fpath"] == str((bundle_root / "model_deployments.yaml").resolve())

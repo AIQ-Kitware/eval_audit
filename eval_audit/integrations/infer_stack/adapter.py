@@ -6,6 +6,7 @@ import shutil
 import sys
 import subprocess
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "profile": "gpt-oss-20b-completions-dp4",
         "bundle_name": "gpt_oss_20b_core_grid",
         "access_kind": "openai-compatible",
+        # G2: the old `-completions` profile name encoded this; now explicit.
+        # (Frozen/archival preset — no catalog entry ships for it.)
+        "protocol_mode": "completions",
         "model_deployment_name": "litellm/gpt-oss-20b-local",
         "smoke_manifest": {
             "experiment_name": "audit-gpt-oss-20b-core-grid-smoke",
@@ -84,6 +88,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "profile": "gpt-oss-20b-completions",
         "bundle_name": "gpt_oss_20b_vllm",
         "access_kind": "openai-compatible",
+        # G2: the old `-completions` profile name encoded this; now explicit.
+        # (Frozen/archival preset — no catalog entry ships for it.)
+        "protocol_mode": "completions",
         "model_deployment_name": "litellm/gpt-oss-20b-local",
         "smoke_manifest": {
             "experiment_name": "audit-gpt-oss-20b-vllm-smoke",
@@ -343,6 +350,7 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 "model_deployment_name": "vllm/phi-2-local",
                 "helm_model_name": "microsoft/phi-2",
                 "helm_tokenizer_name": "microsoft/phi-2",
+                "protocol_mode": "completions",
                 "helm_max_sequence_and_generated_tokens_length": 2048,
             }
         ],
@@ -376,6 +384,7 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 "model_deployment_name": "vllm/phi-2-local",
                 "helm_model_name": "microsoft/phi-2",
                 "helm_tokenizer_name": "microsoft/phi-2",
+                "protocol_mode": "completions",
                 "helm_max_sequence_and_generated_tokens_length": 2048,
             }
         ],
@@ -424,6 +433,7 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 "model_deployment_name": "vllm/phi-2-local",
                 "helm_model_name": "microsoft/phi-2",
                 "helm_tokenizer_name": "microsoft/phi-2",
+                "protocol_mode": "completions",
                 "helm_max_sequence_and_generated_tokens_length": 2048,
             }
         ],
@@ -457,6 +467,11 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "bundle_name": "allenai-olmo-7b",
         "access_kind": "vllm-direct",
         "model_deployment_name": "vllm/allenai-olmo-7b",
+        # G1: HELM model/tokenizer aliases (moved out of the deleted infer_stack
+        # models.yaml). Base model → completions protocol (G2).
+        "helm_model_name": "allenai/olmo-7b",
+        "helm_tokenizer_name": "allenai/olmo-7b",
+        "protocol_mode": "completions",
         # Reserve 32 tokens below max-model-len (2048) so the live vLLM path
         # never trips its hard prompt+generation budget: HELM truncates the
         # *raw* prompt to this budget, but the served client adds a few tokens
@@ -589,6 +604,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "bundle_name": "allenai-olmo-2-0325-32b-instruct",
         "access_kind": "vllm-direct",
         "model_deployment_name": "vllm/allenai-olmo-2-0325-32b-instruct",
+        # G1: HELM aliases. Instruct model → chat protocol (the G2 default).
+        "helm_model_name": "allenai/olmo-2-0325-32b-instruct",
+        "helm_tokenizer_name": "allenai/olmo-2-0325-32b-instruct",
         # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
         # The chat-template wrapper adds ~12 tokens HELM doesn't count, so the
         # num_output_tokens=2048 run_entries (gpqa/mmlu_pro/ifeval) overflow
@@ -621,6 +639,12 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "bundle_name": "allenai-olmo-1-7-7b",
         "access_kind": "vllm-direct",
         "model_deployment_name": "vllm/allenai-olmo-1-7-7b",
+        # G1: tokenizer alias is case-sensitive and non-obvious (the "-hf"
+        # conversion repo), distinct from the lowercase HELM model alias.
+        # Base model → completions protocol (G2).
+        "helm_model_name": "allenai/olmo-1.7-7b",
+        "helm_tokenizer_name": "allenai/OLMo-1.7-7B-hf",
+        "protocol_mode": "completions",
         # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
         "helm_max_sequence_and_generated_tokens_length": 4064,
         "smoke_manifest": {
@@ -703,6 +727,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "bundle_name": "allenai-olmo-2-1124-13b-instruct",
         "access_kind": "vllm-direct",
         "model_deployment_name": "vllm/allenai-olmo-2-1124-13b-instruct",
+        # G1: the 13B reuses the 7B tokenizer alias (intentional, not a typo).
+        "helm_model_name": "allenai/olmo-2-1124-13b-instruct",
+        "helm_tokenizer_name": "allenai/olmo-2-1124-7b-instruct",
         # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
         "helm_max_sequence_and_generated_tokens_length": 4064,
         "smoke_manifest": {
@@ -732,6 +759,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "bundle_name": "allenai-olmo-2-1124-7b-instruct",
         "access_kind": "vllm-direct",
         "model_deployment_name": "vllm/allenai-olmo-2-1124-7b-instruct",
+        # G1: HELM aliases. Instruct model → chat protocol (the G2 default).
+        "helm_model_name": "allenai/olmo-2-1124-7b-instruct",
+        "helm_tokenizer_name": "allenai/olmo-2-1124-7b-instruct",
         # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
         "helm_max_sequence_and_generated_tokens_length": 4064,
         "smoke_manifest": {
@@ -761,6 +791,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "bundle_name": "allenai-olmoe-1b-7b-0125-instruct",
         "access_kind": "vllm-direct",
         "model_deployment_name": "vllm/allenai-olmoe-1b-7b-0125-instruct",
+        # G1: HELM aliases. Instruct model → chat protocol (the G2 default).
+        "helm_model_name": "allenai/olmoe-1b-7b-0125-instruct",
+        "helm_tokenizer_name": "allenai/olmoe-1b-7b-0125-instruct",
         # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
         # OLMoE's chat template adds ~13 tokens HELM doesn't count.
         "helm_max_sequence_and_generated_tokens_length": 4064,
@@ -789,6 +822,17 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
 }
 
 
+# The infer_stack leasing front door is a single LiteLLM gateway; its host port
+# is a fixed default in the new CLI (config.py:DEFAULT_PORTS['litellm']). Callers
+# normally pass an explicit --base-url resolved from `infer-stack env`, but when
+# none is given we fall back to this deterministic gateway URL (default-B; see
+# docs/planning/infer-stack-cli-api-migration.md §5.G3).
+DEFAULT_GATEWAY_PORT = 14042
+# The managed env-var holding the LiteLLM master key (infer_stack
+# compose.py:API_KEY_ENV). Unchanged across the catalog/leasing rewrite.
+LITELLM_AUTH_ENV = "LITELLM_MASTER_KEY"
+
+
 def infer_stack_root() -> Path:
     return repo_root() / "submodules" / "infer_stack"
 
@@ -799,48 +843,74 @@ def _ensure_importable_infer_stack(root: Path | None = None) -> None:
         sys.path.insert(0, package_root)
 
 
-def _import_infer_stack_contracts(root: Path | None = None) -> Any:
+def _import_infer_stack_leasing(root: Path | None = None) -> Any:
+    """Import the vendored ``infer_stack.leasing`` package (``Catalog`` et al.).
+
+    Replaces the deleted ``infer_stack.contracts`` import. The catalog/leasing
+    world is the new source of transport facts (served name, backing HF model,
+    served context window)."""
     _ensure_importable_infer_stack(root)
-    return importlib.import_module("infer_stack.contracts")
+    return importlib.import_module("infer_stack.leasing")
 
 
-def load_profile_contract(
-    profile: str,
+def _infer_stack_config_root(config_dir: Path | None = None) -> Path:
+    """Resolve the infer-stack config dir that holds ``catalog.yaml``.
+
+    Honors an explicit override (the CLI ``--config-dir`` / ``--vllm-root``),
+    otherwise defers to infer_stack's own ``config_root()`` (which reads
+    ``INFER_STACK_CONFIG_DIR``)."""
+    if config_dir is not None:
+        return Path(config_dir).expanduser().resolve()
+    _ensure_importable_infer_stack()
+    paths = importlib.import_module("infer_stack.paths")
+    return paths.config_root()
+
+
+@dataclass(frozen=True)
+class ServingFacts:
+    """The transport facts the serving catalog uniquely supplies for one endpoint.
+
+    Everything HELM-domain (model/tokenizer alias, protocol mode) comes from the
+    eval_audit preset; everything transport (base_url, api key, access kind) is
+    caller-supplied. The catalog only authoritatively knows the served name, the
+    backing HF model id, and the served context window — so those are the only
+    fields this carries (see the §3 strategic decision in the migration plan)."""
+
+    endpoint: str
+    served_model_name: str
+    hf_model_id: str
+    max_model_len: int | None = None
+
+
+def resolve_serving_facts(
+    endpoint: str,
     *,
-    backend: str | None = None,
-    simulate_hardware: str | None = None,
-    vllm_root: Path | None = None,
-) -> dict[str, Any]:
-    root = (vllm_root or infer_stack_root()).resolve()
-    contracts = _import_infer_stack_contracts(root)
-    # NOTE: ``root`` is consumed by _import_infer_stack_contracts above (it puts
-    # the vendored submodule on sys.path). The inner load_profile_contract no
-    # longer accepts a ``root`` kwarg — infer_stack dropped it in b844c9f
-    # ("Make config/data paths CWD-independent"), resolving config via
-    # config_root()/INFER_STACK_CONFIG_DIR instead. Passing root= here raised
-    # TypeError against the pinned submodule.
-    return contracts.load_profile_contract(
-        profile,
-        backend=backend,
-        simulate_hardware_spec=simulate_hardware,
+    config_dir: Path | None = None,
+) -> ServingFacts:
+    """Resolve one catalog endpoint into its transport facts.
+
+    Replaces the deleted ``infer_stack.contracts.load_profile_contract``: reads
+    the new ``catalog.yaml`` via ``infer_stack.leasing.Catalog`` and returns only
+    the facts the catalog owns. Hardware-free (no GPU simulation) and pure-static
+    (no live/rendered stack needed) — under default-B the gateway base_url is
+    deterministic and supplied by the caller, so the resolver never has to probe
+    a running deployment for a port."""
+    leasing = _import_infer_stack_leasing()
+    catalog_path = _infer_stack_config_root(config_dir) / "catalog.yaml"
+    catalog = leasing.Catalog.load(catalog_path)
+    request = catalog.resolve_endpoint(endpoint)
+    if request.engine != "vllm":
+        raise ValueError(
+            f"catalog endpoint {endpoint!r} uses engine {request.engine!r}; "
+            "benchmark export only supports vLLM endpoints."
+        )
+    served = request.served
+    return ServingFacts(
+        endpoint=endpoint,
+        served_model_name=served["served_model_name"],
+        hf_model_id=served["hf_model_id"],
+        max_model_len=request.capacity.get("max_model_len"),
     )
-
-
-def _select_service(contract: dict[str, Any]) -> dict[str, Any]:
-    services = contract.get("services", [])
-    if len(services) != 1:
-        raise ValueError("Benchmark integration currently expects a single-service contract")
-    return services[0]
-
-
-def _select_access(service: dict[str, Any], access_kind: str | None) -> dict[str, Any]:
-    default = service["access"]["default"]
-    if access_kind is None or default["kind"] == access_kind:
-        return default
-    for candidate in service["access"].get("additional", []):
-        if candidate["kind"] == access_kind:
-            return candidate
-    raise KeyError(f"No access kind {access_kind!r} available for service {service['public_name']}")
 
 
 def _benchmark_client_class(protocol_mode: str, access_kind: str) -> str:
@@ -853,41 +923,35 @@ def _benchmark_client_class(protocol_mode: str, access_kind: str) -> str:
     )
 
 
-def _prefer_vllm_client_for_kubeai(contract: dict[str, Any], service: dict[str, Any], access: dict[str, Any]) -> bool:
-    return (
-        contract.get("backend") == "kubeai"
-        and service["protocol"]["mode"] == "completions"
-        and access["kind"] == "openai-compatible"
-        and str(service["protocol"].get("engine", "")).upper() == "VLLM"
-    )
+def _default_gateway_base_url() -> str:
+    return f"http://127.0.0.1:{DEFAULT_GATEWAY_PORT}/v1"
 
 
-def _default_deployment_name(service: dict[str, Any], access_kind: str) -> str:
+def _default_deployment_name(served_name: str, access_kind: str) -> str:
     prefix = "vllm" if access_kind == "vllm-direct" else "litellm"
-    return f"{prefix}/{service['public_name']}-local"
+    return f"{prefix}/{served_name}-local"
 
 
-def _resolve_api_key(access: dict[str, Any], *, api_key_value: str | None = None) -> str | None:
-    if access["kind"] == "vllm-direct":
+def _resolve_api_key(access_kind: str, *, api_key_value: str | None = None) -> str | None:
+    # vllm-direct hits the vLLM server directly (no gateway auth); an explicit
+    # value is forwarded verbatim, otherwise none is required.
+    if access_kind == "vllm-direct":
         return api_key_value
     if api_key_value is not None:
         return api_key_value
-    env_name = access.get("auth_env_name", "")
-    env_value = os.environ.get(env_name) if env_name else None
+    env_value = os.environ.get(LITELLM_AUTH_ENV)
     if env_value:
         return env_value
-    if not access.get("auth_required", access.get("auth_placeholder") != "EMPTY"):
-        return access.get("auth_placeholder")
     raise ValueError(
-        "Selected access mode "
-        f"{access['kind']!r} requires credentials via {env_name!r}; "
-        "bundle was not written because credentials were missing."
+        f"Selected access mode {access_kind!r} requires credentials via "
+        f"{LITELLM_AUTH_ENV!r}; bundle was not written because credentials were missing."
     )
 
 
 def _model_deployment_entry(
-    contract: dict[str, Any],
+    facts: ServingFacts,
     *,
+    protocol_mode: str = "chat",
     helm_model_name: str | None = None,
     helm_tokenizer_name: str | None = None,
     helm_max_sequence_and_generated_tokens_length: int | None = None,
@@ -895,40 +959,47 @@ def _model_deployment_entry(
     model_deployment_name: str | None = None,
     base_url: str | None = None,
     api_key_value: str | None = None,
-    extra_client_args: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    service = _select_service(contract)
-    access = _select_access(service, access_kind)
-    protocol_mode = service["protocol"]["mode"]
-    kind = access["kind"]
-    use_vllm_client = _prefer_vllm_client_for_kubeai(contract, service, access)
-    client_class = (
-        "helm.clients.vllm_client.VLLMClient"
-        if use_vllm_client
-        else _benchmark_client_class(protocol_mode, kind)
-    )
+    # default-B: the front door is the LiteLLM gateway (openai-compatible) for
+    # every preset; vllm-direct is a fallback-only marker (migration plan §5.G3).
+    kind = access_kind or "openai-compatible"
+    served_name = facts.served_model_name
+    if facts.max_model_len is None:
+        raise ValueError(
+            f"catalog endpoint {facts.endpoint!r} declares no runtime.max_model_len; "
+            "set endpoints.<name>.runtime.max_model_len in catalog.yaml so HELM can "
+            "size the prompt+generation budget."
+        )
+    max_model_len = int(facts.max_model_len)
+    client_class = _benchmark_client_class(protocol_mode, kind)
     entry = {
-        "name": model_deployment_name or _default_deployment_name(service, kind),
-        "model_name": helm_model_name or service["model"]["logical_model_name"],
-        "tokenizer_name": helm_tokenizer_name or service["model"]["tokenizer_name"],
-        "max_sequence_length": int(service["runtime"]["max_model_len"]),
+        "name": model_deployment_name or _default_deployment_name(served_name, kind),
+        # HELM-domain aliases are preset-authoritative; the catalog hf_model_id is
+        # only a last-resort fallback (and _assert_helm_aliases_exist fails loudly
+        # if it isn't a registered HELM alias — no silent wrong alias).
+        "model_name": helm_model_name or facts.hf_model_id,
+        "tokenizer_name": helm_tokenizer_name or facts.hf_model_id,
+        "max_sequence_length": max_model_len,
         # vLLM-style servers enforce the total prompt+generation budget against max-model-len.
         "max_sequence_and_generated_tokens_length": int(
-            helm_max_sequence_and_generated_tokens_length or service["runtime"]["max_model_len"]
+            helm_max_sequence_and_generated_tokens_length or max_model_len
         ),
         "client_spec": {
             "class_name": client_class,
             "args": {
-                "base_url": base_url or access["base_url"],
+                "base_url": base_url or _default_gateway_base_url(),
             },
         },
     }
-    if kind == "vllm-direct" or use_vllm_client:
-        entry["client_spec"]["args"]["vllm_model_name"] = access["request_model_name"]
+    if kind == "vllm-direct":
+        entry["client_spec"]["args"]["vllm_model_name"] = served_name
     else:
-        resolved_api_key = _resolve_api_key(access, api_key_value=api_key_value)
+        resolved_api_key = _resolve_api_key(kind, api_key_value=api_key_value)
         entry["client_spec"]["args"]["api_key"] = resolved_api_key
-        entry["client_spec"]["args"]["openai_model_name"] = service["model"]["model_ref"]
+        # The LiteLLM gateway registers each model under its endpoint name (the
+        # served name), so the client must request exactly that (C-3 in the plan:
+        # openai_model_name == endpoint public_name == served name).
+        entry["client_spec"]["args"]["openai_model_name"] = served_name
     return entry
 
 
@@ -968,6 +1039,10 @@ def _profile_specs(profile: str, preset_cfg: dict[str, Any]) -> list[dict[str, A
     return [{
         "profile": preset_cfg.get("profile", profile),
         "access_kind": preset_cfg.get("access_kind"),
+        # G2: the chat-vs-completions distinction used to live in the profile
+        # name (e.g. `-completions` vs `-chat`); the catalog has no such field,
+        # so it is now an explicit preset fact (default "chat").
+        "protocol_mode": preset_cfg.get("protocol_mode"),
         "model_deployment_name": preset_cfg.get("model_deployment_name"),
         "helm_model_name": preset_cfg.get("helm_model_name"),
         "helm_tokenizer_name": preset_cfg.get("helm_tokenizer_name"),
@@ -1042,7 +1117,7 @@ def _write_alias(src: Path, dst: Path) -> None:
 
 def materialize_benchmark_bundle(
     *,
-    contracts: list[dict[str, Any]],
+    facts: list[ServingFacts],
     output_dir: Path,
     preset: str | None = None,
     profile_specs: list[dict[str, Any]] | None = None,
@@ -1053,17 +1128,15 @@ def materialize_benchmark_bundle(
     output_dir = output_dir.resolve()
     preset_cfg = PRESET_CONFIGS.get(preset or "", {})
     specs = profile_specs or _profile_specs("", preset_cfg)
-    services = [_select_service(contract) for contract in contracts]
     model_entries = []
     selected_accesses = []
-    for contract, spec in zip(contracts, specs, strict=True):
-        service = _select_service(contract)
-        selected_kind = access_kind or spec.get("access_kind") or preset_cfg.get("access_kind")
-        # Allow presets/profiles to supply extra client args (e.g., default_instructions)
-        extra_client_args = spec.get("client_args") if spec.get("client_args") is not None else preset_cfg.get("client_args")
+    for fact, spec in zip(facts, specs, strict=True):
+        selected_kind = access_kind or spec.get("access_kind") or preset_cfg.get("access_kind") or "openai-compatible"
+        protocol_mode = spec.get("protocol_mode") or preset_cfg.get("protocol_mode") or "chat"
         model_entries.append(
             _model_deployment_entry(
-                contract,
+                fact,
+                protocol_mode=protocol_mode,
                 helm_model_name=spec.get("helm_model_name"),
                 helm_tokenizer_name=spec.get("helm_tokenizer_name"),
                 helm_max_sequence_and_generated_tokens_length=spec.get("helm_max_sequence_and_generated_tokens_length"),
@@ -1071,11 +1144,19 @@ def materialize_benchmark_bundle(
                 model_deployment_name=spec.get("model_deployment_name"),
                 base_url=base_url,
                 api_key_value=api_key_value,
-                extra_client_args=extra_client_args,
             )
         )
         _assert_helm_aliases_exist(model_entries[-1]["model_name"], model_entries[-1]["tokenizer_name"])
-        selected_accesses.append(_select_access(service, selected_kind))
+        # The old contract carried a rich access dict; under default-B the only
+        # facts worth recording are the resolved transport (for bundle.yaml
+        # traceability — nothing downstream parses it).
+        selected_accesses.append(
+            {
+                "kind": selected_kind,
+                "base_url": model_entries[-1]["client_spec"]["args"]["base_url"],
+                "request_model_name": fact.served_model_name,
+            }
+        )
     output_dir.mkdir(parents=True, exist_ok=True)
     model_deployments = {"model_deployments": model_entries}
     model_deployments_path = output_dir / "model_deployments.yaml"
@@ -1085,26 +1166,26 @@ def materialize_benchmark_bundle(
     smoke_spec = preset_cfg.get(
         "smoke_manifest",
         {
-            "experiment_name": f"{services[0]['public_name']}-smoke",
-            "description": f"Machine-local benchmark smoke manifest for {services[0]['public_name']}.",
+            "experiment_name": f"{facts[0].served_model_name}-smoke",
+            "description": f"Machine-local benchmark smoke manifest for {facts[0].served_model_name}.",
             "run_entries": [
-                f"ifeval:model={service['model']['logical_model_name']},model_deployment={entry['name']}"
-                for service, entry in zip(services, model_entries, strict=True)
+                f"ifeval:model={entry['model_name']},model_deployment={entry['name']}"
+                for entry in model_entries
             ],
-            "suite": f"{services[0]['public_name']}-smoke",
+            "suite": f"{facts[0].served_model_name}-smoke",
             "max_eval_instances": 5,
         },
     )
     full_spec = preset_cfg.get(
         "full_manifest",
         {
-            "experiment_name": f"{services[0]['public_name']}-full",
-            "description": f"Machine-local benchmark full manifest for {services[0]['public_name']}.",
+            "experiment_name": f"{facts[0].served_model_name}-full",
+            "description": f"Machine-local benchmark full manifest for {facts[0].served_model_name}.",
             "run_entries": [
-                f"ifeval:model={service['model']['logical_model_name']},model_deployment={entry['name']}"
-                for service, entry in zip(services, model_entries, strict=True)
+                f"ifeval:model={entry['model_name']},model_deployment={entry['name']}"
+                for entry in model_entries
             ],
-            "suite": f"{services[0]['public_name']}-full",
+            "suite": f"{facts[0].served_model_name}-full",
             "max_eval_instances": 1000,
         },
     )
@@ -1135,11 +1216,11 @@ def materialize_benchmark_bundle(
             "benchmark_full_manifest": str(benchmark_full_path),
         },
     }
-    if len(contracts) == 1:
-        bundle["profile"] = contracts[0]["profile"]
+    if len(facts) == 1:
+        bundle["profile"] = facts[0].endpoint
         bundle["selected_access"] = selected_accesses[0]
     else:
-        bundle["profiles"] = [contract["profile"] for contract in contracts]
+        bundle["profiles"] = [fact.endpoint for fact in facts]
         bundle["selected_accesses"] = selected_accesses
     bundle_path = output_dir / "bundle.yaml"
     _write_yaml(bundle_path, bundle)
@@ -1161,21 +1242,25 @@ def export_benchmark_bundle(
     preset: str | None = None,
     bundle_root: Path | None = None,
     backend: str | None = None,
-    simulate_hardware: str | None = None,
-    vllm_root: Path | None = None,
+    config_dir: Path | None = None,
     access_kind: str | None = None,
     base_url: str | None = None,
     api_key_value: str | None = None,
+    # Deprecated: ``simulate_hardware`` was the GPU-simulation knob for the old
+    # contract resolver; the catalog resolver is hardware-free, so it is now
+    # accept-and-ignore for one release (migration plan §5.G5). ``vllm_root`` is
+    # the legacy name for ``config_dir`` (the infer-stack config dir holding
+    # catalog.yaml); kept as an alias.
+    simulate_hardware: str | None = None,
+    vllm_root: Path | None = None,
 ) -> dict[str, Any]:
     preset_cfg = PRESET_CONFIGS.get(preset or "", {})
-    effective_backend = backend or preset_cfg.get("backend")
     specs = _profile_specs(profile, preset_cfg)
-    contracts = [
-        load_profile_contract(
+    resolved_config_dir = config_dir or vllm_root
+    facts = [
+        resolve_serving_facts(
             spec["profile"],
-            backend=effective_backend,
-            simulate_hardware=simulate_hardware,
-            vllm_root=vllm_root,
+            config_dir=resolved_config_dir,
         )
         for spec in specs
     ]
@@ -1194,7 +1279,7 @@ def export_benchmark_bundle(
             bundle_name = preset_cfg.get("bundle_name") or specs[0]["profile"].replace("-", "_")
             bundle_root = audit_store_root() / "local-bundles" / bundle_name
     return materialize_benchmark_bundle(
-        contracts=contracts,
+        facts=facts,
         output_dir=bundle_root,
         preset=preset,
         profile_specs=specs,
