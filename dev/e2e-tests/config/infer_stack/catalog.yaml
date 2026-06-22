@@ -1,0 +1,33 @@
+# infer-stack serving catalog (new schema) for the phi-2 e2e runbook.
+#
+# Replaces the old config.yaml/models.yaml profile world. A catalog declares
+# `models` (what can be served) and `endpoints` (the served API names users
+# ask for). `infer-stack serve <endpoint>` leases + brings up the endpoint;
+# `eval-audit ... export-benchmark-bundle` resolves the endpoint's served name
+# + context window via infer_stack.leasing.Catalog (see
+# eval_audit/integrations/infer_stack/adapter.py:resolve_serving_facts).
+#
+# Endpoint name == old `phi2-single` profile name on purpose: it doubles as the
+# LiteLLM model_name HELM requests (C-3), and keeping it matches the preset's
+# `profile` field (adapter.PRESET_CONFIGS["e2e-phi_2-vllm-philosophy"]) and the
+# E2E_TARGETS / 05_check_profiles.sh references — no churn there.
+#
+# HELM-domain facts (model/tokenizer alias, protocol mode) are NOT here: they
+# live in the eval_audit preset, which is authoritative (G1/G2). The catalog
+# only owns transport: the backing HF model + the served context window.
+models:
+  phi-2:
+    source: hf://microsoft/phi-2
+
+endpoints:
+  phi2-single:
+    engine: vllm
+    model: phi-2
+    # C-5: sizing is static catalog state now (no resolver inference). Mirrors
+    # the old models.yaml phi2 `defaults` block.
+    runtime:
+      max_model_len: 2048
+      gpu_memory_utilization: 0.8
+      max_num_batched_tokens: 2048
+      max_num_seqs: 16
+      enable_prefix_caching: true

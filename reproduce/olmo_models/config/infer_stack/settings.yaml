@@ -1,0 +1,16 @@
+# infer-stack durable settings (leasing world) for the six-OLMo runbook.
+#
+# Replaces the old config.yaml `active_profile` world. The leasing CLI reads
+# these top-level keys (infer_stack/cli/commands_meta.py `_SETTINGS`); the grid
+# runners point INFER_STACK_CONFIG_DIR at this dir (see ../../_lib.sh) so the
+# catalog.yaml beside this file is resolved.
+#
+# C-4: pin `litellm: true` (the OLMo grid routes HELM through the LiteLLM
+# gateway, default-B) and `ui: false` (no Open WebUI for a benchmark run).
+# `data_dir` is NOT pinned: it's host-specific and the runners export
+# INFER_STACK_DATA_DIR (C-2) so the managed `.env`/ledger are discoverable.
+backend: compose
+litellm: true
+ui: false
+skip_display_gpus: false
+reverse_proxy: false

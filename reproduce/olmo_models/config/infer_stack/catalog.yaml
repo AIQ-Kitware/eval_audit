@@ -1,0 +1,102 @@
+# infer-stack serving catalog (new schema) for the six OLMo models.
+#
+# Replaces the old config.yaml/models.yaml profile world (the six `*-single`
+# profiles + their vllm_models). A catalog declares `models` (what can be
+# served) and `endpoints` (the served API names). `infer-stack serve <endpoint>`
+# leases + brings one up; the grid runners serve them one at a time (with a
+# `release` between, C-1) because they will not co-host.
+#
+# Endpoint names == the old `<preset>-single` profile names on purpose: each
+# doubles as the LiteLLM model_name HELM requests (C-3), and matches the
+# preset's `profile` field (adapter.PRESET_CONFIGS) + OLMO_TARGETS +
+# 05_check_profiles.sh — no churn there.
+#
+# HELM-domain facts (the case-sensitive model/tokenizer aliases, protocol mode)
+# moved into the eval_audit OLMo presets (G1/G2) — they never belonged in a
+# serving layer and the catalog has no field for them. The catalog only owns
+# transport: the backing HF model + the served context window.
+#
+# ⚠️ hf_model_id (`source`) verification carries over from the old models.yaml:
+# the OLMo-2 / OLMoE ids are high-confidence; the OLMo-1 / OLMo-1.7 "-hf"
+# suffixes are lower-confidence — confirm on the HF Hub before a real run.
+#
+# C-5: sizing is static catalog state now (the resolver no longer infers it).
+# `tensor_parallel_size: 2` on the 32B is load-bearing — without it the 32B
+# OOMs on a single <80GB card. max_model_len / gpu_memory_utilization mirror the
+# old per-model `defaults` blocks.
+
+models:
+  olmoe-1b-7b-0125-instruct:
+    source: hf://allenai/OLMoE-1B-7B-0125-Instruct   # verify
+  olmo-7b:
+    source: hf://allenai/OLMo-7B-hf                   # verify (-hf is the vLLM-loadable conversion)
+  olmo-1.7-7b:
+    source: hf://allenai/OLMo-1.7-7B-hf               # verify (-hf suffix + 1.7 naming)
+  olmo-2-1124-7b-instruct:
+    source: hf://allenai/OLMo-2-1124-7B-Instruct      # high confidence
+  olmo-2-1124-13b-instruct:
+    source: hf://allenai/OLMo-2-1124-13B-Instruct     # high confidence
+  olmo-2-0325-32b-instruct:
+    source: hf://allenai/OLMo-2-0325-32B-Instruct     # high confidence
+
+endpoints:
+  allenai-olmoe-1b-7b-0125-instruct-single:
+    engine: vllm
+    model: olmoe-1b-7b-0125-instruct
+    runtime:
+      max_model_len: 4096
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+      enable_prefix_caching: true
+
+  allenai-olmo-7b-single:
+    engine: vllm
+    model: olmo-7b
+    runtime:
+      max_model_len: 2048
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 2048
+      max_num_seqs: 16
+      enable_prefix_caching: true
+
+  allenai-olmo-1-7-7b-single:
+    engine: vllm
+    model: olmo-1.7-7b
+    runtime:
+      max_model_len: 4096
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+      enable_prefix_caching: true
+
+  allenai-olmo-2-1124-7b-instruct-single:
+    engine: vllm
+    model: olmo-2-1124-7b-instruct
+    runtime:
+      max_model_len: 4096
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+      enable_prefix_caching: true
+
+  allenai-olmo-2-1124-13b-instruct-single:
+    engine: vllm
+    model: olmo-2-1124-13b-instruct
+    runtime:
+      max_model_len: 4096
+      gpu_memory_utilization: 0.9
+      max_num_batched_tokens: 4096
+      max_num_seqs: 8
+      enable_prefix_caching: true
+
+  allenai-olmo-2-0325-32b-instruct-single:
+    engine: vllm
+    model: olmo-2-0325-32b-instruct
+    runtime:
+      tensor_parallel_size: 2      # C-5: load-bearing — the 32B needs tp=2 on <80GB cards
+      max_model_len: 4096
+      gpu_memory_utilization: 0.9
+      max_num_batched_tokens: 4096
+      max_num_seqs: 8
+      enable_prefix_caching: true
