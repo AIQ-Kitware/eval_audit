@@ -24,8 +24,8 @@ pairs cleanly with the public run instead of all three pooling into one packet
 (same model + scenario → same canonical key). **Ordered HF-direct first, then the
 vLLM scenarios:** the HF target
 loads `microsoft/phi-2` onto the GPU itself, so it runs while the GPU is free —
-the grids tear down any vLLM stack at the start (`infer-stack down`) and
-run HF before bringing vLLM up, so the direct load can't OOM against a
+the grids free any vLLM stack at the start (`infer-stack release --all --evict`)
+and run HF before bringing vLLM up, so the direct load can't OOM against a
 GPU-resident server.
 
 | scenario (`name`) | transport | full `experiment_name` | what it exercises |
@@ -46,7 +46,7 @@ the per-scenario reports use `-full`.
 The grid branches per scenario on its `transport` (the second field of each
 `E2E_TARGETS` row in [`_lib.sh`](_lib.sh)):
 
-- **`vllm`** — `infer-stack switch` brings phi-2 up on vLLM and fronts it with
+- **`vllm`** — `infer-stack serve` brings phi-2 up on vLLM and fronts it with
   the LiteLLM gateway; `export-benchmark-bundle` materializes the bundle from the
   preset. The phi-2 presets already declare `access_kind: openai-compatible`, so
   the export passes only the LiteLLM base-url + master key — **no** `--access-kind`
@@ -55,17 +55,20 @@ The grid branches per scenario on its `transport` (the second field of each
   directly (the manifest's `enable_huggingface_models`), and the run is the
   checked-in `manifests/<experiment>.yaml`.
 
-## Serving profile
+## Serving endpoint
 
-The vLLM scenarios use the infer-stack profile `phi2-single`, shipped here:
+The vLLM scenarios use the infer-stack catalog endpoint `phi2-single`, shipped
+here (new catalog/leasing schema):
 
-- [`config/infer_stack/models.yaml`](config/infer_stack/models.yaml) — the `phi2`
-  vLLM model + the `phi2-single` profile (single GPU, fronted by LiteLLM).
-- [`config/infer_stack/config.yaml`](config/infer_stack/config.yaml) — points
-  `user_models_file` at the models.yaml.
+- [`config/infer_stack/catalog.yaml`](config/infer_stack/catalog.yaml) — the
+  `phi-2` model + the `phi2-single` endpoint (single GPU, fronted by LiteLLM).
+  HELM-domain facts (alias, protocol) live in the preset, not here.
+- [`config/infer_stack/settings.yaml`](config/infer_stack/settings.yaml) —
+  durable leasing settings (`litellm: true`, `ui: false`, `backend: compose`).
 
-`_lib.sh` sets `INFER_STACK_CONFIG_DIR` to that dir by default.
-`05_check_profiles.sh` validates the profile is present before the grid runs.
+`_lib.sh` sets `INFER_STACK_CONFIG_DIR` to that dir by default (and
+`INFER_STACK_DATA_DIR`, C-2). `05_check_profiles.sh` validates the endpoint is
+present before the grid runs.
 
 ## Containerized execution example (on by default)
 
@@ -118,9 +121,9 @@ VEXP_MANIFEST="$PWD/../../configs/virtual-experiments/e2e-phi2-container.yaml" \
 
 ```bash
 ./00_check_env.sh             # eval-audit-check-env
-./05_check_profiles.sh        # verify the phi2-single profile is defined (vLLM scenarios)
+./05_check_profiles.sh        # verify the phi2-single endpoint is defined (vLLM scenarios)
 ./06_check_container_image.sh # verify the runner image exists (no-op only if E2E_INCLUDE_CONTAINER=0)
-./10_run_smoke_grid.sh        # preflight: per scenario -> (vllm: switch -> wait-ready -> export bundle) -> run smoke
+./10_run_smoke_grid.sh        # preflight: per scenario -> (vllm: serve -> wait -> export bundle) -> run smoke
 ./15_run_full_grid.sh         # per scenario: same, but run the FULL manifest (the batch)
 ./20_index_local.sh           # eval-audit-index -> audit_results_index.csv (verifies the -full run dirs)
 ./30_compose.sh               # compose ONE virtual experiment per scenario (loops E2E_TARGETS)
@@ -178,9 +181,11 @@ own report dir. Set `VEXP_MANIFEST=<path>` to compose/summarize just one.
   per-packet). To make a scenario local-only, drop the `official_public_index`
   source from its manifest.
 - **LiteLLM / openai-compatible transport for the vLLM scenarios.**
-  `10`/`15` resolve the LiteLLM endpoint + master key via `infer-stack env --key`
-  and hand them to `export-benchmark-bundle`. HELM talks to the LiteLLM gateway,
-  which routes to phi-2's vLLM backend.
+  `10`/`15` read the master key via positional `infer-stack env
+  LITELLM_MASTER_KEY` (after `serve`, since the managed `.env` is written on
+  first bring-up) and hand it + the gateway base-url (port `14042` default) to
+  `export-benchmark-bundle`. HELM talks to the LiteLLM gateway, which routes to
+  phi-2's vLLM backend.
 - **No HuggingFace token required.** `microsoft/phi-2` and the MMLU dataset are
   public, so no scenario needs a token — there is no HF-auth preflight, unlike
   `reproduce/olmo_models`, whose gated `gpqa` runs do. (The `06` slot here is

@@ -35,54 +35,54 @@ The presets and their smoke/full `run_entries` already live in
 [`eval_audit/integrations/infer_stack/adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py)
 — this runbook adds no preset code.
 
-## Serving profiles: shipped here, but verify the HF ids
+## Serving endpoints: shipped here, but verify the HF ids
 
-The presets reference infer-stack profiles named `<preset>-single`, which are
-**not** in the repo's `submodules/infer_stack` builtin catalog. This runbook
-therefore ships its own infer-stack config:
+The presets reference infer-stack catalog endpoints named `<preset>-single`,
+which are **not** in the repo's `submodules/infer_stack`. This runbook therefore
+ships its own infer-stack config (new catalog/leasing schema):
 
-- [`config/infer_stack/models.yaml`](config/infer_stack/models.yaml) — the six
-  OLMo `vllm_models` + their `<preset>-single` profiles, in the simple
-  `services:`/`router:` form (each model on vLLM, fronted by LiteLLM). No
-  `benchmark_transport` block: the bundle's **default** access is
-  openai-compatible (the LiteLLM router), which is what this runbook uses.
-- [`config/infer_stack/config.yaml`](config/infer_stack/config.yaml) — points
-  `user_models_file` at the models.yaml.
+- [`config/infer_stack/catalog.yaml`](config/infer_stack/catalog.yaml) — the six
+  OLMo `models` (backing HF source) + their `<preset>-single` `endpoints` (each
+  served on vLLM, fronted by the LiteLLM gateway). HELM-domain facts
+  (model/tokenizer alias, protocol mode) live in the eval_audit presets, not
+  here — the catalog only owns transport (served name + context window).
+- [`config/infer_stack/settings.yaml`](config/infer_stack/settings.yaml) —
+  durable leasing settings (`litellm: true`, `ui: false`, `backend: compose`).
 
-`_lib.sh` sets `INFER_STACK_CONFIG_DIR` to that dir by default. All six profiles
-have been validated to resolve to contracts whose default access is
-openai-compatible via the real infer-stack resolver.
+`_lib.sh` sets `INFER_STACK_CONFIG_DIR` to that dir by default (and
+`INFER_STACK_DATA_DIR`, so `infer-stack env` and `serve` agree on where the
+managed `.env`/ledger live — C-2). All six endpoints have been validated to
+resolve via the real `infer_stack.leasing.Catalog`.
 
 **Still verify before a real run** (these are best-effort defaults, flagged in
-the models.yaml comments):
+the catalog.yaml comments):
 
-- **`hf_model_id`** — the OLMo-2 / OLMoE ids are high-confidence; the
+- **`source` (HF id)** — the OLMo-2 / OLMoE ids are high-confidence; the
   OLMo-1 / OLMo-1.7 `-hf` ids are lower-confidence — confirm on HF Hub.
-- **GPU sizing** — the 32B is set to `tp=2`; adjust `preferred_gpu_count` /
-  `resource_profile` to your hardware.
-- **HELM aliases** — `logical_model_name`/`tokenizer_name`
+- **GPU sizing** — the 32B endpoint sets `runtime.tensor_parallel_size: 2`;
+  adjust the `runtime.*` block to your hardware (C-5: sizing is static catalog
+  state now, not resolver-inferred).
+- **HELM aliases** — the presets' `helm_model_name`/`helm_tokenizer_name`
   (`allenai/olmo-7b`, …) must be registered in HELM's
   `submodules/helm/.../config/model_metadata.yaml` + `tokenizer_configs.yaml`;
   `export-benchmark-bundle` asserts this.
 
-`05_check_profiles.sh` validates profile presence up front and fails with
+`05_check_profiles.sh` validates endpoint presence up front and fails with
 guidance if any is missing.
 
-> **Known blocker (pre-existing, not OLMo-specific):** on a checkout where
-> `infer_stack` is not pip-installed, the adapter loads the vendored
-> `submodules/infer_stack`, whose `load_profile_contract()` does not accept the
-> `root` kwarg the adapter passes — so `export-benchmark-bundle` raises
-> `TypeError` for *any* vllm preset (qwen/gpt-oss/olmo). Resolve the
-> adapter↔submodule version skew (e.g. `uv pip install -e submodules/infer_stack`
-> with a compatible version) before running the grid.
+> **Pin the submodule.** The adapter imports the vendored
+> `submodules/infer_stack`; make sure the `infer-stack` CLI on `PATH` matches it
+> (`uv pip install -e submodules/infer_stack`) so the leasing verbs the grid
+> calls (`serve`/`wait`/`release`/`env`/`catalog`) are the same code the adapter
+> resolves against (C-8).
 
 ## Steps
 
 ```bash
 ./00_check_env.sh         # eval-audit-check-env
-./05_check_profiles.sh    # verify the six <preset>-single profiles are defined
+./05_check_profiles.sh    # verify the six <preset>-single endpoints are defined
 ./06_check_hf_auth.sh     # verify a HuggingFace token (gated gpqa dataset needs it)
-./10_run_smoke_grid.sh    # preflight: per model switch profile -> wait-ready -> export bundle -> run smoke
+./10_run_smoke_grid.sh    # preflight: per model release -> serve -> wait -> export bundle -> run smoke
 ./15_run_full_grid.sh     # per model: same, but run the FULL manifest (the reproducibility batch)
 ./20_index_local.sh       # eval-audit-index -> audit_results_index.csv (verifies the -full run dirs)
 ./30_compose.sh           # build the virtual experiment from the -full runs (the grouping step)
@@ -101,7 +101,10 @@ is kept for grouping the smoke preflight instead).
 - `AUDIT_STORE_ROOT` (default `/data/crfm-helm-audit-store`)
 - `AUDIT_RESULTS_ROOT` (default `/data/crfm-helm-audit`)
 - `VEXP_MANIFEST` — override the grouping manifest path
-- `INFER_STACK_CONFIG_DIR` — infer-stack config providing the OLMo profiles
+- `INFER_STACK_CONFIG_DIR` — infer-stack config providing the OLMo endpoints
+- `INFER_STACK_DATA_DIR` — where the managed LiteLLM `.env` + lease ledger live
+  (C-2); defaults to the XDG location, override to a big-disk path per host
+- `LITELLM_PORT` — LiteLLM gateway host port (default `14042`)
 - `OLMO_KEEP_GOING=1` — in `10_run_smoke_grid.sh` / `15_run_full_grid.sh`, attempt
   every model and report failures at the end instead of stopping on the first
   error (default: fail-fast)
@@ -123,14 +126,17 @@ is kept for grouping the smoke preflight instead).
   To compare against public HELM, uncomment the `official_public_index` source in
   the manifest (needs the public index + Stage-1 filter inventory present).
 - **LiteLLM / openai-compatible transport.** `10_run_smoke_grid.sh` /
-  `15_run_full_grid.sh` resolve the LiteLLM endpoint + master key via
-  `infer-stack env --key`, and override the presets' declared `vllm-direct`
+  `15_run_full_grid.sh` read the master key via `infer-stack env
+  LITELLM_MASTER_KEY` (after the model's `serve`, since the managed `.env` is
+  written on first bring-up), and override the presets' declared `vllm-direct`
   access with
   `--access-kind openai-compatible --base-url <litellm>/v1 --api-key-value <key>`
-  (mirrors `dev/e2e-tests/e2e-phi_2-vllm-philosophy.sh`). HELM talks to the
-  LiteLLM gateway, which routes to each model's vLLM backend.
-- **One model at a time.** `infer-stack switch` tears down the previous model;
-  the grid spans a 1B-active MoE to a 32B dense model, which will not co-host.
+  (default-B; mirrors the phi-2 e2e grid). HELM talks to the LiteLLM gateway,
+  which routes to each model's vLLM backend.
+- **One model at a time.** Each iteration runs `infer-stack release --all
+  --evict` before `serve` so only the current model holds GPUs (C-1: `serve`
+  *accumulates*, unlike the old `switch` which replaced); the grid spans a
+  1B-active MoE to a 32B dense model, which will not co-host.
 - **Gated datasets need HuggingFace auth.** The presets include every candidate
   run from `candidate_runs.json`, including ones tagged `requires-gated-dataset`
   — `gpqa` on the OLMo-2 / OLMoE instruct models (and the **smoke** entry for

@@ -1,5 +1,15 @@
 # OLMo smoke-suite runner + grouped report
 
+> **Migration note (2026-06-22):** the infer-stack serving recipe quoted below
+> predates the catalog/leasing CLI rewrite. The verbs have changed —
+> `switch --profile X --apply` + `wait-ready` → `serve X --yes` + `wait`,
+> `down` → `release --all --evict`, `list-profiles` → `catalog endpoint list`,
+> and the `<preset>-single` profiles are now catalog **endpoints**. The runnable
+> scripts under [`reproduce/olmo_models/`](../../reproduce/olmo_models/) and their
+> README are the current source of truth; see
+> [`infer-stack-cli-api-migration.md`](infer-stack-cli-api-migration.md). The
+> text below is kept as the original design narrative.
+
 **Goal:** Write code that runs the **smoke** manifests for the six AllenAI OLMo
 model presets and produces a **single grouped report** spanning all six, without
 collapsing their per-model identities. Deliverable is a runnable script (plus one
