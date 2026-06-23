@@ -4,14 +4,20 @@
 
 ## Implementation status
 
-| Item | State | Notes |
-|---|---|---|
-| **C1** cmd_queue `setup`/`teardown` | ✅ landed | `BashJob` (serial/tmux) + `SlurmJob`. Validated: success / main-fail / setup-fail / dep-skip / **SIGTERM** (process-group, real generated script) all bracket correctly; main exit code stays authoritative; slurm `--wrap` payloads behaviorally identical. Existing suite green (2 pre-existing `cmd_queue`-not-on-PATH CLI failures, unrelated). |
-| **K1** kwdagger `ProcessNode.setup`/`.teardown` | ✅ landed | Threaded through `submit_jobs` → `queue.submit`. New regression test `tests/test_submit_jobs_setup_teardown.py` (serial + tmux render + no-regression). Full suite green (18). True end-to-end: a demo node ran with `ACQUIRE`/`RELEASE` markers bracketing it. |
-| Cache-gates-setup (don't acquire for a done job) | deferred | **Not** needed on the default path: `--skip_existing=1` means done nodes aren't submitted at all, so they never acquire. The waste only appears in the narrow `cache=True, skip_existing=False` runtime-cache mode (setup runs, inner `test -e DONE` skips the work, teardown runs — wasteful but correct). A `skip_if_exists` on the cmd_queue job is the clean fix; track as a fast-follow if that mode is ever used. |
+All submodule infra is **landed on feature branches** (tested to the limit of a
+no-GPU/no-docker env; nothing pushed). The next phase is wiring eval_audit to use
+them — see [`infer-stack-kwdagger-eval-audit-handoff.md`](infer-stack-kwdagger-eval-audit-handoff.md).
 
-Everything below is the design of record; the infer-stack items (I1
-queue-and-wait, I2 no-blip, …) are unstarted.
+| Item | Branch | State | Notes |
+|---|---|---|---|
+| **C1** cmd_queue `setup`/`teardown` | cmd_queue `feature/job-setup-teardown` | ✅ landed | `BashJob` (serial/tmux) + `SlurmJob`. Validated: success / main-fail / setup-fail / dep-skip / **SIGTERM** (process-group, real generated script); main exit code authoritative; slurm `--wrap` parity. |
+| **K1** kwdagger `ProcessNode.setup`/`.teardown` | kwdagger `feature/processnode-setup-teardown` | ✅ landed | Threaded `submit_jobs` → `queue.submit`. New boundary test; suite (18) green; e2e demo node ran with `ACQUIRE`/`RELEASE` bracket. |
+| **I1** acquire admission queue (`--queue`) | infer-stack `feature/leasing-pipeline-lifecycle` | ✅ landed | `Controller.acquire(wait_for_placement=)` + `acquire`/`run --queue`. 3 fake-budget tests (queue-until-freed / timeout+rollback / fail-fast default). |
+| **I3** `infer-stack gc` | infer-stack `feature/leasing-pipeline-lifecycle` | ✅ landed | Sweep TTL-expired leases + reconcile; `--evict` for keep-warm. 2 tests. |
+| **I2** static superset litellm (no-blip) | infer-stack `feature/litellm-no-blip` | ✅ landed (rendering-validated) | Deterministic service names + catalog superset; config/spec invariant across model set. **Behavioral no-recreate + cooldown-recovery need a docker/GPU box.** 2 render tests. |
+| Cache-gates-setup (don't acquire for a done job) | — | deferred | Not needed on the `--skip_existing=1` default path (done nodes aren't submitted). Only the `cache=True, skip_existing=False` mode wastes a serve cycle; a `skip_if_exists` on the cmd_queue job is the clean fix if ever used. |
+| ~~I4 reclaim:stop~~ | — | **dropped** | Was a one-line eval_audit catalog config, not infra — folded into the eval_audit wiring (§13). |
+| ~~I5 run SIGTERM handler~~ | — | **dropped** | Optional; the kwdagger path uses the cmd_queue `teardown` trap (already SIGTERM-safe) and TTL + `gc` cover direct-`run` leaks. |
 
 
 
@@ -318,14 +324,12 @@ run time (they are).
    exit, failure, SIGINT, and SIGTERM (incl. `tmux kill-session` and slurm
    `scancel` within the `--signal` grace window). For the non-kwdagger
    convenience path, the `infer-stack run` `try/finally` covers exit/failure/
-   SIGINT (a `run` SIGTERM handler — table I5 — closes its SIGTERM gap).
+   SIGINT. (A `run` SIGTERM handler for that path was considered and dropped —
+   the kwdagger pipeline path is the one that matters, and it uses this trap.)
 2. **Finite TTL + sweep** — SIGKILL / OOM-killer / reboot (uncatchable by *any*
-   in-band mechanism). The next acquire's
-   `reconcile()→sweep()` expires the leak and frees the GPU (§4). For the
-   *last* job in a run (nothing after it to trigger a sweep), add a standalone
-   **`infer-stack gc`** verb (sweep + reconcile) to run as a final pipeline step
-   and/or periodically. *(Small infer-stack change — the logic exists; it just
-   isn't exposed standalone today.)*
+   in-band mechanism). The next acquire's `reconcile()→sweep()` expires the leak
+   and frees the GPU (§4); the standalone **`infer-stack gc`** verb (landed) does
+   the same as a final pipeline step and/or periodically (cron).
 
 **TTL sizing:** TTL must exceed worst-case (model load + run). Big tp models
 load slowly; kwdagger has no heartbeat. Either set TTL generously per endpoint,
@@ -440,9 +444,11 @@ to revisit then. No action now.
 | I1 | infer-stack | **Queue-and-wait acquire** (§4): wait loop at `controller.py:237-250` with satisfiability check + FIFO/reservation; leak self-heal via existing `reconcile→sweep` | Medium | **Required** |
 | I2 | infer-stack | **Static superset litellm route table** (§6): deterministic vLLM addressing, no gateway recreate, in `compose.py` | Medium | **Required** |
 | I3 | infer-stack | **Standalone `infer-stack gc`** (sweep+reconcile) for final/periodic leak reclaim (§8) | Small | **Required** |
-| I4 | infer-stack | **`reclaim: stop`** for pipeline endpoints (§8) — config, not code | Trivial | **Required** |
-| I5 | infer-stack | **SIGTERM handler** in `run` wrapper (§8) — only needed for the non-kwdagger convenience path; native teardown's trap covers the kwdagger path | Small | Optional |
 | I6 | infer-stack | Verify `INFER_STACK_ALLOWED_GPUS` is a **hard** inventory filter (§10) | Verify | slurm-only |
+
+*(Dropped: ~~I4 reclaim:stop~~ — eval_audit catalog config, folded into §13 wiring;
+~~I5 run SIGTERM handler~~ — optional, the kwdagger path is covered by the
+cmd_queue `teardown` trap and TTL + `gc`.)*
 | — | kwdagger | GPU request omitted in tmux mode — config (the eval_audit schedule layer), not a code change. | — | — |
 
 **Confirmed-good (no change needed):**
@@ -485,15 +491,16 @@ Deferred to the next pass, recorded so it isn't lost:
 ## 15. Sequencing
 
 0. (already done) infer-stack CLI/API migration — leasing CLI usable.
-1. ✅ **C1 + K1 — `setup`/`teardown`** in cmd_queue + kwdagger. **DONE
-   (2026-06-23)** — see "Implementation status" below. Foundational: the whole
-   job shape rides on it.
-2. **I2 no-blip** (+ cooldown gate-check) — independent; unblocks confident
-   model churn.
-3. **I1 queue-and-wait** (+ I3 `gc`, I4 `reclaim: stop`) — the admission +
-   leak-recovery core. Validate on a 2-model, >4-job tmux fan-out: no failures
-   from oversubscription, no leaked GPUs after induced job crashes.
-4. **§7 recording** — wire the demand/flags snapshot; run the logprob gate.
-5. **slurm (I6 + ledger decision; C2 `afterany` if wanted)** — only after tmux
-   is solid.
-6. **`eval_audit` wiring (§13)** — separate pass.
+1. ✅ **C1 + K1 — `setup`/`teardown`** in cmd_queue + kwdagger. **DONE.**
+   Foundational: the whole job shape rides on it.
+2. ✅ **I2 no-blip** — **DONE** (rendering-validated; cooldown + no-recreate
+   gate-check pending a docker/GPU box).
+3. ✅ **I1 queue-and-wait + I3 `gc`** — **DONE.** Validate behavior on a
+   2-model, >4-job tmux fan-out (no oversubscription failures, no leaked GPUs
+   after induced crashes) once on a GPU box.
+4. **`eval_audit` wiring (§13)** — the next phase. See
+   [`infer-stack-kwdagger-eval-audit-handoff.md`](infer-stack-kwdagger-eval-audit-handoff.md).
+   Includes setting `reclaim: stop` on pipeline endpoints (former I4) and the §7
+   determinism recording.
+5. **slurm (I6 + ledger decision; C2 `afterany` if wanted)** — only after the
+   tmux path is solid on a GPU box.
