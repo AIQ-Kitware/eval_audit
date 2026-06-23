@@ -2,7 +2,7 @@
 #
 # Replaces the old config.yaml/models.yaml profile world. A catalog declares
 # `models` (what can be served) and `endpoints` (the served API names users
-# ask for). `infer-stack serve <endpoint>` leases + brings up the endpoint;
+# ask for). `infer-stack acquire <endpoint>` leases + brings up the endpoint;
 # `eval-audit ... export-benchmark-bundle` resolves the endpoint's served name
 # + context window via infer_stack.leasing.Catalog (see
 # eval_audit/integrations/infer_stack/adapter.py:resolve_serving_facts).

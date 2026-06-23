@@ -38,7 +38,7 @@ failed=()
 
 # The LiteLLM gateway host port is a fixed default in the new CLI (14042;
 # override via LITELLM_PORT). The master key lives in the managed .env, which
-# does not exist until the first `serve` brings the gateway up — so it is read
+# does not exist until the first `acquire` brings the gateway up — so it is read
 # per-model inside run_one (after serve), NOT up front.
 LITELLM_PORT="${LITELLM_PORT:-14042}"
 LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:$LITELLM_PORT}"
@@ -55,19 +55,19 @@ run_one() {
   echo "== ${preset}  (endpoint: ${endpoint})"
   echo "==================================================================="
 
-  # 1. C-1: serve/acquire ACCUMULATE (demand is ref-counted) — unlike the old
+  # 1. C-1: acquire ACCUMULATES (demand is ref-counted) — unlike the old
   #    `switch`, which replaced. The six models span a 1B-active MoE up to a 32B
   #    dense model and will not co-host, so release the previous model's GPUs
   #    before standing up the next or they pile up and OOM. release --all --evict
   #    frees idle deployments; the standing LiteLLM gateway stays up.
   infer-stack release --all --evict || echo "WARN: 'infer-stack release --all --evict' returned nonzero (nothing to free?); continuing." >&2
 
-  # 2. Bring this model up as a standing lease and wait for readiness. `serve`
+  # 2. Bring this model up as a standing lease and wait for readiness. `acquire`
   #    renders + applies + waits; the explicit `wait` is belt-and-suspenders.
-  infer-stack serve "$endpoint" --yes
+  infer-stack acquire "$endpoint" --yes
   infer-stack wait "$endpoint"
 
-  # serve writes the managed LiteLLM master key into the .env on first bring-up;
+  # acquire writes the managed LiteLLM master key into the .env on first bring-up;
   # read it now (positional `env KEY`) for the export below.
   master_key="$(infer-stack env LITELLM_MASTER_KEY)"
 

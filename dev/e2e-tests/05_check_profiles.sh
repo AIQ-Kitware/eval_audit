@@ -4,7 +4,7 @@
 # eval_audit/integrations/infer_stack/adapter.py reference the "phi2-single"
 # endpoint, which is shipped here in config/infer_stack/catalog.yaml (not in the
 # infer_stack submodule). This script fails fast with guidance if it is missing,
-# rather than letting `infer-stack serve` error mid-grid.
+# rather than letting `infer-stack acquire` error mid-grid.
 #
 # The huggingface target needs no serving endpoint (HELM loads microsoft/phi-2
 # directly from HuggingFace), so it is skipped here.

@@ -5,7 +5,7 @@
 # "<preset>-single", shipped here in config/infer_stack/catalog.yaml (not in the
 # infer_stack submodule). They must be provided by the operator's infer-stack
 # config. This script fails fast with guidance if any are missing, rather than
-# letting `infer-stack serve` error mid-grid.
+# letting `infer-stack acquire` error mid-grid.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"

@@ -2,7 +2,7 @@
 
 > **Migration note (2026-06-22):** the infer-stack serving recipe quoted below
 > predates the catalog/leasing CLI rewrite. The verbs have changed —
-> `switch --profile X --apply` + `wait-ready` → `serve X --yes` + `wait`,
+> `switch --profile X --apply` + `wait-ready` → `acquire X --yes` + `wait`,
 > `down` → `release --all --evict`, `list-profiles` → `catalog endpoint list`,
 > and the `<preset>-single` profiles are now catalog **endpoints**. The runnable
 > scripts under [`reproduce/olmo_models/`](../../reproduce/olmo_models/) and their

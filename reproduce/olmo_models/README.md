@@ -50,7 +50,7 @@ ships its own infer-stack config (new catalog/leasing schema):
   durable leasing settings (`litellm: true`, `ui: false`, `backend: compose`).
 
 `_lib.sh` sets `INFER_STACK_CONFIG_DIR` to that dir by default (and
-`INFER_STACK_DATA_DIR`, so `infer-stack env` and `serve` agree on where the
+`INFER_STACK_DATA_DIR`, so `infer-stack env` and `acquire` agree on where the
 managed `.env`/ledger live — C-2). All six endpoints have been validated to
 resolve via the real `infer_stack.leasing.Catalog`.
 
@@ -73,7 +73,7 @@ guidance if any is missing.
 > **Pin the submodule.** The adapter imports the vendored
 > `submodules/infer_stack`; make sure the `infer-stack` CLI on `PATH` matches it
 > (`uv pip install -e submodules/infer_stack`) so the leasing verbs the grid
-> calls (`serve`/`wait`/`release`/`env`/`catalog`) are the same code the adapter
+> calls (`acquire`/`wait`/`release`/`env`/`catalog`) are the same code the adapter
 > resolves against (C-8).
 
 ## Steps
@@ -189,14 +189,14 @@ host venv, leaving the presets' container fields inert.
     write-up and the generalizable "the run name is not the recipe" lesson.
 - **LiteLLM / openai-compatible transport.** `10_run_smoke_grid.sh` /
   `15_run_full_grid.sh` read the master key via `infer-stack env
-  LITELLM_MASTER_KEY` (after the model's `serve`, since the managed `.env` is
+  LITELLM_MASTER_KEY` (after the model's `acquire`, since the managed `.env` is
   written on first bring-up), and override the presets' declared `vllm-direct`
   access with
   `--access-kind openai-compatible --base-url <litellm>/v1 --api-key-value <key>`
   (default-B; mirrors the phi-2 e2e grid). HELM talks to the LiteLLM gateway,
   which routes to each model's vLLM backend.
 - **One model at a time.** Each iteration runs `infer-stack release --all
-  --evict` before `serve` so only the current model holds GPUs (C-1: `serve`
+  --evict` before `acquire` so only the current model holds GPUs (C-1: `acquire`
   *accumulates*, unlike the old `switch` which replaced); the grid spans a
   1B-active MoE to a 32B dense model, which will not co-host.
 - **Gated datasets need HuggingFace auth.** The presets include every candidate

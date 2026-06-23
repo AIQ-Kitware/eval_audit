@@ -2,8 +2,8 @@
 #
 # Replaces the old config.yaml/models.yaml profile world (the six `*-single`
 # profiles + their vllm_models). A catalog declares `models` (what can be
-# served) and `endpoints` (the served API names). `infer-stack serve <endpoint>`
-# leases + brings one up; the grid runners serve them one at a time (with a
+# served) and `endpoints` (the served API names). `infer-stack acquire <endpoint>`
+# leases + brings one up; the grid runners bring them up one at a time (with a
 # `release` between, C-1) because they will not co-host.
 #
 # Endpoint names == the old `<preset>-single` profile names on purpose: each

@@ -46,7 +46,7 @@ the per-scenario reports use `-full`.
 The grid branches per scenario on its `transport` (the second field of each
 `E2E_TARGETS` row in [`_lib.sh`](_lib.sh)):
 
-- **`vllm`** — `infer-stack serve` brings phi-2 up on vLLM and fronts it with
+- **`vllm`** — `infer-stack acquire` brings phi-2 up on vLLM and fronts it with
   the LiteLLM gateway; `export-benchmark-bundle` materializes the bundle from the
   preset. The phi-2 presets already declare `access_kind: openai-compatible`, so
   the export passes only the LiteLLM base-url + master key — **no** `--access-kind`
@@ -182,7 +182,7 @@ own report dir. Set `VEXP_MANIFEST=<path>` to compose/summarize just one.
   source from its manifest.
 - **LiteLLM / openai-compatible transport for the vLLM scenarios.**
   `10`/`15` read the master key via positional `infer-stack env
-  LITELLM_MASTER_KEY` (after `serve`, since the managed `.env` is written on
+  LITELLM_MASTER_KEY` (after `acquire`, since the managed `.env` is written on
   first bring-up) and hand it + the gateway base-url (port `14042` default) to
   `export-benchmark-bundle`. HELM talks to the LiteLLM gateway, which routes to
   phi-2's vLLM backend.

@@ -43,7 +43,7 @@ infer-stack release --all --evict || echo "WARN: 'infer-stack release --all --ev
 
 # The LiteLLM gateway host port is a fixed default in the new CLI (14042;
 # override via LITELLM_PORT). The master key lives in the managed .env, which
-# does not exist until the first `serve` brings the gateway up — so it is read
+# does not exist until the first `acquire` brings the gateway up — so it is read
 # per-scenario inside run_one (after serve), NOT up front.
 LITELLM_PORT="${LITELLM_PORT:-14042}"
 LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:$LITELLM_PORT}"
@@ -64,11 +64,11 @@ run_one() {
     vllm)
       endpoint="$(e2e_serving "$target")"
       bundle_root="$(e2e_bundle_root "$target")"
-      # 1. Bring phi-2 up as a standing lease and wait for readiness. `serve`
+      # 1. Bring phi-2 up as a standing lease and wait for readiness. `acquire`
       #    renders + applies + waits; the explicit `wait` is belt-and-suspenders.
-      infer-stack serve "$endpoint" --yes
+      infer-stack acquire "$endpoint" --yes
       infer-stack wait "$endpoint"
-      # serve writes the managed LiteLLM master key into the .env on first
+      # acquire writes the managed LiteLLM master key into the .env on first
       # bring-up; read it now (positional `env KEY`) for the export below.
       master_key="$(infer-stack env LITELLM_MASTER_KEY)"
       # 2. Materialize the bundle (smoke + full manifests) from the preset,
