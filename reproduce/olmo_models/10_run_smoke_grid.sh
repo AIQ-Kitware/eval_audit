@@ -34,6 +34,22 @@ cd "$ROOT"
 
 KEEP_GOING="${OLMO_KEEP_GOING:-0}"
 FORCE_RERUN="${OLMO_FORCE_RERUN:-1}"
+# OLMO_LEASE=1 switches to the high-throughput per-run-lease fan-out (handoff
+# §13): instead of pre-serving each model serially (release/acquire/wait), each
+# HELM run self-acquires its model's GPU lease (`acquire --queue`, queue-and-wait
+# when the fleet is busy) and releases it after — so kwdagger fans the runs out
+# and infer-stack's admission queue serializes models that can't co-host. The
+# catalog's `reclaim: stop` frees a model's GPU on its last release, and a final
+# `infer-stack gc` reclaims any lease a hard-killed job leaked. Requires
+# OLMO_CONTAINER=1 (the lease bracket lives on the containerized client, which
+# runs with NO GPU since infer-stack owns them). Default OLMO_LEASE=0 keeps the
+# known-good per-model serve loop. NOTE: the lease fan-out is rendering-tested
+# only; its end-to-end behavior is a docker/GPU-box gate-check (see the handoff).
+LEASE="${OLMO_LEASE:-0}"
+if [[ "$LEASE" == "1" && "$OLMO_CONTAINER" == "0" ]]; then
+  echo "FAIL: OLMO_LEASE=1 requires OLMO_CONTAINER=1 (per-run --lease needs the containerized client)." >&2
+  exit 2
+fi
 failed=()
 
 # The LiteLLM gateway host port is a fixed default in the new CLI (14042;
@@ -42,6 +58,21 @@ failed=()
 # per-model inside run_one (after serve), NOT up front.
 LITELLM_PORT="${LITELLM_PORT:-14042}"
 LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:$LITELLM_PORT}"
+
+# OLMO_LEASE bootstrap: bring the no-blip gateway up ONCE so export-benchmark-bundle
+# can read the master key, then release so per-run leasing owns every model's
+# lifecycle. `acquire --no-wait` renders the gateway + writes the key without
+# blocking on the model load; `release --all --evict` frees the half-loaded
+# bootstrap model (reclaim: stop frees its GPU) while the standing LiteLLM gateway
+# stays up (no-blip). The key persists in the managed .env for every bundle.
+LEASE_MASTER_KEY=""
+if [[ "$LEASE" == "1" ]]; then
+  bootstrap_ep="$(olmo_profile "${OLMO_TARGETS[0]}")"
+  echo "OLMO_LEASE=1: bootstrapping the gateway via ${bootstrap_ep} to read the master key…"
+  infer-stack acquire "$bootstrap_ep" --no-wait --yes
+  LEASE_MASTER_KEY="$(infer-stack env LITELLM_MASTER_KEY)"
+  infer-stack release --all --evict || echo "WARN: bootstrap 'release --all --evict' returned nonzero; continuing." >&2
+fi
 
 run_one() {
   local target="$1"
@@ -55,21 +86,29 @@ run_one() {
   echo "== ${preset}  (endpoint: ${endpoint})"
   echo "==================================================================="
 
-  # 1. C-1: acquire ACCUMULATES (demand is ref-counted) — unlike the old
-  #    `switch`, which replaced. The six models span a 1B-active MoE up to a 32B
-  #    dense model and will not co-host, so release the previous model's GPUs
-  #    before standing up the next or they pile up and OOM. release --all --evict
-  #    frees idle deployments; the standing LiteLLM gateway stays up.
-  infer-stack release --all --evict || echo "WARN: 'infer-stack release --all --evict' returned nonzero (nothing to free?); continuing." >&2
+  if [[ "$LEASE" == "1" ]]; then
+    # Per-run-lease fan-out: do NOT pre-serve. Each scheduled HELM run
+    # self-acquires this endpoint (`acquire --queue`); ref-counting coalesces a
+    # model's run_entries onto one deployment, and the queue serializes models
+    # that can't co-host. The master key was read once at bootstrap.
+    master_key="$LEASE_MASTER_KEY"
+  else
+    # 1. C-1: acquire ACCUMULATES (demand is ref-counted) — unlike the old
+    #    `switch`, which replaced. The six models span a 1B-active MoE up to a 32B
+    #    dense model and will not co-host, so release the previous model's GPUs
+    #    before standing up the next or they pile up and OOM. release --all --evict
+    #    frees idle deployments; the standing LiteLLM gateway stays up.
+    infer-stack release --all --evict || echo "WARN: 'infer-stack release --all --evict' returned nonzero (nothing to free?); continuing." >&2
 
-  # 2. Bring this model up as a standing lease and wait for readiness. `acquire`
-  #    renders + applies + waits; the explicit `wait` is belt-and-suspenders.
-  infer-stack acquire "$endpoint" --yes
-  infer-stack wait "$endpoint"
+    # 2. Bring this model up as a standing lease and wait for readiness. `acquire`
+    #    renders + applies + waits; the explicit `wait` is belt-and-suspenders.
+    infer-stack acquire "$endpoint" --yes
+    infer-stack wait "$endpoint"
 
-  # acquire writes the managed LiteLLM master key into the .env on first bring-up;
-  # read it now (positional `env KEY`) for the export below.
-  master_key="$(infer-stack env LITELLM_MASTER_KEY)"
+    # acquire writes the managed LiteLLM master key into the .env on first bring-up;
+    # read it now (positional `env KEY`) for the export below.
+    master_key="$(infer-stack env LITELLM_MASTER_KEY)"
+  fi
 
   # 3. Materialize the bundle (smoke + full manifests) from the preset, routing
   #    through LiteLLM (override the preset's vllm-direct access kind).
@@ -102,6 +141,12 @@ run_one() {
   if [[ "$OLMO_CONTAINER" != "0" ]]; then
     run_args+=(--container-image "$OLMO_CONTAINER_IMAGE")
   fi
+  # OLMO_LEASE=1: bracket each scheduled run with its model's GPU lease. The
+  # bundle's baked-in lease facts (lease_endpoint/ttl/catalog) tell eval-audit-run
+  # which endpoint to acquire; the client runs with no GPU (infer-stack owns them).
+  if [[ "$LEASE" == "1" ]]; then
+    run_args+=(--lease)
+  fi
   eval-audit-run "${run_args[@]}"
 }
 
@@ -115,6 +160,15 @@ for target in "${OLMO_TARGETS[@]}"; do
     run_one "$target"
   fi
 done
+
+# Final backstop (OLMO_LEASE=1): reclaim any lease a hard-killed job leaked (its
+# `release` teardown never ran), tearing down the stop-policy deployment and
+# freeing its GPU. The per-run admission queue already sweeps expired leases
+# while waiting, so this is the last-job sweep; run it even on partial failure.
+if [[ "$LEASE" == "1" ]]; then
+  echo "Reclaiming any leaked leases (infer-stack gc)…"
+  infer-stack gc --yes || echo "WARN: 'infer-stack gc' returned nonzero; continuing." >&2
+fi
 
 if (( ${#failed[@]} > 0 )); then
   echo >&2

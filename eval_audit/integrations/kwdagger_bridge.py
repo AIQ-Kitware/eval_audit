@@ -92,15 +92,64 @@ def _resolve_manifest_override_path(value: str | None) -> str | None:
     return str(path.resolve())
 
 
+def build_lease_matrix_entries(
+    manifest: dict[str, Any],
+    *,
+    ttl_override: str | None = None,
+    catalog_override: str | None = None,
+    queue: bool = True,
+) -> dict[str, Any]:
+    """Build the per-run GPU-lease matrix knobs from a manifest's lease facts.
+
+    The facts (``lease_endpoint`` for single-model manifests, or a
+    ``lease_endpoints`` ``{model_deployment: catalog_endpoint}`` map for
+    multi-model ones, plus ``lease_ttl`` / ``lease_catalog``) are baked into the
+    manifest by ``export-benchmark-bundle``. These flow into the docker node's
+    ``final_config`` where its ``setup``/``teardown`` properties render the
+    ``infer-stack acquire``/``release`` bracket (one lease per run; ref-counting
+    coalesces same-model runs, design §4). ``catalog`` is resolved to an absolute
+    path so the lease command works from any job cwd. Raises if ``--lease`` was
+    requested but the manifest carries no lease endpoint.
+    """
+    endpoint = manifest.get("lease_endpoint")
+    endpoints = manifest.get("lease_endpoints")
+    if not endpoint and not endpoints:
+        raise ValueError(
+            "leasing was requested but the manifest declares neither "
+            "'lease_endpoint' nor 'lease_endpoints'. Re-materialize the bundle "
+            "(eval-audit export-benchmark-bundle bakes the lease facts in) or "
+            "schedule without --lease."
+        )
+    entries: dict[str, Any] = {}
+    if endpoints:
+        # JSON-encode the map so it crosses the kwdagger --params boundary as a
+        # single scalar (the node's _coerce_map parses it back).
+        entries["helm.lease_endpoints"] = [
+            endpoints if isinstance(endpoints, str) else json.dumps(endpoints)
+        ]
+    if endpoint:
+        entries["helm.lease_endpoint"] = [str(endpoint)]
+    ttl = ttl_override or manifest.get("lease_ttl")
+    if ttl:
+        entries["helm.lease_ttl"] = [str(ttl)]
+    catalog = catalog_override or manifest.get("lease_catalog")
+    if catalog:
+        entries["helm.lease_catalog"] = [str(Path(catalog).expanduser().resolve())]
+    entries["helm.lease_queue"] = [bool(queue)]
+    return entries
+
+
 def build_schedule_params(
     manifest: dict[str, Any],
     resolved_image: ResolvedImage | None = None,
+    lease_entries: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the ``kwdagger schedule --params`` payload from a manifest.
 
     When ``resolved_image`` is provided the containerized pipeline is selected
     and the docker-runner matrix knobs are added; otherwise the historic
-    bare-python pipeline is used unchanged.
+    bare-python pipeline is used unchanged. ``lease_entries`` (the GPU-lease
+    matrix knobs, docker path only) are merged in when present.
     """
     matrix = {
         "helm.run_entry": list(manifest["run_entries"]),
@@ -125,6 +174,15 @@ def build_schedule_params(
         matrix["helm.enable_local_huggingface_models"] = [json.dumps(enable_local_hf)]
 
     if resolved_image is None:
+        if lease_entries:
+            # Leasing renders through MaterializeHelmRunDockerNode's
+            # setup/teardown; the bare magnet node has no such bracket, so a
+            # leased bare run would silently never acquire. Fail loud instead.
+            raise ValueError(
+                "per-run GPU leasing requires the containerized pipeline "
+                "(pass --container-image or set container_image in the "
+                "manifest); the bare-python pipeline cannot bracket a lease."
+            )
         return {"pipeline": _BARE_PIPELINE, "matrix": matrix}
 
     # Containerized execution: pin the (already-resolved) image and pass the
@@ -142,6 +200,8 @@ def build_schedule_params(
     container_mounts = manifest.get("container_mounts") or []
     if container_mounts:
         matrix["helm.container_mounts"] = [json.dumps(container_mounts)]
+    if lease_entries:
+        matrix.update(lease_entries)
     return {"pipeline": _DOCKER_PIPELINE, "matrix": matrix}
 
 
@@ -155,6 +215,10 @@ def prepare_schedule_request(
     tmux_workers: int | None = None,
     backend: str | None = None,
     container_image: str | None = None,
+    lease: bool = False,
+    lease_ttl: str | None = None,
+    lease_catalog: str | None = None,
+    lease_queue: bool = True,
 ) -> KWDaggerScheduleRequest:
     manifest_path = Path(manifest_fpath).expanduser().resolve()
     manifest = load_manifest(manifest_path)
@@ -167,6 +231,26 @@ def prepare_schedule_request(
         str.maketrans({c: "-" for c in " !@#$%^&*()+={}[]|\\:;\"'<>,?/~`"})
     )
 
+    # Per-run GPU leasing (opt-in, §5/§13). infer-stack owns every GPU, so the
+    # HELM *client* must request none — default container_gpus to "none" unless
+    # the manifest pins it explicitly (two allocators fighting over the same GPU
+    # indices is exactly what the design forbids). Leasing implies containerized
+    # execution (the lease bracket lives on the docker node).
+    lease_entries: dict[str, Any] | None = None
+    if lease:
+        if container_image is None and not manifest.get("container_image"):
+            raise ValueError(
+                "--lease requires containerized execution; pass --container-image "
+                "or set container_image in the manifest."
+            )
+        manifest.setdefault("container_gpus", "none")
+        lease_entries = build_lease_matrix_entries(
+            manifest,
+            ttl_override=lease_ttl,
+            catalog_override=lease_catalog,
+            queue=lease_queue,
+        )
+
     # Containerized execution (opt-in). A CLI override wins over the manifest.
     if container_image is not None:
         manifest["container_image"] = container_image
@@ -174,7 +258,9 @@ def prepare_schedule_request(
         manifest, experiment_name
     )
 
-    params = build_schedule_params(manifest, resolved_image=resolved_image)
+    params = build_schedule_params(
+        manifest, resolved_image=resolved_image, lease_entries=lease_entries
+    )
     runtime = KWDaggerRuntime(
         queue_name=runtime_queue_name,
         root_dpath=(

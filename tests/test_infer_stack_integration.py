@@ -6,6 +6,9 @@ import pytest
 import yaml
 
 from eval_audit.integrations.infer_stack.adapter import (
+    DEFAULT_LEASE_TTL,
+    ServingFacts,
+    _lease_facts,
     export_benchmark_bundle,
     resolve_serving_facts,
 )
@@ -193,6 +196,50 @@ def test_olmo_instruct_reuses_sibling_tokenizer_alias(tmp_path: Path) -> None:
     assert dep["model_name"] == "allenai/olmo-2-1124-13b-instruct"
     assert dep["tokenizer_name"] == "allenai/olmo-2-1124-7b-instruct"
     assert dep["tokenizer_name"] != dep["model_name"]
+
+
+def test_export_bakes_single_lease_facts_into_manifest(tmp_path: Path) -> None:
+    # A single-model preset gets a scalar lease_endpoint (= the catalog endpoint
+    # == the preset profile), the default TTL, and an absolute catalog path so
+    # `eval-audit-run --lease` can bracket each run.
+    config_dir = _make_config_dir(tmp_path)
+    result = export_benchmark_bundle(
+        "",
+        preset="e2e-phi_2-vllm-philosophy",
+        bundle_root=tmp_path / "phi2-lease",
+        config_dir=config_dir,
+        api_key_value="k",
+    )
+    smoke = yaml.safe_load(result["benchmark_smoke_manifest_path"].read_text())
+    assert smoke["lease_endpoint"] == "phi2-single"
+    assert smoke["lease_ttl"] == DEFAULT_LEASE_TTL
+    assert smoke["lease_catalog"] == str((config_dir / "catalog.yaml").resolve())
+    assert "lease_endpoints" not in smoke
+
+
+def test_lease_facts_builds_multi_endpoint_map() -> None:
+    # Multi-model manifests carry a {deployment_name: catalog_endpoint} map keyed
+    # by the model_deployments.yaml entry name the run-entries reference.
+    facts = [
+        ServingFacts(endpoint="qwen-ep", served_model_name="qwen-ep", hf_model_id="q", max_model_len=4096),
+        ServingFacts(endpoint="gptoss-ep", served_model_name="gptoss-ep", hf_model_id="g", max_model_len=4096),
+    ]
+    model_entries = [{"name": "vllm/qwen-local"}, {"name": "litellm/gpt-oss-local"}]
+    facts_doc = _lease_facts(facts, model_entries, preset_cfg={}, lease_catalog=None)
+    assert facts_doc["lease_endpoints"] == {
+        "vllm/qwen-local": "qwen-ep",
+        "litellm/gpt-oss-local": "gptoss-ep",
+    }
+    assert "lease_endpoint" not in facts_doc
+
+
+def test_lease_facts_rejects_c3_name_chain_violation() -> None:
+    # A served_name that diverges from the endpoint name would misroute every
+    # leased run (lease acquires the endpoint, gateway routes by it, HELM
+    # requests the served name) — fail loud at materialize time.
+    facts = [ServingFacts(endpoint="phi2-single", served_model_name="phi-2-other", hf_model_id="x")]
+    with pytest.raises(ValueError, match="C-3 name-chain"):
+        _lease_facts(facts, [{"name": "vllm/phi-2-local"}], preset_cfg={}, lease_catalog=None)
 
 
 def test_machine_local_bundle_uses_absolute_model_deployments_path(tmp_path: Path) -> None:

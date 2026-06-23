@@ -22,6 +22,7 @@ models:
 endpoints:
   phi2-single:
     engine: vllm
+    reclaim: stop                # §8/former-I4: free the GPU on release so the per-run lease queue can place the next model
     model: phi-2
     # C-5: sizing is static catalog state now (no resolver inference). Mirrors
     # the old models.yaml phi2 `defaults` block.

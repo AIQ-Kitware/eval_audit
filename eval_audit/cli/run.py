@@ -39,6 +39,44 @@ def main(argv: list[str] | None = None) -> None:
             "resolved and pinned at schedule time."
         ),
     )
+    parser.add_argument(
+        "--lease",
+        action="store_true",
+        help=(
+            "Bracket each HELM run with an infer-stack GPU lease "
+            "(acquire --queue before, release after). Each run self-acquires "
+            "its model so kwdagger can fan out many runs without a per-model "
+            "serial serve loop. Requires --container-image / a containerized "
+            "manifest; the client is run with no GPU (infer-stack owns them)."
+        ),
+    )
+    parser.add_argument(
+        "--lease-ttl",
+        default=None,
+        help=(
+            "Soft TTL for each lease (e.g. 2h, 30m). Must exceed worst-case "
+            "model-load + run; leaked leases are reclaimed after it. Overrides "
+            "the manifest's lease_ttl (default 4h)."
+        ),
+    )
+    parser.add_argument(
+        "--lease-catalog",
+        default=None,
+        help=(
+            "Path to the infer-stack catalog.yaml the lease resolves against. "
+            "Overrides the manifest's lease_catalog (resolved to an absolute "
+            "path so the lease works from any job cwd)."
+        ),
+    )
+    parser.add_argument(
+        "--no-queue",
+        action="store_true",
+        help=(
+            "Use fail-fast acquire instead of the admission queue (acquire "
+            "without --queue). Default is to queue-and-wait when the fleet is "
+            "busy. Only meaningful with --lease."
+        ),
+    )
     args = parser.parse_args(argv)
     info = run_from_manifest(
         args.manifest,
@@ -49,6 +87,10 @@ def main(argv: list[str] | None = None) -> None:
         tmux_workers=args.tmux_workers,
         backend=args.backend,
         container_image=args.container_image,
+        lease=args.lease,
+        lease_ttl=args.lease_ttl,
+        lease_catalog=args.lease_catalog,
+        lease_queue=not args.no_queue,
     )
     print(json.dumps(info, indent=2))
 

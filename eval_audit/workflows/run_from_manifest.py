@@ -22,6 +22,10 @@ def run_from_manifest(
     tmux_workers: int | None = None,
     backend: str | None = None,
     container_image: str | None = None,
+    lease: bool = False,
+    lease_ttl: str | None = None,
+    lease_catalog: str | None = None,
+    lease_queue: bool = True,
 ) -> dict[str, Any]:
     manifest = load_manifest(manifest_fpath)
     request = prepare_schedule_request(
@@ -33,6 +37,10 @@ def run_from_manifest(
         tmux_workers=tmux_workers,
         backend=backend,
         container_image=container_image,
+        lease=lease,
+        lease_ttl=lease_ttl,
+        lease_catalog=lease_catalog,
+        lease_queue=lease_queue,
     )
     info: dict[str, Any] = {
         "experiment_name": str(manifest["experiment_name"]),

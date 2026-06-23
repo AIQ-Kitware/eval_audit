@@ -42,6 +42,7 @@ models:
 endpoints:
   allenai-olmoe-1b-7b-0125-instruct-single:
     engine: vllm
+    reclaim: stop                # §8/former-I4: free the GPU on release so the per-run lease queue can place the next model
     model: olmoe-1b-7b-0125-instruct
     runtime:
       max_model_len: 4096
@@ -52,6 +53,7 @@ endpoints:
 
   allenai-olmo-7b-single:
     engine: vllm
+    reclaim: stop                # §8/former-I4: free the GPU on release so the per-run lease queue can place the next model
     model: olmo-7b
     runtime:
       max_model_len: 2048
@@ -62,6 +64,7 @@ endpoints:
 
   allenai-olmo-1-7-7b-single:
     engine: vllm
+    reclaim: stop                # §8/former-I4: free the GPU on release so the per-run lease queue can place the next model
     model: olmo-1.7-7b
     runtime:
       max_model_len: 4096
@@ -72,6 +75,7 @@ endpoints:
 
   allenai-olmo-2-1124-7b-instruct-single:
     engine: vllm
+    reclaim: stop                # §8/former-I4: free the GPU on release so the per-run lease queue can place the next model
     model: olmo-2-1124-7b-instruct
     runtime:
       max_model_len: 4096
@@ -82,6 +86,7 @@ endpoints:
 
   allenai-olmo-2-1124-13b-instruct-single:
     engine: vllm
+    reclaim: stop                # §8/former-I4: free the GPU on release so the per-run lease queue can place the next model
     model: olmo-2-1124-13b-instruct
     runtime:
       max_model_len: 4096
@@ -92,6 +97,7 @@ endpoints:
 
   allenai-olmo-2-0325-32b-instruct-single:
     engine: vllm
+    reclaim: stop                # §8/former-I4: free the GPU on release so the per-run lease queue can place the next model
     model: olmo-2-0325-32b-instruct
     runtime:
       tensor_parallel_size: 2      # C-5: load-bearing — the 32B needs tp=2 on <80GB cards

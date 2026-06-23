@@ -940,6 +940,14 @@ DEFAULT_GATEWAY_PORT = 14042
 # compose.py:API_KEY_ENV). Unchanged across the catalog/leasing rewrite.
 LITELLM_AUTH_ENV = "LITELLM_MASTER_KEY"
 
+# Default soft TTL baked into a materialized manifest's lease facts. Must exceed
+# worst-case (model cold-load + run) so a hard-killed job's leaked lease is
+# reclaimed by the admission queue's sweep / `infer-stack gc` rather than
+# expiring mid-run (integration plan §8). Per-preset overrides via
+# PRESET_CONFIGS[...]["lease_ttl"]; per-run overrides via `eval-audit-run
+# --lease-ttl`. Kept in sync with helm_docker_pipeline._DEFAULT_LEASE_TTL.
+DEFAULT_LEASE_TTL = "4h"
+
 
 def infer_stack_root() -> Path:
     return repo_root() / "submodules" / "infer_stack"
@@ -1183,10 +1191,56 @@ _CONTAINER_SPEC_KEYS = (
 )
 
 
+def _lease_facts(
+    facts: list[ServingFacts],
+    model_entries: list[dict[str, Any]],
+    *,
+    preset_cfg: dict[str, Any],
+    lease_catalog: Path | str | None,
+) -> dict[str, Any]:
+    """Build the per-run GPU-lease facts baked into the generated manifest.
+
+    These let ``eval-audit-run --lease`` bracket each HELM run with an
+    ``infer-stack acquire``/``release`` (the high-throughput fan-out, plan §13).
+    A single-endpoint manifest gets a scalar ``lease_endpoint``; a multi-endpoint
+    one gets a ``lease_endpoints`` ``{deployment_name: catalog_endpoint}`` map
+    keyed by the model_deployments.yaml entry name its run-entries reference.
+
+    Asserts the **C-3 name chain**: the served name HELM requests must equal the
+    catalog endpoint name the lease acquires (and the no-blip LiteLLM gateway
+    routes by). They are equal whenever the catalog leaves ``served_name`` /
+    ``public_name`` unset (it defaults to the endpoint name); a divergent
+    override silently misroutes every leased run, so fail loud here instead.
+    """
+    for fact in facts:
+        if fact.served_model_name != fact.endpoint:
+            raise ValueError(
+                f"C-3 name-chain violation for catalog endpoint {fact.endpoint!r}: "
+                f"it serves under name {fact.served_model_name!r}. A lease acquires "
+                "the endpoint name while HELM requests the served name, and the "
+                "no-blip LiteLLM gateway routes by endpoint name — so they must "
+                "match. Remove the endpoint's served_name/public_name override (it "
+                "defaults to the endpoint name) before scheduling a leased run."
+            )
+    out: dict[str, Any] = {}
+    if len(facts) == 1:
+        out["lease_endpoint"] = facts[0].endpoint
+    else:
+        out["lease_endpoints"] = {
+            entry["name"]: fact.endpoint
+            for entry, fact in zip(model_entries, facts, strict=True)
+        }
+    out["lease_ttl"] = str(preset_cfg.get("lease_ttl") or DEFAULT_LEASE_TTL)
+    if lease_catalog is not None:
+        out["lease_catalog"] = str(Path(lease_catalog).resolve())
+    return out
+
+
 def _manifest_doc(
     *,
     spec: dict[str, Any],
     model_deployments_fpath: str,
+    lease_facts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     doc = {
         "schema_version": 1,
@@ -1210,6 +1264,11 @@ def _manifest_doc(
     for key in _CONTAINER_SPEC_KEYS:
         if key in spec:
             doc[key] = spec[key]
+    # Lease facts are inert until `eval-audit-run --lease` reads them; baking
+    # them in keeps the manifest self-describing about which endpoint each run
+    # leases.
+    if lease_facts:
+        doc.update(lease_facts)
     return doc
 
 
@@ -1232,6 +1291,7 @@ def materialize_benchmark_bundle(
     access_kind: str | None = None,
     base_url: str | None = None,
     api_key_value: str | None = None,
+    lease_catalog: Path | str | None = None,
 ) -> dict[str, Any]:
     output_dir = output_dir.resolve()
     preset_cfg = PRESET_CONFIGS.get(preset or "", {})
@@ -1297,8 +1357,22 @@ def materialize_benchmark_bundle(
             "max_eval_instances": 1000,
         },
     )
-    benchmark_smoke_manifest = _manifest_doc(spec=smoke_spec, model_deployments_fpath=model_deployments_fpath)
-    benchmark_full_manifest = _manifest_doc(spec=full_spec, model_deployments_fpath=model_deployments_fpath)
+    lease_facts = _lease_facts(
+        facts,
+        model_entries,
+        preset_cfg=preset_cfg,
+        lease_catalog=lease_catalog,
+    )
+    benchmark_smoke_manifest = _manifest_doc(
+        spec=smoke_spec,
+        model_deployments_fpath=model_deployments_fpath,
+        lease_facts=lease_facts,
+    )
+    benchmark_full_manifest = _manifest_doc(
+        spec=full_spec,
+        model_deployments_fpath=model_deployments_fpath,
+        lease_facts=lease_facts,
+    )
     benchmark_smoke_path = output_dir / "benchmark_smoke_manifest.yaml"
     benchmark_full_path = output_dir / "benchmark_full_manifest.yaml"
     _write_yaml(benchmark_smoke_path, benchmark_smoke_manifest)
@@ -1372,6 +1446,10 @@ def export_benchmark_bundle(
         )
         for spec in specs
     ]
+    # The catalog the lease facts point at — the same one the facts resolved
+    # against. Baked into the manifest as an absolute path so `infer-stack
+    # acquire --catalog` works from any kwdagger job cwd.
+    lease_catalog = _infer_stack_config_root(resolved_config_dir) / "catalog.yaml"
     if bundle_root is None:
         # Allow presets to override the target bundle root path. If the
         # preset sets `bundle_root`, interpret absolute paths directly
@@ -1394,4 +1472,5 @@ def export_benchmark_bundle(
         access_kind=access_kind,
         base_url=base_url,
         api_key_value=api_key_value,
+        lease_catalog=lease_catalog,
     )

@@ -3059,3 +3059,114 @@ every_eval_ever, kwdagger) — untouched here.
 instead of `git rm` silently RESURRECTS the file you meant to delete. After a
 reschema-style migration, grep the config dir for the old-schema filenames as a
 post-merge guard — auto-resolution can quietly undo a deletion.
+
+## 2026-06-23 16:26:37 -0400
+
+**Model/harness.** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code.
+
+**User intent.** Execute the eval_audit-integration hand-off
+(`docs/planning/infer-stack-kwdagger-eval-audit-handoff.md`): wire the now-landed
+infer-stack/cmd_queue/kwdagger leasing features into the main pipeline so HELM
+reproduction fans out at high parallelism — each HELM run is a kwdagger
+`ProcessNode` that brackets itself with an infer-stack GPU lease (acquire --queue
+before, release after), the client requests no GPU, and a final `gc` reclaims
+leaks.
+
+**What I built (all rendering/unit-tested; the end-to-end tmux fan-out is a
+docker/GPU-box gate-check, out of scope here).**
+
+- **The lease bracket lives on the docker node, as `setup`/`teardown`
+  properties** (`eval_audit/pipelines/helm_docker_pipeline.py`). This was the key
+  seam decision (open question #1): the existing `command` property already reads
+  per-matrix-point `final_config`, so I mirrored it — each configured node renders
+  its own `infer-stack acquire <endpoint> --ttl T --queue --yes --env-file
+  <out_dpath>/lease.env [--catalog C]` (setup) and `infer-stack release
+  --env-file <out_dpath>/lease.env` (teardown), with the lease handle in the
+  node's *own* output dir (per-job, never shared). Logic is in module-level
+  helpers (`render_lease_setup/teardown`, `_resolve_lease_endpoint`) so it's
+  unit-testable without kwdagger.
+- **Endpoint resolution (open question #2): scalar `lease_endpoint` for
+  single-model manifests, a `lease_endpoints` {deployment→endpoint} map resolved
+  per run-entry (via its `model_deployment=` token) for multi-model ones.** The
+  endpoint == the preset `profile` == catalog endpoint == served name (the C-3
+  chain) — adapter `_lease_facts` asserts `served_model_name == endpoint` and
+  fails loud on a divergent catalog `served_name`/`public_name` (a silent
+  misroute otherwise).
+- **`adapter.py` bakes the lease facts into both generated manifests**
+  (lease_endpoint/_endpoints, lease_ttl default 4h, absolute lease_catalog).
+  Inert until `eval-audit-run --lease` reads them, so existing on-disk manifests
+  are unaffected.
+- **Bridge + CLI:** `--lease`/`--lease-ttl`/`--lease-catalog`/`--no-queue`. `--lease`
+  *requires* the containerized pipeline (the bracket only exists on the docker
+  node — a leased bare run would silently never acquire, so I raise) and defaults
+  `container_gpus: none` (design rule #1: infer-stack owns every GPU; two
+  allocators fighting is exactly what's forbidden).
+- **Catalogs:** `reclaim: stop` on every pipeline endpoint (former I4) so a
+  released model frees its GPU for the admission queue instead of holding it warm.
+- **Grid runner:** `reproduce/olmo_models/10_run_smoke_grid.sh` gained a
+  **default-off `OLMO_LEASE=1`** path that drops the per-model serve loop, boots
+  the no-blip gateway once for the master key, schedules each model with
+  `--lease`, and ends with `infer-stack gc`. Default-off because it's the one
+  piece I can't validate here (no GPU/docker) and I won't risk the known-good
+  runbook.
+
+**Two correctness traps I hit and closed.**
+1. **The snapshot `|| true` defeated the gating.** My first setup render was
+   `mkdir && acquire && { snapshot } || true` — but `A && B || C` makes a *failed
+   acquire* fall through to `|| true`, so PREAMBLE_OK would be 1 and the run would
+   hit a gateway with no model. Fix: scope `|| true` *inside* the snapshot brace
+   (`&& { snapshot || true ; }`) so only the snapshot is best-effort; a failed
+   acquire keeps the chain false. Verified by simulating cmd_queue's exact
+   `{ setup && PREAMBLE_OK=1; } || PREAMBLE_OK=0` wrapper for both acquire-ok and
+   acquire-fail.
+2. **`setup`/`teardown` can't be plain read-only properties.** `ProcessNode.__init__`
+   assigns them (default None) via `_classvar_init`'s `setattr`, which throws on a
+   property with no setter. Gave them absorbing setters (the one construction-time
+   assignment is ignored; the getter computes from final_config every time).
+
+**The one prerequisite the next run needs (flagged, not done — it's a submodule
+pin the user owns).** The checked-out infer_stack branch is
+`feature/litellm-no-blip`, which does **NOT** contain `--queue`/`gc`/
+`wait_for_placement` — those live on `feature/leasing-pipeline-lifecycle`
+(commits 7990214, 55c39a7). The hand-off says land lifecycle first, then rebase
+no-blip on top; that combine hasn't happened. The eval_audit wiring *emits* the
+right commands regardless (it's generating shell), but an actual leased run needs
+the two infer_stack branches combined + the submodule pinned + installed editable.
+Coordinate with the user (the gitlink bumps are deliberately their call).
+
+**Verification.** `render_lease_setup`/teardown, `_resolve_lease_endpoint`, the
+bridge knobs, `prepare_schedule_request`, and `_lease_facts` (incl. C-3 raise) are
+covered by `tests/test_lease_bracket.py` (17 new) + 3 in
+`test_infer_stack_integration.py` — 38 pass. End-to-end: `eval-audit-run --lease
+--run=0` emits a docker-pipeline schedule with `helm.container_gpus=['none']` +
+all lease knobs; and driving the docker pipeline through a real cmd_queue
+`SerialQueue` renders exactly the design §2 shape —
+`{ mkdir && acquire ... } → if PREAMBLE_OK → __cmdq_teardown(){ release } ; trap
+EXIT/TERM/INT ; test -e DONE || docker run --rm ...` with no `--gpus`. The one
+failing test (`test_run_surface::...argv_differs...`) is **pre-existing** (stale
+re: the `--log`/`--monitor`/`--virtualenv_cmd` argv additions — confirmed failing
+on committed HEAD via a detached worktree); unrelated to this work.
+
+**Reusable insight.** When a per-job value must vary across a kwdagger matrix but
+isn't a CLI arg of the work (here: the lease endpoint + the per-node lease.env
+path), don't try to thread it through the matrix as a scalar — make it a node
+*property* that reads `final_config`, exactly as the existing `command` does.
+The matrix carries the *inputs* (endpoint name, ttl); the property composes the
+*per-node* shell (resolving out_dpath at render time). Strip those inputs from the
+inner CLI the same way the container knobs are stripped. And whenever a setup
+chain mixes a gating step with a best-effort step, unit-test the bash precedence
+against the resource manager's *exact* gating wrapper — `&& ... || true` does not
+mean what it looks like.
+
+**Next steps.** (1) Combine the two infer_stack branches + pin the gitlinks
+(user's call). (2) On a GPU/docker box: the tmux fan-out gate-check (no
+oversubscription failures, no leaked GPUs after an induced job crash — kill a job
+mid-run, confirm `gc`/next-acquire reclaims), the no-blip cooldown-recovery check,
+and the serial-vs-concurrent logprob fidelity (§7) determinism gate. (3) Surface
+the per-run `concurrency_snapshot.json` (co-held lease demand, written by setup)
+into the reproducibility analysis schema so agreement-vs-concurrency is plottable.
+(4) For a true single fan-out across models, a combined-run-manifest capability
+(merge model_deployments.yaml + concat run_entries + emit the lease_endpoints map)
+would let one schedule span all six OLMo models; the per-model loop + `--lease` is
+the pragmatic stand-in (and on 2 GPUs the models can't co-host anyway, so the
+admission queue serializes them either way).
