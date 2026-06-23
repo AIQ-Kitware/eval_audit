@@ -2888,3 +2888,135 @@ requests), the safe move is to make ONE layer authoritative and assert the
 others equal it — here `openai_model_name == served_name == endpoint name`,
 verified against the gateway's own `model_list` generator rather than assumed.
 A mismatch there is a silent 404 with empty results, not a crash.
+
+## 2026-06-23 12:15:48 -0400
+
+**Intent.** User asked "do `serve` and `acquire` really need to both exist in
+infer-stack?", then: collapse them, update the docs, **no compatibility alias**,
+and (chosen via prompt) **`acquire` is the surviving primary verb**.
+
+**Model/harness.** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude
+Code.
+
+**What I found.** `serve` and `acquire` routed through the *same* `_do_acquire`;
+`serve` was just `acquire --owner manual --ttl ∞`. The `manual` owner had **zero**
+operational meaning (grepped controller/ledger/cleanup — nothing branches on
+owner; reclaim is per-deployment policy + TTL). So the pair was a pure
+naming/preset split, not two behaviors.
+
+**What I did.** Merged `ServeCLI` into a single `AcquireCLI` (`__command__ =
+'acquire'`, no `__alias__`) that absorbed serve's render→apply→wait help +
+`__epilog__`; `serve` is now an argparse `invalid choice`. Owner default is now
+`$USER` (was `manual`); `--ttl` distinguishes standing (none) vs reservation.
+Updated tests (`ServeCLI`→`AcquireCLI`; `test_acquire_without_ttl_is_standing_lease`
+asserts `owner == _default_owner()` + `expires_at is None`). Swept every
+`serve`-as-command ref across **both repos**: CLI help/docstrings, the leasing-demo
++ ollama tutorials, README, the migration planning doc + olmo-smoke doc, the
+shipped `catalog.yaml` comments, and — critically — the executable runbooks
+(`dev/e2e-tests/*.sh`, `reproduce/olmo_models/*.sh`) which called
+`infer-stack serve "$endpoint"` and would have broken. Added a CHANGELOG
+"Removed (breaking)" entry. Verified: py_compile, 117 passed/1 skipped across
+leasing/compose/tui/catalog/meta, CLI smoke (serve invalid, acquire shows
+`--ttl/--owner/--dedicated`).
+
+**Deliberate non-changes (flagged to user).** (1) The TUI's "Serve" button /
+`s` key / `action_serve` / `_do_serve` + status strings ("serving …", "serve a
+model first") are **natural-language UI vocabulary** for a single control that
+calls `controller.acquire()` directly — never the CLI verb. Renaming all of it to
+"acquire" is large churn that makes the prose more jargony, and `btn-serve` is
+asserted by tests. Left intact. (2) CHANGELOG/journal *historical* `serve`
+mentions left as development record; the new Removed entry is authoritative.
+
+**Reusable insight.** Before collapsing two verbs, confirm the distinguishing
+field is *inert* — here a one-line grep proved `owner='manual'` drove no
+behavior, which turned a scary-looking "two semantics" merge into a safe
+preset-removal. And distinguish a CLI *verb* from the same English word: the
+sweep had to keep "served" (deployment state), "serves a request" (prose), and
+the TUI's "Serve" label while killing only `infer-stack serve` / `` `serve` ``
+the command.
+
+## 2026-06-23 13:27:49 -0400
+
+**Intent.** Planning-only (no code): decide whether infer-stack's leasing
+(`acquire`/`release`) can drive high-parallelism, high-throughput HELM
+reproduction through kwdagger/cmd_queue, or whether kwdagger must be adapted.
+Iterated with the user across three rounds, then landed a planning doc at
+[`docs/planning/infer-stack-kwdagger-integration.md`](../../docs/planning/infer-stack-kwdagger-integration.md).
+
+**Model/harness.** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude
+Code. Used parallel Explore subagents to map infer-stack leasing, kwdagger,
+cmd_queue, and the current Stage-3 integration before reasoning; every load-
+bearing claim is grounded in a file:line the subagents quoted.
+
+**The question that drove the design.** "Acquire is a *precondition* of a job,
+not a job itself; release must always run after finish *or* crash — and I'm not
+sure kwdagger/cmd_queue support that outside slurm." First I proposed embedding
+the lifecycle in the job command (`infer-stack run -- <cmd>`, acquire→run→
+release in a `finally`). The user pushed back: works, but inelegant and helps
+no one else — *is it feasible to make job preconditions first-class in
+cmd_queue/kwdagger?* It is, and it's the **correct** model, not just the tidy
+one.
+
+**Findings that settled it (verified, not assumed).**
+- cmd_queue's `preamble` **already gates** the main command (PREAMBLE_OK →
+  `if [[ … ]]; then main; else RETURN_CODE=3; fi`, `serial.py:245-255`). So the
+  precondition half exists; only an always-run `teardown` (trap `EXIT INT TERM`)
+  is new. tmux reuses serial rendering, so `kill-session`→SIGTERM fires the
+  trap; slurm `--wrap` + `--signal=B:TERM@N` gives grace before SIGKILL.
+- kwdagger's cache guard is `test -e <out> || <cmd>` (`pipeline.py:2184-2205`),
+  so wrapping as `test -e DONE || { setup-gates-main; trap teardown; main; }`
+  makes a *skipped* job acquire nothing — the precondition is enforced by the
+  framework, not by convention.
+- The **decisive correctness argument is co-location**, not elegance: the lease
+  lives in a node-local ledger and the gateway is localhost, so release must run
+  *where* acquire ran. A separate `afterany` cleanup node can't promise that (and
+  is actively wrong on multi-node slurm); a job *phase* guarantees it. `afterany`
+  is still a worthwhile *orthogonal* feature (cross-job "run regardless"), just
+  not the tool for resource bracketing.
+- Multi-GPU/tp-gang placement **is** supported (`required_gpu_count = tp×dp`,
+  first-fit reserves the gang — `placement.py:72-77,174-183`).
+- acquire is **fail-fast today** (`controller.py:237-250` raises PlacementError);
+  the queue-and-wait wait-loop slots in exactly there. And because `reconcile()`
+  calls `sweep()`, a blocking acquire's retry loop *reclaims TTL-expired leaks
+  while it waits* — queue-and-wait and leak-recovery become one mechanism, **iff
+  every pipeline lease has a finite TTL**.
+
+**Design decisions locked with the user.** (1) First-class `setup`/`teardown` in
+cmd_queue + kwdagger; infer-stack acquire/release are the canonical *users*, both
+libs stay infer-stack-agnostic. (2) infer-stack gets a queue-and-wait (blocking)
+acquire with a satisfiability check + FIFO-with-reservation (don't starve a tp=2
+request under a stream of 1-GPU requests). (3) In tmux mode, **drop the GPU
+request** — kwdagger/cmd_queue do no GPU management; infer-stack is the sole
+allocator. (4) LiteLLM no-blip via a static superset route table (deterministic
+vLLM addressing; gateway never recreated) — gated on confirming LiteLLM cooldown
+*recovers* a route whose upstream came up late. (5) Every pipeline lease has a
+finite TTL; `reclaim: stop`; add a standalone `infer-stack gc` for the last-job /
+periodic sweep. (6) GPU non-determinism under concurrent batching is **recorded,
+not eliminated** — snapshot the deployment `demand` + vLLM determinism flags per
+run and study agreement-vs-concurrency (turns a confound into a finding, which
+fits the audit's whole premise). (7) slurm (later, single-node) shadows slurm's
+grant via `INFER_STACK_ALLOWED_GPUS=$SLURM_JOB_GPUS`; the docker-escapes-cgroup
+gap is a non-issue *because* infer-stack respects the grant rather than relying
+on enforcement.
+
+**Net shape.** cmd_queue and kwdagger each gain one clean reusable feature
+(setup/teardown); the resource intelligence (placement, admission, TTL, no-blip)
+stays in infer-stack where it belongs. The only honest gap is SIGKILL/power-loss,
+uncatchable by *any* in-band mechanism (trap or afterany) — infer-stack's TTL is
+the universal backstop, so the story closes.
+
+**Reusable insight.** When a resource's lifecycle must bracket a scheduled job,
+the instinct is "add an acquire node and a release node." Resist it: separate
+nodes break on the scheduler's success-only dependencies *and* can't guarantee
+co-location with the work. The right primitive is a job *phase* (setup/teardown),
+which is also the more general library feature. And before declaring a feature
+"missing," read the codegen — here half of it (`preamble` gating) already
+existed, which turned a daunting "teach the scheduler preconditions" task into
+"add a teardown trap."
+
+**Next steps.** No code yet. Build order (doc §15): C1+K1 setup/teardown
+(foundational, testable with a dummy acquire/release) → I2 no-blip (+ cooldown
+gate-check) → I1 queue-and-wait (+ `gc`, `reclaim: stop`) → §7 recording (+
+serial-vs-batched logprob gate) → slurm → eval_audit wiring (where run-
+independence as DAG siblings is *my* job, per doc §13). Open questions tracked in
+doc §14.
