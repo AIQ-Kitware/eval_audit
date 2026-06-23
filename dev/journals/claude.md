@@ -2778,6 +2778,44 @@ not a Python exception you can catch. Force it once in a shared module and
 import that module ahead of pyplot, rather than leaving each call site to
 remember.
 
+## 2026-06-18 13:29:00 -0400
+
+**Model/config:** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude Code CLI (VSCode extension).
+
+**User intent:** Implement `docs/planning/olmo-models-docker-pipeline-plan.md` — make
+`reproduce/olmo_models/` run HELM inside the pinned `eval-audit-helm-runner` image
+("docker pipeline") *by default*, with an `OLMO_CONTAINER=0` host-venv fallback. Model
+stays served on the host; only where HELM runs changes.
+
+**What I did (data + scripts + docs only; zero Python *logic* changed):**
+- `eval_audit/integrations/infer_stack/adapter.py` — added `container_network: "host"`,
+  `hf_cache_dir: "~/.cache/eval-audit-hf"`, `container_gpus: "none"` (with a rationale
+  comment) to both the `smoke_manifest` and `full_manifest` of all six OLMo presets (12
+  blocks). Deliberately **no** `container_image` — that is the run-time on/off switch. The
+  existing `_CONTAINER_SPEC_KEYS` forwarding carries these into the generated manifest.
+- `reproduce/olmo_models/_lib.sh` — added `OLMO_CONTAINER` (default 1) + `OLMO_CONTAINER_IMAGE`
+  (default `eval-audit-helm-runner:dev`) knobs, mirroring e2e's `_lib.sh`.
+- `10_run_smoke_grid.sh` / `15_run_full_grid.sh` — build the `eval-audit-run` call as an args
+  array; append `--container-image "$OLMO_CONTAINER_IMAGE"` unless `OLMO_CONTAINER=0`.
+- `07_check_container_image.sh` — NEW preflight adapted from e2e's `06`; gates on
+  `OLMO_CONTAINER`, verifies docker + image, no-op when 0.
+- `README.md` — `./docker/build.sh` prerequisite, `07` in the preflight sequence, a
+  containerized-execution section + two new knobs, cross-link to docs/container-execution.md.
+
+**Why this shape won:** the plan's key insight is that container settings are *inert without
+an image* (`build_schedule_params` returns the bare pipeline before reading them), so the
+recipe lives in the preset and the image — supplied at run time — is the toggle. This keeps
+the experiment_name identical across container/host, so index→compose→summary need no change.
+
+**Verification:** AST check confirms all 6 presets × 2 manifests carry the 3 fields and omit
+`container_image`; `_manifest_doc()` forwards them end-to-end (confirmed via real import);
+`bash -n` clean on all 4 scripts; `pytest tests/test_container_execution.py` → 8 passed.
+Did NOT build the image or run the grid (needs docker + GPUs + infer-stack — host-dependent).
+
+**Next steps:** on a docker+GPU host, run plan verification 2/4/7/8 — `./docker/build.sh`,
+the `--run=0` toggle preview, the smoke grid (confirm `container_provenance.json` + gpqa via
+forwarded HF token), and the `OLMO_CONTAINER=0` escape hatch.
+
 ## 2026-06-22 17:12:35 -0400
 
 **Model/harness.** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code.

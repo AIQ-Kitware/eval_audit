@@ -98,8 +98,16 @@ run_one() {
     fi
   fi
 
-  # 5. Run the full manifest.
-  eval-audit-run --run=1 "$bundle_root/full_manifest.yaml"
+  # 5. Run the full manifest. With OLMO_CONTAINER=1 (default) append
+  #    --container-image to route HELM through the pinned container ("docker
+  #    pipeline"); with OLMO_CONTAINER=0 omit it for the host-venv fallback
+  #    (the presets' container fields stay inert). Built as an args array, like
+  #    the export call above.
+  local run_args=(--run=1 "$bundle_root/full_manifest.yaml")
+  if [[ "$OLMO_CONTAINER" != "0" ]]; then
+    run_args+=(--container-image "$OLMO_CONTAINER_IMAGE")
+  fi
+  eval-audit-run "${run_args[@]}"
 }
 
 for target in "${OLMO_TARGETS[@]}"; do

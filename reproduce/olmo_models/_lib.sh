@@ -41,6 +41,25 @@ export INFER_STACK_DATA_DIR="${INFER_STACK_DATA_DIR:-$HOME/.local/share/infer_st
 export EVAL_AUDIT_SKIP_LOCAL_REPEAT="${EVAL_AUDIT_SKIP_LOCAL_REPEAT:-1}"
 export EVAL_AUDIT_GROUP_STRIP="${EVAL_AUDIT_GROUP_STRIP:-1}"
 
+# Containerized HELM execution (the "docker pipeline"; see
+# docs/container-execution.md). ON BY DEFAULT (OLMO_CONTAINER=1): the grid scripts
+# pass `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`, so HELM runs
+# inside the pinned eval-audit-helm-runner image instead of the host venv — pinning
+# the software environment so it stops being a confounding variable in the
+# reproducibility comparison. The model is still SERVED ON THE HOST (vLLM behind
+# LiteLLM); only WHERE HELM runs changes. The in-container HELM reaches the host's
+# LiteLLM endpoint via --network host (declared by the presets' container_network:
+# host in eval_audit/integrations/infer_stack/adapter.py). Set OLMO_CONTAINER=0 to
+# fall back to the host-venv path: the grid omits --container-image, leaving the
+# presets' container fields inert (build_schedule_params keeps the bare pipeline
+# when no image is set). The experiment_name is identical either way.
+#
+# OLMO_CONTAINER_IMAGE is the local tag built by ./docker/build.sh; override with a
+# pushed digest for cross-machine pinning. 07_check_container_image.sh verifies it
+# exists before the grid runs (a no-op when OLMO_CONTAINER=0).
+export OLMO_CONTAINER="${OLMO_CONTAINER:-1}"
+export OLMO_CONTAINER_IMAGE="${OLMO_CONTAINER_IMAGE:-eval-audit-helm-runner:dev}"
+
 # HuggingFace auth. Some candidate runs (e.g. gpqa on the OLMo-2 / OLMoE
 # instruct models) pull a GATED HF dataset; HELM's dataset loader needs a token
 # whose account has accepted that dataset's terms. Resolve a token from the env
