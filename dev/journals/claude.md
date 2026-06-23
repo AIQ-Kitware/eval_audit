@@ -3020,3 +3020,42 @@ gate-check) → I1 queue-and-wait (+ `gc`, `reclaim: stop`) → §7 recording (+
 serial-vs-batched logprob gate) → slurm → eval_audit wiring (where run-
 independence as DAG siblings is *my* job, per doc §13). Open questions tracked in
 doc §14.
+
+## 2026-06-23 15:49:00 -0400
+
+**Model/harness.** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code.
+
+**User intent.** Audit the migration after committing the "Messy state" checkpoint
+(`ee34857`): the infer_stack submodule was bumped 0344636 → 156f6bb and the
+runbooks were renamed `serve` → `acquire`. Determine if anything needs fixing.
+
+**Audit findings.**
+- *infer_stack delta is safe for the adapter.* The 2 new submodule commits:
+  `8150e33` collapsed `serve` into `acquire` (so the runbook rename is correct —
+  `acquire <ep>` with no `--ttl` is an infinite standing service, exactly old
+  `serve` semantics) and `156f6bb` switched LiteLLM to a *static superset* route
+  table. The Catalog resolver API (`resolve_endpoint`/`.served`/`.capacity`) did
+  NOT change; the catalog.py edit was error-message text only. C-3 still holds and
+  is strengthened — the gateway registers `model_name: <endpoint>` for every
+  catalog endpoint, so HELM requesting the endpoint name always routes. 18 tests
+  pass and end-to-end export works against the live 156f6bb.
+- *serve→acquire rename is complete.* No stray `infer-stack serve`, no old verbs
+  reintroduced, C-1 per-model `release --all --evict` retained, bash -n clean.
+- *One real defect, fixed.* The "Messy state" commit resolved the earlier unmerged
+  `reproduce/olmo_models/config/infer_stack/config.yaml` (DU, deleted-by-us) by
+  **re-adding** the old-schema file — resurrecting the `active_profile`/`profiles`
+  world the §B reschema had deleted. It's inert (the leasing CLI reads only
+  settings.yaml + catalog.yaml, never config.yaml) but contradicts the reschema and
+  is misleading. Deleted it; the olmo dir now matches the e2e dir (catalog +
+  settings only).
+
+**Left as-is (noted, not changed).** `docs/planning/olmo-smoke-grouped-runner.md`
+still shows `switch`/`wait-ready` in its body, but that's the historical design
+narrative already disclaimed by the migration banner at its top. The "Messy state"
+commit also bundled in 4 unrelated submodule pointer bumps (aiq-magnet, cmd_queue,
+every_eval_ever, kwdagger) — untouched here.
+
+**Reusable insight.** A "deleted by us" (DU) merge conflict resolved by `git add`
+instead of `git rm` silently RESURRECTS the file you meant to delete. After a
+reschema-style migration, grep the config dir for the old-schema filenames as a
+post-merge guard — auto-resolution can quietly undo a deletion.
