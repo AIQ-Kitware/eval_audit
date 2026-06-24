@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from eval_audit.pipelines.helm_docker_pipeline import (
-    helm_single_run_docker_pipeline,
+from eval_audit.pipelines.helm_docker_pipeline import helm_single_run_docker_pipeline
+from eval_audit.pipelines.lease_bracket import (
     render_lease_setup,
     render_lease_teardown,
     _parse_model_deployment,
@@ -262,12 +262,16 @@ def test_schedule_params_merges_lease_on_docker_path() -> None:
     assert "helm_docker_pipeline" in params["pipeline"]
 
 
-def test_schedule_params_rejects_lease_on_bare_path() -> None:
+def test_schedule_params_requires_container_image() -> None:
+    # Containerization is mandatory: no resolved image => raise, even with a lease
+    # (leasing is the orthogonal axis on the docker node, not a bare fallback).
     manifest = {"run_entries": ["mmlu:model=x"], "max_eval_instances": 5, "suite": "s"}
-    with pytest.raises(ValueError, match="containerized pipeline"):
+    with pytest.raises(ValueError, match="containerized execution is required"):
         build_schedule_params(
             manifest, resolved_image=None, lease_entries={"helm.lease_endpoint": ["ep"]}
         )
+    with pytest.raises(ValueError, match="containerized execution is required"):
+        build_schedule_params(manifest, resolved_image=None, lease_entries=None)
 
 
 # --------------------------------------------------------------------------- #
@@ -289,9 +293,19 @@ def _write_manifest(tmp_path: Path, **extra) -> Path:
     return path
 
 
-def test_prepare_request_lease_requires_container(tmp_path: Path) -> None:
-    manifest = _write_manifest(tmp_path, lease_endpoint="phi2-single")
-    with pytest.raises(ValueError, match="requires containerized execution"):
+def test_prepare_request_lease_without_container_raises(tmp_path: Path) -> None:
+    # Containerization is mandatory: --lease with no container image is rejected
+    # (the bare host-venv pipelines were removed — leasing rides on the docker
+    # node, not a bare fallback).
+    catalog = tmp_path / "catalog.yaml"
+    catalog.write_text("endpoints: {}\n")
+    manifest = _write_manifest(
+        tmp_path,
+        lease_endpoint="phi2-single",
+        lease_ttl="2h",
+        lease_catalog=str(catalog),
+    )
+    with pytest.raises(ValueError, match="containerized execution is required"):
         prepare_schedule_request(manifest, lease=True)
 
 

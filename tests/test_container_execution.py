@@ -183,8 +183,10 @@ def test_prepare_schedule_request_container(tmp_path: Path, monkeypatch: pytest.
     assert (tmp_path / "hf").is_dir()
 
 
-def test_prepare_schedule_request_bare_path_unchanged(tmp_path: Path):
-    # No container_image => historic bare-python pipeline, no resolution.
+def test_prepare_schedule_request_requires_container_image(tmp_path: Path):
+    # Containerization is mandatory: a manifest with no container_image (and no
+    # --container-image override) is rejected — the bare host-venv pipeline was
+    # removed.
     manifest_fpath = tmp_path / "manifest.yaml"
     manifest_fpath.write_text(
         "\n".join(
@@ -199,10 +201,7 @@ def test_prepare_schedule_request_bare_path_unchanged(tmp_path: Path):
         )
         + "\n"
     )
-    request = kwdagger_bridge.prepare_schedule_request(
-        manifest_fpath, run=False, root_dpath=tmp_path / "results"
-    )
-    assert "helm_single_run_pipeline()" in request.params_text
-    assert "helm_single_run_docker_pipeline()" not in request.params_text
-    assert request.resolved_image is None
-    assert request.container_provenance is None
+    with pytest.raises(ValueError, match="containerized execution is required"):
+        kwdagger_bridge.prepare_schedule_request(
+            manifest_fpath, run=False, root_dpath=tmp_path / "results"
+        )

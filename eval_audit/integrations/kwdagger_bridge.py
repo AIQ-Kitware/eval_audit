@@ -20,7 +20,12 @@ from eval_audit.integrations.docker_provenance import (
     write_container_provenance,
 )
 
-_BARE_PIPELINE = "magnet.backends.helm.pipeline.helm_single_run_pipeline()"
+# Containerized execution is mandatory: every HELM run goes through the docker
+# pipeline (which pins the software environment so it stops being a confounding
+# variable in the reproducibility comparison). Leasing is the orthogonal axis —
+# the docker node carries the lease bracket (eval_audit.pipelines.lease_bracket),
+# which renders only when the manifest names a lease endpoint. The historic bare
+# host-venv pipelines have been removed.
 _DOCKER_PIPELINE = (
     "eval_audit.pipelines.helm_docker_pipeline.helm_single_run_docker_pipeline()"
 )
@@ -146,10 +151,11 @@ def build_schedule_params(
 ) -> dict[str, Any]:
     """Build the ``kwdagger schedule --params`` payload from a manifest.
 
-    When ``resolved_image`` is provided the containerized pipeline is selected
-    and the docker-runner matrix knobs are added; otherwise the historic
-    bare-python pipeline is used unchanged. ``lease_entries`` (the GPU-lease
-    matrix knobs, docker path only) are merged in when present.
+    Containerized execution is mandatory, so ``resolved_image`` must be set;
+    every run goes through the docker pipeline. ``lease_entries`` (the per-run
+    GPU-lease matrix knobs) merge in when present — leasing is the orthogonal
+    axis, rendered by the docker node's lease bracket. Raises if no image was
+    resolved (the bare host-venv pipelines have been removed).
     """
     matrix = {
         "helm.run_entry": list(manifest["run_entries"]),
@@ -174,16 +180,11 @@ def build_schedule_params(
         matrix["helm.enable_local_huggingface_models"] = [json.dumps(enable_local_hf)]
 
     if resolved_image is None:
-        if lease_entries:
-            # Leasing renders through MaterializeHelmRunDockerNode's
-            # setup/teardown; the bare magnet node has no such bracket, so a
-            # leased bare run would silently never acquire. Fail loud instead.
-            raise ValueError(
-                "per-run GPU leasing requires the containerized pipeline "
-                "(pass --container-image or set container_image in the "
-                "manifest); the bare-python pipeline cannot bracket a lease."
-            )
-        return {"pipeline": _BARE_PIPELINE, "matrix": matrix}
+        raise ValueError(
+            "containerized execution is required: pass --container-image or set "
+            "container_image in the manifest. The bare host-venv pipeline has "
+            "been removed — every HELM run is pinned to a container image."
+        )
 
     # Containerized execution: pin the (already-resolved) image and pass the
     # docker-runner knobs through to MaterializeHelmRunDockerNode.
@@ -232,17 +233,15 @@ def prepare_schedule_request(
     )
 
     # Per-run GPU leasing (opt-in, §5/§13). infer-stack owns every GPU, so the
-    # HELM *client* must request none — default container_gpus to "none" unless
-    # the manifest pins it explicitly (two allocators fighting over the same GPU
-    # indices is exactly what the design forbids). Leasing implies containerized
-    # execution (the lease bracket lives on the docker node).
+    # HELM *client* must request none. Leasing and containerization are
+    # orthogonal (see eval_audit.pipelines.lease_bracket): a containerized leased
+    # client gets container_gpus="none"; a bare host-venv leased client is just
+    # an HTTP caller to the served endpoint and uses no GPU regardless. Default
+    # container_gpus to "none" so the *containerized* leased path never fights
+    # infer-stack over GPU indices (inert on the bare path, which ignores
+    # container knobs).
     lease_entries: dict[str, Any] | None = None
     if lease:
-        if container_image is None and not manifest.get("container_image"):
-            raise ValueError(
-                "--lease requires containerized execution; pass --container-image "
-                "or set container_image in the manifest."
-            )
         manifest.setdefault("container_gpus", "none")
         lease_entries = build_lease_matrix_entries(
             manifest,

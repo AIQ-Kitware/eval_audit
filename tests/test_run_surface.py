@@ -12,6 +12,10 @@ from eval_audit.infra.paths import repo_root
 from eval_audit.manifests import builders as manifest_builders
 from eval_audit.workflows import run_from_manifest as run_workflow
 
+# Containerization is mandatory, so every schedulable manifest needs an image. A
+# digest-pinned ref short-circuits docker resolution (no daemon needed in CI).
+_PINNED_IMAGE = "ghcr.io/aiq-kitware/eval-audit-helm-runner@sha256:" + "a" * 64
+
 
 def _write_manifest(tmp_path: Path) -> Path:
     manifest_fpath = tmp_path / "manifest.yaml"
@@ -27,6 +31,7 @@ def _write_manifest(tmp_path: Path) -> Path:
                 "devices: 2,3",
                 "tmux_workers: 4",
                 "backend: tmux",
+                f"container_image: {_PINNED_IMAGE}",
             ]
         )
         + "\n"
@@ -107,6 +112,7 @@ def test_kwdagger_manifest_propagates_model_override(tmp_path: Path):
                 "tmux_workers: 4",
                 "backend: tmux",
                 "model_deployments_fpath: configs/debug/repro_model_overrides.yaml",
+                f"container_image: {_PINNED_IMAGE}",
             ]
         )
         + "\n"
@@ -118,8 +124,14 @@ def test_kwdagger_manifest_propagates_model_override(tmp_path: Path):
 
 
 def test_qwen35_vllm_manifest_propagates_local_override_and_local_path():
+    # This config lives in a frozen/archival runbook (reproduce/qwen35_vllm) that
+    # bakes no container_image; supply one here since containerization is now
+    # mandatory. The test is about override + local_path propagation, not the
+    # (removed) bare path.
     manifest_fpath = repo_root() / "configs/qwen35_vllm_smoke_manifest.yaml"
-    request = prepare_schedule_request(manifest_fpath, run=False)
+    request = prepare_schedule_request(
+        manifest_fpath, run=False, container_image=_PINNED_IMAGE
+    )
     params_text = request.params_text
     assert "qwen/qwen3.5-9b" in params_text
     assert "helm.local_path" in params_text

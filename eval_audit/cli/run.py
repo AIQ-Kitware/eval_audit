@@ -46,8 +46,11 @@ def main(argv: list[str] | None = None) -> None:
             "Bracket each HELM run with an infer-stack GPU lease "
             "(acquire --queue before, release after). Each run self-acquires "
             "its model so kwdagger can fan out many runs without a per-model "
-            "serial serve loop. Requires --container-image / a containerized "
-            "manifest; the client is run with no GPU (infer-stack owns them)."
+            "serial serve loop. Works with or without --container-image: the "
+            "lease acquires the model server's GPU, while the HELM client (an "
+            "HTTP caller to the served endpoint) runs in the container if one is "
+            "given, else in the host venv. Either way it uses no GPU "
+            "(infer-stack owns them)."
         ),
     )
     parser.add_argument(
