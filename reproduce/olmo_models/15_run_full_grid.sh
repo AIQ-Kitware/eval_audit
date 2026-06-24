@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the FULL manifest for each of the six OLMo presets, sequentially.
+# Run the FULL manifest for each of the six OLMo presets via per-run GPU leasing.
 #
 # This is the heavy counterpart to 10_run_smoke_grid.sh: where the smoke grid
 # runs 1-4 cheap entries per model as a preflight, the full grid runs every
@@ -7,16 +7,27 @@
 # max_eval_instances=1000). The full runs are what the downstream
 # index -> compose -> summary steps (20/30/40) operate on.
 #
-# Per model: bring the vLLM service up via its infer-stack profile, wait for it
-# to be ready, materialize the benchmark bundle from the preset, and run the
-# FULL manifest (eval-audit-run --run=1). Models are served one at a time
-# (switching the active profile tears down the previous one) because the grid
-# spans a 1B-active MoE up to a 32B dense model and they will not co-host.
+# High-throughput per-run-lease fan-out (handoff §13): each scheduled HELM run
+# self-acquires its model's GPU lease (`acquire --queue`, queue-and-wait when the
+# fleet is busy) and releases it after, so kwdagger fans the runs out and
+# infer-stack's admission queue serializes the models that can't co-host (the grid
+# spans a 1B-active MoE up to a 32B dense model). The catalog's `reclaim: stop`
+# frees a model's GPU on its last release; `infer-stack gc` reclaims any lease a
+# hard-killed job leaked. There is no per-model serial serve loop and no blunt
+# `release --all --evict` (which tore down the shared docker-compose project,
+# killing co-tenants' models) — only the scoped, leaked-lease `gc`.
+#
+# Containerization is mandatory (the grid always passes --container-image
+# "$OLMO_CONTAINER_IMAGE"), and leasing is the ORTHOGONAL axis
+# (eval_audit.pipelines.lease_bracket): the lease acquires the model server's GPU,
+# while the container pins where the HELM *client* runs. The client is just an
+# HTTP caller to the served LiteLLM endpoint and uses no GPU (container_gpus:
+# none). See docs/container-execution.md.
 #
 # Transport: LiteLLM gateway (openai-compatible). The OLMo presets in adapter.py
 # declare access_kind: vllm-direct, so we override it here with
 # `--access-kind openai-compatible` and hand export-benchmark-bundle the LiteLLM
-# base-url + master key (mirrors dev/e2e-tests/e2e-phi_2-vllm-philosophy.sh).
+# base-url + master key (mirrors dev/e2e-tests/).
 #
 # HuggingFace auth: _lib.sh exports HF_TOKEN / HUGGING_FACE_HUB_TOKEN (from the
 # env or a cached `huggingface-cli login`) into the environment eval-audit-run
@@ -42,15 +53,36 @@ FORCE_RERUN="${OLMO_FORCE_RERUN:-0}"
 failed=()
 
 # The LiteLLM gateway host port is a fixed default in the new CLI (14042;
-# override via LITELLM_PORT). The master key lives in the managed .env, which
-# does not exist until the first `acquire` brings the gateway up — so it is read
-# per-model inside run_one (after serve), NOT up front.
+# override via LITELLM_PORT). The master key lives in the managed .env, read once
+# at bootstrap below.
 LITELLM_PORT="${LITELLM_PORT:-14042}"
 LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:$LITELLM_PORT}"
 
+# Reclaim any lease a prior hard-killed run leaked (TTL-expired) before we start,
+# freeing its GPU. `gc` is scoped to leaked/expired demand in THIS data_dir's
+# ledger — it never touches another user's active leases (unlike the old
+# `release --all --evict`, which tore down the shared docker-compose project).
+echo "Reclaiming any leaked leases before start (infer-stack gc)…"
+infer-stack gc --yes || echo "WARN: 'infer-stack gc' returned nonzero; continuing." >&2
+
+# Bootstrap the no-blip gateway ONCE so export-benchmark-bundle can read the
+# managed LiteLLM master key, then release just the bootstrap model — scoped by
+# env-file, NOT `--all` — so per-run leasing owns every model's lifecycle.
+# `acquire --no-wait` renders the gateway + writes the key without blocking on the
+# model load; the standing LiteLLM gateway stays up (no-blip) and the key persists
+# in the managed .env for every bundle.
+bootstrap_ep="$(olmo_profile "${OLMO_TARGETS[0]}")"
+bootstrap_env="$(mktemp)"
+echo "Bootstrapping the gateway via ${bootstrap_ep} to read the LiteLLM master key…"
+infer-stack acquire "$bootstrap_ep" --no-wait --yes --env-file "$bootstrap_env"
+LEASE_MASTER_KEY="$(infer-stack env LITELLM_MASTER_KEY)"
+infer-stack release --env-file "$bootstrap_env" --evict \
+  || echo "WARN: bootstrap 'release --env-file --evict' returned nonzero; continuing." >&2
+rm -f "$bootstrap_env"
+
 run_one() {
   local target="$1"
-  local preset endpoint bundle_root master_key
+  local preset endpoint bundle_root
   preset="$(olmo_preset "$target")"
   endpoint="$(olmo_profile "$target")"
   bundle_root="$(olmo_bundle_root "$target")"
@@ -60,34 +92,21 @@ run_one() {
   echo "== ${preset}  (endpoint: ${endpoint})"
   echo "==================================================================="
 
-  # 1. C-1: acquire ACCUMULATES (demand is ref-counted) — unlike the old
-  #    `switch`, which replaced. The six models span a 1B-active MoE up to a 32B
-  #    dense model and will not co-host, so release the previous model's GPUs
-  #    before standing up the next or they pile up and OOM. release --all --evict
-  #    frees idle deployments; the standing LiteLLM gateway stays up.
-  infer-stack release --all --evict || echo "WARN: 'infer-stack release --all --evict' returned nonzero (nothing to free?); continuing." >&2
-
-  # 2. Bring this model up as a standing lease and wait for readiness. `acquire`
-  #    renders + applies + waits; the explicit `wait` is belt-and-suspenders.
-  infer-stack acquire "$endpoint" --yes
-  infer-stack wait "$endpoint"
-
-  # acquire writes the managed LiteLLM master key into the .env on first bring-up;
-  # read it now (positional `env KEY`) for the export below.
-  master_key="$(infer-stack env LITELLM_MASTER_KEY)"
-
-  # 3. Materialize the bundle (smoke + full manifests) from the preset, routing
-  #    through LiteLLM (override the preset's vllm-direct access kind).
+  # 1. Materialize the bundle (smoke + full manifests) from the preset, routing
+  #    through LiteLLM (override the preset's vllm-direct access kind). No
+  #    pre-serve: each scheduled HELM run self-acquires "$endpoint" via --lease
+  #    below; ref-counting coalesces a model's run_entries onto one deployment and
+  #    the admission queue serializes models that can't co-host.
   "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
     --preset "$preset" \
     --bundle-root "$bundle_root" \
     --access-kind openai-compatible \
     --base-url "${LITELLM_BASE_URL}/v1" \
-    --api-key-value "$master_key"
+    --api-key-value "$LEASE_MASTER_KEY"
 
-  # 4. Optionally clear a prior run so kwdagger's skip_existing doesn't no-op
-  #    this model. The full experiment_name is "audit-<preset>-full" and its
-  #    results (incl. the DONE sentinel) live under $RESULTS_ROOT/<experiment>.
+  # 2. Optionally clear a prior run so kwdagger's skip_existing doesn't no-op this
+  #    model. The full experiment_name is "audit-<preset>-full" and its results
+  #    (incl. the DONE sentinel) live under $RESULTS_ROOT/<experiment>.
   if [[ "$FORCE_RERUN" == "1" ]]; then
     local experiment result_dpath
     experiment="$(olmo_experiment_full "$target")"
@@ -98,16 +117,14 @@ run_one() {
     fi
   fi
 
-  # 5. Run the full manifest. With OLMO_CONTAINER=1 (default) append
-  #    --container-image to route HELM through the pinned container ("docker
-  #    pipeline"); with OLMO_CONTAINER=0 omit it for the host-venv fallback
-  #    (the presets' container fields stay inert). Built as an args array, like
-  #    the export call above.
-  local run_args=(--run=1 "$bundle_root/full_manifest.yaml")
-  if [[ "$OLMO_CONTAINER" != "0" ]]; then
-    run_args+=(--container-image "$OLMO_CONTAINER_IMAGE")
-  fi
-  eval-audit-run "${run_args[@]}"
+  # 3. Run the full manifest. Containerization is mandatory (the pinned image
+  #    pins the software env), and each scheduled run is bracketed with its
+  #    model's GPU lease (--lease; the bundle's baked-in lease_endpoint/ttl/catalog
+  #    tell eval-audit-run which endpoint to acquire). Container and lease are
+  #    orthogonal: the image says where the HELM client runs, the lease acquires
+  #    the served model's GPU (client runs with container_gpus: none).
+  eval-audit-run --run=1 "$bundle_root/full_manifest.yaml" \
+    --container-image "$OLMO_CONTAINER_IMAGE" --lease
 }
 
 for target in "${OLMO_TARGETS[@]}"; do
@@ -120,6 +137,13 @@ for target in "${OLMO_TARGETS[@]}"; do
     run_one "$target"
   fi
 done
+
+# Final backstop: reclaim any lease a hard-killed job leaked (its `release`
+# teardown never ran), tearing down the stop-policy deployment and freeing its
+# GPU. The per-run admission queue already sweeps expired leases while waiting, so
+# this is the last-job sweep; run it even on partial failure.
+echo "Reclaiming any leaked leases (infer-stack gc)…"
+infer-stack gc --yes || echo "WARN: 'infer-stack gc' returned nonzero; continuing." >&2
 
 if (( ${#failed[@]} > 0 )); then
   echo >&2

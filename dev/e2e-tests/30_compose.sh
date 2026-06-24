@@ -6,8 +6,8 @@
 # single packet. Requires the local index produced by 20_index_local.sh; it does
 # not re-run any benchmarks.
 #
-# By default this loops over the scenarios in E2E_TARGETS (so it honors
-# E2E_INCLUDE_CONTAINER). Set VEXP_MANIFEST=<path> to compose just one manifest.
+# By default this loops over the scenarios in E2E_TARGETS. Set
+# VEXP_MANIFEST=<path> to compose just one manifest.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"

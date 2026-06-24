@@ -59,47 +59,31 @@ export EVAL_AUDIT_GROUP_STRIP="${EVAL_AUDIT_GROUP_STRIP:-1}"
 #   * serving   — vllm: the infer-stack catalog endpoint to serve.
 #                 hf:   unused ("-"); the manifest path is derived from the
 #                       experiment name (manifests/<experiment>.yaml).
-# Ordered HF-direct FIRST, then the vLLM scenarios. The hf target makes HELM load
-# microsoft/phi-2 onto the GPU itself (no infer-stack), so it must run while the
-# GPU is free — before any vLLM stack is up holding the memory (otherwise the HF
-# load can OOM). The grid scripts run `infer-stack release --all --evict` at the
-# start to guarantee that clean state, and running hf first keeps the GPU clear.
-# After hf, the vLLM comparable baseline and its temperature=1 "incomparable"
-# negative control (a deliberate recipe deviation the planner should flag) run
-# against the served LiteLLM endpoint. The container scenario (appended below) is
-# vLLM-served too and runs last, reusing the already-up stack.
+# Ordered HF-direct FIRST, then the vLLM scenarios. Every scenario runs HELM
+# inside the pinned eval-audit-helm-runner image (containerization is mandatory;
+# the grid passes `eval-audit-run --container-image "$E2E_CONTAINER_IMAGE"`). The
+# hf target loads microsoft/phi-2 IN-PROCESS in its container (a real GPU, no
+# lease, no --network host), so it must run while the GPU is free — before any
+# vLLM scenario self-acquires phi-2 and holds the memory (otherwise the HF load
+# can OOM). The grid scripts reclaim leaked leases (`infer-stack gc`) and evict
+# the one-time gateway-bootstrap model at the start, and run hf first, to keep the
+# GPU clear (the per-run leasing path has no standing pre-served stack). After hf,
+# the vLLM comparable baseline and its temperature=1 "incomparable" negative
+# control (a deliberate recipe deviation the planner should flag) run against the
+# served LiteLLM endpoint, each self-acquiring phi-2's lease for the run
+# (`eval-audit-run --lease`, container_gpus: none). The only hf-vs-vLLM difference
+# is the lease (and the GPU config that follows from it).
 E2E_TARGETS=(
   "e2e-phi_2-huggingface-philosophy:hf:-"
   "e2e-phi_2-vllm-philosophy:vllm:phi2-single"
   "e2e-phi_2-vllm-philosophy-incomparable:vllm:phi2-single"
 )
 
-# Containerized-execution example (ON BY DEFAULT; set E2E_INCLUDE_CONTAINER=0 to
-# skip). Runs HELM inside the pinned eval-audit-helm-runner image (build with
-# ./docker/build.sh first) instead of the host venv — the "docker pipeline"
-# (Stage 3 containerized execution; see docs/container-execution.md). It needs
-# the built image + a working docker, so on hosts without them set
-# E2E_INCLUDE_CONTAINER=0 (otherwise 06_check_container_image.sh fails the
-# preflight with a build/skip hint).
-#
-# This is the intended containerized workflow: the model is SERVED on the host
-# (phi-2 on vLLM behind LiteLLM) and HELM runs in the container, reaching the host
-# endpoint via --network host. It reuses transport "vllm" unchanged — the
-# container settings (incl. container_network: host) are declared by the
-# e2e-phi_2-vllm-philosophy-container PRESET, so the generated bundle manifest
-# carries it. (An in-process HF-in-container flavor — the model loaded inside the
-# container — is intentionally not included: it is self-contained and needs no
-# host endpoint, which is not the served workflow this exercises.)
-if [[ "${E2E_INCLUDE_CONTAINER:-1}" != "0" ]]; then
-  E2E_TARGETS+=(
-    "e2e-phi_2-vllm-philosophy-container:vllm:phi2-single"
-  )
-fi
-
-# The pinned HELM-runner image + a dedicated audit HF cache (the container runs
-# as root, so a dedicated dir keeps downloads consistently owned). These match
-# the e2e-phi_2-*-container preset / manifest defaults and are used by
-# 06_check_container_image.sh; override to point at a pushed digest / other cache.
+# The pinned HELM-runner image (always used — containerization is mandatory) + a
+# dedicated audit HF cache (the container runs as root, so a dedicated dir keeps
+# downloads consistently owned). Build the image first with ./docker/build.sh;
+# 06_check_container_image.sh verifies it. Override E2E_CONTAINER_IMAGE with a
+# pushed digest for cross-machine pinning.
 export E2E_CONTAINER_IMAGE="${E2E_CONTAINER_IMAGE:-eval-audit-helm-runner:dev}"
 export E2E_HF_CACHE_DIR="${E2E_HF_CACHE_DIR:-$HOME/.cache/eval-audit-hf}"
 
@@ -138,7 +122,6 @@ e2e_vexp_manifest() {
     e2e-phi_2-vllm-philosophy)              printf '%s\n' "$d/e2e-phi2-vllm.yaml" ;;
     e2e-phi_2-vllm-philosophy-incomparable) printf '%s\n' "$d/e2e-phi2-incomparable.yaml" ;;
     e2e-phi_2-huggingface-philosophy)       printf '%s\n' "$d/e2e-phi2-hf.yaml" ;;
-    e2e-phi_2-vllm-philosophy-container)    printf '%s\n' "$d/e2e-phi2-container.yaml" ;;
     *) echo "e2e_vexp_manifest: no manifest mapped for '$(e2e_name "$1")'" >&2; return 1 ;;
   esac
 }

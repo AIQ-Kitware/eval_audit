@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 # Run the SMOKE manifest for each of the three phi-2 e2e scenarios, sequentially.
 #
-# Per scenario, the path depends on its transport:
-#   * vllm — bring phi-2 up on vLLM via its infer-stack profile, wait for
-#     readiness, materialize the benchmark bundle from the preset (routed through
-#     the LiteLLM gateway), and run the SMOKE manifest. The phi-2 presets in
-#     adapter.py already declare access_kind: openai-compatible, so the export
-#     passes only the LiteLLM base-url + master key (no --access-kind override;
-#     unlike reproduce/olmo_models, whose presets declare vllm-direct).
-#   * hf — no infer-stack: HELM loads microsoft/phi-2 directly from HuggingFace
-#     and runs the checked-in smoke manifest under manifests/.
-#
-# The two vLLM scenarios share the phi2-single profile, so switching between them
-# is a no-op re-apply; the order still mirrors the full grid.
+# Every scenario runs HELM inside the pinned eval-audit-helm-runner image
+# (containerization is mandatory — the grid always passes --container-image). The
+# ONLY difference between the transports is leasing (and the GPU config that
+# follows from it):
+#   * vllm — phi-2 is SERVED on the host (vLLM behind LiteLLM). Each scheduled
+#     HELM run self-acquires phi-2's GPU lease (`acquire --queue` before, release
+#     after) via `eval-audit-run --lease`; the bundle's baked-in
+#     lease_endpoint/ttl/catalog name the endpoint. The in-container client is an
+#     HTTP caller (container_gpus: none) reaching the host via --network host. No
+#     per-scenario pre-serve and no blunt `release --all` (which tore down the
+#     shared docker-compose project, killing co-tenants' models).
+#   * hf — no infer-stack: HELM loads microsoft/phi-2 IN-PROCESS from HuggingFace,
+#     inside its container, on a real GPU (no --lease => no container_gpus: none).
+#     It cannot lease (no served endpoint), so it runs first, while the GPU is
+#     clear (a started vLLM model would hold the memory and OOM the HF load).
 #
 # Default is fail-fast. Set E2E_KEEP_GOING=1 to attempt every scenario and report
 # which ones failed at the end instead of stopping on the first error.
@@ -33,24 +36,41 @@ KEEP_GOING="${E2E_KEEP_GOING:-0}"
 FORCE_RERUN="${E2E_FORCE_RERUN:-1}"
 failed=()
 
-# Start from a clean GPU: release any standing leases + evict idle models left up
-# by a prior run so the hf scenario (first in the grid) has the full GPU to load
-# phi-2 onto. Best-effort — `release --all --evict` is a no-op when nothing is
-# leased, and a clean host shouldn't abort the grid just for having nothing to
-# free. (The leasing CLI replaced the old `infer-stack down`.)
-echo "Releasing leases + evicting idle models to free the GPU (infer-stack release --all --evict)…"
-infer-stack release --all --evict || echo "WARN: 'infer-stack release --all --evict' returned nonzero (nothing to free?); continuing." >&2
-
 # The LiteLLM gateway host port is a fixed default in the new CLI (14042;
-# override via LITELLM_PORT). The master key lives in the managed .env, which
-# does not exist until the first `acquire` brings the gateway up — so it is read
-# per-scenario inside run_one (after serve), NOT up front.
+# override via LITELLM_PORT). The master key lives in the managed .env, read once
+# at bootstrap below.
 LITELLM_PORT="${LITELLM_PORT:-14042}"
 LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:$LITELLM_PORT}"
 
+# Reclaim any lease a prior hard-killed run leaked (TTL-expired), freeing its GPU
+# so the hf scenario (first) loads phi-2 onto a clear card. `gc` is scoped to
+# leaked/expired demand in THIS data_dir's ledger — it never tears down another
+# user's active leases (unlike the old `release --all --evict`).
+echo "Reclaiming any leaked leases before start (infer-stack gc)…"
+infer-stack gc --yes || echo "WARN: 'infer-stack gc' returned nonzero; continuing." >&2
+
+# Bootstrap the no-blip gateway ONCE so the vLLM scenarios' export-benchmark-bundle
+# can read the managed LiteLLM master key, then release just the bootstrap model
+# (scoped by env-file, NOT `--all`). The gateway is a CPU container (no GPU) and
+# stays up; the bootstrap model is evicted so the hf scenario keeps the GPU clear.
+bootstrap_ep=""
+for _t in "${E2E_TARGETS[@]}"; do
+  if [[ "$(e2e_transport "$_t")" == "vllm" ]]; then bootstrap_ep="$(e2e_serving "$_t")"; break; fi
+done
+LEASE_MASTER_KEY=""
+if [[ -n "$bootstrap_ep" ]]; then
+  bootstrap_env="$(mktemp)"
+  echo "Bootstrapping the gateway via ${bootstrap_ep} to read the LiteLLM master key…"
+  infer-stack acquire "$bootstrap_ep" --no-wait --yes --env-file "$bootstrap_env"
+  LEASE_MASTER_KEY="$(infer-stack env LITELLM_MASTER_KEY)"
+  infer-stack release --env-file "$bootstrap_env" --evict \
+    || echo "WARN: bootstrap 'release --env-file --evict' returned nonzero; continuing." >&2
+  rm -f "$bootstrap_env"
+fi
+
 run_one() {
   local target="$1"
-  local name transport experiment endpoint bundle_root manifest master_key
+  local name transport experiment endpoint bundle_root manifest
   name="$(e2e_name "$target")"
   transport="$(e2e_transport "$target")"
   experiment="$(e2e_experiment_smoke "$target")"
@@ -60,31 +80,30 @@ run_one() {
   echo "== ${name}  (transport: ${transport})"
   echo "==================================================================="
 
+  # Containerization is mandatory for every scenario; the image is supplied here.
+  local run_args=(--run=1 --container-image "$E2E_CONTAINER_IMAGE")
   case "$transport" in
     vllm)
       endpoint="$(e2e_serving "$target")"
       bundle_root="$(e2e_bundle_root "$target")"
-      # 1. Bring phi-2 up as a standing lease and wait for readiness. `acquire`
-      #    renders + applies + waits; the explicit `wait` is belt-and-suspenders.
-      #    The two vLLM scenarios share the phi2-single endpoint, so the second
-      #    `acquire` just coalesces onto the live deployment (ref-count++).
-      infer-stack acquire "$endpoint" --yes
-      infer-stack wait "$endpoint"
-      # acquire writes the managed LiteLLM master key into the .env on first
-      # bring-up; read it now (positional `env KEY`) for the export below.
-      master_key="$(infer-stack env LITELLM_MASTER_KEY)"
-      # 2. Materialize the bundle (smoke + full manifests) from the preset,
-      #    routing through the LiteLLM gateway.
+      # 1. Materialize the bundle (smoke + full manifests) from the preset,
+      #    routing through the LiteLLM gateway (master key read once at bootstrap).
+      #    No pre-serve: the scheduled run self-acquires "$endpoint" via --lease.
       "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
         --preset "$name" \
         --bundle-root "$bundle_root" \
         --base-url "${LITELLM_BASE_URL}/v1" \
-        --api-key-value "$master_key"
+        --api-key-value "$LEASE_MASTER_KEY"
       manifest="$bundle_root/smoke_manifest.yaml"
+      # 2. Bracket the run with phi-2's GPU lease (served on the host; the
+      #    in-container client is an HTTP caller with container_gpus: none).
+      run_args+=("$manifest" --lease)
       ;;
     hf)
-      # HELM loads microsoft/phi-2 directly from HuggingFace; no infer-stack.
+      # HELM loads microsoft/phi-2 IN-PROCESS from HuggingFace; no infer-stack, no
+      # lease (so the container gets a real GPU). Runs first while the GPU is clear.
       manifest="$(e2e_hf_manifest "$target" smoke)"
+      run_args+=("$manifest")
       ;;
     *)
       echo "FAIL: unknown transport '$transport' for scenario '$name'" >&2
@@ -97,8 +116,8 @@ run_one() {
     e2e_clear_results "$experiment"
   fi
 
-  # 4. Run the smoke manifest.
-  eval-audit-run --run=1 "$manifest"
+  # 4. Run the manifest (leased for vLLM, bare for hf).
+  eval-audit-run "${run_args[@]}"
 }
 
 for target in "${E2E_TARGETS[@]}"; do
@@ -111,6 +130,12 @@ for target in "${E2E_TARGETS[@]}"; do
     run_one "$target"
   fi
 done
+
+# Final backstop: reclaim any lease a hard-killed vLLM run leaked (its release
+# teardown never ran). Safe no-op when nothing leaked; runs even on partial
+# failure.
+echo "Reclaiming any leaked leases (infer-stack gc)…"
+infer-stack gc --yes || echo "WARN: 'infer-stack gc' returned nonzero; continuing." >&2
 
 if (( ${#failed[@]} > 0 )); then
   echo >&2
