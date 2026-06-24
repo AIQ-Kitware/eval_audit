@@ -120,6 +120,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "backend": "compose",
         "access_kind": "vllm-direct",
         "model_deployment_name": "vllm/qwen2-72b-instruct-local",
+        # Instruct/chat model (official together/qwen2-72b-instruct is a
+        # TogetherChatClient) → chat protocol.
+        "protocol_mode": "chat",
         "smoke_manifest": {
             "experiment_name": "audit-qwen2-72b-vllm-smoke",
             "description": "Smoke-test HELM batch for qwen/qwen2-72b-instruct through a local vLLM server.",
@@ -158,12 +161,20 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 "model_deployment_name": "kubeai/qwen2-5-7b-instruct-turbo-default-local",
                 "helm_model_name": "qwen/qwen2.5-7b-instruct-turbo",
                 "helm_tokenizer_name": "qwen/qwen2.5-7b-instruct",
+                # Instruct/chat model (official together/qwen2.5-7b-instruct-turbo
+                # is a TogetherChatClient) → chat protocol.
+                "protocol_mode": "chat",
             },
             {
                 "profile": "vicuna-7b-v1-3-no-chat-template",
                 "model_deployment_name": "kubeai/vicuna-7b-v1-3-no-chat-template-local",
                 "helm_model_name": "lmsys/vicuna-7b-v1.3",
                 "helm_tokenizer_name": "hf-internal-testing/llama-tokenizer",
+                # Deliberately served WITHOUT a chat template (the deployment and
+                # profile name say so; the official huggingface/vicuna-7b-v1.3 uses
+                # the llama tokenizer, which has no chat template → completion
+                # behavior) → completions protocol.
+                "protocol_mode": "completions",
                 # Keep a small headroom margin for the live vLLM/Vicuna path, which
                 # appears to need a few reserved tokens beyond HELM's nominal budget.
                 "helm_max_sequence_and_generated_tokens_length": 2040,
@@ -219,12 +230,20 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 "model_deployment_name": "vllm/qwen2-5-7b-instruct-turbo-local",
                 "helm_model_name": "qwen/qwen2.5-7b-instruct-turbo",
                 "helm_tokenizer_name": "qwen/qwen2.5-7b-instruct",
+                # Instruct/chat model (official together/qwen2.5-7b-instruct-turbo
+                # is a TogetherChatClient) → chat protocol.
+                "protocol_mode": "chat",
             },
             {
                 "profile": "gpt-oss-20b-chat",
                 "model_deployment_name": "litellm/gpt-oss-20b-local",
                 "helm_model_name": "openai/gpt-oss-20b",
                 "helm_tokenizer_name": "openai/o200k_harmony",
+                # gpt-oss needs the harmony format (applied via the chat template);
+                # the official together/gpt-oss-20b is a TogetherChatClient → chat
+                # protocol. (The frozen gpt_oss_20b_* presets pin completions; this
+                # active preset matches the official deployment instead.)
+                "protocol_mode": "chat",
             },
         ],
         "smoke_manifest": {
@@ -590,9 +609,10 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "bundle_name": "allenai-olmo-2-0325-32b-instruct",
         "access_kind": "vllm-direct",
         "model_deployment_name": "vllm/allenai-olmo-2-0325-32b-instruct",
-        # G1: HELM aliases. Instruct model → chat protocol (the G2 default).
+        # G1: HELM aliases. Instruct model → chat protocol (G2, explicit).
         "helm_model_name": "allenai/olmo-2-0325-32b-instruct",
         "helm_tokenizer_name": "allenai/olmo-2-0325-32b-instruct",
+        "protocol_mode": "chat",
         # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
         # The chat-template wrapper adds ~12 tokens HELM doesn't count, so the
         # num_output_tokens=2048 run_entries (gpqa/mmlu_pro/ifeval) overflow
@@ -750,8 +770,10 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "access_kind": "vllm-direct",
         "model_deployment_name": "vllm/allenai-olmo-2-1124-13b-instruct",
         # G1: the 13B reuses the 7B tokenizer alias (intentional, not a typo).
+        # Instruct model → chat protocol (G2, explicit).
         "helm_model_name": "allenai/olmo-2-1124-13b-instruct",
         "helm_tokenizer_name": "allenai/olmo-2-1124-7b-instruct",
+        "protocol_mode": "chat",
         # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
         "helm_max_sequence_and_generated_tokens_length": 4064,
         "smoke_manifest": {
@@ -799,9 +821,10 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "bundle_name": "allenai-olmo-2-1124-7b-instruct",
         "access_kind": "vllm-direct",
         "model_deployment_name": "vllm/allenai-olmo-2-1124-7b-instruct",
-        # G1: HELM aliases. Instruct model → chat protocol (the G2 default).
+        # G1: HELM aliases. Instruct model → chat protocol (G2, explicit).
         "helm_model_name": "allenai/olmo-2-1124-7b-instruct",
         "helm_tokenizer_name": "allenai/olmo-2-1124-7b-instruct",
+        "protocol_mode": "chat",
         # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
         "helm_max_sequence_and_generated_tokens_length": 4064,
         "smoke_manifest": {
@@ -849,9 +872,10 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "bundle_name": "allenai-olmoe-1b-7b-0125-instruct",
         "access_kind": "vllm-direct",
         "model_deployment_name": "vllm/allenai-olmoe-1b-7b-0125-instruct",
-        # G1: HELM aliases. Instruct model → chat protocol (the G2 default).
+        # G1: HELM aliases. Instruct model → chat protocol (G2, explicit).
         "helm_model_name": "allenai/olmoe-1b-7b-0125-instruct",
         "helm_tokenizer_name": "allenai/olmoe-1b-7b-0125-instruct",
+        "protocol_mode": "chat",
         # 32-token reserve below max-model-len (4096); see allenai-olmo-7b.
         # OLMoE's chat template adds ~13 tokens HELM doesn't count.
         "helm_max_sequence_and_generated_tokens_length": 4064,
@@ -1035,7 +1059,7 @@ def _resolve_api_key(access_kind: str, *, api_key_value: str | None = None) -> s
 def _model_deployment_entry(
     facts: ServingFacts,
     *,
-    protocol_mode: str = "chat",
+    protocol_mode: str,
     helm_model_name: str | None = None,
     helm_tokenizer_name: str | None = None,
     helm_max_sequence_and_generated_tokens_length: int | None = None,
@@ -1125,7 +1149,8 @@ def _profile_specs(profile: str, preset_cfg: dict[str, Any]) -> list[dict[str, A
         "access_kind": preset_cfg.get("access_kind"),
         # G2: the chat-vs-completions distinction used to live in the profile
         # name (e.g. `-completions` vs `-chat`); the catalog has no such field,
-        # so it is now an explicit preset fact (default "chat").
+        # so it is now an explicit, required preset fact (no default — see the
+        # required check in materialize_benchmark_bundle).
         "protocol_mode": preset_cfg.get("protocol_mode"),
         "model_deployment_name": preset_cfg.get("model_deployment_name"),
         "helm_model_name": preset_cfg.get("helm_model_name"),
@@ -1257,6 +1282,7 @@ def materialize_benchmark_bundle(
     preset: str | None = None,
     profile_specs: list[dict[str, Any]] | None = None,
     access_kind: str | None = None,
+    protocol_mode: str | None = None,
     base_url: str | None = None,
     api_key_value: str | None = None,
     lease_catalog: Path | str | None = None,
@@ -1268,11 +1294,33 @@ def materialize_benchmark_bundle(
     selected_accesses = []
     for fact, spec in zip(facts, specs, strict=True):
         selected_kind = access_kind or spec.get("access_kind") or preset_cfg.get("access_kind") or "openai-compatible"
-        protocol_mode = spec.get("protocol_mode") or preset_cfg.get("protocol_mode") or "chat"
+        # protocol_mode is required — there is no default. Picking chat vs
+        # completions wrong silently breaks reproduction (a base model served as
+        # chat gets its prompt chat-templated and emits garbage; see the OLMo-7B
+        # "The" failure). Every preset/profile must declare it explicitly so the
+        # choice is a conscious, reviewable fact rather than an accident.
+        # Precedence: caller override → profile spec → preset.
+        resolved_protocol_mode = (
+            protocol_mode or spec.get("protocol_mode") or preset_cfg.get("protocol_mode")
+        )
+        if resolved_protocol_mode is None:
+            raise ValueError(
+                f"protocol_mode is required but unset for profile "
+                f"{spec.get('profile')!r} (preset {preset!r}); set "
+                f"'protocol_mode' to 'completions' (base/text-completion models) "
+                f"or 'chat' (instruct/chat models) in the preset or profile spec, "
+                f"or pass an explicit override (--protocol-mode)."
+            )
+        if resolved_protocol_mode not in ("chat", "completions"):
+            raise ValueError(
+                f"protocol_mode for profile {spec.get('profile')!r} (preset "
+                f"{preset!r}) must be 'chat' or 'completions', got "
+                f"{resolved_protocol_mode!r}."
+            )
         model_entries.append(
             _model_deployment_entry(
                 fact,
-                protocol_mode=protocol_mode,
+                protocol_mode=resolved_protocol_mode,
                 helm_model_name=spec.get("helm_model_name"),
                 helm_tokenizer_name=spec.get("helm_tokenizer_name"),
                 helm_max_sequence_and_generated_tokens_length=spec.get("helm_max_sequence_and_generated_tokens_length"),
@@ -1394,6 +1442,7 @@ def export_benchmark_bundle(
     backend: str | None = None,
     config_dir: Path | None = None,
     access_kind: str | None = None,
+    protocol_mode: str | None = None,
     base_url: str | None = None,
     api_key_value: str | None = None,
     # Deprecated: ``simulate_hardware`` was the GPU-simulation knob for the old
@@ -1438,6 +1487,7 @@ def export_benchmark_bundle(
         preset=preset,
         profile_specs=specs,
         access_kind=access_kind,
+        protocol_mode=protocol_mode,
         base_url=base_url,
         api_key_value=api_key_value,
         lease_catalog=lease_catalog,

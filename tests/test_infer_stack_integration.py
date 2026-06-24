@@ -7,9 +7,12 @@ import yaml
 
 from eval_audit.integrations.infer_stack.adapter import (
     DEFAULT_LEASE_TTL,
+    PRESET_CONFIGS,
     ServingFacts,
     _lease_facts,
+    _profile_specs,
     export_benchmark_bundle,
+    materialize_benchmark_bundle,
     resolve_serving_facts,
 )
 
@@ -183,7 +186,7 @@ def test_olmo_base_preset_routed_through_gateway(tmp_path: Path) -> None:
 
 def test_olmo_instruct_reuses_sibling_tokenizer_alias(tmp_path: Path) -> None:
     # The 13B instruct model intentionally reuses the 7B tokenizer alias, and is
-    # a chat model (vllm-direct default -> VLLMChatClient).
+    # a chat model (vllm-direct + protocol_mode=chat -> VLLMChatClient).
     config_dir = _make_config_dir(tmp_path)
     result = export_benchmark_bundle(
         "",
@@ -240,6 +243,68 @@ def test_lease_facts_rejects_c3_name_chain_violation() -> None:
     facts = [ServingFacts(endpoint="phi2-single", served_model_name="phi-2-other", hf_model_id="x")]
     with pytest.raises(ValueError, match="C-3 name-chain"):
         _lease_facts(facts, [{"name": "vllm/phi-2-local"}], preset_cfg={}, lease_catalog=None)
+
+
+def test_all_presets_declare_protocol_mode() -> None:
+    # protocol_mode is required for every preset/profile — no silent "chat"
+    # default. A base model served as chat gets its prompt chat-templated and
+    # emits garbage (the OLMo-7B "The" failure), so the choice must be an
+    # explicit, reviewable fact. This guards against a future preset omitting it.
+    bad: list[tuple[str, object, object]] = []
+    for name, cfg in PRESET_CONFIGS.items():
+        for spec in _profile_specs("", cfg):
+            mode = spec.get("protocol_mode") or cfg.get("protocol_mode")
+            if mode not in ("chat", "completions"):
+                bad.append((name, spec.get("profile"), mode))
+    assert not bad, f"presets missing/invalid protocol_mode: {bad}"
+
+
+def test_materialize_requires_protocol_mode(tmp_path: Path) -> None:
+    # A profile with no declared protocol_mode (and no preset/override to supply
+    # one) fails loudly before any bundle is written.
+    facts = [ServingFacts(endpoint="ep", served_model_name="ep", hf_model_id="x", max_model_len=2048)]
+    out = tmp_path / "no-proto"
+    with pytest.raises(ValueError, match="protocol_mode is required"):
+        materialize_benchmark_bundle(
+            facts=facts,
+            output_dir=out,
+            profile_specs=[{"profile": "ep"}],
+        )
+    assert not (out / "bundle.yaml").exists()
+
+
+def test_materialize_rejects_invalid_protocol_mode(tmp_path: Path) -> None:
+    facts = [ServingFacts(endpoint="ep", served_model_name="ep", hf_model_id="x", max_model_len=2048)]
+    with pytest.raises(ValueError, match="must be 'chat' or 'completions'"):
+        materialize_benchmark_bundle(
+            facts=facts,
+            output_dir=tmp_path / "bad-proto",
+            profile_specs=[{"profile": "ep", "protocol_mode": "completion"}],  # typo
+        )
+
+
+def test_protocol_mode_override_satisfies_bare_profile(tmp_path: Path) -> None:
+    # A bare profile (no preset) is exportable when the caller supplies
+    # protocol_mode explicitly; the override also wins over a preset/profile value.
+    config_dir = _make_config_dir(tmp_path)
+    result = export_benchmark_bundle(
+        "phi2-single",
+        bundle_root=tmp_path / "bare-completions",
+        config_dir=config_dir,
+        protocol_mode="completions",
+        api_key_value="k",
+    )
+    assert _deployment(result)["client_spec"]["class_name"].endswith("OpenAILegacyCompletionsClient")
+
+    # Override beats the preset's declared value (olmo-7b declares completions).
+    result_chat = export_benchmark_bundle(
+        "",
+        preset="allenai-olmo-7b",
+        bundle_root=tmp_path / "olmo-override-chat",
+        config_dir=config_dir,
+        protocol_mode="chat",
+    )
+    assert _deployment(result_chat)["client_spec"]["class_name"].endswith("VLLMChatClient")
 
 
 def test_machine_local_bundle_uses_absolute_model_deployments_path(tmp_path: Path) -> None:

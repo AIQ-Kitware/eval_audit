@@ -35,6 +35,16 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--simulate-hardware", default=None, help="Deprecated; accepted and ignored.")
     s.add_argument("--vllm-root", default=None, help="Deprecated alias for --config-dir.")
     s.add_argument("--access-kind", default=None)
+    s.add_argument(
+        "--protocol-mode",
+        default=None,
+        choices=["chat", "completions"],
+        help=(
+            "Override the HELM serving protocol (chat vs completions). Required "
+            "when exporting a bare profile that has no preset to declare it; "
+            "for presets it overrides the declared value."
+        ),
+    )
     s.add_argument("--base-url", default=None)
     s.add_argument("--api-key-value", default=None)
     s.set_defaults(cmd_name="export-benchmark-bundle")
@@ -58,6 +68,7 @@ def main(argv: list[str] | None = None) -> None:
         backend=args.backend,
         config_dir=Path(config_dir) if config_dir else None,
         access_kind=args.access_kind,
+        protocol_mode=args.protocol_mode,
         base_url=args.base_url,
         api_key_value=args.api_key_value,
     )
