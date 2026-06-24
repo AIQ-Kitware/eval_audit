@@ -71,7 +71,7 @@ bootstrap_env="$(mktemp)"
 echo "Bootstrapping the gateway via ${bootstrap_ep} to read the LiteLLM master key…"
 infer-stack acquire "$bootstrap_ep" --no-wait --yes --env-file "$bootstrap_env"
 LEASE_MASTER_KEY="$(infer-stack env LITELLM_MASTER_KEY)"
-infer-stack release --env-file "$bootstrap_env" --evict \
+infer-stack release --env-file "$bootstrap_env" --evict --yes \
   || echo "WARN: bootstrap 'release --env-file --evict' returned nonzero; continuing." >&2
 rm -f "$bootstrap_env"
 
