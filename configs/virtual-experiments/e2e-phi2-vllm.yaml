@@ -6,7 +6,7 @@ description: >
   Composed alone — one local recipe — so it pairs cleanly with the public
   microsoft/phi-2 mmlu:philosophy run by canonical logical key, instead of pooling
   with the other phi-2 scenarios into a single packet. Sibling per-scenario
-  manifests: e2e-phi2-incomparable, e2e-phi2-hf, e2e-phi2-container.
+  manifests: e2e-phi2-incomparable, e2e-phi2-hf.
 
 scope:
   models:

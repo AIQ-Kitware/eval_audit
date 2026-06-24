@@ -362,6 +362,14 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "e2e-phi_2-vllm-philosophy-smoke",
             "max_eval_instances": 5,
+            # Containerized HELM is mandatory (the docker pipeline pins the
+            # software env). network=host so the in-container HELM client reaches
+            # the host-served model (vLLM behind LiteLLM); gpus=none keeps the
+            # client off the serving GPUs (it's an HTTP caller; the model's GPU is
+            # leased separately). See docs/container-execution.md.
+            "container_network": "host",
+            "hf_cache_dir": "~/.cache/eval-audit-hf",
+            "container_gpus": "none",
         },
         "full_manifest": {
             "experiment_name": "e2e-phi_2-vllm-philosophy-full",
@@ -371,6 +379,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "e2e-phi_2-vllm-philosophy-full",
             "max_eval_instances": 1000,
+            "container_network": "host",
+            "hf_cache_dir": "~/.cache/eval-audit-hf",
+            "container_gpus": "none",
         },
     },
     "e2e-phi_2-vllm-philosophy-incomparable": {
@@ -396,6 +407,10 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "e2e-phi_2-vllm-philosophy-incomparable-smoke",
             "max_eval_instances": 5,
+            # Containerized HELM (mandatory); see e2e-phi_2-vllm-philosophy.
+            "container_network": "host",
+            "hf_cache_dir": "~/.cache/eval-audit-hf",
+            "container_gpus": "none",
         },
         "full_manifest": {
             "experiment_name": "e2e-phi_2-vllm-philosophy-incomparable-full",
@@ -405,63 +420,16 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "e2e-phi_2-vllm-philosophy-incomparable-full",
             "max_eval_instances": 1000,
-        },
-    },
-    # Same recipe as e2e-phi_2-vllm-philosophy (phi-2 served on vLLM, behind the
-    # LiteLLM gateway), but HELM itself runs inside the pinned
-    # eval-audit-helm-runner image instead of the host venv. The container opt-in
-    # lives in the smoke/full manifest specs below (forwarded verbatim into the
-    # generated bundle manifest by _manifest_doc). A distinct experiment_name keeps
-    # it independently addressable from the host-venv run and lets the two be
-    # grouped side-by-side (configs/virtual-experiments/e2e-phi2-container.yaml).
-    #
-    # container_network: host is REQUIRED here: the model is SERVED on the host
-    # (vLLM behind LiteLLM), so the in-container HELM client must reach the
-    # endpoint published on the host's localhost, which a default bridge container
-    # cannot see. See docs/container-execution.md and
-    # dev/e2e-tests/README.md. Build the image first with ./docker/build.sh
-    # (`eval-audit-helm-runner:dev` is its local tag); override with a pushed
-    # digest via `eval-audit-run --container-image ...` for cross-machine pinning.
-    "e2e-phi_2-vllm-philosophy-container": {
-        "profile": "phi2-single",
-        "bundle_name": "e2e-phi_2-vllm-philosophy-container",
-        "access_kind": "openai-compatible",
-        "model_deployment_name": "vllm/phi-2-local",
-        "profiles": [
-            {
-                "profile": "phi2-single",
-                "model_deployment_name": "vllm/phi-2-local",
-                "helm_model_name": "microsoft/phi-2",
-                "helm_tokenizer_name": "microsoft/phi-2",
-                "protocol_mode": "completions",
-                "helm_max_sequence_and_generated_tokens_length": 2048,
-            }
-        ],
-        "smoke_manifest": {
-            "experiment_name": "e2e-phi_2-vllm-philosophy-container-smoke",
-            "description": "Smoke-test for phi-2 on vLLM, HELM executed in-container.",
-            "run_entries": [
-                "mmlu:subject=philosophy,method=multiple_choice_joint,model=microsoft/phi-2,eval_split=test"
-            ],
-            "suite": "e2e-phi_2-vllm-philosophy-container-smoke",
-            "max_eval_instances": 5,
-            "container_image": "eval-audit-helm-runner:dev",
             "container_network": "host",
             "hf_cache_dir": "~/.cache/eval-audit-hf",
-        },
-        "full_manifest": {
-            "experiment_name": "e2e-phi_2-vllm-philosophy-container-full",
-            "description": "Full HELM batch for phi-2 on vLLM, HELM executed in-container.",
-            "run_entries": [
-                "mmlu:subject=philosophy,method=multiple_choice_joint,model=microsoft/phi-2,eval_split=test"
-            ],
-            "suite": "e2e-phi_2-vllm-philosophy-container-full",
-            "max_eval_instances": 1000,
-            "container_image": "eval-audit-helm-runner:dev",
-            "container_network": "host",
-            "hf_cache_dir": "~/.cache/eval-audit-hf",
+            "container_gpus": "none",
         },
     },
+    # NOTE: the former ``e2e-phi_2-vllm-philosophy-container`` preset was removed
+    # once containerization became mandatory for every run — it had become an
+    # exact duplicate of ``e2e-phi_2-vllm-philosophy`` (whose smoke/full manifests
+    # now carry container_network: host + hf_cache_dir, so it runs in-container
+    # too). The image is supplied per-run via ``eval-audit-run --container-image``.
     "allenai-olmo-7b": {
         "profile": "allenai-olmo-7b-single",
         "bundle_name": "allenai-olmo-7b",
@@ -487,9 +455,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "audit-allenai-olmo-7b-smoke",
             "max_eval_instances": 5,
-            # Containerized HELM ("docker pipeline"): inert unless the run passes
-            # `eval-audit-run --container-image` (the OLMO_CONTAINER toggle in
-            # reproduce/olmo_models/_lib.sh). network=host so the in-container
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container
             # HELM client reaches the host-served model (vLLM behind LiteLLM);
             # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
             # entries have no local-HF judge model). See docs/container-execution.md.
@@ -606,9 +574,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "audit-allenai-olmo-7b-full",
             "max_eval_instances": 1000,
-            # Containerized HELM ("docker pipeline"): inert unless the run passes
-            # `eval-audit-run --container-image` (the OLMO_CONTAINER toggle in
-            # reproduce/olmo_models/_lib.sh). network=host so the in-container
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container
             # HELM client reaches the host-served model (vLLM behind LiteLLM);
             # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
             # entries have no local-HF judge model). See docs/container-execution.md.
@@ -638,9 +606,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "audit-allenai-olmo-2-0325-32b-instruct-smoke",
             "max_eval_instances": 5,
-            # Containerized HELM ("docker pipeline"): inert unless the run passes
-            # `eval-audit-run --container-image` (the OLMO_CONTAINER toggle in
-            # reproduce/olmo_models/_lib.sh). network=host so the in-container
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container
             # HELM client reaches the host-served model (vLLM behind LiteLLM);
             # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
             # entries have no local-HF judge model). See docs/container-execution.md.
@@ -659,9 +627,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "audit-allenai-olmo-2-0325-32b-instruct-full",
             "max_eval_instances": 1000,
-            # Containerized HELM ("docker pipeline"): inert unless the run passes
-            # `eval-audit-run --container-image` (the OLMO_CONTAINER toggle in
-            # reproduce/olmo_models/_lib.sh). network=host so the in-container
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container
             # HELM client reaches the host-served model (vLLM behind LiteLLM);
             # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
             # entries have no local-HF judge model). See docs/container-execution.md.
@@ -691,9 +659,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "audit-allenai-olmo-1-7-7b-smoke",
             "max_eval_instances": 5,
-            # Containerized HELM ("docker pipeline"): inert unless the run passes
-            # `eval-audit-run --container-image` (the OLMO_CONTAINER toggle in
-            # reproduce/olmo_models/_lib.sh). network=host so the in-container
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container
             # HELM client reaches the host-served model (vLLM behind LiteLLM);
             # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
             # entries have no local-HF judge model). See docs/container-execution.md.
@@ -765,9 +733,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "audit-allenai-olmo-1-7-7b-full",
             "max_eval_instances": 1000,
-            # Containerized HELM ("docker pipeline"): inert unless the run passes
-            # `eval-audit-run --container-image` (the OLMO_CONTAINER toggle in
-            # reproduce/olmo_models/_lib.sh). network=host so the in-container
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container
             # HELM client reaches the host-served model (vLLM behind LiteLLM);
             # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
             # entries have no local-HF judge model). See docs/container-execution.md.
@@ -794,9 +762,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "audit-allenai-olmo-2-1124-13b-instruct-smoke",
             "max_eval_instances": 5,
-            # Containerized HELM ("docker pipeline"): inert unless the run passes
-            # `eval-audit-run --container-image` (the OLMO_CONTAINER toggle in
-            # reproduce/olmo_models/_lib.sh). network=host so the in-container
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container
             # HELM client reaches the host-served model (vLLM behind LiteLLM);
             # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
             # entries have no local-HF judge model). See docs/container-execution.md.
@@ -815,9 +783,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "audit-allenai-olmo-2-1124-13b-instruct-full",
             "max_eval_instances": 1000,
-            # Containerized HELM ("docker pipeline"): inert unless the run passes
-            # `eval-audit-run --container-image` (the OLMO_CONTAINER toggle in
-            # reproduce/olmo_models/_lib.sh). network=host so the in-container
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container
             # HELM client reaches the host-served model (vLLM behind LiteLLM);
             # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
             # entries have no local-HF judge model). See docs/container-execution.md.
@@ -844,9 +812,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "audit-allenai-olmo-2-1124-7b-instruct-smoke",
             "max_eval_instances": 5,
-            # Containerized HELM ("docker pipeline"): inert unless the run passes
-            # `eval-audit-run --container-image` (the OLMO_CONTAINER toggle in
-            # reproduce/olmo_models/_lib.sh). network=host so the in-container
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container
             # HELM client reaches the host-served model (vLLM behind LiteLLM);
             # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
             # entries have no local-HF judge model). See docs/container-execution.md.
@@ -865,9 +833,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "audit-allenai-olmo-2-1124-7b-instruct-full",
             "max_eval_instances": 1000,
-            # Containerized HELM ("docker pipeline"): inert unless the run passes
-            # `eval-audit-run --container-image` (the OLMO_CONTAINER toggle in
-            # reproduce/olmo_models/_lib.sh). network=host so the in-container
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container
             # HELM client reaches the host-served model (vLLM behind LiteLLM);
             # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
             # entries have no local-HF judge model). See docs/container-execution.md.
@@ -895,9 +863,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "audit-allenai-olmoe-1b-7b-0125-instruct-smoke",
             "max_eval_instances": 5,
-            # Containerized HELM ("docker pipeline"): inert unless the run passes
-            # `eval-audit-run --container-image` (the OLMO_CONTAINER toggle in
-            # reproduce/olmo_models/_lib.sh). network=host so the in-container
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container
             # HELM client reaches the host-served model (vLLM behind LiteLLM);
             # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
             # entries have no local-HF judge model). See docs/container-execution.md.
@@ -916,9 +884,9 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "audit-allenai-olmoe-1b-7b-0125-instruct-full",
             "max_eval_instances": 1000,
-            # Containerized HELM ("docker pipeline"): inert unless the run passes
-            # `eval-audit-run --container-image` (the OLMO_CONTAINER toggle in
-            # reproduce/olmo_models/_lib.sh). network=host so the in-container
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container
             # HELM client reaches the host-served model (vLLM behind LiteLLM);
             # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
             # entries have no local-HF judge model). See docs/container-execution.md.

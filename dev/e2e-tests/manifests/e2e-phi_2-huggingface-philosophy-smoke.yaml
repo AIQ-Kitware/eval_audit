@@ -15,3 +15,10 @@ precomputed_root:
 require_per_instance_stats: true
 enable_huggingface_models: ["microsoft/phi-2"]
 enable_local_huggingface_models: []
+# Containerized HELM is mandatory; the grid supplies the image via
+# `eval-audit-run --container-image`. This scenario loads phi-2 IN-PROCESS from
+# HuggingFace (no infer-stack, no lease), so the container gets a real GPU
+# automatically (no --lease => no container_gpus: none) and no --network host
+# (nothing host-served to reach). hf_cache_dir is mounted so the weights persist
+# across the --rm container instead of re-downloading each run.
+hf_cache_dir: ~/.cache/eval-audit-hf
