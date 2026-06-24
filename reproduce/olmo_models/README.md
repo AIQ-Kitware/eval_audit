@@ -83,16 +83,16 @@ guidance if any is missing.
 ./00_check_env.sh         # eval-audit-check-env
 ./05_check_profiles.sh    # verify the six <preset>-single endpoints are defined
 ./06_check_hf_auth.sh     # verify a HuggingFace token (gated gpqa dataset needs it)
-./07_check_container_image.sh  # verify docker + the container image (no-op when OLMO_CONTAINER=0)
-./10_run_smoke_grid.sh    # preflight: per model release -> serve -> wait -> export bundle -> run smoke
+./07_check_container_image.sh  # verify docker + the container image (required; containerization is mandatory)
+./10_run_smoke_grid.sh    # preflight: gc -> gateway bootstrap -> per model (export bundle -> run smoke --lease)
 ./15_run_full_grid.sh     # per model: same, but run the FULL manifest (the reproducibility batch)
 ./20_index_local.sh       # eval-audit-index -> audit_results_index.csv (verifies the -full run dirs)
 ./30_compose.sh           # build the virtual experiment from the -full runs (the grouping step)
 ./40_build_summary.sh     # aggregate publication surface across all six
 ```
 
-`./docker/build.sh` is a prerequisite only for the default containerized path
-(see below); skip it if you run with `OLMO_CONTAINER=0`.
+`./docker/build.sh` is a required prerequisite — containerization is mandatory
+(see below), and every run is pinned to the built image.
 
 The smoke preflight (`10`) is optional once you trust the path — `15` is the run
 that feeds `20`/`30`/`40`. The grouping manifest is checked in at
@@ -101,12 +101,14 @@ that feeds `20`/`30`/`40`. The grouping manifest is checked in at
 [`olmo-models-smoke.yaml`](../../configs/virtual-experiments/olmo-models-smoke.yaml),
 is kept for grouping the smoke preflight instead).
 
-## Containerized HELM ("docker pipeline") — ON by default
+## Containerized HELM ("docker pipeline") — MANDATORY
 
-By default this runbook runs **HELM inside the pinned `eval-audit-helm-runner`
-image** (Stage 3 containerized execution, the "docker pipeline") instead of the
-host venv. This pins HELM's software environment so it stops being a confounding
-variable in the reproducibility comparison (the core research question — see
+This runbook runs **HELM inside the pinned `eval-audit-helm-runner` image**
+(Stage 3 containerized execution, the "docker pipeline"). Containerization is
+mandatory — the host-venv path has been removed (`build_schedule_params` requires
+a container image). This pins HELM's software environment so it stops being a
+confounding variable in the reproducibility comparison (the core research
+question — see
 [`docs/helm-reproduction-research-journal.md`](../../docs/helm-reproduction-research-journal.md)).
 Full background:
 [`docs/container-execution.md`](../../docs/container-execution.md).
@@ -127,33 +129,25 @@ The experiment names are unchanged (`audit-<preset>-{smoke,full}`), so the
 downstream index → compose → summary stages need no changes — runs just gain a
 per-run `container_provenance.json` sidecar.
 
-**How the toggle works.** The recipe-level container fields live in the presets
-but are *inert* until a run supplies an image; the **image is the on/off switch**,
-passed at run time via the existing `eval-audit-run --container-image` flag:
+**How it's wired.** The recipe-level container fields (`container_network: host`,
+`hf_cache_dir`, `container_gpus: none`) live in the presets; the grids always
+pass the image at run time via `eval-audit-run --container-image
+"$OLMO_CONTAINER_IMAGE"`. Build the image first with `./docker/build.sh`;
+`07_check_container_image.sh` verifies it is present (a required preflight — there
+is no host-venv fallback). The gated **gpqa** dataset works in-container: `_lib.sh`
+exports `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN`, which the docker pipeline forwards
+into the container.
 
-| `OLMO_CONTAINER` | grid passes | HELM runs in |
-|---|---|---|
-| `1` (default) | `eval-audit-run … --container-image "$OLMO_CONTAINER_IMAGE"` | the **container** ("docker pipeline") |
-| `0` | `eval-audit-run …` (no flag) | the **host venv** (container fields inert) |
-
-Build the image first with `./docker/build.sh`; `07_check_container_image.sh`
-verifies it is present (and is a no-op when `OLMO_CONTAINER=0`). The gated **gpqa**
-dataset still works in-container: `_lib.sh` exports `HF_TOKEN` /
-`HUGGING_FACE_HUB_TOKEN`, which the docker pipeline forwards into the container.
-
-To run on a host without docker (or to A/B the container against the host venv),
-set `OLMO_CONTAINER=0` — the grids omit `--container-image` and HELM runs in the
-host venv, leaving the presets' container fields inert.
+Leasing is the **orthogonal** axis (always on via `--lease`): the container pins
+where the HELM client runs; the lease acquires the served model's GPU. See
+[`eval_audit/pipelines/lease_bracket.py`](../../eval_audit/pipelines/lease_bracket.py).
 
 ## Knobs (env vars)
 
-- `OLMO_CONTAINER` (default `1`) — `1` runs HELM in the pinned container ("docker
-  pipeline", the default); `0` runs HELM in the host venv (the fallback). The
-  model is served on the host either way; only where HELM runs changes (see the
-  containerized-execution section above)
-- `OLMO_CONTAINER_IMAGE` (default `eval-audit-helm-runner:dev`) — the image
-  passed to `eval-audit-run --container-image` when `OLMO_CONTAINER=1`; build it
-  with `./docker/build.sh`, or point at a pushed digest for cross-machine pinning
+- `OLMO_CONTAINER_IMAGE` (default `eval-audit-helm-runner:dev`) — the image the
+  grids pass to `eval-audit-run --container-image` (containerization is
+  mandatory); build it with `./docker/build.sh`, or point at a pushed digest for
+  cross-machine pinning
 - `AUDIT_STORE_ROOT` (default `/data/crfm-helm-audit-store`)
 - `AUDIT_RESULTS_ROOT` (default `/data/crfm-helm-audit`)
 - `VEXP_MANIFEST` — override the grouping manifest path
@@ -188,17 +182,25 @@ host venv, leaving the presets' container fields inert.
     [`NOTES-bbq-instructions-drift.md`](NOTES-bbq-instructions-drift.md) for the full
     write-up and the generalizable "the run name is not the recipe" lesson.
 - **LiteLLM / openai-compatible transport.** `10_run_smoke_grid.sh` /
-  `15_run_full_grid.sh` read the master key via `infer-stack env
-  LITELLM_MASTER_KEY` (after the model's `acquire`, since the managed `.env` is
+  `15_run_full_grid.sh` read the master key once via `infer-stack env
+  LITELLM_MASTER_KEY` at a one-time gateway bootstrap (the managed `.env` is
   written on first bring-up), and override the presets' declared `vllm-direct`
   access with
   `--access-kind openai-compatible --base-url <litellm>/v1 --api-key-value <key>`
   (default-B; mirrors the phi-2 e2e grid). HELM talks to the LiteLLM gateway,
   which routes to each model's vLLM backend.
-- **One model at a time.** Each iteration runs `infer-stack release --all
-  --evict` before `acquire` so only the current model holds GPUs (C-1: `acquire`
-  *accumulates*, unlike the old `switch` which replaced); the grid spans a
-  1B-active MoE to a 32B dense model, which will not co-host.
+- **Per-run GPU leasing (one model at a time, no pre-serve).** Each scheduled
+  HELM run self-acquires its model's lease (`eval-audit-run --lease`:
+  `acquire --queue` before, release after); the catalog's `reclaim: stop` frees
+  the GPU on the last release and a final `infer-stack gc` reclaims any leaked
+  lease. infer-stack's admission queue serializes the models (the grid spans a
+  1B-active MoE to a 32B dense model, which will not co-host). There is no
+  per-model serve loop and no blunt `release --all --evict` (which tore down the
+  shared docker-compose project, killing co-tenants' models) — start and end use
+  the scoped, leaked-lease `gc`, which never touches another user's active
+  leases. Leasing is the orthogonal axis to the (now mandatory) containerization:
+  the container pins where the HELM *client* runs, the lease acquires the served
+  model's GPU (client runs with `container_gpus: none`).
 - **Gated datasets need HuggingFace auth.** The presets include every candidate
   run from `candidate_runs.json`, including ones tagged `requires-gated-dataset`
   — `gpqa` on the OLMo-2 / OLMoE instruct models (and the **smoke** entry for

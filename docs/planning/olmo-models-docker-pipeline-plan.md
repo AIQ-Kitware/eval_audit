@@ -1,5 +1,13 @@
 # Run the OLMo reproduction through the Docker pipeline
 
+> **Superseded (historical design narrative).** This plan introduced
+> containerized execution as an *opt-in* with an `OLMO_CONTAINER=0` host-venv
+> fallback. Containerization is now **mandatory** — the host-venv path and the
+> `OLMO_CONTAINER` toggle have been removed (`build_schedule_params` requires a
+> container image; the grids always pass `--container-image`). Leasing is the
+> orthogonal axis. References to `OLMO_CONTAINER` / the fallback below are kept as
+> a record of the original design.
+
 **Goal:** Make [`reproduce/olmo_models/`](../../reproduce/olmo_models/) execute
 HELM inside the pinned `eval-audit-helm-runner` image (the containerized Stage 3
 "docker pipeline") instead of the host venv, **by default**, with an

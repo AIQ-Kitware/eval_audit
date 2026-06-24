@@ -3170,3 +3170,235 @@ into the reproducibility analysis schema so agreement-vs-concurrency is plottabl
 would let one schedule span all six OLMo models; the per-model loop + `--lease` is
 the pragmatic stand-in (and on 2 GPUs the models can't co-host anyway, so the
 admission queue serializes them either way).
+
+## 2026-06-24 10:17:44 -0400
+
+**Model/harness.** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code.
+
+**Intent.** Mid-task pivot. User started from "rewrite both smoke grids to lease
+by default + drop the env toggle", but probing the `--lease`-requires-container
+coupling surfaced the real blocker: the lease bracket lived ONLY on the docker
+node, so making the e2e host-venv vLLM scenarios lease would have dragged
+containerization onto them. User chose to **decouple leasing from
+containerization first**, then convert the grids on top.
+
+**What I found.** The coupling was an implementation seam, not a constraint. The
+acquire/release bracket is plain shell (`infer-stack acquire/release --env-file
+<node>/lease.env`) attached as `setup`/`teardown` properties on
+`MaterializeHelmRunDockerNode` only; the bridge raised on a leased imageless run
+because the bare magnet node had no such bracket (would silently never acquire).
+Nothing docker-specific about it — for a served endpoint the HELM client is just
+an HTTP caller; the lease acquires the *model server's* GPU, the container choice
+is about where the *client* process runs. Two orthogonal concerns.
+
+**What I did.**
+1. New `eval_audit/pipelines/lease_bracket.py` — the transport-agnostic home:
+   `LEASE_KEYS`, `LEASE_PERF_PARAMS`, the endpoint resolver + `render_lease_setup`
+   /`render_lease_teardown` (moved verbatim from helm_docker_pipeline), a
+   `LeaseBracketMixin` (the setup/teardown properties + absorbing setters), and
+   `render_magnet_command(executable, cfg, *, exclude)` — one CLI renderer
+   mirroring magnet's base `command` exactly, with a key-exclusion set.
+2. New `eval_audit/pipelines/helm_leased_pipeline.py` —
+   `MaterializeHelmRunLeasedNode(LeaseBracketMixin, MaterializeHelmRunNode)` +
+   `helm_single_run_leased_pipeline()`. Bare host-venv client, SAME bracket, no
+   docker wrapper. `command` = `render_magnet_command(..., exclude=LEASE_KEYS)`.
+3. Refactored `MaterializeHelmRunDockerNode` onto `LeaseBracketMixin` (dropped its
+   local setup/teardown + `_render_inner_command`); `command` now calls
+   `render_magnet_command(..., exclude=_CONTAINER_KEYS | _LEASE_KEYS)`. perf_params
+   spread `**LEASE_PERF_PARAMS`. Behavior identical (docker tests unchanged-green).
+4. Bridge: added `_BARE_LEASED_PIPELINE`; `build_schedule_params` now routes
+   imageless+lease to it (merging the lease matrix knobs) instead of raising;
+   removed the "--lease requires containerized execution" guard in
+   `prepare_schedule_request`. `container_gpus="none"` default kept (inert on the
+   bare path, which ignores container knobs).
+5. Tests: repointed lease-primitive imports to `lease_bracket`; flipped the two
+   "lease rejects/requires container" tests to assert the bare-leased routing;
+   added 2 node-integration tests (bare leased node brackets the lease, strips
+   lease keys from the inner CLI, emits NO `docker run`, still passes
+   `--run_entry`/`--max_eval_instances`). `--lease` help text softened.
+
+**The load-bearing correctness trap.** The magnet base `command` emits
+`--<key>=<value>` for EVERY non-None `final_config` entry. The lease knobs must
+be declared params (so setup/teardown can read them from final_config), which
+means they'd leak into the materialize CLI as `--lease_endpoint=...` unless
+stripped. Both nodes strip via `render_magnet_command`'s `exclude`. Missing this
+would 500 the inner CLI on unknown args.
+
+**Validated.** py_compile clean; `test_lease_bracket.py` + `test_container_execution.py`
+= 35 passed; full suite 238 passed / 71 skipped. The lone failure
+(`test_run_surface::...argv_differs...`) is the SAME pre-existing one prior
+entries flagged — confirmed failing on a clean HEAD worktree, and my bridge diff
+doesn't touch argv construction. End-to-end is still a GPU/docker-box gate-check
+(the bracket renders correctly; nobody has run a real bare-leased fan-out yet).
+
+**Reusable insight.** When a capability seems "coupled" to a transport, check
+whether it's the *capability* that needs the transport or just *where someone
+bolted it on*. Here the bracket was 100% transport-neutral shell — the coupling
+was a subclass boundary. The fix was a mixin + a shared renderer, not new
+machinery. And whenever a node declares params purely to drive setup/teardown,
+remember the base command will try to pass them to the inner CLI — strip them.
+
+**Next steps.** Decoupling is done and unblocks the original task. STILL OPEN: the
+scope question for the grid rewrite (the two smoke grids vs all four grids) — the
+user interrupted the AskUserQuestion to ask about the coupling, so it was never
+answered. With decoupling landed, the e2e vLLM scenarios can lease in the host
+venv (no forced containerization); the e2e hf scenario still can't lease (no
+infer-stack endpoint) and stays a non-leased exception. Then: drop OLMO_LEASE
+(always lease), and the same for e2e (new always-on path, no toggle).
+
+## 2026-06-24 10:42:10 -0400
+
+**Model/harness.** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code.
+(Continuation of the same session as the decoupling entry above.)
+
+**Intent.** With leasing decoupled from containerization, convert ALL FOUR grid
+runbooks to lease-by-default and DROP the env toggle (`OLMO_LEASE`) entirely — no
+backwards-compat flag. The four: `reproduce/olmo_models/{10,15}` and
+`dev/e2e-tests/{10,15}`.
+
+**Consistent shape across all four.** start-of-grid `infer-stack gc` (scoped,
+reclaims TTL-expired leaks — replaces the blunt `release --all --evict`) → ONE-time
+gateway bootstrap to read the LiteLLM master key, with a SCOPED release
+(`acquire <ep> --no-wait --yes --env-file <tmp>` → `infer-stack env
+LITELLM_MASTER_KEY` → `release --env-file <tmp> --evict`; no `--all`) → per-model/
+per-scenario `export-benchmark-bundle` (master key from the bootstrap) → run with
+`eval-audit-run --run=1 <manifest> --lease` → final `infer-stack gc` backstop.
+
+**OLMo (10+15).** Collapsed the OLMO_LEASE branch into the only path; removed the
+`OLMO_LEASE==1 && OLMO_CONTAINER==0 → FAIL` guard (decoupling killed it). Now
+ALWAYS `--lease`, and `OLMO_CONTAINER` is purely orthogonal — `!=0` appends
+`--container-image` (docker leased pipeline), `==0` runs the SAME lease against a
+host-venv client (bare leased pipeline, newly possible). 15 gained the lease path
+it never had.
+
+**e2e (10+15).** Per-transport: `vllm` scenarios export the bundle + run `--lease`
+(the `*-container` preset bakes `container_image`, so `--lease` auto-routes THAT
+scenario through the docker leased pipeline while the two plain vLLM scenarios use
+the bare leased pipeline — both from one uniform `--lease`); the `hf` scenario
+CANNOT lease (HELM loads phi-2 directly, no infer-stack endpoint) so it stays
+non-leased and FIRST, on a GPU kept clear by the start gc + the bootstrap-model
+eviction. bootstrap_ep is derived as the first `vllm`-transport target's endpoint.
+
+**Two correctness facts I verified against the infer_stack source (not assumed).**
+(1) `acquire --no-wait --env-file` DOES write a releasable handle: `_emit_acquire`
+writes the env-file from the descriptor (commands_leasing.py:365-368) BEFORE the
+readiness check, and `--no-wait` makes `outcome.wait is None` so the command
+returns 0 (line 404) — safe under `set -e`, and `release --env-file` resolves the
+lease id from it (line 278-279). (2) `gc` only reclaims TTL-expired/leaked demand
+in THIS data_dir's per-user ledger (GcCLI docstring 919-928) — it never touches a
+co-tenant's active leases, which is the whole point of replacing `release --all`.
+
+**The blast-radius win.** Every `release --all --evict` is gone from the runnable
+path (the only remaining mentions are "unlike the old …" comments). On a shared
+docker daemon the grids no longer tear down the shared `infer-stack` compose
+project out from under co-tenants; per-run release (`reclaim: stop`) + scoped
+`gc` reclaim only our own leases.
+
+**Honest residual.** `gc` only frees TTL-EXPIRED leaks. A prior run hard-killed
+seconds ago (TTL unexpired) leaves a lease holding a GPU that neither the start gc
+nor a fail-fast bootstrap acquire reclaims → the bootstrap (or the e2e hf load)
+could fail. The old `release --all` masked this by nuking everything (incl.
+co-tenants). This is the deliberate trade: correctness-for-co-tenants over
+convenience-on-my-own-crash. The per-run `acquire --queue` sweep + TTL backstop
+close it once the TTL elapses.
+
+**Validated.** `bash -n` clean on all four; `eval-audit-run` argparse accepts the
+exact argv emitted (`--run` int, positional manifest, `--lease`, `--container-image`);
+`acquire`/`release --env-file`/`gc` signatures checked against the submodule. Swept
+both runbook READMEs + `dev/e2e-tests/_lib.sh` to the lease-by-default vocabulary;
+`OLMO_LEASE`/`E2E_LEASE` no longer appear in any non-journal file. NOT run
+end-to-end (no GPU/docker/served stack here) — the live tmux fan-out + the
+bootstrap-evict-then-hf ordering on a real box is the outstanding gate-check.
+
+**Reusable insight.** A bootstrap that exists ONLY to read a managed secret
+shouldn't pay for it with a global teardown. The fix was a scoped handle
+(`--env-file`) the whole time — the old `release --all` was a shortcut taken
+because nobody threaded the handle through. When you see `--all`/`*` in a cleanup,
+ask what specific thing it's actually trying to free and whether you already hold a
+name for it.
+
+**Next steps.** GPU/docker-box gate-check (per the decoupling entry's list) now
+also covers: bare-leased host-venv fan-out (OLMO_CONTAINER=0 + --lease), the e2e
+hf-first ordering after the scoped bootstrap evict, and confirming `gc` start/end
+leaves no leaked GPUs after an induced mid-run kill. The submodule still needs the
+two infer_stack branches combined + pinned (the working-tree gitlink bump to
+cfddfac is that combine, still unstaged — user's call).
+
+## 2026-06-24 11:09:49 -0400
+
+**Model/harness.** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code.
+(Same session as the two entries above.)
+
+**Intent.** Make docker containerization the default too and REMOVE the
+non-containerized paths — the parallel of the leasing-by-default change. The user
+first corrected my framing (I had treated the e2e `hf` scenario as
+"non-containerizable"): containerization and leasing are ORTHOGONAL; the only
+hf-vs-vLLM difference is the lease. Then: remove the now-redundant `-container`
+e2e scenario.
+
+**The key realization (user's correction).** The docker node already supports
+"containerized, no lease" — `LeaseBracketMixin` returns `None` with no
+lease_endpoint. So hf = docker + no-lease (real GPU, in-process load); vLLM =
+docker + lease (`container_gpus: none`, HTTP client). One node, two cases, the
+lease is the only axis. My earlier "hf is a non-containerized exception" was the
+conflation.
+
+**What I did.**
+- *Bridge:* `build_schedule_params` now REQUIRES `resolved_image` (raises
+  otherwise); removed `_BARE_PIPELINE` + `_BARE_LEASED_PIPELINE`. Every run is the
+  docker pipeline; `lease_entries` merge in as the orthogonal axis. Deleted
+  `eval_audit/pipelines/helm_leased_pipeline.py` (the bare leased node from the
+  decoupling — now unreachable). `lease_bracket.py` stays: its mixin is exactly
+  the orthogonality mechanism on the docker node (docstring rewritten to say so).
+- *adapter.py:* added `container_network: host` + `hf_cache_dir` +
+  `container_gpus: none` to the two plain e2e vLLM presets (philosophy +
+  incomparable) — CLI can't pass network/cache, so they MUST be baked. Removed the
+  `e2e-phi_2-vllm-philosophy-container` preset (exact duplicate once everything
+  containerizes); left a NOTE. Updated the 12 OLMo preset comments off the
+  `OLMO_CONTAINER` toggle framing.
+- *e2e hf manifests:* added `hf_cache_dir` (image comes from the grid CLI; no
+  lease => real GPU automatically; no network => default bridge).
+- *Grids:* OLMo 10/15 always pass `--container-image` (dropped the
+  `OLMO_CONTAINER` conditional). e2e 10/15 pass `--container-image` to ALL
+  scenarios, `--lease` only for vLLM; removed the `-container` scenario.
+- *Toggles/scripts:* dropped `OLMO_CONTAINER` and `E2E_INCLUDE_CONTAINER` (kept
+  the *_CONTAINER_IMAGE vars); 06/07 check scripts are now required preflights
+  (no skip); removed the e2e_vexp_manifest `-container` mapping; deleted
+  `configs/virtual-experiments/e2e-phi2-container.yaml`.
+- *Tests:* `test_container_execution` bare-path test → asserts the require-container
+  raise; `test_lease_bracket` bare-leased tests removed, routing/prepare tests
+  flipped to assert the raise; `test_run_surface` fixtures gained a pinned
+  `container_image` (and the qwen35 test — a frozen/archival config — passes the
+  image via the call rather than editing the frozen runbook).
+- *Docs:* OLMo + e2e READMEs rewritten to "containerization mandatory"; superseded
+  banner on `docs/planning/olmo-models-docker-pipeline-plan.md`.
+
+**Validated.** py_compile + `bash -n` clean. `test_lease_bracket` +
+`test_container_execution` = 33 pass; full suite 236 passed / 71 skipped, with the
+SAME single pre-existing `test_run_surface::...argv_differs...` failure (confirmed
+on clean HEAD; unrelated). End-to-end (no GPU/docker needed): a real
+`export-benchmark-bundle` for the edited e2e philosophy preset emits
+`container_network: host` + `container_gpus: none` + `hf_cache_dir` + lease facts;
+and driving the hf manifest through `prepare_schedule_request --container-image`
+(no `--lease`) renders a docker command with `--gpus` (REAL GPU), NO `--network
+host`, an `/hf-cache` mount, and the in-process `enable_huggingface_models` arg —
+exactly the orthogonal hf-vs-vLLM split.
+
+**Heads-up I'm leaving (not acted on — out of the authorized scope).** The bridge
+now requires a container image GLOBALLY, so the FROZEN runbooks
+(`reproduce/{qwen35_vllm,gpt_oss_*,...}`) that call `eval-audit-run` without
+`--container-image` will now raise until they pass one. Those were already
+frozen/partially-broken from the infer-stack migration; this is consistent with
+"remove non-containerized paths" but is a new break in archival dirs. Flagged for
+the user — did not edit frozen runbooks.
+
+**Reusable insight.** When two capabilities feel coupled, the test is: does the
+underlying node already handle the cross-product? Here the docker node already
+rendered "no lease" correctly, so making containerization universal didn't need a
+new code path — it needed DELETING the bare ones and letting the lease bracket be
+what it always was: an orthogonal, optional setup/teardown. The decoupling work
+two entries up wasn't wasted; it's precisely what let one node absorb both axes.
+
+**Next steps.** The GPU/docker-box gate-check now also covers the hf-in-container
+in-process load (real GPU, no host network). And the frozen-runbook container-image
+question above is the user's call.
