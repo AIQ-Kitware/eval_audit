@@ -3402,3 +3402,50 @@ two entries up wasn't wasted; it's precisely what let one node absorb both axes.
 **Next steps.** The GPU/docker-box gate-check now also covers the hf-in-container
 in-process load (real GPU, no host network). And the frozen-runbook container-image
 question above is the user's call.
+
+## 2026-06-24 14:36:38 -0400
+
+**Model/harness.** claude-opus-4-8[1m] via Claude Code (VSCode extension).
+
+**User intent.** `dev/e2e-tests/10_run_smoke_grid.sh` crashed on its very first
+step (`infer-stack gc --yes`, line 50) with `AttributeError('catalog')` thrown
+from `infer_stack/cli/commands_leasing.py:_load_catalog` → `config.catalog`.
+
+**Root cause.** `_load_catalog`/`_load_catalog_for_tui` read `config.catalog` as a
+bare attribute. On a scriptconfig DataConfig, accessing an undeclared field raises
+`AttributeError`. The `catalog` field is declared only on `_AcquireFlagsMixin`
+(acquire), `TuiCLI`, and `RunCLI` — NOT on `_ApprovalMixin` (the parent of
+`release`/`evict`/`gc`) nor on plain `_LeasingCommonMixin` (wait/render/renew/
+leases). Yet `_make_backend` deliberately calls `_load_catalog` on EVERY converge
+— including release/gc — for the no-blip static route table (see its comment).
+Its `try/except SystemExit` guard does NOT catch `AttributeError`, so gc/release/
+evict crashed instead of falling back to the default catalog path. So this hit
+not just the reported `gc` but also the script's later `release --evict` (line 66).
+
+**Fix.** `config.catalog` → `getattr(config, 'catalog', None)` in both
+`_load_catalog` and `_load_catalog_for_tui`. Missing field now falls back to
+`config_root()/catalog.yaml`; absent file → SystemExit → caught → legacy
+per-deployment gateway config. Exactly the documented intent ("converge verbs
+that don't take a catalog arg still load it for no-blip"). Patched the submodule
+source (`submodules/infer_stack`, detached at cfddfac) AND the e2e venv's
+installed copy (a non-editable copy install, was byte-identical to source) so the
+running CLI picks it up. Verified the two files are identical post-edit and
+py_compile-clean.
+
+**Could not runtime-verify.** The e2e venv's interpreter lives under
+`/home/local/KHQ/edward.wang/.local/share/uv/...`, inaccessible to me as user
+`agent` (venv created by edward.wang). So I patched by inspection; the user should
+re-run `10_run_smoke_grid.sh` to confirm.
+
+**Loose end for the user.** The submodule (`submodules/infer_stack`) is at a
+DETACHED HEAD (cfddfac). This fix lives only in the working tree there + the venv
+copy. To persist it: commit on an infer_stack branch and push, then bump the
+gitlink — OR carry it as a local patch. Also: the venv is a non-editable copy
+install, so future infer_stack source edits won't reach it without a reinstall
+(consider `pip install -e submodules/infer_stack` into that venv for the duration
+of this migration branch).
+
+**Reusable insight.** scriptconfig DataConfig fields are per-command; any helper
+shared across commands that reads `config.<field>` must use `getattr(..., default)`
+for fields that aren't universal. A `try/except SystemExit` is not a safety net
+for missing-field access — those raise `AttributeError`, a different class.
