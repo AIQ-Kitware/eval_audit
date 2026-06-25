@@ -1,6 +1,9 @@
 # Recording the local deployment on from-spec replays — plan
 
 **Status:** PLAN — not yet implemented.
+**Decision:** explicit `--model-deployment` manifest field threaded to the CLI
+(not auto-derive-from-override — its failure mode is a silent no-op that
+re-masks the substitution; see §5).
 **Problem:** faithful `run_spec.json` replay with **by-name** deployment
 substitution makes the local run record `model_deployment: together/phi-2`
 (identical to the official), so the comparison reports `same_deployment=yes` and
@@ -200,25 +203,34 @@ This *simplifies* the shipped vLLM path (`integrations/infer_stack/adapter.py`):
   `model_deployment` rewrite; default stays by-name, but the e2e (and any audit
   that substitutes a local engine) opts in for comparability honesty.
 
-## 5. Decision: explicit arg vs. auto-derive from the override
+## 5. Decision: explicit `--model-deployment` arg (DECIDED)
 
-**Recommended: explicit `--model-deployment` (Changes 1+3).** Predictable, part
-of algo identity, and mirrors the existing `precomputed_root` /
-`model_deployments_fpath` manifest-field plumbing. Cost: the manifest value and
-the registered override `name` must agree (the §3 invariant) — guarded by a test.
+**The rewrite target is named explicitly in the manifest and threaded to the CLI
+(Changes 1+3).** Predictable, part of algo identity, and mirrors the existing
+`precomputed_root` / `model_deployments_fpath` manifest-field plumbing. Cost: the
+manifest value and the registered override `name` must agree (the §3 invariant) —
+guarded by a test.
 
-**Alternative: auto-derive (magnet-only).** The CLI already loads the override;
-it could rewrite `adapter_spec.model_deployment` to the override deployment whose
-`model_name` matches `adapter_spec.model`, with **no** manifest/bridge/node
-plumbing and a single source of truth (rename the override deployment → the spec
-follows). Cost: implicit, and the `model_name` match is a heuristic (fragile if an
-override carries two deployments for the same model). Judge-dependent runs are
-handled because the judge deployment has a different `model_name`.
+**The decisive reason is the failure-mode asymmetry.** This feature exists to stop
+*silently* masking the substitution, so the mechanism's own failure mode matters:
 
-Both require the Change-2 image rebuild, so that cost is identical. Pick explicit
-for predictability; auto-derive only if the reduced surface is worth the implicit
-behavior. (A hybrid — explicit wins, else auto-derive — is possible but adds CLI
-branching for little gain.)
+- **Explicit (chosen):** a wrong/mismatched name → HELM "deployment not found" —
+  a **loud crash before any instances run**, also caught by the §3 invariant test.
+  You cannot ship a masked run past it.
+- **Auto-derive (rejected):** derive the target from the override (the entry whose
+  `model_name` matches `adapter_spec.model`), with no manifest plumbing and a
+  single source of truth. But its failure mode is the **silent no-op** — any
+  normalization mismatch (`microsoft/Phi-2` vs `microsoft/phi-2`, slash/case)
+  leaves the spec at `together/phi-2`, so `same_deployment=yes` returns invisibly:
+  the mechanism fails *toward the very bug it fixes*. A loud crash is strictly
+  better than a silent wrong answer for an integrity feature, which outweighs
+  auto-derive's smaller surface.
+
+A hybrid (explicit wins, else auto-derive, else *raise* — never keep the official
+name) was considered and set aside: it re-admits the implicit path for marginal
+ergonomics. If a future non-e2e caller wants zero plumbing, revisit auto-derive
+**only** with a mandatory "a rewrite happened or raise" guard so it can never
+silently no-op.
 
 ## 6. What deliberately does NOT change
 
