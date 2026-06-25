@@ -5,7 +5,7 @@
 [submodule "submodules/aiq-magnet"]
 	path = submodules/aiq-magnet
 	url = https://github.com/AIQ-Kitware/aiq-magnet.git
-	branch = fix/materialize-model-deployment-match
+	branch = impl/run-from-run-spec
 [submodule "submodules/helm"]
 	path = submodules/helm
 	url = https://github.com/AIQ-Kitware/helm.git
