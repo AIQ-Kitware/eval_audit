@@ -367,6 +367,13 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             {
                 "profile": "phi2-single",
                 "model_deployment_name": "vllm/phi-2-local",
+                # From-spec rekey (migration plan Change 2b): under
+                # export-benchmark-bundle --from-spec, the generated
+                # model_deployments.yaml binds this OFFICIAL deployment name (the
+                # one the official run_spec.json carries) to the LiteLLM endpoint,
+                # shadowing HELM's built-in together/phi-2 (the real Together API).
+                # Inert on the default run-entry path (which keeps vllm/phi-2-local).
+                "from_spec_model_deployment_name": "together/phi-2",
                 "helm_model_name": "microsoft/phi-2",
                 "helm_tokenizer_name": "microsoft/phi-2",
                 "protocol_mode": "completions",
@@ -381,6 +388,10 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "e2e-phi_2-vllm-philosophy-smoke",
             "max_eval_instances": 5,
+            # From-spec recipe SOURCE (migration plan Change 2a). Only emitted into
+            # the generated manifest when export-benchmark-bundle --from-spec is
+            # passed; narrowed to the mmlu subtree so discovery is fast/unambiguous.
+            "precomputed_root": "/data/crfm-helm-public/mmlu",
             # Containerized HELM is mandatory (the docker pipeline pins the
             # software env). network=host so the in-container HELM client reaches
             # the host-served model (vLLM behind LiteLLM); gpus=none keeps the
@@ -398,11 +409,20 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             ],
             "suite": "e2e-phi_2-vllm-philosophy-full",
             "max_eval_instances": 1000,
+            # From-spec recipe SOURCE (migration plan Change 2a). The official
+            # adapter_spec.max_eval_instances is 10000, so this 1000 cap compares on
+            # HELM's deterministic instance PREFIX, not official parity (plan §7).
+            "precomputed_root": "/data/crfm-helm-public/mmlu",
             "container_network": "host",
             "hf_cache_dir": "~/.cache/eval-audit-hf",
             "container_gpus": "none",
         },
     },
+    # NOTE: the incomparable negative control deliberately carries NO from-spec
+    # fields. From-spec replays the official recipe verbatim, which would erase the
+    # temperature=1 deviation this scenario exists to flag, so it stays on the
+    # run-entry path (migration plan Change 4 / §7). The grid's e2e_fromspec_enabled
+    # also excludes it, so --from-spec is never passed for it.
     "e2e-phi_2-vllm-philosophy-incomparable": {
         "profile": "phi2-single",
         "bundle_name": "e2e-phi_2-vllm-philosophy-incomparable",
@@ -1234,7 +1254,19 @@ def _manifest_doc(
     spec: dict[str, Any],
     model_deployments_fpath: str,
     lease_facts: dict[str, Any] | None = None,
+    from_run_spec: bool = False,
+    precomputed_root: str | None = None,
 ) -> dict[str, Any]:
+    # From-spec replay: the generated manifest must carry from_run_spec: true and a
+    # precomputed_root (the recipe SOURCE the bridge requires). Because this builder
+    # emits a FIXED dict, threading the two fields here is the only way a preset/CLI
+    # value reaches the manifest — adding precomputed_root to a preset block alone
+    # would be silently dropped (it is not a _CONTAINER_SPEC_KEY), landing on the
+    # run-entry path with no error (migration plan Change 2a). The run-entry path
+    # keeps precomputed_root: None and omits from_run_spec (its manifest default).
+    resolved_precomputed_root = (
+        (precomputed_root or spec.get("precomputed_root")) if from_run_spec else None
+    )
     doc = {
         "schema_version": 1,
         "experiment_name": spec["experiment_name"],
@@ -1248,12 +1280,14 @@ def _manifest_doc(
         "devices": spec.get("devices", "0"),
         "tmux_workers": spec.get("tmux_workers", 1),
         "local_path": "prod_env",
-        "precomputed_root": None,
+        "precomputed_root": resolved_precomputed_root,
         "require_per_instance_stats": True,
         "model_deployments_fpath": model_deployments_fpath,
         "enable_huggingface_models": [],
         "enable_local_huggingface_models": [],
     }
+    if from_run_spec:
+        doc["from_run_spec"] = True
     for key in _CONTAINER_SPEC_KEYS:
         if key in spec:
             doc[key] = spec[key]
@@ -1286,6 +1320,8 @@ def materialize_benchmark_bundle(
     base_url: str | None = None,
     api_key_value: str | None = None,
     lease_catalog: Path | str | None = None,
+    from_run_spec: bool = False,
+    precomputed_root: str | None = None,
 ) -> dict[str, Any]:
     output_dir = output_dir.resolve()
     preset_cfg = PRESET_CONFIGS.get(preset or "", {})
@@ -1317,6 +1353,16 @@ def materialize_benchmark_bundle(
                 f"{preset!r}) must be 'chat' or 'completions', got "
                 f"{resolved_protocol_mode!r}."
             )
+        # From-spec replay names the OFFICIAL deployment (e.g. together/phi-2). When
+        # from_run_spec, rekey the generated model_deployments.yaml entry to that
+        # name (the profile's from_spec_model_deployment_name) so by-name
+        # substitution binds the name the official run_spec.json carries to the
+        # served endpoint. The run-entry path keeps the local model_deployment_name.
+        # The lease is unaffected: single-endpoint lease_endpoint keys off the
+        # catalog endpoint, not the deployment name (see _lease_facts).
+        deployment_name = spec.get("model_deployment_name")
+        if from_run_spec and spec.get("from_spec_model_deployment_name"):
+            deployment_name = spec["from_spec_model_deployment_name"]
         model_entries.append(
             _model_deployment_entry(
                 fact,
@@ -1325,7 +1371,7 @@ def materialize_benchmark_bundle(
                 helm_tokenizer_name=spec.get("helm_tokenizer_name"),
                 helm_max_sequence_and_generated_tokens_length=spec.get("helm_max_sequence_and_generated_tokens_length"),
                 access_kind=selected_kind,
-                model_deployment_name=spec.get("model_deployment_name"),
+                model_deployment_name=deployment_name,
                 base_url=base_url,
                 api_key_value=api_key_value,
             )
@@ -1383,11 +1429,15 @@ def materialize_benchmark_bundle(
         spec=smoke_spec,
         model_deployments_fpath=model_deployments_fpath,
         lease_facts=lease_facts,
+        from_run_spec=from_run_spec,
+        precomputed_root=precomputed_root,
     )
     benchmark_full_manifest = _manifest_doc(
         spec=full_spec,
         model_deployments_fpath=model_deployments_fpath,
         lease_facts=lease_facts,
+        from_run_spec=from_run_spec,
+        precomputed_root=precomputed_root,
     )
     benchmark_smoke_path = output_dir / "benchmark_smoke_manifest.yaml"
     benchmark_full_path = output_dir / "benchmark_full_manifest.yaml"
@@ -1452,6 +1502,8 @@ def export_benchmark_bundle(
     # catalog.yaml); kept as an alias.
     simulate_hardware: str | None = None,
     vllm_root: Path | None = None,
+    from_run_spec: bool = False,
+    precomputed_root: str | None = None,
 ) -> dict[str, Any]:
     preset_cfg = PRESET_CONFIGS.get(preset or "", {})
     specs = _profile_specs(profile, preset_cfg)
@@ -1491,4 +1543,6 @@ def export_benchmark_bundle(
         base_url=base_url,
         api_key_value=api_key_value,
         lease_catalog=lease_catalog,
+        from_run_spec=from_run_spec,
+        precomputed_root=precomputed_root,
     )

@@ -47,6 +47,26 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.add_argument("--base-url", default=None)
     s.add_argument("--api-key-value", default=None)
+    s.add_argument(
+        "--from-spec",
+        action="store_true",
+        help=(
+            "Emit a faithful-replay bundle: the generated manifests carry "
+            "from_run_spec: true + precomputed_root (the recipe source), and the "
+            "model_deployments.yaml is rekeyed to the preset's "
+            "from_spec_model_deployment_name (the OFFICIAL deployment the "
+            "run_spec.json names). Default off keeps the run-entry path."
+        ),
+    )
+    s.add_argument(
+        "--precomputed-root",
+        default=None,
+        help=(
+            "Override the from-spec recipe source root (the dir searched for the "
+            "official run dir). Only used with --from-spec; otherwise the preset's "
+            "smoke/full precomputed_root is used."
+        ),
+    )
     s.set_defaults(cmd_name="export-benchmark-bundle")
 
     args = parser.parse_args(argv)
@@ -71,6 +91,8 @@ def main(argv: list[str] | None = None) -> None:
         protocol_mode=args.protocol_mode,
         base_url=args.base_url,
         api_key_value=args.api_key_value,
+        from_run_spec=args.from_spec,
+        precomputed_root=args.precomputed_root,
     )
     print(json.dumps({
         "bundle_dir": str(result["bundle_dir"]),
