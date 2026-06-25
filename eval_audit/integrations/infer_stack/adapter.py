@@ -366,14 +366,16 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         "profiles": [
             {
                 "profile": "phi2-single",
+                # The bundle keeps its NATIVE local deployment name on both paths.
+                # Under --from-spec the generated manifest's `model_deployment`
+                # field carries this same name (set by the exporter), and the
+                # from-spec CLI rewrites the replayed run_spec.json's
+                # adapter_spec.model_deployment to it — so the produced run records
+                # the LOCAL endpoint and the audit reports same_deployment=no.
+                # Rewrite target == registered name by construction (no drift).
+                # Supersedes the by-name `from_spec_model_deployment_name` rekey;
+                # see docs/planning/from-spec-deployment-rewrite-plan.md Change 5.
                 "model_deployment_name": "vllm/phi-2-local",
-                # From-spec rekey (migration plan Change 2b): under
-                # export-benchmark-bundle --from-spec, the generated
-                # model_deployments.yaml binds this OFFICIAL deployment name (the
-                # one the official run_spec.json carries) to the LiteLLM endpoint,
-                # shadowing HELM's built-in together/phi-2 (the real Together API).
-                # Inert on the default run-entry path (which keeps vllm/phi-2-local).
-                "from_spec_model_deployment_name": "together/phi-2",
                 "helm_model_name": "microsoft/phi-2",
                 "helm_tokenizer_name": "microsoft/phi-2",
                 "protocol_mode": "completions",
@@ -1256,6 +1258,7 @@ def _manifest_doc(
     lease_facts: dict[str, Any] | None = None,
     from_run_spec: bool = False,
     precomputed_root: str | None = None,
+    model_deployment: str | None = None,
 ) -> dict[str, Any]:
     # From-spec replay: the generated manifest must carry from_run_spec: true and a
     # precomputed_root (the recipe SOURCE the bridge requires). Because this builder
@@ -1288,6 +1291,13 @@ def _manifest_doc(
     }
     if from_run_spec:
         doc["from_run_spec"] = True
+        # Deployment-rewrite target: the LOCAL deployment name the replay records
+        # into the produced run_spec.json (so the audit reports same_deployment=no).
+        # Only meaningful under from_run_spec; omitted otherwise so the run-entry
+        # manifest stays byte-compatible. None => pure by-name (the from-spec CLI
+        # keeps the official deployment name).
+        if model_deployment is not None:
+            doc["model_deployment"] = model_deployment
     for key in _CONTAINER_SPEC_KEYS:
         if key in spec:
             doc[key] = spec[key]
@@ -1353,16 +1363,15 @@ def materialize_benchmark_bundle(
                 f"{preset!r}) must be 'chat' or 'completions', got "
                 f"{resolved_protocol_mode!r}."
             )
-        # From-spec replay names the OFFICIAL deployment (e.g. together/phi-2). When
-        # from_run_spec, rekey the generated model_deployments.yaml entry to that
-        # name (the profile's from_spec_model_deployment_name) so by-name
-        # substitution binds the name the official run_spec.json carries to the
-        # served endpoint. The run-entry path keeps the local model_deployment_name.
-        # The lease is unaffected: single-endpoint lease_endpoint keys off the
-        # catalog endpoint, not the deployment name (see _lease_facts).
+        # The generated model_deployments.yaml binds the bundle's NATIVE local
+        # deployment name on BOTH paths (run-entry and from-spec). Under from-spec
+        # the manifest's `model_deployment` field (set below) names this same entry
+        # and the replay rewrites the run_spec.json's adapter_spec.model_deployment
+        # to it — so the produced run records the local endpoint (same_deployment=no)
+        # with the rewrite target and the registration agreeing by construction.
+        # This supersedes the earlier by-name rekey to the official name; see
+        # docs/planning/from-spec-deployment-rewrite-plan.md Change 5.
         deployment_name = spec.get("model_deployment_name")
-        if from_run_spec and spec.get("from_spec_model_deployment_name"):
-            deployment_name = spec["from_spec_model_deployment_name"]
         model_entries.append(
             _model_deployment_entry(
                 fact,
@@ -1425,12 +1434,25 @@ def materialize_benchmark_bundle(
         preset_cfg=preset_cfg,
         lease_catalog=lease_catalog,
     )
+    # From-spec replay records the LOCAL deployment so the audit reports
+    # same_deployment=no. The rewrite target is the bundle's own deployment name —
+    # the exact name model_deployments.yaml registers — so target and registration
+    # agree by construction (the §3 invariant holds with no drift). Only a
+    # single-deployment bundle has an unambiguous target; a multi-deployment
+    # from-spec bundle would need a per-run rewrite (out of scope), so it stays
+    # pure by-name (model_deployment unset).
+    rewrite_deployment = (
+        model_entries[0]["name"]
+        if from_run_spec and len(model_entries) == 1
+        else None
+    )
     benchmark_smoke_manifest = _manifest_doc(
         spec=smoke_spec,
         model_deployments_fpath=model_deployments_fpath,
         lease_facts=lease_facts,
         from_run_spec=from_run_spec,
         precomputed_root=precomputed_root,
+        model_deployment=rewrite_deployment,
     )
     benchmark_full_manifest = _manifest_doc(
         spec=full_spec,
@@ -1438,6 +1460,7 @@ def materialize_benchmark_bundle(
         lease_facts=lease_facts,
         from_run_spec=from_run_spec,
         precomputed_root=precomputed_root,
+        model_deployment=rewrite_deployment,
     )
     benchmark_smoke_path = output_dir / "benchmark_smoke_manifest.yaml"
     benchmark_full_path = output_dir / "benchmark_full_manifest.yaml"

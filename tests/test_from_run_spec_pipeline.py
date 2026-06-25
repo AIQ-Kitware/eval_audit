@@ -37,16 +37,22 @@ def _render_from_spec(config: dict, tmp_path: Path) -> str:
 # --------------------------------------------------------------------------
 
 
-def test_from_spec_node_only_swaps_the_executable():
+def test_from_spec_node_swaps_executable_and_adds_deployment_param():
     node = MaterializeHelmRunFromSpecDockerNode()
     # Identity / completion contract inherited unchanged.
     assert node.name == "helm"
     assert node.primary_out_key == "done_fname"
     assert node.out_paths == MaterializeHelmRunDockerNode.out_paths
-    assert node.algo_params == MaterializeHelmRunDockerNode.algo_params
-    # By-name substitution: no model/model_deployment added to identity.
+    # The from-spec node extends the run-entry node's algo identity with exactly
+    # one field: model_deployment (the optional deployment-rewrite target, default
+    # None => pure by-name). See from-spec-deployment-rewrite-plan.md Change 3.
+    assert node.algo_params == {
+        **MaterializeHelmRunDockerNode.algo_params,
+        "model_deployment": None,
+    }
+    # model is never an algo param — the model identity always replays verbatim.
     assert "model" not in node.algo_params
-    assert "model_deployment" not in node.algo_params
+    assert node.algo_params["model_deployment"] is None
     # Only the inner executable differs.
     assert node.executable.endswith("materialize_helm_run_from_spec")
 

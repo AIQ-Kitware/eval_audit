@@ -52,10 +52,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help=(
             "Emit a faithful-replay bundle: the generated manifests carry "
-            "from_run_spec: true + precomputed_root (the recipe source), and the "
-            "model_deployments.yaml is rekeyed to the preset's "
-            "from_spec_model_deployment_name (the OFFICIAL deployment the "
-            "run_spec.json names). Default off keeps the run-entry path."
+            "from_run_spec: true + precomputed_root (the recipe source) + "
+            "model_deployment (the bundle's own LOCAL deployment name). The replay "
+            "rewrites the run_spec.json's adapter_spec.model_deployment to that "
+            "local name, so the produced run records the served endpoint and the "
+            "audit reports same_deployment=no. Default off keeps the run-entry path."
         ),
     )
     s.add_argument(

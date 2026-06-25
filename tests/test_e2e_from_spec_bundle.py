@@ -1,16 +1,21 @@
 """Tests for the phi-2 e2e from-spec migration.
 
 Covers the exporter-side wiring of
-``docs/planning/e2e-from-run-spec-migration-plan.md``: the ``_manifest_doc``
-gating and deployment rekey under ``--from-spec`` (Change 2), the preset wiring
-(comparable carries it, the incomparable control deliberately does not), the
-checked-in HF sibling manifests + override (Change 1), and a corpus-dependent
-discovery dry-check (Change 6) that resolves the official phi-2 run dir and
-confirms its ``run_spec.json`` names the substitution target with no annotators.
+``docs/planning/e2e-from-run-spec-migration-plan.md`` as amended by
+``docs/planning/from-spec-deployment-rewrite-plan.md``: the ``_manifest_doc``
+gating under ``--from-spec`` (Change 2), the preset wiring (comparable carries it,
+the incomparable control deliberately does not), the deployment rewrite — the
+bundle keeps its NATIVE local name and the generated manifest emits that name as
+the rewrite target (rewrite plan Change 5) — the checked-in HF sibling manifests +
+local override (Change 1/4), and a corpus-dependent discovery dry-check (Change 6)
+that resolves the official phi-2 run dir and confirms its ``run_spec.json`` names
+the official deployment with no annotators.
 
 None of the exporter tests need a live serving stack or catalog — they drive
 ``materialize_benchmark_bundle`` with synthesized ``ServingFacts`` + the real
-preset profiles, so the rekey path is exercised end to end.
+preset profiles, so the path is exercised end to end. The comparability proof
+(rewriting the deployment un-masks the substitution) and the manifest->bridge->node
+plumbing live in ``test_from_spec_deployment_rewrite.py``.
 """
 
 from __future__ import annotations
@@ -83,17 +88,20 @@ def test_manifest_doc_cli_precomputed_root_override_wins():
 
 def test_comparable_preset_has_fromspec_wiring():
     p = A.PRESET_CONFIGS["e2e-phi_2-vllm-philosophy"]
-    assert p["profiles"][0]["from_spec_model_deployment_name"] == "together/phi-2"
+    # The bundle keeps its NATIVE local deployment name on both paths (the rekey to
+    # the official name is gone; deployment-rewrite plan Change 5). Under --from-spec
+    # the exporter emits this same name as the manifest's model_deployment.
+    assert p["profiles"][0]["model_deployment_name"] == "vllm/phi-2-local"
+    assert "from_spec_model_deployment_name" not in p["profiles"][0]
     assert p["smoke_manifest"]["precomputed_root"] == "/data/crfm-helm-public/mmlu"
     assert p["full_manifest"]["precomputed_root"] == "/data/crfm-helm-public/mmlu"
 
 
 def test_incomparable_preset_omits_fromspec_wiring():
-    # The negative control stays on the run-entry path (§7/Change 4): no rekey
-    # field, no precomputed_root, so even an accidental --from-spec cannot replay
-    # away its temperature=1 deviation.
+    # The negative control stays on the run-entry path (§7/Change 4): no
+    # precomputed_root, so even an accidental --from-spec cannot replay away its
+    # temperature=1 deviation.
     p = A.PRESET_CONFIGS["e2e-phi_2-vllm-philosophy-incomparable"]
-    assert "from_spec_model_deployment_name" not in p["profiles"][0]
     assert "precomputed_root" not in p["smoke_manifest"]
     assert "precomputed_root" not in p["full_manifest"]
 
@@ -137,14 +145,17 @@ def test_exporter_run_entry_binds_local_deployment(tmp_path: Path):
     smoke = yaml.safe_load(res["benchmark_smoke_manifest_path"].read_text())
     assert smoke["precomputed_root"] is None
     assert "from_run_spec" not in smoke
+    # The run-entry manifest stays byte-compatible: no deployment-rewrite field.
+    assert "model_deployment" not in smoke
 
 
-def test_exporter_from_spec_rekeys_to_official_deployment(tmp_path: Path):
+def test_exporter_from_spec_binds_local_deployment_and_emits_target(tmp_path: Path):
     res = _materialize(tmp_path, from_run_spec=True)
     md = yaml.safe_load(Path(res["model_deployments_path"]).read_text())
-    # The replayed recipe names together/phi-2; by-name substitution binds THAT
-    # name to the served LiteLLM endpoint (shadowing the real Together API).
-    assert [e["name"] for e in md["model_deployments"]] == ["together/phi-2"]
+    # The bundle keeps its NATIVE local name on the from-spec path too (the rekey
+    # to the official together/phi-2 is gone; deployment-rewrite plan Change 5).
+    names = [e["name"] for e in md["model_deployments"]]
+    assert names == ["vllm/phi-2-local"]
     entry = md["model_deployments"][0]
     assert entry["client_spec"]["args"]["openai_model_name"] == "phi2-single"
     smoke = yaml.safe_load(res["benchmark_smoke_manifest_path"].read_text())
@@ -152,8 +163,15 @@ def test_exporter_from_spec_rekeys_to_official_deployment(tmp_path: Path):
     assert smoke["from_run_spec"] is True
     assert smoke["precomputed_root"] == "/data/crfm-helm-public/mmlu"
     assert full["from_run_spec"] is True
+    # The generated manifest names the bundle's own deployment as the rewrite
+    # target — the replay records the LOCAL endpoint (same_deployment=no).
+    assert smoke["model_deployment"] == "vllm/phi-2-local"
+    assert full["model_deployment"] == "vllm/phi-2-local"
+    # §3 invariant: the rewrite target is exactly a registered deployment name (no
+    # drift between the manifest field and model_deployments.yaml).
+    assert smoke["model_deployment"] in names
     # The lease is unaffected: lease_endpoint keys off the catalog endpoint, not
-    # the (now rekeyed) deployment name.
+    # the deployment name.
     assert smoke["lease_endpoint"] == "phi2-single"
 
 
@@ -174,6 +192,9 @@ def test_hf_manifest_is_from_spec(mode: str):
     assert d["model_deployments_fpath"] == (
         "configs/debug/e2e_phi2_fromspec_overrides.yaml"
     )
+    # The deployment-rewrite target: the local name the override registers, so the
+    # replay records the served endpoint and the audit reports same_deployment=no.
+    assert d["model_deployment"] == "huggingface/phi-2-local"
     assert d["experiment_name"] == f"e2e-phi_2-huggingface-philosophy-{mode}"
     assert d["suite"] == f"e2e-phi_2-huggingface-philosophy-{mode}"
     # enable_huggingface_models is redundant once the override fully specifies the
@@ -181,11 +202,15 @@ def test_hf_manifest_is_from_spec(mode: str):
     assert d["enable_huggingface_models"] == []
 
 
-def test_hf_fromspec_override_targets_official_deployment():
+def test_hf_fromspec_override_registers_local_deployment():
     d = yaml.safe_load(OVERRIDE_FPATH.read_text())
-    entry = next(
-        e for e in d["model_deployments"] if e["name"] == "together/phi-2"
-    )
+    # The override registers a LOCAL deployment name (the rewrite target), NOT the
+    # official together/phi-2 — so the produced run records the local endpoint and
+    # the audit reports same_deployment=no (deployment-rewrite plan Change 4).
+    names = [e["name"] for e in d["model_deployments"]]
+    assert names == ["huggingface/phi-2-local"]
+    assert "together/phi-2" not in names
+    entry = d["model_deployments"][0]
     assert entry["client_spec"]["class_name"].endswith("HuggingFaceClient")
     assert entry["client_spec"]["args"]["pretrained_model_name_or_path"] == (
         "microsoft/phi-2"

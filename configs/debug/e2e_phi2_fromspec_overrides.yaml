@@ -1,19 +1,29 @@
 # From-spec replay override for the phi-2 e2e (hf scenario).
 #
 # The official microsoft/phi-2 mmlu:philosophy run_spec.json names
-# `model_deployment: together/phi-2`. The faithful-replay pipeline
-# (docs/planning/run-from-run-spec-json-plan.md §5) substitutes by NAME only — it
-# rebinds the deployment names present in this file and nothing else. So to run
-# the official recipe locally we must re-register *together/phi-2* (the name the
-# spec carries) pointed at a local in-process HuggingFace client; this shadows
-# HELM's built-in together/phi-2 (the real Together API), exactly as
-# repro_model_overrides.yaml shadows together/qwen2.5-...
+# `model_deployment: together/phi-2` (the hosted Together API). To run the
+# official recipe locally AND record that fact honestly, the from-spec pipeline
+# does two things (docs/planning/from-spec-deployment-rewrite-plan.md):
 #
-# This is the hf scenario's analogue of the vLLM rekey (the bundle exporter binds
-# the same together/phi-2 name to the LiteLLM endpoint). See the migration plan
-# Change 1 (docs/planning/e2e-from-run-spec-migration-plan.md).
+#   1. This file registers a LOCAL deployment `huggingface/phi-2-local` pointed at
+#      an in-process HuggingFace client (the engine that actually serves the run).
+#   2. The from-spec CLI rewrites the replayed run_spec.json's
+#      adapter_spec.model_deployment from `together/phi-2` -> `huggingface/phi-2-local`
+#      (the manifest's `model_deployment` field threads this name in).
+#
+# So the produced run records `huggingface/phi-2-local`, the audit comparison sees
+# it differs from the official `together/phi-2`, and reports `same_deployment=no` —
+# surfacing the engine substitution (local HF vs the hosted Together API) instead
+# of masking it behind the official name. The deployment NAME registered here MUST
+# equal the manifest's `model_deployment` (the §3 invariant), or HELM fails loud
+# ("deployment not found") before any instances run.
+#
+# This is the hf scenario's analogue of the vLLM path: the bundle exporter binds
+# the native `vllm/phi-2-local` name and the generated manifest carries the same
+# name. See the deployment-rewrite plan, which supersedes the earlier by-name-only
+# rekey in the migration plan (docs/planning/e2e-from-run-spec-migration-plan.md).
 model_deployments:
-  - name: together/phi-2          # the name the OFFICIAL run_spec.json carries
+  - name: huggingface/phi-2-local   # LOCAL name; the replay rewrites the spec to this
     model_name: microsoft/phi-2
     tokenizer_name: microsoft/phi-2
     # REQUIRED — the context-window metadata HELM's window service needs. The
@@ -24,7 +34,7 @@ model_deployments:
     # max_request_length=None and HELM crashes in
     # local_window_service._effective_prompt_token_budget (`min(None, ...)` ->
     # "TypeError: '<' not supported between 'int' and 'NoneType'"). 2047 matches
-    # the official deployment exactly (faithful replay).
+    # the official together/phi-2 exactly (faithful replay).
     max_sequence_length: 2047
     client_spec:
       class_name: "helm.clients.huggingface_client.HuggingFaceClient"

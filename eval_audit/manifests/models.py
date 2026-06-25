@@ -49,6 +49,15 @@ class ManifestSpec:
     # produced run dir keeps the official ``run_spec.name`` and Stages 4-6 are
     # unchanged. See docs/planning/run-from-run-spec-json-plan.md.
     from_run_spec: bool = False
+    # Optional deployment-rewrite target for ``from_run_spec`` replays. When set,
+    # the from-spec CLI rewrites ``adapter_spec.model_deployment`` to this LOCAL
+    # deployment name after deserialization, so the produced run records the
+    # endpoint that actually served it and the audit reports ``same_deployment=no``
+    # instead of masking the engine substitution behind the official name. It MUST
+    # name a deployment registered in the run's ``model_deployments.yaml`` (the
+    # by-name override for hf, the bundle for vLLM). Inert on the run-entry path.
+    # See docs/planning/from-spec-deployment-rewrite-plan.md.
+    model_deployment: str | None = None
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:

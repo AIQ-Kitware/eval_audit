@@ -139,6 +139,7 @@ def _build_manifest(
     model_deployments_fpath: str | None,
     from_run_spec: bool = False,
     precomputed_root: str | None = None,
+    model_deployment: str | None = None,
 ) -> dict[str, Any]:
     return ManifestSpec(
         experiment_name=experiment_name,
@@ -151,6 +152,7 @@ def _build_manifest(
         model_deployments_fpath=model_deployments_fpath,
         from_run_spec=from_run_spec,
         precomputed_root=precomputed_root,
+        model_deployment=model_deployment,
     ).to_dict()
 
 
@@ -195,12 +197,30 @@ def main(argv: list[str] | None = None) -> None:
             "Bind-mounted read-only into the run container at its same path."
         ),
     )
+    parser.add_argument(
+        "--model-deployment",
+        default=None,
+        help=(
+            "Deployment-rewrite target (only meaningful with --from-run-spec). The "
+            "from-spec CLI rewrites adapter_spec.model_deployment to this LOCAL "
+            "deployment name so the produced run records the endpoint that served "
+            "it and the audit reports same_deployment=no. It MUST name a deployment "
+            "registered in the run's model_deployments.yaml. When omitted, the "
+            "official deployment name replays verbatim (pure by-name)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.from_run_spec and not args.precomputed_root:
         raise SystemExit(
             "--from-run-spec requires --precomputed-root (the recipe source from "
             "which each official run_spec.json is read)"
+        )
+    if args.model_deployment and not args.from_run_spec:
+        raise SystemExit(
+            "--model-deployment is only meaningful with --from-run-spec (it "
+            "rewrites the replayed run_spec.json's adapter_spec.model_deployment); "
+            "the run-entry path carries the deployment in the run-entry string."
         )
 
     defaults = env_defaults()
@@ -258,6 +278,7 @@ def main(argv: list[str] | None = None) -> None:
         model_deployments_fpath=model_override,
         from_run_spec=args.from_run_spec,
         precomputed_root=args.precomputed_root,
+        model_deployment=args.model_deployment,
     )
 
     out_fpath = Path(args.output)
@@ -289,6 +310,7 @@ def main(argv: list[str] | None = None) -> None:
         "model_deployments_fpath": model_override,
         "from_run_spec": args.from_run_spec,
         "precomputed_root": args.precomputed_root,
+        "model_deployment": args.model_deployment,
         "include_patterns": args.include_pattern,
         "exclude_patterns": args.exclude_pattern,
         "models": args.model,

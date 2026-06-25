@@ -224,17 +224,28 @@ class MaterializeHelmRunFromSpecDockerNode(MaterializeHelmRunDockerNode):
     verbatim via ``run_benchmarking``.
 
     Everything about the container wrapper is identical — same mounts,
-    ``out_paths``, ``primary_out_key='done_fname'``, algo identity, and lease
-    bracket — so only the inner ``executable`` differs. Substitution is by-name
-    only, so we deliberately do NOT add ``model`` / ``model_deployment`` to
-    ``algo_params``: the locally-registered ``model_deployments.yaml`` rebinds the
-    official deployment name to a local client, and the produced run dir keeps the
-    official ``run_spec.name``.
+    ``out_paths``, ``primary_out_key='done_fname'``, and lease bracket — so only
+    the inner ``executable`` and the added ``model_deployment`` algo param differ.
+
+    ``model_deployment`` is the optional deployment-rewrite target: when set, the
+    inner CLI rewrites ``adapter_spec.model_deployment`` to this LOCAL name so the
+    produced run records the served endpoint (``same_deployment=no``) instead of
+    masking the engine substitution behind the official name. It is algo identity
+    (a different deployment is a different run). ``model`` is deliberately NOT an
+    algo param — the model identity always replays verbatim (by-name), and the
+    produced run dir keeps the official ``run_spec.name`` (HELM names encode
+    ``model=…``, not ``model_deployment=…``). When unset, replay is pure by-name.
+    See docs/planning/from-spec-deployment-rewrite-plan.md.
     """
 
     executable = (
         "python -m magnet.backends.helm.cli.materialize_helm_run_from_spec"
     )
+
+    algo_params = {
+        **MaterializeHelmRunDockerNode.algo_params,
+        "model_deployment": None,
+    }
 
 
 def helm_single_run_from_spec_docker_pipeline():

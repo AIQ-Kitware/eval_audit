@@ -230,6 +230,14 @@ def build_schedule_params(
                 "--precomputed-root (eval-audit-make-manifest) or precomputed_root "
                 "in the manifest."
             )
+        # Deployment-rewrite target (opt-in). When set, the from-spec node rewrites
+        # adapter_spec.model_deployment to this LOCAL name so the produced run
+        # records the served endpoint (same_deployment=no). Only added on the
+        # from-spec branch — the run-entry node does not declare model_deployment,
+        # so it would reject the matrix key. Omitted when unset (pure by-name).
+        model_deployment = manifest.get("model_deployment")
+        if model_deployment is not None:
+            matrix["helm.model_deployment"] = [model_deployment]
         return {"pipeline": _DOCKER_FROM_SPEC_PIPELINE, "matrix": matrix}
     return {"pipeline": _DOCKER_PIPELINE, "matrix": matrix}
 

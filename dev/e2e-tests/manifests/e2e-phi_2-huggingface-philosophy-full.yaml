@@ -30,11 +30,16 @@ local_path: prod_env
 from_run_spec: true
 precomputed_root: /data/crfm-helm-public/mmlu
 require_per_instance_stats: true
-# By-name substitution rebinds the OFFICIAL deployment together/phi-2 -> a local
-# in-process HuggingFace client. enable_huggingface_models is redundant now (the
-# override fully specifies weights+tokenizer) and would only register an UNUSED
-# microsoft/phi-2 deployment, so it is dropped.
+# The override registers a LOCAL deployment (huggingface/phi-2-local) bound to an
+# in-process HuggingFace client; `model_deployment` (below) rewrites the replayed
+# run_spec.json to that local name so the produced run records the served endpoint
+# and the audit reports same_deployment=no. enable_huggingface_models is redundant
+# now (the override fully specifies weights+tokenizer) and would only register an
+# UNUSED microsoft/phi-2 deployment, so it is dropped.
 model_deployments_fpath: configs/debug/e2e_phi2_fromspec_overrides.yaml
+# Deployment-rewrite target: MUST equal the deployment `name` registered in the
+# override above (the §3 invariant). See from-spec-deployment-rewrite-plan.md.
+model_deployment: huggingface/phi-2-local
 enable_huggingface_models: []
 enable_local_huggingface_models: []
 # Containerized HELM is mandatory; the grid supplies the image via
