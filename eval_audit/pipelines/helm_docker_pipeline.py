@@ -211,3 +211,39 @@ def helm_single_run_docker_pipeline():
         "materialize_helm_run": MaterializeHelmRunDockerNode(),
     }
     return kwdagger.Pipeline(nodes)
+
+
+class MaterializeHelmRunFromSpecDockerNode(MaterializeHelmRunDockerNode):
+    """Run ``materialize_helm_run_from_spec`` inside a pinned Docker image.
+
+    The faithful-replay counterpart of :class:`MaterializeHelmRunDockerNode`:
+    instead of reconstructing a run-entry string and re-parsing it through
+    ``helm-run``, the in-container CLI deserializes the official
+    ``run_spec.json`` (delivered by the ``precomputed_root`` ``:ro`` mount, which
+    in this mode is the *recipe source*) and replays the fully-resolved recipe
+    verbatim via ``run_benchmarking``.
+
+    Everything about the container wrapper is identical — same mounts,
+    ``out_paths``, ``primary_out_key='done_fname'``, algo identity, and lease
+    bracket — so only the inner ``executable`` differs. Substitution is by-name
+    only, so we deliberately do NOT add ``model`` / ``model_deployment`` to
+    ``algo_params``: the locally-registered ``model_deployments.yaml`` rebinds the
+    official deployment name to a local client, and the produced run dir keeps the
+    official ``run_spec.name``.
+    """
+
+    executable = (
+        "python -m magnet.backends.helm.cli.materialize_helm_run_from_spec"
+    )
+
+
+def helm_single_run_from_spec_docker_pipeline():
+    """kwdagger pipeline factory: a single containerized from-spec replay node.
+
+    Referenced by ``kwdagger schedule`` via the fully-qualified path
+    ``eval_audit.pipelines.helm_docker_pipeline.helm_single_run_from_spec_docker_pipeline()``.
+    """
+    nodes = {
+        "materialize_helm_run": MaterializeHelmRunFromSpecDockerNode(),
+    }
+    return kwdagger.Pipeline(nodes)

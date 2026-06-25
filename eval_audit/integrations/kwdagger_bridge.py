@@ -30,6 +30,15 @@ _DOCKER_PIPELINE = (
     "eval_audit.pipelines.helm_docker_pipeline.helm_single_run_docker_pipeline()"
 )
 
+# Faithful-replay variant: deserialize the official run_spec.json and replay the
+# resolved recipe verbatim (instead of reconstructing a run-entry string). Same
+# containerized wrapper; selected when the manifest sets ``from_run_spec: true``.
+# Because the selection sits *after* the ``resolved_image is None`` raise in
+# build_schedule_params, this path inherits mandatory containerization for free.
+_DOCKER_FROM_SPEC_PIPELINE = (
+    "eval_audit.pipelines.helm_docker_pipeline.helm_single_run_from_spec_docker_pipeline()"
+)
+
 
 def _detect_virtualenv_cmd() -> str | None:
     """Return a shell command that activates the venv eval-audit-run is
@@ -156,6 +165,10 @@ def build_schedule_params(
     GPU-lease matrix knobs) merge in when present — leasing is the orthogonal
     axis, rendered by the docker node's lease bracket. Raises if no image was
     resolved (the bare host-venv pipelines have been removed).
+
+    When ``manifest['from_run_spec']`` is set, the faithful-replay pipeline
+    (:data:`_DOCKER_FROM_SPEC_PIPELINE`) is selected instead of the run-entry
+    pipeline; that path requires ``precomputed_root`` (the recipe source).
     """
     matrix = {
         "helm.run_entry": list(manifest["run_entries"]),
@@ -203,6 +216,21 @@ def build_schedule_params(
         matrix["helm.container_mounts"] = [json.dumps(container_mounts)]
     if lease_entries:
         matrix.update(lease_entries)
+
+    # Pipeline selection: faithful run_spec.json replay vs run-entry-string
+    # reconstruction. The from-spec pipeline always uses discovery (it is keyed
+    # on run-entry strings; the explicit --run-spec-json input is for ad-hoc CLI
+    # use), so precomputed_root is mandatory — it is the recipe source from which
+    # the official run_spec.json is read, not just a reuse cache.
+    if manifest.get("from_run_spec"):
+        if not manifest.get("precomputed_root"):
+            raise ValueError(
+                "from_run_spec=true requires 'precomputed_root': the official "
+                "run_spec.json is read from the matched run dir under it. Set "
+                "--precomputed-root (eval-audit-make-manifest) or precomputed_root "
+                "in the manifest."
+            )
+        return {"pipeline": _DOCKER_FROM_SPEC_PIPELINE, "matrix": matrix}
     return {"pipeline": _DOCKER_PIPELINE, "matrix": matrix}
 
 
