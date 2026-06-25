@@ -3646,3 +3646,39 @@ hf/vllm smoke + full runs, and the run-entry-vs-from-spec *parity diff* of the
 produced `run_spec.json`/`stats.json` (the methodology deliverable). The aiq-magnet
 CLI is already at `4b10e1b` with the gitlink bumped, so Change 0 is purely the
 rebuild. Until it lands, every from-spec run fails (module absent from the image).
+
+## 2026-06-25 13:30:00 -0400
+
+**Model/config.** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude
+Code harness. Branch `impl/run-from-run-spec`. Continuation of the entry above.
+
+**User intent.** "Make run-from-spec the default in the e2e tests. Do not give
+the option to turn it off." I.e. retire the `E2E_FROM_SPEC` gate I had just
+shipped and make faithful replay unconditional for the comparable scenarios.
+
+**What changed.**
+- Removed the `E2E_FROM_SPEC` env var entirely. `e2e_fromspec_enabled` (which
+  combined the env check + the incomparable carve-out) became `e2e_uses_from_spec`
+  — purely the structural carve-out (false only for `*-incomparable`). The grids
+  call it to decide `--from-spec` for the vLLM baseline.
+- Collapsed the two HF `-fromspec-{smoke,full}` siblings into the canonical hf
+  manifests (which are now from-spec) and deleted the siblings + the
+  `e2e_hf_manifest` infix. No dead files; opening the canonical manifest shows
+  reality.
+- Updated the sibling-pinning test to assert the canonical hf manifests are
+  from-spec; 38 tests green.
+- Docs: plan Status → IMPLEMENTED + a post-implementation note threaded through
+  the gate bullet / Change 1 / Change 3 / Change 6 / §8; README gained a
+  "Faithful replay (from-spec) — the default" section and the hf-transport bullet
+  was corrected (in-process client comes from the override, not
+  `enable_huggingface_models`).
+
+**Design judgement.** The incomparable control is NOT "an option to turn off" —
+it is the one scenario from-spec structurally *cannot* represent (replay erases
+its `temperature=1` deviation). So the carve-out stays; what I removed was the
+*toggle*, not the carve-out. The casualty is the automated run-entry-vs-from-spec
+parity diff (it was a grid mode); it survives as a manual step against an archived
+run-entry manifest, which I noted in the plan so it isn't silently lost.
+
+**Not done.** Same GPU/image follow-ups (Change 0 rebuild, the hf/vllm smoke +
+full runs, the now-manual parity diff).
