@@ -1,7 +1,7 @@
 [submodule "submodules/infer_stack"]
 	path = submodules/infer_stack
 	url = https://github.com/AIQ-Kitware/infer_stack.git
-	branch = main
+	branch = infer-stack-cli-api-migration
 [submodule "submodules/aiq-magnet"]
 	path = submodules/aiq-magnet
 	url = https://github.com/AIQ-Kitware/aiq-magnet.git
