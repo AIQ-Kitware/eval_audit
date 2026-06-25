@@ -75,19 +75,40 @@ RUN uv venv /opt/venv --python=${PYTHON_VERSION} --python-preference only-manage
 
 # Pristine source trees (staged by build.sh). Editable installs need them on
 # disk at a stable path that is identical in the final stage.
+#
+# Layer ordering is deliberately heavy-deps-first / fast-changing-last so the
+# expensive layer survives the edits that happen most. crfm-helm[heim] pulls the
+# entire heavy dependency set (torch, transformers, jax, flax, ...) and is a
+# pinned upstream submodule that changes rarely; aiq-magnet is a thin wrapper
+# (its deps are crfm-helm + light pure-Python packages, all satisfied by helm's
+# set) and is where active development — including this audit's CLI — lands. So:
+#   * COPY + install helm FIRST  -> the heavy layer, cached across every magnet edit.
+#   * COPY + install magnet LAST -> a magnet-only edit re-runs just this small
+#     layer; its deps are already satisfied, so uv only re-links the editable pkg.
+# Keeping both in one COPY+RUN (as before) made any magnet edit re-run the whole
+# helm[heim] install (re-link + bytecode-compile of the full dep tree). The uv
+# cache mount persists resolved wheels across rebuilds either way.
 WORKDIR /opt/src
-COPY helm/ /opt/src/helm/
-COPY aiq-magnet/ /opt/src/aiq-magnet/
 
-# Install HELM (with the heim extra used by the local-HF recipe) and aiq-magnet.
-# The uv cache mount persists resolved wheels (torch, transformers, ...) across
-# rebuilds, so source-only edits do not re-download the heavy dependency set.
+# --- heavy, rarely-invalidated layer: HELM + its full dependency tree ----------
+COPY helm/ /opt/src/helm/
 RUN --mount=type=cache,target=/root/.cache/uv <<'EOF'
 set -eux
 uv pip install -e '/opt/src/helm[heim]'
+python -c "import helm; print('helm', getattr(helm, '__version__', '?'))"
+EOF
+
+# --- light, frequently-invalidated layer: aiq-magnet (installed LAST) ----------
+# Must come AFTER helm: magnet depends on crfm-helm, so the editable helm above
+# satisfies it (otherwise uv would pull crfm-helm from PyPI instead of the pinned
+# submodule source). With helm in place, this resolves to "deps already satisfied"
+# and only builds + links the magnet editable package.
+COPY aiq-magnet/ /opt/src/aiq-magnet/
+RUN --mount=type=cache,target=/root/.cache/uv <<'EOF'
+set -eux
 uv pip install -e /opt/src/aiq-magnet
 # Sanity: both must import in the built venv before we ship it.
-python -c "import helm, magnet; print('helm', helm.__version__ if hasattr(helm, '__version__') else '?', '| magnet', magnet.__version__)"
+python -c "import helm, magnet; print('helm', getattr(helm, '__version__', '?'), '| magnet', magnet.__version__)"
 EOF
 
 # ------------------------------------------------------------------------------
