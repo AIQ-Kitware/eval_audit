@@ -88,11 +88,18 @@ run_one() {
       # 1. Materialize the bundle (smoke + full manifests) from the preset,
       #    routing through the LiteLLM gateway (master key read once at bootstrap).
       #    No pre-serve: the scheduled run self-acquires "$endpoint" via --lease.
-      "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
-        --preset "$name" \
-        --bundle-root "$bundle_root" \
-        --base-url "${LITELLM_BASE_URL}/v1" \
+      local export_args=(
+        --preset "$name"
+        --bundle-root "$bundle_root"
+        --base-url "${LITELLM_BASE_URL}/v1"
         --api-key-value "$LEASE_MASTER_KEY"
+      )
+      # Faithful-replay: emit a from-spec bundle (manifests carry from_run_spec +
+      # precomputed_root; model_deployments.yaml rekeyed to together/phi-2).
+      # Excludes the incomparable control (e2e_fromspec_enabled). See _lib.sh.
+      if e2e_fromspec_enabled "$target"; then export_args+=(--from-spec); fi
+      "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
+        "${export_args[@]}"
       manifest="$bundle_root/smoke_manifest.yaml"
       # 2. Bracket the run with phi-2's GPU lease (served on the host; the
       #    in-container client is an HTTP caller with container_gpus: none).
