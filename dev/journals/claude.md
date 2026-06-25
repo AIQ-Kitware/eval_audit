@@ -3682,3 +3682,87 @@ run-entry manifest, which I noted in the plan so it isn't silently lost.
 
 **Not done.** Same GPU/image follow-ups (Change 0 rebuild, the hf/vllm smoke +
 full runs, the now-manual parity diff).
+
+## 2026-06-25 15:20:49 -0400
+
+**Model/config.** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude
+Code harness. Branch `impl/run-from-run-spec`. Implements
+`docs/planning/from-spec-deployment-rewrite-plan.md`.
+
+**User intent.** "Implement the plan to replace model deployment." The plan: a
+faithful from-spec replay with **by-name** deployment substitution makes the local
+run record the *official* deployment (`together/phi-2`), so the comparison reports
+`same_deployment=yes` and the engine substitution (local HF/vLLM vs the hosted
+Together API) becomes invisible — the single most important difference the audit
+exists to surface. Fix: rewrite `adapter_spec.model_deployment` to the **local**
+name after deserialization, so the produced run records the served endpoint and
+the *existing* `diff.py` logic reports `same_deployment=no` with no downstream
+plumbing.
+
+**What changed (the 7 changes).**
+- **magnet CLI** (`materialize_helm_run_from_spec.py`): new optional
+  `--model-deployment` (algo_param). Extracted the substitution into a pure,
+  unit-testable `apply_adapter_substitutions(run_spec, *, max_eval_instances,
+  model_deployment)` → `(run_spec, replay_record)`; it rewrites *only*
+  `adapter_spec.model_deployment` (never `model`), records
+  `replay.deployment_substitution = {from, to}` (null when unset), and the unset
+  path returns the spec object unchanged (pure by-name). Real-helm-dataclass unit
+  tests cover set/unset/deployment-only + the flag parse.
+- **eval_audit plumbing** (Change 3): `ManifestSpec.model_deployment`;
+  `make-manifest --model-deployment` (+ a guard rejecting it without
+  `--from-run-spec`); the bridge adds `helm.model_deployment` to the matrix **only
+  on the from-spec branch** (the run-entry node doesn't declare it, so kwdagger
+  would reject the key); the from-spec docker node adds `model_deployment` to its
+  `algo_params` so `render_magnet_command` emits `--model_deployment=<v>` when set.
+- **hf override + manifests** (Change 4): the override registers a LOCAL name
+  `huggingface/phi-2-local` (was `together/phi-2`); the two checked-in hf manifests
+  carry `model_deployment: huggingface/phi-2-local`.
+- **vLLM** (Change 5): dropped the Change-2b `from_spec_model_deployment_name`
+  rekey — the bundle keeps its native `vllm/phi-2-local` on both paths, and the
+  exporter emits that same name as the generated manifest's `model_deployment`
+  rewrite target (so target == registered name by construction; the §3 invariant
+  holds with no drift).
+- **Tests** (Change 6): a new `test_from_spec_deployment_rewrite.py` holds the
+  *comparability proof* — `facts_semantic_inputs(official, local)` yields
+  `deployment_changed=True` for both local names, and the by-name case
+  (`together/phi-2` vs `together/phi-2`) is pinned as `False` to document the bug
+  the rewrite fixes — plus the manifest→bridge→node plumbing and the §3
+  invariant guard (each checked-in from-spec manifest's `model_deployment` is a
+  registered deployment name). Updated `test_e2e_from_spec_bundle.py` (exporter
+  now binds the native name + emits the target; override registers the local name)
+  and `test_from_run_spec_pipeline.py` (the node now *adds* `model_deployment` to
+  algo identity). 23 + 10 green.
+- **Docs** (Change 7): marked the rewrite plan IMPLEMENTED; added supersession/
+  amendment banners to the migration plan (§5 crux, Change 5, top) and the
+  run-from-run-spec plan (§5, §6 node, §10) so the by-name history stays intact
+  but the current mechanism is unambiguous; fixed the grid-script + README
+  comments that still described the rekey.
+
+**Design judgement.** Explicit `--model-deployment` over auto-derive (per the
+plan's §5 decision): the whole feature exists to stop *silently* masking the
+substitution, so the mechanism's own failure mode must be loud. A wrong/mismatched
+name is a HELM "deployment not found" crash *before any instances run* (and the §3
+invariant test catches it pre-run); auto-derive's failure mode is the silent no-op
+that fails *toward the very bug it fixes*. Extracting `apply_adapter_substitutions`
+slightly violates the "one-off helper" guidance, but the plan explicitly wants a
+unit test of exactly this logic and the module already exposes
+`collect_class_names`/`preflight_resolve_classes` as public for the same reason —
+testability won.
+
+**Confidence.** High on the comparability logic (the proof test exercises the real
+`facts_semantic_inputs` path) and the plumbing (verified the rendered
+`--model_deployment=` flag, matrix key, and exporter manifest end to end). The §3
+invariant — manifest name == registered name — is guarded for the hf manifests and
+proved by construction for vLLM.
+
+**Not done (operational, GPU-gated).** Change 2: the runner-image rebuild +
+re-pin (`./docker/build.sh` → digest → `E2E_CONTAINER_IMAGE` → gitlink bump). The
+magnet CLI lives *in the image*, so **until the image is rebuilt the
+`--model-deployment` arg is silently ignored and every from-spec run stays
+by-name** (`same_deployment=yes`). After the rebuild, run the hf + vLLM smoke and
+confirm the produced `run_spec.json` records the local deployment and the
+per-scenario report shows `same_deployment=no` (plan §8 step 5). Pre-existing,
+unrelated: `test_run_surface.py::test_kwdagger_argv_differs_between_preview_and_execute`
+fails whenever a venv is detected (the argv appends `--log`/`--monitor`/
+`--virtualenv_cmd` after `--run`, so its `[:-1]` slice still contains the differing
+`--run` flag) — not touched by this work.

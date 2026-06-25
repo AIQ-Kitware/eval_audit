@@ -1,5 +1,19 @@
 # Migrating the phi-2 e2e to faithful `run_spec.json` replay — plan
 
+> **AMENDED (2026-06-25) by
+> [`from-spec-deployment-rewrite-plan.md`](from-spec-deployment-rewrite-plan.md).**
+> The by-name-only substitution this plan describes (Change 1/2 rekey both sides to
+> the official `together/phi-2`, §5) **masked** the engine substitution: the local
+> run recorded `together/phi-2`, so the comparison reported `same_deployment=yes`.
+> The amendment reverses that — the local overrides now register **local**
+> deployment names (`huggingface/phi-2-local` for `hf`, the bundle's native
+> `vllm/phi-2-local` for `vllm`), and the from-spec CLI **rewrites**
+> `adapter_spec.model_deployment` to the local name (threaded via a new manifest
+> `model_deployment` field), so the produced run records the served endpoint and
+> the audit reports `same_deployment=no`. Where this plan says "rekey to
+> `together/phi-2`," read "register the local name + emit it as the rewrite
+> target." The sections below are kept as the historical record.
+
 **Status:** IMPLEMENTED (code/config + tests) — the GPU runs + parity diff
 (Change 0 image re-pin, Change 6 end-to-end) remain.
 **Update (post-implementation):** at the user's direction, from-spec is now the
@@ -200,8 +214,13 @@ configs are untouched. The from-spec local run dir now carries the **full
 official `run_spec.name`** (incl. `groups=mmlu_philosophy`), making it
 name-identical to the official side; pairing is by canonical key so it still
 matches. Verify on the first run that the planner pairs `hf`/`vllm` exactly as
-before (and that `same_deployment=no` still holds — the local client differs from
-Together even though the *name* is now `together/phi-2`).
+before (and that `same_deployment=no` holds). **Amended:** under the
+deployment-rewrite plan `same_deployment=no` now holds *because the recorded name
+differs* — the local run records its local deployment (`huggingface/phi-2-local` /
+`vllm/phi-2-local`), not `together/phi-2` — which is the honest signal (the
+original by-name design recorded `together/phi-2` on both sides and so reported
+`same_deployment=yes`, masking the substitution). Pairing stays inert: HELM run
+names encode `model=…`, not `model_deployment=…`.
 
 ### Change 6 — parity + tests
 
@@ -222,6 +241,17 @@ Together even though the *name* is now `together/phi-2`).
   and pair. *(Needs the rebuilt image — Change 0.)*
 
 ## 5. The deployment-substitution subtlety (the crux)
+
+> **AMENDED by [`from-spec-deployment-rewrite-plan.md`](from-spec-deployment-rewrite-plan.md).**
+> This section's resolution (re-register `together/phi-2` → a local client, keeping
+> the official *name*) makes the run call the local engine — but it also makes the
+> produced run **record** `together/phi-2`, so the comparison reads
+> `same_deployment=yes` and the substitution is invisible. The amendment registers a
+> **local** name instead and rewrites `adapter_spec.model_deployment` to it, so the
+> run records the local endpoint and the comparison reports `same_deployment=no`.
+> Read the paragraph below as the *motivation* (the recipe carries `together/phi-2`
+> and the local engine must serve it); the *mechanism* is now register-local +
+> rewrite, not re-register-the-official-name.
 
 The official `run_spec.json` names `model_deployment: together/phi-2`. By-name
 substitution only rebinds names **present in the override yaml** — so replayed

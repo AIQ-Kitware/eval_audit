@@ -1,6 +1,8 @@
 # Recording the local deployment on from-spec replays — plan
 
-**Status:** PLAN — not yet implemented.
+**Status:** IMPLEMENTED (2026-06-25) — code + tests landed; the runner image
+rebuild (Change 2) is the one operational step left, see §7. All changes below
+are in the tree; the e2e smoke (§8 step 5) is pending the image rebuild.
 **Decision:** explicit `--model-deployment` manifest field threaded to the CLI
 (not auto-derive-from-override — its failure mode is a silent no-op that
 re-masks the substitution; see §5).

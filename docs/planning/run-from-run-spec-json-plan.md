@@ -247,6 +247,19 @@ flags it; revisit only if the thin forensics prove to obscure real triage.
 
 ## 5. Change — substitution is by-name only (decided)
 
+> **AMENDED (2026-06-25) by
+> [`from-spec-deployment-rewrite-plan.md`](from-spec-deployment-rewrite-plan.md).**
+> The CLI now also accepts an **optional** `--model-deployment <local-name>` that,
+> after deserialization, rewrites `adapter_spec.model_deployment` to that local
+> name (the by-name override registers the local name; the rewrite points the spec
+> at it). `adapter_spec.model` is still never touched. The **default stays pure
+> by-name** (no rewrite) — so the general path below is unchanged — but the e2e
+> (and any audit that substitutes a local engine) opts in so the produced run
+> records the local deployment and the comparison reports `same_deployment=no`
+> instead of masking the substitution behind the official name. The judge/annotator
+> "sharp edge" below is unaffected (judge deployments are still by-name; the rewrite
+> targets only the primary `model_deployment`).
+
 The CLI never rewrites `adapter_spec.model` / `model_deployment`. The official
 `run_spec.json` keeps its deployment name (e.g.
 `together/qwen2.5-7b-instruct-turbo`); the locally-registered override
@@ -285,9 +298,13 @@ def helm_single_run_from_spec_docker_pipeline(): ...
 ```
 
 Inherits mounts, `out_paths`, `primary_out_key='done_fname'`, and identity
-unchanged. (Do **not** add `model_deployment`/`model` to `algo_params` — by-name
-substitution, §5.) The `precomputed_root` `:ro` mount already delivers the
-official `run_spec.json` into the container.
+unchanged. (Do **not** add `model` to `algo_params` — the model identity always
+replays verbatim. **Amended:** the deployment-rewrite plan *does* add
+`model_deployment` to the from-spec node's `algo_params` — the optional
+rewrite target, default `None`/by-name; see
+[`from-spec-deployment-rewrite-plan.md`](from-spec-deployment-rewrite-plan.md)
+Change 3.) The `precomputed_root` `:ro` mount already delivers the official
+`run_spec.json` into the container.
 
 **Change 3 — bridge** (`eval_audit/integrations/kwdagger_bridge.py`): add
 `_DOCKER_FROM_SPEC_PIPELINE`. `build_schedule_params` already **requires a
@@ -382,6 +399,12 @@ Because the new module is in magnet, the only image action is a rebuild:
   is why the §9 round-trip test asserts no raw key is dropped. Document in the
   methodology that full byte-faithful pinning always requires external
   cross-reference (no self-describing version stamp exists in the artifacts).
+- **Primary `model_deployment` rewrite — DONE (2026-06-25).** The optional
+  `--model-deployment` rewrite landed (see the §5 amendment and
+  [`from-spec-deployment-rewrite-plan.md`](from-spec-deployment-rewrite-plan.md)):
+  the produced run now records the **local** deployment, so the comparison reports
+  `same_deployment=no` instead of masking the engine substitution. Default stays
+  pure by-name; the e2e opts in.
 - **Judge/annotator deployment substitution (§5).** A judge-dependent
   `run_spec.json` names a judge model deployment distinct from the primary model.
   By-name substitution rebinds it only if the override yaml has an entry for that
@@ -389,7 +412,8 @@ Because the new module is in magnet, the only image action is a rebuild:
   with the wrong judge. v1 ships the uniform by-name mechanism and documents the
   requirement; a curated official-judge → local-judge override set (sourced from
   `judge_registry.py`) is the natural follow-up so judge-dependent runs replay
-  faithfully end to end.
+  faithfully end to end. The primary-model rewrite above is the template — a
+  judge-deployment rewrite is the analogous next step (rewrite-plan §7).
 - **In-process hard-crash forensics (§4).** A Python exception is captured to
   `cmd_stderr.txt`, but an OOM-kill/segfault bypasses the except block, leaving
   thin forensics (failure is still flagged by non-zero exit + missing `DONE`).

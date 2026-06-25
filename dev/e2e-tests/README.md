@@ -54,10 +54,16 @@ from the official run only by model *execution*, never by a re-derived recipe.
 Mechanically: the run-entry becomes just the discovery key (it locates the
 official run dir under `precomputed_root=/data/crfm-helm-public/mmlu`), and the
 matched `run_spec.json` drives execution. The recipe names the official
-deployment `together/phi-2`, so a by-name override rebinds *that* name to the
-local engine — the `model_deployments_fpath` override for `hf`, the bundle's
-rekeyed `model_deployments.yaml` for `vllm`. See the migration plan
-[`docs/planning/e2e-from-run-spec-migration-plan.md`](../../docs/planning/e2e-from-run-spec-migration-plan.md).
+deployment `together/phi-2`; a local override registers the engine that actually
+serves the run under a **local** deployment name (`huggingface/phi-2-local` for
+`hf` via `model_deployments_fpath`; the bundle's native `vllm/phi-2-local` for
+`vllm`), and the replay **rewrites** `adapter_spec.model_deployment` to that local
+name (the manifest's `model_deployment` field threads it in). So the produced run
+records the served endpoint and the audit reports `same_deployment=no` — surfacing
+the engine substitution instead of masking it. See the migration plan
+[`docs/planning/e2e-from-run-spec-migration-plan.md`](../../docs/planning/e2e-from-run-spec-migration-plan.md)
+and the deployment-rewrite plan
+[`docs/planning/from-spec-deployment-rewrite-plan.md`](../../docs/planning/from-spec-deployment-rewrite-plan.md).
 
 The **incomparable** control is the sole carve-out (`e2e_uses_from_spec` in
 `_lib.sh`): it stays on the run-entry path because from-spec replays the official

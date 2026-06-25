@@ -103,9 +103,10 @@ run_one() {
         --api-key-value "$LEASE_MASTER_KEY"
       )
       # Faithful replay is the default: emit a from-spec bundle (manifests carry
-      # from_run_spec + precomputed_root; model_deployments.yaml rekeyed to
-      # together/phi-2). The incomparable control is the sole carve-out
-      # (e2e_uses_from_spec → false), so it alone keeps the run-entry path.
+      # from_run_spec + precomputed_root + model_deployment=vllm/phi-2-local, the
+      # bundle's own LOCAL name that the replay rewrites the run_spec.json onto, so
+      # the audit reports same_deployment=no). The incomparable control is the sole
+      # carve-out (e2e_uses_from_spec → false), so it alone keeps the run-entry path.
       if e2e_uses_from_spec "$target"; then export_args+=(--from-spec); fi
       "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
         "${export_args[@]}"
