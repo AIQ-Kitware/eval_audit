@@ -3587,3 +3587,62 @@ dir keeps `run_spec.name`. (2) Commit the magnet branch, then in a *separate
 explicit* commit bump the superproject gitlink and rebuild/re-pin the runner
 image. (3) Consider hashing the official `run_spec.json` into the node's algo
 identity (plan §7 optional) so a changed official recipe forces recompute.
+
+## 2026-06-25 12:41:25 -0400
+
+**Model/config.** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude
+Code harness. Branch: `impl/run-from-run-spec`.
+
+**User intent.** First *review* the phi-2-e2e→from-spec migration plan
+(`docs/planning/e2e-from-run-spec-migration-plan.md`), edit the plan to fold the
+review findings, then *implement* it — committing logical units as I went.
+
+**Review findings folded into the plan.** Two real issues: (a) Change 2 was
+understated — `_manifest_doc` builds a *fixed* manifest dict (hardcodes
+`precomputed_root: None`, no `from_run_spec` key, only forwards
+`_CONTAINER_SPEC_KEYS`), so adding the two fields to a preset block alone is
+*silently dropped* and the run lands on the run-entry path with no error. (b) §2.4
+falsely claimed the phi-2 vLLM run_entries carry `model_deployment=` — they are
+bare `model=microsoft/phi-2` (every *other* preset carries it; phi-2 is the
+exception), which actually *helps* discovery (clean token-subset of the official
+dir). Also clarified the rekey mechanism (profile `model_deployment_name`), the
+"full"=1000 vs official 10000 prefix caveat, and committed Change 1 to sibling
+files.
+
+**What landed (5 commits, Changes 1/2/3/4/6).**
+- *Change 1:* `configs/debug/e2e_phi2_fromspec_overrides.yaml` (rebinds the
+  OFFICIAL `together/phi-2` → local in-process `HuggingFaceClient`) + two
+  checked-in HF `-fromspec-{smoke,full}.yaml` siblings (carry `from_run_spec` +
+  `precomputed_root` + the override; reuse the run-entry `experiment_name`/`suite`
+  so downstream is a no-op).
+- *Change 2:* threaded `from_run_spec`/`precomputed_root` through
+  `export_benchmark_bundle → materialize_benchmark_bundle → _manifest_doc`
+  (gated emission); conditional rekey to the profile's new
+  `from_spec_model_deployment_name` (`together/phi-2`); added the field +
+  `precomputed_root` to the *comparable* preset only; `--from-spec` /
+  `--precomputed-root` CLI flags. The incomparable control deliberately gets
+  nothing (Change 4).
+- *Change 3+4:* `E2E_FROM_SPEC` gate in `_lib.sh`; `e2e_fromspec_enabled`
+  carve-out (matches `*-incomparable` → never from-spec); `e2e_hf_manifest`
+  returns the sibling when enabled; both grids append `--from-spec` for the
+  comparable vLLM. Verified by sourcing: at 0 all run-entry; at 1 hf+vllm flip,
+  incomparable stays run-entry.
+- *Change 6:* `tests/test_e2e_from_spec_bundle.py` — 11 tests (manifest-doc
+  gating, preset wiring, exporter rekey end-to-end via synthesized `ServingFacts`,
+  sibling/override artifacts, and a corpus-gated discovery dry-check that really
+  resolved the official phi-2 dir + confirmed `together/phi-2` / no annotators).
+  60 adjacent adapter/pipeline/lease/container tests still green.
+
+**Design insight.** When a config field has to survive a *generated*-manifest
+builder, "add it to the source block" is necessary but not sufficient — the
+builder's fixed-dict shape is the real gate. The review caught this because I
+read `_manifest_doc` rather than trusting the plan's prose; the silent-drop
+failure mode (no error, wrong path) is exactly the kind a code review earns its
+keep on.
+
+**Not done (needs GPU + the rebuilt image — Change 0).** The image re-pin
+(`./docker/build.sh` → digest → `E2E_CONTAINER_IMAGE`), the `E2E_FROM_SPEC=1`
+hf/vllm smoke + full runs, and the run-entry-vs-from-spec *parity diff* of the
+produced `run_spec.json`/`stats.json` (the methodology deliverable). The aiq-magnet
+CLI is already at `4b10e1b` with the gitlink bumped, so Change 0 is purely the
+rebuild. Until it lands, every from-spec run fails (module absent from the image).
