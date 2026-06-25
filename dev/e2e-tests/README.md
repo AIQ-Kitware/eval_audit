@@ -44,6 +44,25 @@ the HF scenario is driven by the checked-in manifests under
 (`max_eval_instances=5`) and a `-full` (`max_eval_instances=1000`) experiment;
 the per-scenario reports use `-full`.
 
+## Faithful replay (from-spec) — the default
+
+The two **comparable** scenarios (`hf`, `vllm`) replay the **official**
+`microsoft/phi-2` mmlu:philosophy `run_spec.json` verbatim instead of
+reconstructing the recipe from the run-entry string. This is the **default and
+only path** — there is no run-entry opt-out — so the local reproduction differs
+from the official run only by model *execution*, never by a re-derived recipe.
+Mechanically: the run-entry becomes just the discovery key (it locates the
+official run dir under `precomputed_root=/data/crfm-helm-public/mmlu`), and the
+matched `run_spec.json` drives execution. The recipe names the official
+deployment `together/phi-2`, so a by-name override rebinds *that* name to the
+local engine — the `model_deployments_fpath` override for `hf`, the bundle's
+rekeyed `model_deployments.yaml` for `vllm`. See the migration plan
+[`docs/planning/e2e-from-run-spec-migration-plan.md`](../../docs/planning/e2e-from-run-spec-migration-plan.md).
+
+The **incomparable** control is the sole carve-out (`e2e_uses_from_spec` in
+`_lib.sh`): it stays on the run-entry path because from-spec replays the official
+recipe verbatim and would erase the `temperature=1` deviation it exists to flag.
+
 ## Transports
 
 The grid branches per scenario on its `transport` (the second field of each
@@ -56,9 +75,11 @@ The grid branches per scenario on its `transport` (the second field of each
   `access_kind: openai-compatible`, so the export passes only the LiteLLM
   base-url + master key — **no** `--access-kind`
   override (unlike `reproduce/olmo_models`, whose presets declare `vllm-direct`).
-- **`hf`** — no infer-stack: HELM's HuggingFace path loads `microsoft/phi-2`
-  directly (the manifest's `enable_huggingface_models`), and the run is the
-  checked-in `manifests/<experiment>.yaml`.
+- **`hf`** — no infer-stack: HELM loads `microsoft/phi-2` IN-PROCESS, and the run
+  is the checked-in `manifests/<experiment>.yaml`. The manifest is from-spec (see
+  above), so the in-process client is registered by the `model_deployments_fpath`
+  override (which rebinds the official `together/phi-2` deployment) rather than by
+  `enable_huggingface_models`.
 
 ## Serving endpoint
 

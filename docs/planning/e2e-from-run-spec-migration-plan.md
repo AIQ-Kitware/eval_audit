@@ -1,10 +1,17 @@
 # Migrating the phi-2 e2e to faithful `run_spec.json` replay — plan
 
-**Status:** PLAN — not yet implemented.
-**Scope:** the two *comparable* phi-2 scenarios (`hf`, `vllm`) move to the
-from-spec replay pipeline. The `incomparable` negative control **stays on the
-run-entry path** (§7). Gated behind an `E2E_FROM_SPEC` flag so the existing
-run-entry coverage — and a run-entry-vs-from-spec parity diff — are retained.
+**Status:** IMPLEMENTED (code/config + tests) — the GPU runs + parity diff
+(Change 0 image re-pin, Change 6 end-to-end) remain.
+**Update (post-implementation):** at the user's direction, from-spec is now the
+**unconditional default** for the comparable scenarios — the `E2E_FROM_SPEC`
+toggle was removed (no run-entry opt-out). Sections that still describe the gated
+design below are annotated; the carve-out and substitution mechanics are
+unchanged. The run-entry-vs-from-spec parity diff is now a **manual** step
+(point at an archived run-entry manifest), not a grid mode.
+**Scope:** the two *comparable* phi-2 scenarios (`hf`, `vllm`) replay the official
+`run_spec.json`. The `incomparable` negative control **stays on the run-entry
+path** (§7) — the sole, structural carve-out (from-spec would erase its
+`temperature=1` deviation).
 **Depends on:** [`run-from-run-spec-json-plan.md`](run-from-run-spec-json-plan.md)
 (the replay pipeline, now implemented on `impl/run-from-run-spec`).
 **Method:** read the e2e harness under `dev/e2e-tests/`, the infer-stack bundle
@@ -82,11 +89,13 @@ strict upgrade; for the negative control it is the wrong tool (§7).
 - **`precomputed_root: /data/crfm-helm-public/mmlu`** — narrowed to the mmlu
   subtree so discovery is fast and unambiguous (the full corpus is large and may
   carry phi-2 runs in multiple suites/versions).
-- **Gate behind `E2E_FROM_SPEC=1`.** Default keeps the run-entry path; the flag
-  flips `hf` + `vllm` to from-spec. This preserves run-entry coverage and makes a
-  *parity diff* (run-entry vs from-spec produced `run_spec.json`/`stats.json`) a
-  first-class deliverable (the methodology result the replay pipeline exists to
-  quantify).
+- **~~Gate behind `E2E_FROM_SPEC=1`.~~ → From-spec is the unconditional default**
+  (superseded). The comparable scenarios always replay the official
+  `run_spec.json`; there is no run-entry opt-out (`e2e_uses_from_spec` in `_lib.sh`
+  is purely the incomparable carve-out). The run-entry-vs-from-spec *parity diff*
+  (run-entry vs from-spec produced `run_spec.json`/`stats.json`) is still the
+  methodology deliverable, but is produced **manually** — diff a from-spec run
+  against one driven by an archived run-entry manifest — rather than as a grid mode.
 - **Substitution is by-name on the OFFICIAL deployment `together/phi-2`** (§5).
 
 ## 4. Changes
@@ -101,11 +110,10 @@ the CLI) → capture the new digest → set `E2E_CONTAINER_IMAGE` (default
 
 ### Change 1 — HF manifests + the `together/phi-2` override
 
-Author **sibling** from-spec manifests
-`manifests/e2e-phi_2-huggingface-philosophy-fromspec-{smoke,full}.yaml` (new
-checked-in files — *not* a runtime edit of the run-entry manifests). Keeping both
-shapes on disk lets one grid invocation run *both* paths and lets the parity step
-(Change 6) diff them. Relative to the run-entry manifests, each adds/changes:
+**As shipped (default-from-spec):** the canonical hf manifests
+`manifests/e2e-phi_2-huggingface-philosophy-{smoke,full}.yaml` *are* the from-spec
+manifests — there is no separate run-entry sibling (the original sibling-file
+design was collapsed when from-spec became the default). Each carries:
 
 ```yaml
 from_run_spec: true
@@ -161,22 +169,23 @@ unaffected: `_lease_facts` keys the single-endpoint `lease_endpoint` off the
 bare run_entries as the discovery key (§2.4) — they only *locate* the official
 dir; the recipe comes from its `run_spec.json`.
 
-### Change 3 — grid gating (`E2E_FROM_SPEC`)
+### Change 3 — grid wiring (no toggle; from-spec is the default)
 
-In `_lib.sh` add `E2E_FROM_SPEC="${E2E_FROM_SPEC:-0}"`. In `10_run_smoke_grid.sh`
-/ `15_run_full_grid.sh`, when set:
+**As shipped:** there is no `E2E_FROM_SPEC` env var. `_lib.sh` exposes
+`e2e_uses_from_spec <scenario>` — the structural carve-out that returns false only
+for `*-incomparable`. In `10_run_smoke_grid.sh` / `15_run_full_grid.sh`:
 
-- `hf`: select the Change-1 sibling
-  `…-huggingface-philosophy-fromspec-{smoke,full}.yaml` instead of the run-entry
-  manifest;
-- `vllm`: pass a `--from-spec`-style flag (or a preset suffix) to
-  `export-benchmark-bundle` so it emits the Change-2(a) fields and the Change-2(b)
-  rekey;
-- `incomparable`: **unchanged** — always run-entry (§7).
+- `hf`: `e2e_hf_manifest` returns the canonical (from-spec) manifest — no infix,
+  no branch;
+- `vllm`: the grid appends `--from-spec` to `export-benchmark-bundle` iff
+  `e2e_uses_from_spec` (so the comparable baseline gets the Change-2(a) fields +
+  Change-2(b) rekey; the incomparable control does not);
+- `incomparable`: run-entry — its preset carries no from-spec wiring (Change 2b)
+  and `e2e_uses_from_spec` excludes it (§7).
 
-Change 1 commits to sibling manifest files over in-place edits precisely so a
-single grid invocation can run *both* paths and the parity step (Change 6) can
-diff them.
+*(Originally specified as an `E2E_FROM_SPEC=1` gate that kept the run-entry path
+as default; that toggle was removed at the user's direction — from-spec is now
+unconditional for the comparable scenarios.)*
 
 ### Change 4 — leave `incomparable` on the run-entry path
 
@@ -199,14 +208,18 @@ Together even though the *name* is now `together/phi-2`).
 - **Discovery dry-check (CPU, no model):** assert `find_best_precomputed_run`
   resolves the public phi-2 dir from `precomputed_root=/data/crfm-helm-public/mmlu`
   for the phi-2 run-entry, and that its `run_spec.json` deserializes + passes the
-  preflight (it is plain MC mmlu — no annotators/judges, so it should).
-- **Smoke end-to-end (`hf`, `E2E_FROM_SPEC=1`):** DONE written; `adapter_manifest`
-  `status=replayed`, `recipe.source=discovery`, `replay.applied_max_eval_instances=5`;
-  produced dir == official `run_spec.name`.
-- **Parity:** diff the run-entry vs from-spec produced `run_spec.json` / `stats.json`
-  for `hf` — quantifies the recipe drift the replay removes (methodology result).
-- **Full grid + compose + summary** on `E2E_FROM_SPEC=1`; confirm the per-scenario
-  reports still build and pair.
+  preflight (it is plain MC mmlu — no annotators/judges, so it should). **Done**
+  (`tests/test_e2e_from_spec_bundle.py`, corpus-gated) alongside exporter-rekey +
+  preset-wiring + manifest unit tests.
+- **Smoke end-to-end (`hf`):** DONE written; `adapter_manifest` `status=replayed`,
+  `recipe.source=discovery`, `replay.applied_max_eval_instances=5`; produced dir ==
+  official `run_spec.name`. *(Needs the rebuilt image — Change 0.)*
+- **Parity (now manual):** diff a from-spec `run_spec.json` / `stats.json` against
+  one produced from an archived run-entry manifest for `hf` — quantifies the recipe
+  drift the replay removes (methodology result). No longer a grid mode (the toggle
+  was removed); run the two manifests by hand into separate result roots and diff.
+- **Full grid + compose + summary**; confirm the per-scenario reports still build
+  and pair. *(Needs the rebuilt image — Change 0.)*
 
 ## 5. The deployment-substitution subtlety (the crux)
 
@@ -259,11 +272,14 @@ difference an implementer must get right; everything else is plumbing.
 
 ## 8. Sequencing
 
-0. Rebuild + re-pin the image (Change 0).
-1. Add the `together/phi-2` override + HF from-spec manifest variant (Change 1).
-2. Gate the grid (Change 3); run the `hf` smoke under `E2E_FROM_SPEC=1`; check the
-   discovery dry-check + parity (Change 6).
-3. Teach `export-benchmark-bundle` the from-spec fields + rekey (Change 2); run
-   the `vllm` smoke.
-4. Full grid + compose + summary; confirm pairing (Change 5).
-5. Document the `incomparable` carve-out (Change 4).
+Steps 1–6 (override + canonical from-spec hf manifests, exporter threading +
+rekey, grid wiring, incomparable carve-out, tests incl. the discovery dry-check)
+are **done**. Remaining, all requiring the rebuilt image:
+
+0. Rebuild + re-pin the image (Change 0) — the hard prerequisite.
+1. Run the `hf` smoke; check `status=replayed` + produced dir == official
+   `run_spec.name` (Change 6).
+2. Run the `vllm` smoke (the grid passes `--from-spec` for the comparable
+   baseline).
+3. Full grid + compose + summary; confirm pairing holds (Change 5).
+4. Produce the manual run-entry-vs-from-spec parity diff (Change 6).
