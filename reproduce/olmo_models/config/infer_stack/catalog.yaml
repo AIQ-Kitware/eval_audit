@@ -11,10 +11,15 @@
 # preset's `profile` field (adapter.PRESET_CONFIGS) + OLMO_TARGETS +
 # 05_check_profiles.sh — no churn there.
 #
-# HELM-domain facts (the case-sensitive model/tokenizer aliases, protocol mode)
-# moved into the eval_audit OLMo presets (G1/G2) — they never belonged in a
-# serving layer and the catalog has no field for them. The catalog only owns
-# transport: the backing HF model + the served context window.
+# HELM-domain aliases (the case-sensitive model/tokenizer names) live in the
+# eval_audit OLMo presets (G1/G2) — they never belonged in a serving layer. The
+# catalog owns transport: the backing HF model + the served context window +
+# `protocol`. The latter MUST agree with each preset's `protocol_mode`: the base
+# models (olmo-7b, olmo-1.7-7b) serve completions, so their endpoints set
+# `protocol: completions` or infer-stack's generation-gated readiness probe
+# defaults to /chat/completions — which a completions-only model never answers,
+# blocking `acquire` until the TTL. The `-instruct` endpoints serve chat and use
+# the default (`protocol: chat`), so they need no override.
 #
 # ⚠️ hf_model_id (`source`) verification carries over from the old models.yaml:
 # the OLMo-2 / OLMoE ids are high-confidence; the OLMo-1 / OLMo-1.7 "-hf"
@@ -55,6 +60,7 @@ endpoints:
     engine: vllm
     reclaim: stop                # §8/former-I4: free the GPU on release so the per-run lease queue can place the next model
     model: olmo-7b
+    protocol: completions        # base model (preset protocol_mode: completions) -> probe /completions
     runtime:
       max_model_len: 2048
       gpu_memory_utilization: 0.85
@@ -66,6 +72,7 @@ endpoints:
     engine: vllm
     reclaim: stop                # §8/former-I4: free the GPU on release so the per-run lease queue can place the next model
     model: olmo-1.7-7b
+    protocol: completions        # base model (preset protocol_mode: completions) -> probe /completions
     runtime:
       max_model_len: 4096
       gpu_memory_utilization: 0.85

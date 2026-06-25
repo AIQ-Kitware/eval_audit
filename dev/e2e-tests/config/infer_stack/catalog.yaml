@@ -12,9 +12,17 @@
 # `profile` field (adapter.PRESET_CONFIGS["e2e-phi_2-vllm-philosophy"]) and the
 # E2E_TARGETS / 05_check_profiles.sh references — no churn there.
 #
-# HELM-domain facts (model/tokenizer alias, protocol mode) are NOT here: they
-# live in the eval_audit preset, which is authoritative (G1/G2). The catalog
-# only owns transport: the backing HF model + the served context window.
+# HELM-domain aliases (the case-sensitive model/tokenizer names) are NOT here:
+# they live in the eval_audit preset, which is authoritative (G1/G2). The
+# catalog owns transport: the backing HF model + the served context window +
+# `protocol` (which OpenAI surface the leasing readiness probe hits — see below).
+#
+# `protocol` MUST agree with the preset's `protocol_mode`: phi-2 is a base model
+# served in completions mode (preset e2e-phi_2-vllm-philosophy pins
+# protocol_mode: completions -> HELM uses OpenAILegacyCompletionsClient). Without
+# `protocol: completions` here, infer-stack's generation-gated readiness probe
+# defaults to /chat/completions, which a completions-only model never answers, so
+# `acquire` blocks until the TTL and the leased run hangs.
 models:
   phi-2:
     source: hf://microsoft/phi-2
@@ -24,6 +32,7 @@ endpoints:
     engine: vllm
     reclaim: stop                # §8/former-I4: free the GPU on release so the per-run lease queue can place the next model
     model: phi-2
+    protocol: completions        # base model -> readiness probe must hit /completions, not /chat/completions
     # C-5: sizing is static catalog state now (no resolver inference). Mirrors
     # the old models.yaml phi2 `defaults` block.
     runtime:

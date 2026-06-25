@@ -3449,3 +3449,60 @@ of this migration branch).
 shared across commands that reads `config.<field>` must use `getattr(..., default)`
 for fields that aren't universal. A `try/except SystemExit` is not a safety net
 for missing-field access — those raise `AttributeError`, a different class.
+
+## 2026-06-25 08:54:36 -0400
+
+**Model / harness.** Claude Opus 4.8 (1M context), claude-opus-4-8[1m], Claude
+Code CLI in the VSCode extension.
+
+**User intent.** "In the previous iteration of infer_stack the e2e tests failed
+because the acquire wait-for-generation probe pinged chat mode by default even
+when the model serves completions. Have recent infer_stack changes fixed it?"
+Investigation → then (user chose) apply the catalog fix to both catalogs.
+
+**Finding: half-resolved.** infer_stack added the *mechanism* but eval_audit
+wasn't using it.
+
+- infer_stack `9153d4e` ("leasing: protocol-aware, generation-gated readiness",
+  in the pinned merge `0cde11d`) gives catalog endpoints a `protocol` field
+  (`chat` default | `completions`), threads it `EndpointSpec.protocol` →
+  resolved `served['protocol']` (`catalog.py:_resolve_vllm`) → `probe_ready`
+  reads `served.get('protocol') or 'chat'` (`compose.py:1163`) →
+  `openai_ready(protocol=…)` hits `/completions` vs `/chat/completions`
+  (`probe.py:61`). `--require-generation` is now a no-op (readiness always
+  requires a real generation). The hardcoded `/chat/completions` probe is gone.
+- BUT the default is still `chat`, and the eval_audit catalogs never set
+  `protocol:` on their completions endpoints — even though the matching presets
+  pin `protocol_mode: completions`. So `acquire phi2-single` (via
+  `eval-audit-run --lease` → `lease_bracket`, which waits on `probe_ready`)
+  still defaulted to a chat probe against base-model phi-2 → probe never
+  succeeds → acquire blocks until TTL → the e2e smoke grid hangs. This is
+  exactly F6 in this journal ("readiness always chat (completions-only models
+  fail)"); that line was the open eval_audit half of the same bug.
+
+**Fix applied.** Added `protocol: completions` to the three completions
+endpoints whose presets declare `protocol_mode: completions`:
+`phi2-single` (dev/e2e-tests catalog), `allenai-olmo-7b-single` and
+`allenai-olmo-1-7-7b-single` (reproduce/olmo_models catalog). The four
+`*-instruct` OLMo endpoints serve chat and are correct under the default, so no
+override. Refreshed the now-stale catalog header comments that claimed "the
+catalog has no field for [protocol]".
+
+**Verified.** Loaded both catalogs through `infer_stack.leasing.Catalog`
+(direct module import, stubbing the package `__init__` to dodge the `ubelt`
+dep the base interpreter lacks): both validate, and `resolve_endpoint().served`
+carries `protocol='completions'` for the three base models and `'chat'` for the
+instruct ones. Could NOT run the live GPU probe here (no serving host), so this
+is verified at the catalog-resolution layer `probe_ready` consumes, not end to
+end — the user should re-run `10_run_smoke_grid.sh` on a GPU host to confirm
+acquire now goes ready.
+
+**Design insight.** When a knob moves from one layer to another (here: the
+chat/completions distinction was a HELM-preset-only fact, then infer_stack grew
+a real catalog `protocol` field), the migration isn't done until *every* config
+that needs it is updated — the capability landing in the dependency is necessary
+but not sufficient. The two catalogs' "the catalog has no field for this"
+comments were load-bearing assumptions that silently went stale the moment
+infer_stack shipped the field. `protocol_mode` (preset → HELM client class) and
+`protocol` (catalog → readiness probe surface) are two views of one fact and
+must agree; a future guard could cross-check them at bundle-export time.
