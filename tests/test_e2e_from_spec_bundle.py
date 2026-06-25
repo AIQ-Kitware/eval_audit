@@ -190,6 +190,11 @@ def test_hf_fromspec_override_targets_official_deployment():
     assert entry["client_spec"]["args"]["pretrained_model_name_or_path"] == (
         "microsoft/phi-2"
     )
+    # Regression guard: a by-name override REPLACES HELM's built-in deployment
+    # registration, so it must re-supply the context-window metadata the window
+    # service needs. Dropping it leaves max_request_length=None and HELM crashes
+    # in _effective_prompt_token_budget. 2047 matches the official together/phi-2.
+    assert entry["max_sequence_length"] == 2047
 
 
 # --------------------------------------------------------------------------

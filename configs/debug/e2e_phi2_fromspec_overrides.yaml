@@ -16,6 +16,16 @@ model_deployments:
   - name: together/phi-2          # the name the OFFICIAL run_spec.json carries
     model_name: microsoft/phi-2
     tokenizer_name: microsoft/phi-2
+    # REQUIRED — the context-window metadata HELM's window service needs. The
+    # built-in together/phi-2 deployment carries `max_sequence_length: 2047`; the
+    # old run-entry path got this for free via `enable_huggingface_models`
+    # (HELM's registered phi-2 metadata). A by-name override REPLACES that
+    # registration, so it must re-supply the window. Omitting it leaves
+    # max_request_length=None and HELM crashes in
+    # local_window_service._effective_prompt_token_budget (`min(None, ...)` ->
+    # "TypeError: '<' not supported between 'int' and 'NoneType'"). 2047 matches
+    # the official deployment exactly (faithful replay).
+    max_sequence_length: 2047
     client_spec:
       class_name: "helm.clients.huggingface_client.HuggingFaceClient"
       args:
