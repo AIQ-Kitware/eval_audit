@@ -137,6 +137,8 @@ def _build_manifest(
     tmux_workers: int,
     devices: str,
     model_deployments_fpath: str | None,
+    from_run_spec: bool = False,
+    precomputed_root: str | None = None,
 ) -> dict[str, Any]:
     return ManifestSpec(
         experiment_name=experiment_name,
@@ -147,6 +149,8 @@ def _build_manifest(
         devices=devices,
         tmux_workers=tmux_workers,
         model_deployments_fpath=model_deployments_fpath,
+        from_run_spec=from_run_spec,
+        precomputed_root=precomputed_root,
     ).to_dict()
 
 
@@ -173,7 +177,31 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--exclude-pattern", action="append", default=[])
     parser.add_argument("--model", action="append", default=[])
     parser.add_argument("--benchmark", action="append", default=[])
+    parser.add_argument(
+        "--from-run-spec",
+        action="store_true",
+        help=(
+            "Replay each run's fully-resolved run_spec.json directly (faithful "
+            "replay) instead of reconstructing a run-entry string and re-parsing "
+            "it through helm-run. Requires --precomputed-root (the recipe source)."
+        ),
+    )
+    parser.add_argument(
+        "--precomputed-root",
+        default=None,
+        help=(
+            "Root searched for official HELM run dirs. In --from-run-spec mode "
+            "this is the RECIPE SOURCE the run_spec.json is read from (mandatory). "
+            "Bind-mounted read-only into the run container at its same path."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.from_run_spec and not args.precomputed_root:
+        raise SystemExit(
+            "--from-run-spec requires --precomputed-root (the recipe source from "
+            "which each official run_spec.json is read)"
+        )
 
     defaults = env_defaults()
     run_entries = _load_run_specs(args.run_specs_fpath)
@@ -228,6 +256,8 @@ def main(argv: list[str] | None = None) -> None:
         tmux_workers=tmux_workers,
         devices=devices,
         model_deployments_fpath=model_override,
+        from_run_spec=args.from_run_spec,
+        precomputed_root=args.precomputed_root,
     )
 
     out_fpath = Path(args.output)
@@ -257,6 +287,8 @@ def main(argv: list[str] | None = None) -> None:
         "tmux_workers": tmux_workers,
         "max_eval_instances": max_eval_instances,
         "model_deployments_fpath": model_override,
+        "from_run_spec": args.from_run_spec,
+        "precomputed_root": args.precomputed_root,
         "include_patterns": args.include_pattern,
         "exclude_patterns": args.exclude_pattern,
         "models": args.model,

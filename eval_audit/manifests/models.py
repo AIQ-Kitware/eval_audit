@@ -40,6 +40,15 @@ class ManifestSpec:
     # endpoint) — a bridge container's localhost is its own namespace, not the
     # host's. See docs/container-execution.md.
     container_network: str | None = None
+    # Faithful-replay execution (opt-in). When True, Stage 3 replays each run's
+    # fully-resolved ``run_spec.json`` directly (HELM ``from_json`` +
+    # ``run_benchmarking``) instead of reconstructing a run-entry string and
+    # re-parsing it through ``helm-run``. The bridge then routes to the from-spec
+    # docker pipeline, which requires ``precomputed_root`` (the recipe source the
+    # official ``run_spec.json`` is read from). Substitution stays by-name, so the
+    # produced run dir keeps the official ``run_spec.name`` and Stages 4-6 are
+    # unchanged. See docs/planning/run-from-run-spec-json-plan.md.
+    from_run_spec: bool = False
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:
