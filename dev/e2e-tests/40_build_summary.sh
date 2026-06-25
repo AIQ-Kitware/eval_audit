@@ -19,6 +19,11 @@ else
   done
 fi
 
+# Collect each scenario's report location so we can recap them all together at the
+# end (parallel arrays: name[i] <-> report dir[i]) for easy copy/paste access.
+summary_names=()
+summary_paths=()
+
 for manifest in "${manifests[@]}"; do
   read -r EXPERIMENT_NAME OUTPUT_ROOT <<<"$("$PYTHON_BIN" -c "
 import yaml
@@ -57,4 +62,25 @@ print(data['name'], data['output']['root'])
     "${INVENTORY_FLAGS[@]}" \
     "$@"
   echo "Aggregate publication surface: $SUMMARY_ROOT"
+
+  # Record an absolute path (resolve against $ROOT, the cwd, when relative) for the
+  # end-of-run recap so the printed paths are copy/paste-able from anywhere.
+  case "$SUMMARY_ROOT" in
+    /*) summary_abspath="$SUMMARY_ROOT" ;;
+    *)  summary_abspath="$ROOT/$SUMMARY_ROOT" ;;
+  esac
+  summary_names+=("$EXPERIMENT_NAME")
+  summary_paths+=("$summary_abspath")
+done
+
+# End-of-run recap: list every scenario's report so the results are easy to find
+# without scrolling back through the per-scenario build output.
+echo
+echo "==================================================================="
+echo "== e2e summaries complete — ${#summary_paths[@]} scenario report(s)"
+echo "==================================================================="
+for i in "${!summary_paths[@]}"; do
+  echo "  ${summary_names[$i]}"
+  echo "    report dir:  ${summary_paths[$i]}"
+  echo "    start here:  ${summary_paths[$i]}/level_001/README.txt"
 done
