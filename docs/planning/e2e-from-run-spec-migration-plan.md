@@ -60,7 +60,15 @@ strict upgrade; for the negative control it is the wrong tool (§7).
 4. **The vLLM bundle bakes a by-name override:** `export-benchmark-bundle`
    generates `model_deployments.yaml` binding `vllm/phi-2-local` → the LiteLLM
    endpoint, plus the lease facts (`lease_endpoint`/ttl/catalog) used by
-   `--lease`. The run_entries carry `model_deployment=vllm/phi-2-local`.
+   `--lease`. **Unlike every other preset, the phi-2 run_entries are *bare*
+   `…model=microsoft/phi-2,eval_split=test` — they do NOT carry a
+   `model_deployment=` token** (`_manifest_doc` writes them verbatim,
+   [`adapter.py:1242`](../../eval_audit/integrations/infer_stack/adapter.py); HELM
+   resolves the deployment from the registered `model_deployments.yaml`). This
+   *helps* the migration: the bare run-entry is a clean token-subset of the
+   official dir name (which only adds `groups=mmlu_philosophy`), so discovery
+   (`find_best_precomputed_run`) matches it with no stray `model_deployment=` token
+   to reconcile (§5, Change 6).
 5. **Downstream is canonical-key based.** The per-scenario virtual experiments
    ([`configs/virtual-experiments/e2e-phi2-{hf,vllm,incomparable}.yaml`](../../configs/virtual-experiments/))
    pair the local row against `official_public_index` by canonical logical key,
@@ -93,9 +101,11 @@ the CLI) → capture the new digest → set `E2E_CONTAINER_IMAGE` (default
 
 ### Change 1 — HF manifests + the `together/phi-2` override
 
-In both `manifests/e2e-phi_2-huggingface-philosophy-{smoke,full}.yaml`, under the
-`E2E_FROM_SPEC` variant (Change 3 decides whether this is a new file or a runtime
-edit):
+Author **sibling** from-spec manifests
+`manifests/e2e-phi_2-huggingface-philosophy-fromspec-{smoke,full}.yaml` (new
+checked-in files — *not* a runtime edit of the run-entry manifests). Keeping both
+shapes on disk lets one grid invocation run *both* paths and lets the parity step
+(Change 6) diff them. Relative to the run-entry manifests, each adds/changes:
 
 ```yaml
 from_run_spec: true
@@ -119,38 +129,54 @@ model_deployments:
         pretrained_model_name_or_path: microsoft/phi-2
 ```
 
-### Change 2 — vLLM preset (adapter.py): from-spec fields + rekey the override
+### Change 2 — vLLM preset + exporter (adapter.py): from-spec fields + rekey
 
-In the `e2e-phi_2-vllm-philosophy` preset
-([`adapter.py:361`](../../eval_audit/integrations/infer_stack/adapter.py)):
+Two parts, **both code** (not just preset data), both in the infer-stack adapter —
+no eval_audit-core change.
 
-- add `from_run_spec: true` and `precomputed_root: /data/crfm-helm-public/mmlu`
-  to the `smoke_manifest` / `full_manifest` blocks (so `export-benchmark-bundle`
-  writes them into the generated manifests);
-- **rekey the generated `model_deployments.yaml`** so it binds **`together/phi-2`**
-  (the official deployment) → the LiteLLM endpoint, instead of (or in addition to)
-  `vllm/phi-2-local`. The replayed recipe names `together/phi-2`; the lease still
-  acquires the same served endpoint. The `run_entries` themselves are no longer
-  consulted for the recipe (discovery uses only the benchmark+tokens to *locate*
-  the official dir), but keep them as the discovery key.
+**(a) Thread the fields through the exporter (the easy-to-miss part).** Adding
+`from_run_spec: true` + `precomputed_root: /data/crfm-helm-public/mmlu` to the
+preset's `smoke_manifest` / `full_manifest` blocks is **not sufficient on its
+own**. `_manifest_doc`
+([`adapter.py:1232`](../../eval_audit/integrations/infer_stack/adapter.py)) builds
+a *fixed* manifest dict: it **hardcodes `precomputed_root: None`** (`:1251`), has
+**no `from_run_spec` key**, and only passes through `_CONTAINER_SPEC_KEYS`
+(`:1175`, which contains neither field). So an exporter run would silently drop
+both and land on the run-entry path **with no error** (the bridge guard only fires
+when `from_run_spec` is truthy). `_manifest_doc` must therefore be edited to
+(i) read `from_run_spec` from the spec and (ii) stop hardcoding
+`precomputed_root: None` and read it from the spec instead. Only then do the
+preset-block fields take effect.
 
-This is the only code change (vs. config) and lives entirely in the infer-stack
-adapter — no eval_audit-core change.
+**(b) Rekey the deployment to `together/phi-2`.** Change the **profile spec's
+`model_deployment_name`** from `vllm/phi-2-local` → `together/phi-2`
+([`adapter.py:369`](../../eval_audit/integrations/infer_stack/adapter.py); it flows
+to `_model_deployment_entry`'s `name` field, `:1084`). The generated
+`model_deployments.yaml` then binds **`together/phi-2`** (the name the official
+`run_spec.json` carries) → the LiteLLM endpoint. Registering it locally **shadows
+HELM's built-in `together/phi-2`** (the real Together API), exactly as
+`repro_model_overrides.yaml` shadows `together/qwen2.5-...`. The lease is
+unaffected: `_lease_facts` keys the single-endpoint `lease_endpoint` off the
+*catalog endpoint* (`phi2-single`), not the deployment name (`:1219`). Keep the
+bare run_entries as the discovery key (§2.4) — they only *locate* the official
+dir; the recipe comes from its `run_spec.json`.
 
 ### Change 3 — grid gating (`E2E_FROM_SPEC`)
 
 In `_lib.sh` add `E2E_FROM_SPEC="${E2E_FROM_SPEC:-0}"`. In `10_run_smoke_grid.sh`
 / `15_run_full_grid.sh`, when set:
 
-- `hf`: select the from-spec manifest variant (a sibling
-  `…-fromspec-{smoke,full}.yaml`, the cleanest no-mutation form) instead of the
-  run-entry manifest;
+- `hf`: select the Change-1 sibling
+  `…-huggingface-philosophy-fromspec-{smoke,full}.yaml` instead of the run-entry
+  manifest;
 - `vllm`: pass a `--from-spec`-style flag (or a preset suffix) to
-  `export-benchmark-bundle` so it emits the Change-2 fields;
+  `export-benchmark-bundle` so it emits the Change-2(a) fields and the Change-2(b)
+  rekey;
 - `incomparable`: **unchanged** — always run-entry (§7).
 
-Prefer sibling manifest files over in-place edits so a single grid invocation can
-run *both* paths and the parity step (Change 6) can diff them.
+Change 1 commits to sibling manifest files over in-place edits precisely so a
+single grid invocation can run *both* paths and the parity step (Change 6) can
+diff them.
 
 ### Change 4 — leave `incomparable` on the run-entry path
 
@@ -214,6 +240,12 @@ difference an implementer must get right; everything else is plumbing.
   Together; replaying them against in-process HF / vLLM could surface request
   mismatches. That is a *real* reproducibility signal worth seeing — but note it
   so it is not mistaken for a migration bug.
+- **"Full" is still a prefix, not the official instance count.** The official
+  `adapter_spec.max_eval_instances` is `10000`; the e2e `full` caps at `1000`
+  (smoke at `5`). The replay CLI truncates by replacing `max_eval_instances`, so
+  even the full grid compares on HELM's deterministic instance *prefix*, not the
+  complete official set — identical to today's run-entry path, but stated so
+  "full" is not read as official parity.
 - **Run-name change ripples.** The produced dir gains the `groups=mmlu_philosophy`
   suffix (now identical to the official). Pairing is canonical-key based so it
   should be inert, but confirm on first run (Change 5).
