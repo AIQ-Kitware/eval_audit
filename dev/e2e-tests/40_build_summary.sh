@@ -81,6 +81,5 @@ echo "== e2e summaries complete — ${#summary_paths[@]} scenario report(s)"
 echo "==================================================================="
 for i in "${!summary_paths[@]}"; do
   echo "  ${summary_names[$i]}"
-  echo "    report dir:  ${summary_paths[$i]}"
-  echo "    start here:  ${summary_paths[$i]}/level_001/README.txt"
+  echo "    ${summary_paths[$i]}"
 done
