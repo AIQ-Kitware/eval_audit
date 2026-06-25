@@ -102,10 +102,11 @@ run_one() {
         --base-url "${LITELLM_BASE_URL}/v1"
         --api-key-value "$LEASE_MASTER_KEY"
       )
-      # Faithful-replay: emit a from-spec bundle (manifests carry from_run_spec +
-      # precomputed_root; model_deployments.yaml rekeyed to together/phi-2).
-      # Excludes the incomparable control (e2e_fromspec_enabled). See _lib.sh.
-      if e2e_fromspec_enabled "$target"; then export_args+=(--from-spec); fi
+      # Faithful replay is the default: emit a from-spec bundle (manifests carry
+      # from_run_spec + precomputed_root; model_deployments.yaml rekeyed to
+      # together/phi-2). The incomparable control is the sole carve-out
+      # (e2e_uses_from_spec → false), so it alone keeps the run-entry path.
+      if e2e_uses_from_spec "$target"; then export_args+=(--from-spec); fi
       "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
         "${export_args[@]}"
       manifest="$bundle_root/full_manifest.yaml"

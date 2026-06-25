@@ -163,17 +163,17 @@ def test_exporter_from_spec_rekeys_to_official_deployment(tmp_path: Path):
 
 
 @pytest.mark.parametrize("mode", ["smoke", "full"])
-def test_hf_fromspec_sibling_manifest_valid(mode: str):
-    f = MANIFEST_DIR / f"e2e-phi_2-huggingface-philosophy-fromspec-{mode}.yaml"
-    assert f.exists(), f"missing sibling manifest {f}"
+def test_hf_manifest_is_from_spec(mode: str):
+    # From-spec is the default and only path for the comparable hf scenario, so the
+    # canonical checked-in manifest IS the from-spec one (no run-entry sibling).
+    f = MANIFEST_DIR / f"e2e-phi_2-huggingface-philosophy-{mode}.yaml"
+    assert f.exists(), f"missing hf manifest {f}"
     d = yaml.safe_load(f.read_text())
     assert d["from_run_spec"] is True
     assert d["precomputed_root"] == "/data/crfm-helm-public/mmlu"
     assert d["model_deployments_fpath"] == (
         "configs/debug/e2e_phi2_fromspec_overrides.yaml"
     )
-    # Reuses the run-entry experiment_name/suite so downstream index/compose/
-    # summary pick it up unchanged (Change 5 is a no-op).
     assert d["experiment_name"] == f"e2e-phi_2-huggingface-philosophy-{mode}"
     assert d["suite"] == f"e2e-phi_2-huggingface-philosophy-{mode}"
     # enable_huggingface_models is redundant once the override fully specifies the

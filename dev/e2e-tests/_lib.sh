@@ -46,16 +46,15 @@ export INFER_STACK_DATA_DIR="${INFER_STACK_DATA_DIR:-$HOME/.local/share/infer_st
 export EVAL_AUDIT_SKIP_LOCAL_REPEAT="${EVAL_AUDIT_SKIP_LOCAL_REPEAT:-1}"
 export EVAL_AUDIT_GROUP_STRIP="${EVAL_AUDIT_GROUP_STRIP:-1}"
 
-# Faithful-replay gate (migration plan docs/planning/e2e-from-run-spec-migration-plan.md).
-# Default 0 keeps the run-entry path (the local side reconstructs the recipe from
-# the run-entry string). Set E2E_FROM_SPEC=1 to flip the two COMPARABLE scenarios
-# (hf, vllm) to replaying the OFFICIAL microsoft/phi-2 run_spec.json verbatim:
-#   * hf   -> select the checked-in sibling manifest (e2e_hf_manifest below);
-#   * vllm -> pass `--from-spec` to export-benchmark-bundle (the grid scripts).
-# The incomparable negative control is EXCLUDED even when this is 1 (see
-# e2e_fromspec_enabled) — from-spec would erase the temperature=1 deviation it
-# exists to flag, so it stays on the run-entry path (Change 4 / §7).
-export E2E_FROM_SPEC="${E2E_FROM_SPEC:-0}"
+# Faithful replay is the DEFAULT and only path for the comparable scenarios — the
+# e2e always replays the OFFICIAL microsoft/phi-2 run_spec.json verbatim rather
+# than reconstructing the recipe from the run-entry string (migration plan
+# docs/planning/e2e-from-run-spec-migration-plan.md). There is no run-entry
+# opt-out: the hf manifests are from-spec and the grids always pass `--from-spec`
+# to export-benchmark-bundle for the vLLM baseline. The incomparable negative
+# control is the SOLE carve-out (see e2e_uses_from_spec) — it stays on the
+# run-entry path because from-spec replays the official recipe verbatim and would
+# erase the temperature=1 deviation it exists to flag (§7).
 
 # The three phi-2 e2e scenarios. Each row is "name:transport:serving":
 #   * name      — the preset/experiment stem. The per-mode experiments are
@@ -107,28 +106,22 @@ e2e_experiment_smoke() { printf '%s-smoke\n' "${1%%:*}"; }
 e2e_experiment_full()  { printf '%s-full\n' "${1%%:*}"; }
 e2e_bundle_root()      { printf '%s\n' "$STORE_ROOT/local-bundles/${1%%:*}"; }
 
-# Whether a scenario runs the FROM-SPEC (faithful-replay) path. True iff
-# E2E_FROM_SPEC=1 AND the scenario is one of the two COMPARABLE ones. The
-# incomparable negative control is always excluded: from-spec replays the official
-# recipe verbatim and would erase its temperature=1 deviation (Change 4 / §7). $1 =
-# an E2E_TARGETS row (or bare scenario name).
-e2e_fromspec_enabled() {
-  [[ "${E2E_FROM_SPEC:-0}" == "1" ]] || return 1
+# Whether a scenario runs the FROM-SPEC (faithful-replay) path. From-spec is the
+# default for every scenario EXCEPT the incomparable negative control, which is the
+# sole carve-out: from-spec replays the official recipe verbatim and would erase
+# its temperature=1 deviation (§7). This is structural, not a toggle. $1 = an
+# E2E_TARGETS row (or bare scenario name).
+e2e_uses_from_spec() {
   case "$(e2e_name "$1")" in
     *-incomparable) return 1 ;;
     *)              return 0 ;;
   esac
 }
 
-# HF manifest path for a given mode ("smoke" | "full"). When the scenario is
-# from-spec-enabled, return the checked-in `-fromspec-<mode>` sibling (replays the
-# official run_spec.json) instead of the run-entry manifest. $1 = target/name,
-# $2 = mode.
-e2e_hf_manifest() {
-  local infix=""
-  if e2e_fromspec_enabled "$1"; then infix="-fromspec"; fi
-  printf '%s\n' "$E2E_DIR/manifests/${1%%:*}${infix}-$2.yaml"
-}
+# HF manifest path for a given mode ("smoke" | "full"). The hf scenario is
+# comparable, so this checked-in manifest replays the official run_spec.json
+# (from-spec is the default; see e2e_uses_from_spec). $1 = target/name, $2 = mode.
+e2e_hf_manifest() { printf '%s\n' "$E2E_DIR/manifests/${1%%:*}-$2.yaml"; }
 
 # Clear a prior experiment's result dir so kwdagger's skip_existing doesn't
 # no-op a re-invocation. eval-audit-run schedules with skip_existing=1, so a

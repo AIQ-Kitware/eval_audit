@@ -1,8 +1,22 @@
 schema_version: 1
+# HF-direct phi-2 e2e (full). Replays the OFFICIAL microsoft/phi-2
+# mmlu:philosophy run_spec.json verbatim instead of reconstructing the recipe
+# from the run-entry string — this is the DEFAULT and only path for this
+# comparable scenario (there is no run-entry opt-out; see _lib.sh / the migration
+# plan docs/planning/e2e-from-run-spec-migration-plan.md). The incomparable
+# negative control is the sole carve-out (it stays on the run-entry path because
+# from-spec would erase its temperature=1 deviation).
 experiment_name: e2e-phi_2-huggingface-philosophy-full
-description: e2e full batch with Microsoft Phi-2 deployed directly from huggingface
+description: e2e full batch with Microsoft Phi-2, replaying the official run_spec.json (from-spec)
 run_entries:
+# In from-spec mode the run-entry is ONLY the discovery key: find_best_precomputed_run
+# locates the official run dir under precomputed_root by token-subset match (the bare
+# run-entry is a clean subset of the official dir name, which adds groups=mmlu_philosophy),
+# then the matched run_spec.json drives execution. The recipe is NOT reconstructed here.
 - mmlu:subject=philosophy,method=multiple_choice_joint,model=microsoft/phi-2,eval_split=test
+# The official adapter_spec.max_eval_instances is 10000; capping below it compares
+# on HELM's deterministic instance PREFIX (replay truncates by replacing the field),
+# so even "full" is a prefix comparison, not official parity. See plan §7.
 max_eval_instances: 1000
 suite: e2e-phi_2-huggingface-philosophy-full
 mode: compute_if_missing
@@ -11,9 +25,17 @@ backend: tmux
 devices: '0'
 tmux_workers: 1
 local_path: prod_env
-precomputed_root:
+# From-spec fields: replay the official recipe; precomputed_root is the recipe
+# SOURCE (narrowed to the mmlu subtree so discovery is fast and unambiguous).
+from_run_spec: true
+precomputed_root: /data/crfm-helm-public/mmlu
 require_per_instance_stats: true
-enable_huggingface_models: ["microsoft/phi-2"]
+# By-name substitution rebinds the OFFICIAL deployment together/phi-2 -> a local
+# in-process HuggingFace client. enable_huggingface_models is redundant now (the
+# override fully specifies weights+tokenizer) and would only register an UNUSED
+# microsoft/phi-2 deployment, so it is dropped.
+model_deployments_fpath: configs/debug/e2e_phi2_fromspec_overrides.yaml
+enable_huggingface_models: []
 enable_local_huggingface_models: []
 # Containerized HELM is mandatory; the grid supplies the image via
 # `eval-audit-run --container-image`. This scenario loads phi-2 IN-PROCESS from
