@@ -24,16 +24,15 @@
 # whose previous smoke run already wrote its DONE sentinel
 # ($AUDIT_RESULTS_ROOT/<experiment>/helm/.../DONE) would be silently skipped on a
 # re-invocation. Because the smoke grid is a cheap preflight whose whole job is to
-# re-validate the recipe on every invocation, it FORCE-RERUNS by default (clears
-# each scenario's prior result dir before running). Set E2E_FORCE_RERUN=0 to opt
-# back into kwdagger's skip_existing no-op. (15_run_full_grid.sh defaults the
-# other way.)
+# re-validate the recipe on every invocation, it ALWAYS force-reruns (clears each
+# scenario's prior result dir before running). This is mandatory for the e2e suite
+# and intentionally NOT overridable (no E2E_FORCE_RERUN opt-out), so a stale DONE
+# sentinel can never mask a regression.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
 
 KEEP_GOING="${E2E_KEEP_GOING:-0}"
-FORCE_RERUN="${E2E_FORCE_RERUN:-1}"
 failed=()
 
 # The LiteLLM gateway host port is a fixed default in the new CLI (14042;
@@ -111,10 +110,10 @@ run_one() {
       ;;
   esac
 
-  # 3. Optionally clear a prior run so kwdagger's skip_existing doesn't no-op it.
-  if [[ "$FORCE_RERUN" == "1" ]]; then
-    e2e_clear_results "$experiment"
-  fi
+  # 3. Always clear any prior run so kwdagger's skip_existing can't no-op it — the
+  #    e2e grid must re-execute the full recipe on every invocation (mandatory, no
+  #    opt-out).
+  e2e_clear_results "$experiment"
 
   # 4. Run the manifest (leased for vLLM, bare for hf).
   eval-audit-run "${run_args[@]}"

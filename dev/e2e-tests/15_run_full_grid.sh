@@ -27,17 +27,20 @@
 #
 # eval-audit-run schedules through kwdagger with skip_existing=1, so a scenario
 # whose previous full run already wrote its DONE sentinel
-# ($AUDIT_RESULTS_ROOT/<experiment>/helm/.../DONE) is silently skipped on a
-# re-invocation. Set E2E_FORCE_RERUN=1 to clear each scenario's prior result dir
-# before running so the full manifest re-executes from scratch. Unlike the smoke
-# grid (10_run_smoke_grid.sh), which force-reruns by default, the full grid keeps
-# force-rerun opt-in (matching reproduce/olmo_models).
+# ($AUDIT_RESULTS_ROOT/<experiment>/helm/.../DONE) would be silently skipped on a
+# re-invocation. Because the whole point of this grid is to exercise the full e2e
+# capabilities (serve -> lease -> containerized HELM -> release) on every
+# invocation, it ALWAYS force-reruns (clears each scenario's prior result dir so
+# the full manifest re-executes from scratch) — like the smoke grid
+# (10_run_smoke_grid.sh). This is mandatory for the e2e suite and intentionally
+# NOT overridable (no E2E_FORCE_RERUN opt-out), so a stale DONE sentinel can never
+# mask a regression. Note: a re-invocation therefore rebuilds the full results the
+# 20/30/40 (index -> compose -> summary) steps consume.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
 
 KEEP_GOING="${E2E_KEEP_GOING:-0}"
-FORCE_RERUN="${E2E_FORCE_RERUN:-0}"
 failed=()
 
 # The LiteLLM gateway host port is a fixed default in the new CLI (14042;
@@ -115,10 +118,10 @@ run_one() {
       ;;
   esac
 
-  # 3. Optionally clear a prior run so kwdagger's skip_existing doesn't no-op it.
-  if [[ "$FORCE_RERUN" == "1" ]]; then
-    e2e_clear_results "$experiment"
-  fi
+  # 3. Always clear any prior run so kwdagger's skip_existing can't no-op it — the
+  #    e2e grid must re-execute the full serve->lease->HELM->release path on every
+  #    invocation (mandatory, no opt-out).
+  e2e_clear_results "$experiment"
 
   # 4. Run the manifest (leased for vLLM, bare for hf).
   eval-audit-run "${run_args[@]}"
