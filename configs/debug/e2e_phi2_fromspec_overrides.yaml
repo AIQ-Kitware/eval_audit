@@ -1,0 +1,22 @@
+# From-spec replay override for the phi-2 e2e (hf scenario).
+#
+# The official microsoft/phi-2 mmlu:philosophy run_spec.json names
+# `model_deployment: together/phi-2`. The faithful-replay pipeline
+# (docs/planning/run-from-run-spec-json-plan.md §5) substitutes by NAME only — it
+# rebinds the deployment names present in this file and nothing else. So to run
+# the official recipe locally we must re-register *together/phi-2* (the name the
+# spec carries) pointed at a local in-process HuggingFace client; this shadows
+# HELM's built-in together/phi-2 (the real Together API), exactly as
+# repro_model_overrides.yaml shadows together/qwen2.5-...
+#
+# This is the hf scenario's analogue of the vLLM rekey (the bundle exporter binds
+# the same together/phi-2 name to the LiteLLM endpoint). See the migration plan
+# Change 1 (docs/planning/e2e-from-run-spec-migration-plan.md).
+model_deployments:
+  - name: together/phi-2          # the name the OFFICIAL run_spec.json carries
+    model_name: microsoft/phi-2
+    tokenizer_name: microsoft/phi-2
+    client_spec:
+      class_name: "helm.clients.huggingface_client.HuggingFaceClient"
+      args:
+        pretrained_model_name_or_path: microsoft/phi-2
