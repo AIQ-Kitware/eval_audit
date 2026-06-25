@@ -12,6 +12,9 @@ venv/
 build/
 dist/
 *.egg-info/
+# docker/build.sh staging context (pristine git-archived source for the runner
+# image). Regenerated on every build; never a tracked source.
+/.build-staging/
 
 # Editors / OS
 .DS_Store
