@@ -3506,3 +3506,84 @@ comments were load-bearing assumptions that silently went stale the moment
 infer_stack shipped the field. `protocol_mode` (preset → HELM client class) and
 `protocol` (catalog → readiness probe surface) are two views of one fact and
 must agree; a future guard could cross-check them at bundle-export time.
+
+## 2026-06-25 10:58:01 -0400
+
+**Model/config.** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude
+Code harness. Branches: superproject `impl/run-from-run-spec` (off
+`infer-stack-cli-api-migration`); aiq-magnet submodule `impl/run-from-run-spec`
+(off detached `5937b16`).
+
+**User intent.** Implement the planned "run HELM reproductions directly from
+`run_spec.json`" pathway end to end, on a fresh branch *per touched repo*. The
+plan (`docs/planning/run-from-run-spec-json-plan.md`, brought onto the impl
+branch) was approved-but-unimplemented; both `run-from-run-spec-{json,impl}`
+branches carried only the doc.
+
+**What landed.**
+- *aiq-magnet:* new `materialize_helm_run_from_spec.py` — a faithful-replay
+  sibling of `materialize_helm_run.py`. Reuses its discovery/matching/local-config
+  scaffolding verbatim; swaps the compute step from "reconstruct a run-entry
+  string → `helm-run` subprocess" to "`from_json(run_spec.json, RunSpec)` →
+  in-process `run_benchmarking`". Dual input (explicit `--run-spec-json` wins,
+  else discovery via `find_best_precomputed_run`). Mirrors the `helm_run`
+  registration preamble *before* a class-resolution preflight, recursing into
+  nested `ObjectSpec`/dict args (judge specs). Substitution is by-name only
+  (no `adapter_spec.model` rewrite); only `max_eval_instances` is replaced.
+- *eval_audit:* `MaterializeHelmRunFromSpecDockerNode` + factory (executable
+  swap only); bridge `_DOCKER_FROM_SPEC_PIPELINE` selected on
+  `manifest['from_run_spec']` (sits *after* the mandatory-containerization raise,
+  so it inherits that guard); `ManifestSpec.from_run_spec`; `--from-run-spec` /
+  `--precomputed-root` make-manifest flags.
+- Tests: 10 eval_audit (node/bridge/manifest/builders — all run here), 7 magnet
+  (collect/preflight/round-trip — `importorskip('helm')`; 1 opt-in integration).
+
+**Two findings from real-data smoke (`.venv` has helm + `/data/crfm-helm-public`).**
+1. The round-trip key-preservation guard is sound because HELM *writes*
+   `run_spec.json` with `asdict_without_nones` (drops only None values), so every
+   on-disk key is non-None and the cattrs codec re-emits every non-None field —
+   a raw key missing after `from_json`→`to_json` is therefore an unambiguous
+   silent-drop. 10/10 sampled mmlu specs round-trip with zero key loss under the
+   pinned helm.
+2. The preflight's original `except (ImportError, AttributeError)` was too
+   narrow: importing a vision-language scenario module raises HELM's
+   `OptionalDependencyNotInstalled` (missing `latex` extra), which is neither —
+   it crashed the scan. Broadened to `except Exception`, recording
+   `"<ExcType>: <msg>"` per class. This also fits the research taxonomy: a
+   missing optional extra is a *recipe/environment filter reason*, not a
+   reproducibility failure, so the preflight should report it, not die on it.
+   Added a monkeypatched regression test.
+
+**Design insights.**
+- *The reconstructed-string round-trip was the only fragile hop.* In discovery
+  mode the run-entry string now does nothing but *locate* the official dir
+  (robust dir-name matching); the authoritative resolved recipe drives execution.
+  We stopped feeding reconstructed strings to HELM's parser.
+- *A preflight that imports is a preflight that can raise anything.* Resolving a
+  class means importing its module, whose top-level code can fail for reasons far
+  beyond ImportError. A guard whose job is "report what won't resolve here" must
+  catch broadly or it becomes the very mid-run crash it was meant to pre-empt.
+- *Writer/serializer asymmetry decides whether a diff test is sound.* The
+  no-key-dropped assertion only holds because the writer drops a *superset* of
+  what the re-serializer drops; confirming that (not assuming it) is what makes
+  the test free of false positives.
+
+**Not done (deliberate, per plan + repo convention).**
+- The magnet→superproject **gitlink bump is left unstaged** (memory: never
+  auto-commit submodule gitlinks; plan §8: a separate explicit commit). The
+  from-spec docker image also needs a rebuild+re-pin once the magnet commit is
+  merged — the eval_audit code only references the module path as a string, so it
+  is committable independently.
+- Integration + parity (string-vs-from-spec output diff) tests are opt-in
+  (`MATERIALIZE_FROM_SPEC_INTEGRATION`) — they need a real model; run them on
+  aivm-2404 / in the container.
+- Judge/annotator deployment substitution stays uniform by-name (plan §5/§10):
+  judge-dependent runs still need override entries for the judge deployment(s);
+  the curated `judge_registry.py`-sourced override set is the follow-up.
+
+**Next steps for a future agent.** (1) On a GPU host, run the opt-in integration
+test against an mmlu/openai_gpt2 official run to confirm DONE + that the produced
+dir keeps `run_spec.name`. (2) Commit the magnet branch, then in a *separate
+explicit* commit bump the superproject gitlink and rebuild/re-pin the runner
+image. (3) Consider hashing the official `run_spec.json` into the node's algo
+identity (plan §7 optional) so a changed official recipe forces recompute.
