@@ -40,6 +40,7 @@ Environment variables
   PUSH_IMAGES   1 to push, 0 to build only       (default: 0)
   PYTHON_VERSION                                 (default: 3.11)
   STAGING_DIR   Staging context dir              (default: <repo>/.build-staging/helm-runner)
+  BUILD_NOFILE  nofile ulimit for build steps    (default: 1048576; 0 omits --ulimit)
 '
 
 set -euo pipefail
@@ -64,6 +65,12 @@ REPO_ROOT="$(realpath "${SCRIPT_DIR}/..")"
 : "${DOCKER_REPO:=}"
 : "${PYTHON_VERSION:=3.11}"
 : "${STAGING_DIR:=${REPO_ROOT}/.build-staging/helm-runner}"
+# UV_COMPILE_BYTECODE=1 in the dockerfile makes uv pre-compile the whole
+# crfm-helm[heim] dep tree via a pool of parallel interpreters; under a low
+# container nofile limit that pool exhausts FDs and dies with EMFILE
+# ("os error 24"). Raise the build-step FD ceiling. Override BUILD_NOFILE=0 to
+# omit the flag (e.g. if a docker version rejects --ulimit through BuildKit).
+: "${BUILD_NOFILE:=1048576}"
 
 HELM_SUBMODULE="${REPO_ROOT}/submodules/helm"
 MAGNET_SUBMODULE="${REPO_ROOT}/submodules/aiq-magnet"
@@ -168,7 +175,14 @@ EOF
 print_summary
 
 log "Building ${IMAGE_QUALNAME}"
+# Raise the FD ceiling for RUN steps so uv's parallel bytecode compilation of
+# the helm[heim] dep tree doesn't hit EMFILE. BUILD_NOFILE=0 opts out.
+ULIMIT_ARGS=()
+if [[ "${BUILD_NOFILE}" != "0" ]]; then
+    ULIMIT_ARGS=(--ulimit "nofile=${BUILD_NOFILE}:${BUILD_NOFILE}")
+fi
 DOCKER_BUILDKIT=1 docker build \
+    "${ULIMIT_ARGS[@]}" \
     --progress=plain \
     --file "${SCRIPT_DIR}/helm-runner.dockerfile" \
     --build-arg PYTHON_VERSION="${PYTHON_VERSION}" \
