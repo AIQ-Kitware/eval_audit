@@ -3987,3 +3987,26 @@ pass `bash -n`; the data_dir resolution logic unit-tested in isolation
 (GPU smoke + downstream verify) + its parity-diff sub-item remain — both need a
 produced from-spec run dir, so they're the user's `aiq-gpu` shell. Plan §6 and the
 handoff "What REMAINS" updated to reflect this.
+
+## 2026-06-29 15:22:00 -0400
+
+**Model / config.** Claude Opus 4.8 (1M context), claude-opus-4-8[1m], Claude Code CLI (VSCode extension). Analysis host (no `helm`/`docker` here); the failing run is the user's `aiq-gpu` GPU box — Change 5 (GPU smoke) from the OLMo from-spec plan.
+
+**User intent.** A bare paste of a HELM run error: `Failed to tokenize ... allenai/olmo-7b ... requires hf_olmo. Run pip install hf_olmo`. Diagnose and fix.
+
+**Diagnosis (root cause, not the surface fix).** The error is the OLMo-1 `allenai/olmo-7b` tokenizer loading its original repo's `trust_remote_code` tokenizer (needs `ai2-olmo`/`hf_olmo`). Only the two olmo-7b presets (`-mmlu`/`-lite`) use that alias. We *already* fix this in [`eval_audit/integrations/helm_plugins.py`](../../eval_audit/integrations/helm_plugins.py): it repoints the alias at the transformers-native `allenai/OLMo-7B-hf` (real `tokenizer.json`, no remote code) — and that's the right target, since the catalog serves exactly `OLMo-7B-hf` for this endpoint. The override registers via a `[project.entry-points.helm]` plugin that `helm-run main()` loads through `load_entry_point_plugins()` — **but only for packages installed in helm-run's own env.** This runbook now runs HELM *in the container* (`materialize_helm_run` shells out to `helm-run` at line 1418), and `docker/build.sh` staged only `helm` + `aiq-magnet` — **never `eval_audit`.** So in-container the entry point doesn't exist, the override never registers, and HELM falls back to the built-in trust_remote_code config → the `hf_olmo` death. The host venv worked because eval_audit is installed there; the container silently diverged.
+
+**Fix (chosen: install eval_audit in the image).** Stage the superproject's `eval_audit/` + `pyproject.toml` + `README.md` and `uv pip install -e /opt/src/eval-audit --no-deps` in the builder. `--no-deps` is load-bearing: the plugin only imports `helm.benchmark.*` (present), so its full dep tree is dead weight AND a full resolve could pull crfm-helm from PyPI over the pinned editable submodule. This is the root-cause fix — it registers *every* current/future eval_audit HELM override in-container, closing a real correctness gap (the container is supposed to pin the recipe; it was running a different tokenizer config than the host).
+
+Rejected alternatives: (a) add `ai2-olmo`/`hf_olmo` to the image — contradicts the deliberate repoint design and has transformers-version friction (env pinned transformers<5); (b) edit the vendored HELM `tokenizer_configs.yaml` — duplicates the plugin into the submodule the plugin exists to avoid touching.
+
+**Guard.** `load_entry_point_plugins()` *swallows* per-plugin import errors (run.py:148 — warns, then silently falls back), so a broken plugin would ship undetected and resurface as the same in-container error. Made the **final-stage** build check (the one that ships) exercise the real discovery path: assert the `eval-audit-tokenizer-overrides` entry point is found, run `load_entry_point_plugins("helm")`, and assert `get_tokenizer_config("allenai/olmo-7b")` now resolves to `allenai/OLMo-7B-hf`. The build fails loudly rather than shipping a silent fallback.
+
+**Validation (no docker/GPU here).** `bash -n docker/build.sh` OK; `git archive HEAD <paths>` confirms the staged subset; editable-installed the staged tree in a throwaway uv venv (`--no-deps`) and confirmed `importlib.metadata.entry_points().select(group="helm")` registers `eval-audit-tokenizer-overrides` — the exact layer HELM reads. Could not run the in-container override-resolution end to end (no helm/docker on the analysis host); that runs at image build time on the GPU box via the new final-stage guard.
+
+**Design notes worth keeping.**
+1. *An entry-point override is only as present as the env it's installed into.* The plugin's "no submodule edits needed" elegance quietly assumed eval_audit ⊂ helm-run's env — true host-side, false in the container that became mandatory later. When you move where a process runs, re-audit what's installed there.
+2. *A fix that fails open is worse than no fix.* HELM warns-and-continues on plugin load failure, so the missing override degraded to the built-in config with only a log line. The build-time guard converts that silent fallback into a hard build failure.
+3. *Match the served vocab, not just "an OLMo tokenizer."* The repoint to `OLMo-7B-hf` is correct specifically because catalog.yaml serves `OLMo-7B-hf`; a different -hf conversion would be a subtle tokenization mismatch.
+
+**State / next steps.** `docker/build.sh` + `docker/helm-runner.dockerfile` edited; working tree otherwise clean. User must **rebuild the runner image on aiq-gpu** (`./docker/build.sh`) — the new final-stage guard will confirm the override before the image is usable — then re-run Change 5 GPU smoke. The two olmo-7b presets should now tokenize without `hf_olmo`. Not yet committed (awaiting the user's go / a successful GPU rebuild).
