@@ -7,10 +7,16 @@
 #
 # C-4: pin `litellm: true` (the OLMo grid routes HELM through the LiteLLM
 # gateway, default-B) and `ui: false` (no Open WebUI for a benchmark run).
-# `data_dir` is NOT pinned: it's host-specific and the runners export
-# INFER_STACK_DATA_DIR (C-2) so the managed `.env`/ledger are discoverable.
+#
+# `data_dir` IS pinned here (env > this pin > /data default; see _lib.sh). It is
+# BIND-MOUNTED into the vLLM/LiteLLM containers (HF weight cache + gateway route
+# table), so it must live on a docker-mountable big disk — never an NFS $HOME,
+# which silently breaks the mounts and makes every HELM request 500. Override per
+# host via INFER_STACK_DATA_DIR (or relocate just the parent via
+# INFER_STACK_DATA_ROOT) when /data/service isn't the local big disk.
 backend: compose
 litellm: true
 ui: false
 skip_display_gpus: false
 reverse_proxy: false
+data_dir: /data/service/infer-stack

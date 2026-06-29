@@ -30,11 +30,59 @@ export INFER_STACK_CONFIG_DIR="${INFER_STACK_CONFIG_DIR:-$ROOT/reproduce/olmo_mo
 # C-2: config_root and data_root are SEPARATE in the leasing world. The managed
 # LiteLLM .env + the lease ledger live under data_root()/leasing/, and the grid
 # runners read the master key via `infer-stack env LITELLM_MASTER_KEY` — that
-# read and the serve-time write must resolve the same data_root, so pin it here.
-# Defaults to the XDG location; override to a big-disk path on hosts where
-# weights/state shouldn't land under $HOME (the old config used
-# /data/service/docker/vllm-stack).
-export INFER_STACK_DATA_DIR="${INFER_STACK_DATA_DIR:-$HOME/.local/share/infer_stack}"
+# read and the serve-time write must resolve the SAME data_root. We guarantee that
+# by resolving it ONCE here and exporting it, so every infer-stack call in the
+# runbook agrees (including the bracket's `infer-stack acquire`, which inherits the
+# exported value rather than re-resolving from its own possibly-CONFIG_DIR-less env).
+#
+# The data dir is also BIND-MOUNTED into the containers: the vLLM upstream gets
+# the HF weight cache (compose.py: `<hf_cache>:/root/.cache/huggingface`) and the
+# gateway gets its static route table. It must therefore live on a path the docker
+# daemon can bind-mount — never an NFS $HOME (the vLLM mount fails, the model never
+# attaches behind the gateway's *static* route, and HELM sees LiteLLM up but every
+# request 500s with "Connection error" — the "works here, not there" footgun).
+#
+# Resolution order (highest first), matching infer-stack's own env > settings >
+# default precedence, but resolved HERE and exported so it travels to subprocesses:
+#   1. an explicit INFER_STACK_DATA_DIR in the environment  (operator override)
+#   2. a `data_dir:` pinned in the resolved settings.yaml    (durable, committed)
+#   3. ${INFER_STACK_DATA_ROOT:-/data/service}/infer-stack   (big-disk fallback)
+_olmo_yaml_scalar() {  # $1=file $2=key -> value with quotes/inline-comment stripped
+  local v
+  v="$(sed -n -E "s/^[[:space:]]*$2:[[:space:]]*(.*)$/\1/p" "$1" 2>/dev/null | head -n1)"
+  v="${v%%#*}"                          # strip inline comment
+  v="${v%"${v##*[![:space:]]}"}"        # rstrip whitespace
+  v="${v#\"}"; v="${v%\"}"              # strip double quotes
+  v="${v#\'}"; v="${v%\'}"              # strip single quotes
+  printf '%s' "$v"
+}
+: "${INFER_STACK_DATA_ROOT:=/data/service}"
+_olmo_pinned_data_dir="$(_olmo_yaml_scalar "$INFER_STACK_CONFIG_DIR/settings.yaml" data_dir)"
+if [[ -n "${INFER_STACK_DATA_DIR:-}" ]]; then
+  _olmo_data_src="env"                                          # 1. explicit override wins
+elif [[ -n "$_olmo_pinned_data_dir" ]]; then
+  INFER_STACK_DATA_DIR="$_olmo_pinned_data_dir"; _olmo_data_src="settings.yaml"  # 2. yaml pin
+else
+  INFER_STACK_DATA_DIR="${INFER_STACK_DATA_ROOT}/infer-stack"; _olmo_data_src="default"  # 3. fallback
+fi
+export INFER_STACK_DATA_DIR
+
+# Best-effort legibility: warn (don't silently relocate) when the chosen dir can't
+# be created/written or is on NFS, so a later container-mount failure is
+# self-explanatory. The remedy is to point INFER_STACK_DATA_DIR at a local big disk.
+if ! { mkdir -p "$INFER_STACK_DATA_DIR" 2>/dev/null && [[ -w "$INFER_STACK_DATA_DIR" ]]; }; then
+  echo "WARN: INFER_STACK_DATA_DIR=$INFER_STACK_DATA_DIR is not writable;" \
+       "docker bind-mounts into the vLLM/LiteLLM containers will fail." \
+       "Set INFER_STACK_DATA_DIR to a writable local big disk." >&2
+else
+  _olmo_fstype="$(stat -f -c %T "$INFER_STACK_DATA_DIR" 2>/dev/null || true)"
+  if [[ "$_olmo_fstype" == nfs* || "$_olmo_fstype" == autofs ]]; then
+    echo "WARN: INFER_STACK_DATA_DIR=$INFER_STACK_DATA_DIR is on $_olmo_fstype" \
+         "(not docker-mountable); the vLLM HF-cache mount will fail." \
+         "Set INFER_STACK_DATA_DIR to a local big disk." >&2
+  fi
+fi
+echo "[olmo] infer-stack data dir: $INFER_STACK_DATA_DIR (source: $_olmo_data_src)" >&2
 
 # Carry the e2e-test conventions: one local attempt per model (no repeat),
 # strip the run-group prefix so smoke rows pair cleanly.
