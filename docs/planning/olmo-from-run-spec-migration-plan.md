@@ -194,7 +194,7 @@ Per preset, in `adapter.py`'s `smoke_manifest` / `full_manifest`:
    `run_spec.json`, not the entry. Re-run the §4.1 dry-check after editing until
    it reports 0 NO_MATCH (and 0 AMBIGUOUS under `STRICT=1`).
 
-### Change 2 — exporter threading (verify generalization)
+### Change 2 — exporter threading (verify generalization) — **DONE (verified, no code change)**
 The e2e fix made `_manifest_doc` read `from_run_spec` + `precomputed_root` from
 the spec instead of hardcoding `precomputed_root: None`
 ([`adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py); e2e plan
@@ -202,8 +202,14 @@ Change 2a). Confirm that path is **preset-agnostic** (keys off the manifest
 block, not a phi-2 name) so the OLMo blocks' new fields flow through. The native
 `model_deployment` emission for single-deployment bundles already applies to the
 OLMo presets (each has one `model_deployment_name`).
+**Verified:** drove `materialize_benchmark_bundle(..., from_run_spec=True)` for
+`allenai-olmo-7b-mmlu` / `-lite` / `-olmoe-…-instruct` and asserted each emitted
+manifest carries `from_run_spec: true`, the preset's own `precomputed_root`
+(`/mmlu`, `/lite`, parent), and `model_deployment: vllm/allenai-<model>` (a
+registered deployment); the run-entry default stays byte-compatible. The path is
+fully preset-agnostic — no code change needed.
 
-### Change 3 — grid wiring
+### Change 3 — grid wiring — **DONE** (`99bdc0e`)
 In `reproduce/olmo_models/10_run_smoke_grid.sh` / `15_run_full_grid.sh`, append
 `--from-spec` to the `export-benchmark-bundle` call **unconditionally** (no
 `e2e_uses_from_spec` carve-out — every OLMo preset is comparable). The
@@ -220,21 +226,33 @@ runbook preflight `reproduce/olmo_models/08_check_discovery.sh`. The baseline ru
 is captured in §4.1. *Remaining:* fold the dry-check into a corpus-gated pytest
 (mirror `tests/test_e2e_from_spec_bundle.py`) so CI guards it.
 
-### Change 5 — downstream verification (expected no-op)
+### Change 5 — downstream verification (expected no-op) — **REMAINING (GPU; user's shell)**
 `20_index_local` → `30_compose` → `40_build_summary` and
 `configs/virtual-experiments/olmo-models.yaml` are untouched. Verify on first run
 that the paired rows now resolve `same_deployment=no` and the
 `comparability_unknown:*` warnings clear for benchmarks with a public counterpart.
+This is the only step left — it needs a GPU (`aiq-gpu`) and the user's own shell
+(the agent's e2e venv interpreter is a dangling symlink; see the handoff §"CRITICAL
+environment gotchas"). Smoke one preset first, confirm the produced dir ==
+official `run_spec.name`, the recorded `model_deployment` is `vllm/allenai-<model>`,
+and the per-scenario report shows `same_deployment=no`; then full grid + compose +
+summary.
 
-### Change 6 — tests + parity diff
-- **Discovery dry-check** (Change 4) as a committed test.
-- **Comparability proof:** `RecipeFacts` for an official `huggingface/olmo-2-…`
-  (or `together/olmo-7b`) vs local `vllm/allenai-…` → `same_deployment=no`.
+### Change 6 — tests + parity diff — **DONE (tests; parity diff pending the GPU run)** (`037ba68`)
+- **Discovery dry-check** as a committed corpus-gated test —
+  [`tests/test_olmo_from_spec.py`](../../tests/test_olmo_from_spec.py); all 14
+  (preset, mode) blocks resolve 1:1 (0 NO_MATCH / 0 AMBIGUOUS), root enumerations
+  cached module-wide. **Done.**
+- **Comparability proof:** `RecipeFacts` for an official `together/olmo-7b` /
+  `huggingface/olmo-1.7-7b` / `huggingface/olmo-2-…` / `huggingface/olmoe-…` vs
+  local `vllm/allenai-…` → `same_deployment=no` via `normalized/diff` +
+  `_same_value_fact`. **Done** (same test file).
 - **Parity diff (the methodology deliverable):** diff a from-spec `run_spec.json`
   / `stats.json` against the archived run-entry result for BBQ — quantifies the
-  `output_format_instructions` drift the NOTES document, now removed.
+  `output_format_instructions` drift the NOTES document, now removed. **Pending the
+  first GPU run** (needs a produced from-spec run dir to diff against).
 
-### Change 7 — port the `data_dir` hardening (`8d96a47`)
+### Change 7 — port the `data_dir` hardening (`8d96a47`) — **DONE** (`1ad68a8`)
 While in `reproduce/olmo_models/_lib.sh`, fold in the e2e's data-dir resolution
 (`env > settings.yaml data_dir: pin > /data default`) + the NFS/autofs warning,
 replacing the current hard `INFER_STACK_DATA_DIR=$HOME/.local/share/infer_stack`
@@ -242,7 +260,7 @@ default (the bind-mount footgun). Pin `data_dir` in
 `reproduce/olmo_models/config/infer_stack/settings.yaml`. *(Independent of
 from-spec, but olmo `_lib.sh` is open anyway.)*
 
-### Change 8 — docs
+### Change 8 — docs — **DONE** (`90d9581`)
 Update `reproduce/olmo_models/README.md` (from-spec is now the default; how
 discovery + the deployment-rewrite work) and annotate the two `NOTES-*` drift
 files as **resolved by from-spec** (kept as the historical "why").

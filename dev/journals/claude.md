@@ -3907,3 +3907,83 @@ hf run → `status=generated` (was conversion_failed). `eval_audit` is an editab
 install, so the fix is live in the user's venv. Next: user re-runs
 `./30_compose.sh && ./40_build_summary.sh` for hf (reuses the now-cached
 conversion → rows=1). **Uncommitted**, pending their end-to-end confirmation.
+
+## 2026-06-29 14:32:03 -0400
+
+**Model/harness.** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code CLI.
+
+**User intent.** "Read the olmo handoff doc and continue the implementation."
+Picked up the OLMo from-spec migration mid-flight: Changes 1 + 4 were already
+committed; the handoff (`docs/planning/olmo-from-spec-handoff.md`) listed the
+remaining CPU changes (2, 3, 6, 7, 8) and a GPU step (5). Goal: land every CPU
+change, leave Change 5 cleanly handed off (it needs `aiq-gpu` + the user's shell;
+the agent's e2e venv interpreter is a dangling symlink).
+
+**What I did (all on `impl/run-from-run-spec`, no fast-forward).**
+
+- **Change 2 (verify, no code).** Confirmed `_manifest_doc` in `adapter.py` reads
+  `precomputed_root` from `spec.get("precomputed_root")` (the preset's own
+  smoke/full block) and threads `from_run_spec` + the native single-deployment
+  `model_deployment` — fully preset-agnostic. Acid test: drove
+  `materialize_benchmark_bundle(from_run_spec=True)` for olmo-7b-mmlu/-lite/-olmoe
+  and asserted each manifest carries `from_run_spec: true`, the right
+  `precomputed_root` (`/mmlu`, `/lite`, parent), and `model_deployment:
+  vllm/allenai-<model>` (a registered name); run-entry default stays
+  byte-compatible. No fix needed (contrast: e2e Change 2a *did* need the fix; here
+  it already generalized).
+- **Change 3 (`99bdc0e`).** Appended `--from-spec` to `export-benchmark-bundle` in
+  both grids, UNCONDITIONALLY — no `e2e_uses_from_spec` carve-out, because OLMo has
+  no temperature negative control whose deviation replay would erase.
+- **Change 6 (`037ba68`).** New `tests/test_olmo_from_spec.py`: (a) corpus-gated
+  discovery dry-check wrapping the *same* helpers `08_check_discovery.sh` uses
+  (`dc._enumerate_runs`/`_classify`/`_load_run_entries`), parametrized over all 7
+  presets × {smoke, full}, asserting 0 NO_MATCH / 0 AMBIGUOUS, with a module-scoped
+  fixture caching the 3 distinct root enumerations; (b) a pure comparability proof
+  (official `together/olmo-7b` / `huggingface/olmo-…` vs local `vllm/allenai-…` →
+  `deployment_changed`/`same_deployment=no` via `normalized/diff.facts_semantic_inputs`
+  + the report's own `_same_value_fact`). Preset set derived from the registry
+  (`startswith("allenai-olmo")`) so a new preset is auto-covered. Official
+  deployment names verified against the live corpus, not assumed.
+- **Change 7 (`1ad68a8`).** Ported the e2e data_dir hardening (`8d96a47`) into olmo
+  `_lib.sh`: resolve `env > settings.yaml data_dir: pin > /data default`, export
+  once, warn (don't relocate) on unwritable/NFS/autofs; `settings.yaml` now pins
+  `data_dir: /data/service/infer-stack`. The footgun it kills: the data dir is
+  bind-mounted into the vLLM/LiteLLM containers, so an NFS `$HOME` silently breaks
+  the mounts and 500s every HELM request.
+- **Change 8 (`90d9581`).** README rewritten for from-spec-as-default (intro
+  callout + a "From-spec replay" section: discovery → verbatim replay → deployment
+  rewrite); targets table now 7 experiments / 6 models with the olmo-7b -mmlu/-lite
+  split + per-preset `precomputed_root`; `08_check_discovery.sh` added to Steps;
+  data_dir knob updated. Both `NOTES-*` drift files got a "RESOLVED BY FROM-SPEC"
+  banner (bodies kept as the historical "run name is not the recipe" case study;
+  the hand-added `output_format_instructions=mcqa` fix marked superseded — that
+  token is now dropped from the discovery key). Stale "six" counts that meant
+  presets/experiments/runs corrected to seven across the README + 5 script headers
+  + the `_lib.sh` OLMO_TARGETS comment (model/endpoint counts stay six).
+
+**Verification under the agent user.** No pytest available to `agent`, and the
+e2e venv interpreter is a dangling symlink, so I drove everything with the
+handoff's `env PYTHONPATH="$REPO:$REPO/submodules/aiq-magnet:…/site-packages"
+$PY` recipe (agent's matching cpython-3.14). Discovery: 14/14 (preset, mode)
+blocks RESOLVED, 0 NO_MATCH / 0 AMBIGUOUS (3 root enumerations, ~3 s for the
+parent). Comparability proof + all acid tests pass. All touched shell scripts
+pass `bash -n`; the data_dir resolution logic unit-tested in isolation
+(pin-wins / env-wins / quoted+inline-comment parse).
+
+**Design notes worth keeping.**
+1. *The exporter generalized where the e2e didn't because the OLMo fields live in
+   the preset's manifest block, and `_manifest_doc` was already taught (by e2e
+   Change 2a) to read from `spec`, not a hardcoded name.* Verifying beat assuming —
+   I proved it with the acid test rather than trusting "should generalize".
+2. *Test the runbook's own helpers, not a re-implementation.* Importing
+   `check_precomputed_discovery`'s internals into the pytest means CI guards the
+   exact classification the preflight ships — a matcher drift can't pass the test
+   while breaking the runbook.
+3. *Derive the covered set from the registry.* `startswith("allenai-olmo")` means
+   the discovery test fans out over whatever presets exist, so the "7 presets"
+   invariant is enforced, not encoded.
+
+**State.** Working tree clean after the doc-status commit (next). Only Change 5
+(GPU smoke + downstream verify) + its parity-diff sub-item remain — both need a
+produced from-spec run dir, so they're the user's `aiq-gpu` shell. Plan §6 and the
+handoff "What REMAINS" updated to reflect this.

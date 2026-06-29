@@ -48,43 +48,44 @@ Per-preset `precomputed_root` (the decided roots):
 - the four `*-instruct` / `olmoe` → `/data/crfm-helm-public` (parent; bbq lives under
   `safety`, the rest under `capabilities`, each benchmark in one suite → unambiguous)
 
-## What REMAINS (in order)
+## What REMAINS
 
-1. **Change 2 — exporter threading (CPU; verify, likely no-op).** Confirm
-   `_manifest_doc` in [`eval_audit/integrations/infer_stack/adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py)
-   threads `from_run_spec` + `precomputed_root` preset-agnostically (the e2e fix
-   should already generalize). Acid test: run `export-benchmark-bundle --preset
-   allenai-olmo-7b-mmlu --from-spec …` and assert the generated manifest carries
-   `from_run_spec: true`, `precomputed_root: /data/crfm-helm-public/mmlu`, and
-   `model_deployment: vllm/allenai-olmo-7b`. If `_manifest_doc` drops them, fix it
-   exactly as e2e Change 2a (stop hardcoding `precomputed_root: None`, read both
-   from the spec).
-2. **Change 3 — grid wiring (CPU).** In
-   [`reproduce/olmo_models/10_run_smoke_grid.sh`](../../reproduce/olmo_models/10_run_smoke_grid.sh)
-   and `15_run_full_grid.sh`, append `--from-spec` to the `export-benchmark-bundle`
-   call **unconditionally** (every OLMo preset is comparable — no e2e-style
-   `incomparable` carve-out). The `eval-audit-run` line is unchanged (the bridge
-   picks the pipeline from `manifest['from_run_spec']`).
-3. **Change 6 — tests (CPU).** (a) Corpus-gated pytest wrapping the dry-check
-   (mirror `tests/test_e2e_from_spec_bundle.py`; skip if `/data/crfm-helm-public`
-   absent) asserting 0 NO_MATCH / 0 AMBIGUOUS for all 7 presets. (b) A comparability
-   test: official `huggingface/olmo-2-…` (or `together/olmo-7b`) vs local
-   `vllm/allenai-…` → `same_deployment=no` via `normalized/diff.py`.
-4. **Change 7 — data_dir hardening (CPU).** Port `8d96a47` (the e2e
-   `env > settings.yaml pin > /data default` resolution + NFS/autofs warning) into
-   `reproduce/olmo_models/_lib.sh`, replacing the current hard
-   `INFER_STACK_DATA_DIR=$HOME/.local/share/infer_stack`; pin `data_dir` in
-   `reproduce/olmo_models/config/infer_stack/settings.yaml`. (Independent of
-   from-spec; the file is open anyway.)
-5. **Change 8 — docs (CPU).** Update `reproduce/olmo_models/README.md` (from-spec is
-   now default; the olmo-7b split; how the deployment-rewrite works) and annotate
-   `NOTES-bbq-instructions-drift.md` / `NOTES-dropped-run-expander-keys.md` as
-   **resolved by from-spec** (keep as the historical "why").
-6. **Change 5 — first GPU run + downstream verification (GPU, user's shell).** Smoke
-   one preset end-to-end on `aiq-gpu`; confirm the produced run dir == official
-   `run_spec.name`, the recorded `model_deployment` is `vllm/allenai-<model>`, and
-   the per-scenario report shows `same_deployment=no`. Then full grid + compose +
-   summary; confirm pairing + that `comparability_unknown:*` warnings clear.
+All CPU changes are now DONE (Changes 2, 3, 6, 7, 8 — committed on
+`impl/run-from-run-spec`; see the plan's §6 status markers and the commit hashes
+below). **Only Change 5 remains, and it needs a GPU + the user's own shell.**
+
+- **Change 5 — first GPU run + downstream verification (GPU, `aiq-gpu`, user's
+  shell).** Smoke one preset end-to-end (start with an instruct preset — single
+  `capabilities`/`safety` root, 4 entries); confirm the produced run dir ==
+  official `run_spec.name`, the recorded `model_deployment` is
+  `vllm/allenai-<model>`, and the per-scenario report shows `same_deployment=no`.
+  Then full grid → `20_index_local` → `30_compose` → `40_build_summary`; confirm
+  pairing and that the `comparability_unknown:*` warnings clear for benchmarks with
+  a public counterpart. Run `bash reproduce/olmo_models/08_check_discovery.sh`
+  first as the preflight (must be 0 NO_MATCH / 0 AMBIGUOUS). Must run in
+  edward.wang's shell — the agent's e2e venv interpreter is a dangling symlink (see
+  the env gotchas below).
+- **Change 6 parity diff (deferred sub-item of an otherwise-DONE change).** Once
+  Change 5 produces a from-spec BBQ run dir, diff its `run_spec.json` / `stats.json`
+  against the archived run-entry result to quantify the now-removed
+  `output_format_instructions` drift — the methodology deliverable the NOTES
+  describe. (The discovery + comparability tests are already committed in
+  `tests/test_olmo_from_spec.py`.)
+
+### Done this session (CPU changes)
+
+| Change | Commit | What |
+|---|---|---|
+| 2 | (verify-only, no code) | `_manifest_doc` threading is preset-agnostic — drove `materialize_benchmark_bundle(from_run_spec=True)` for olmo-7b-mmlu/-lite/-olmoe and asserted `from_run_spec`/`precomputed_root`/`model_deployment: vllm/allenai-…`. |
+| 3 | `99bdc0e` | `--from-spec` appended unconditionally to both grids' `export-benchmark-bundle`. |
+| 6 | `037ba68` | `tests/test_olmo_from_spec.py` — corpus-gated discovery (14/14 blocks resolve 1:1) + pure comparability proof (`same_deployment=no`). |
+| 7 | `1ad68a8` | data_dir resolved env > settings.yaml pin > /data default + NFS/autofs warn; `settings.yaml` pins `/data/service/infer-stack`. |
+| 8 | `90d9581` | README from-spec default + olmo-7b split + Steps `08`; NOTES annotated resolved-by-from-spec; stale six→seven counts. |
+
+> **No pytest for the `agent` user.** Validate by driving the test bodies'
+> underlying helpers directly with the `env PYTHONPATH=… $PY …` recipe below
+> (that's how this session verified Change 6); under CI / edward.wang's venv,
+> `pytest tests/test_olmo_from_spec.py` runs normally.
 
 ## CRITICAL environment gotchas
 
