@@ -65,6 +65,43 @@ def helm_raw_cache_parent(run_path: str | Path) -> Path:
     return default_helm_raw_cache_root() / digest
 
 
+def _register_run_local_helm_configs(run_path: Path) -> str | None:
+    """Replay the run's local HELM config registration before conversion.
+
+    A from-spec replay registers a LOCAL deployment override — e.g.
+    ``huggingface/phi-2-local`` -> ``microsoft/phi-2`` — via the run dir's
+    ``prod_env/model_deployments.yaml`` (the same file ``helm-run`` consumed at
+    run time through ``--local-path`` / ``model_deployments_fpath``). The
+    HELM->EEE converter only registers HELM's *builtin* configs (at import of the
+    every_eval_ever adapter), so without replaying that override
+    ``get_model_deployment("huggingface/phi-2-local")`` misses the explicit entry
+    and falls through to HELM's dynamic ``huggingface/<id>`` generator, which
+    eagerly ``AutoTokenizer.from_pretrained``s the bare suffix (``phi-2-local``)
+    and raises ``OSError: ... is not a local folder``. ``get_model_deployment``
+    checks the explicit registry FIRST, so registering the run's prod_env makes
+    the explicit deployment win and the generator never fires — resolution then
+    matches run time. For non-``huggingface/`` deployments (e.g. ``vllm/...``,
+    which have no generator and already fall back to ``adapter_spec.model``) this
+    is output-identical, so it is safe for every scenario.
+
+    Walks up from the leaf run dir to the HELM execution root that holds
+    ``prod_env/``. Best-effort and purely additive: returns the registered dir, or
+    None when none is found or anything goes wrong — registration must never abort
+    an otherwise-fine conversion.
+    """
+    try:
+        from helm.benchmark.config_registry import register_configs_from_directory
+
+        for parent in [run_path, *run_path.parents][:8]:
+            candidate = parent / "prod_env"
+            if candidate.is_dir():
+                register_configs_from_directory(str(candidate))
+                return str(candidate)
+    except Exception:
+        return None
+    return None
+
+
 @profile
 def convert_helm_run_to_cached_eee(
     run_path: str | Path,
@@ -129,6 +166,10 @@ def convert_helm_run_to_cached_eee(
     try:
         from every_eval_ever.converters.helm.adapter import HELMAdapter
 
+        # Replay the run's local deployment/tokenizer overrides (prod_env) so the
+        # converter resolves names like ``huggingface/phi-2-local`` the same way
+        # ``helm-run`` did, instead of HELM's eager ``huggingface/<id>`` generator.
+        status["registered_prod_env"] = _register_run_local_helm_configs(run_path)
         adapter = HELMAdapter()
         logs = adapter.transform_from_directory(
             str(run_path),
@@ -588,6 +629,10 @@ def convert_local_helm_run_to_eee(
     try:
         from every_eval_ever.converters.helm.adapter import HELMAdapter
 
+        # Replay the run's local deployment/tokenizer overrides (prod_env) so the
+        # converter resolves names like ``huggingface/phi-2-local`` the same way
+        # ``helm-run`` did, instead of HELM's eager ``huggingface/<id>`` generator.
+        status["registered_prod_env"] = _register_run_local_helm_configs(run_path)
         adapter = HELMAdapter()
         logs = adapter.transform_from_directory(
             str(run_path),
