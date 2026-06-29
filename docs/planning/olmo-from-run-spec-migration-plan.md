@@ -105,19 +105,45 @@ the hyphen form `olmo-1-7-7b` is only the *experiment/endpoint* name. The
 local **rewrite target** is each bundle's native `vllm/allenai-<model>`, which
 differs from every official deployment above → `same_deployment=no` for free.
 
-The 4 instruct models' current benchmarks (bbq, gpqa, ifeval, mmlu_pro) are all
-in **capabilities v1.8.0**, so a single narrow `precomputed_root` covers them.
 The safety v1.10.0 benchmarks (anthropic_red_team, harm_bench, …) and capabilities
 extras (omni_math, wildbench) **exist officially but are out of current scope** —
 from-spec makes adding them later trivial (just add bare discovery keys).
+
+### 4.1 Change-4 discovery baseline (MEASURED 2026-06-29)
+
+Ran the dry-check (`eval_audit/cli/check_precomputed_discovery.py`,
+`reproduce/olmo_models/08_check_discovery.sh`) against the live corpus with the
+**current** run-entries. Results correct two assumptions above:
+
+- **Use a single uniform `precomputed_root: /data/crfm-helm-public`** for every
+  preset, not per-suite roots. The per-root enumeration is **4–6 s** (matching is
+  in-memory), so the breadth is free, and it's the only root that spans every
+  benchmark — including **bbq, which lives under `safety` (v1.10.0), not
+  `capabilities`** (the instruct models span two suites just like olmo-7b spans
+  mmlu+lite).
+- **Almost everything resolves as-is.** `gpqa`/`ifeval`/`mmlu_pro` (instruct) and
+  all 57 olmo-1.7-7b `mmlu` entries → RESOLVED with no edit. Official deployments
+  confirmed: `huggingface/olmo-2-*`, `huggingface/olmoe-*`,
+  `huggingface/olmo-1.7-7b`, `together/olmo-7b`.
+- **Only two reductions are needed (Change 1):**
+  1. **bbq** (×4 instruct): drop the hand-authored `output_format_instructions=mcqa`
+     token — absent from the official `safety` dir (the exact
+     `NOTES-bbq-instructions-drift.md` drift). Verified: the reduced key
+     `bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=…`
+     → RESOLVED.
+  2. **olmo-7b**: 5 bare `mmlu:subject=…,method=…,model=allenai/olmo-7b` entries
+     (no `eval_split=test`) are AMBIGUOUS (match several official copies). Add
+     `eval_split=test` (as the sibling entries already have) or dedupe.
+- **Net:** 0 NO_MATCH after those two reductions; olmo-7b 71/76 RESOLVED + 5
+  AMBIGUOUS→fixable; the four instruct presets 3/4 RESOLVED + bbq→fixable.
 
 ## 5. Decisions
 
 - **Migrate all six uniformly.** No carve-out; from-spec is unconditional (as the
   e2e comparable scenarios are).
-- **Per-preset `precomputed_root`** (not one global root): `capabilities` for the
-  four instruct models, `mmlu` for olmo-1.7-7b, and the **parent**
-  `/data/crfm-helm-public` for olmo-7b (its benchmarks span mmlu + lite, §7).
+- **One uniform `precomputed_root: /data/crfm-helm-public`** for every preset
+  (revised by the §4.1 measurement — the broad scan is 4–6 s and is the only root
+  that spans every benchmark, incl. bbq under `safety`).
 - **Reduce each run-entry to a minimal discovery key** (Change 1) — the single
   biggest task. Discovery requires *requested tokens ⊆ candidate dir name*, and
   today's entries carry hand-authored tokens that are **absent or different** in
@@ -142,19 +168,20 @@ Per preset, in `adapter.py`'s `smoke_manifest` / `full_manifest`:
 1. **Add** `precomputed_root: <per-table>`, `container_network: host`,
    `container_gpus: none`, `hf_cache_dir: ~/.cache/eval-audit-hf` (mirror the
    phi-2 vLLM preset).
-2. **Reduce** every `run_entries` string to a discovery key. The reduction rule:
-   keep the benchmark stem, `model=allenai/<served>`, and only tokens present in
-   the official dir name that disambiguate among multiple official runs for that
-   (benchmark, model). Examples:
+2. **Reduce** the run-entries that the §4.1 dry-check flags. **Per measurement,
+   only two changes are needed** (most entries already token-subset-match the
+   official dirs):
 
-| Current (drifted) run-entry | Reduced discovery key | Why |
+| Entry to fix | Change | Why (measured) |
 |---|---|---|
-| `mmlu_pro:subject=all,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-0325-32b-instruct` | `mmlu_pro:model=allenai/olmo-2-0325-32b-instruct` | official uses `subset=all` not `subject=all`; one mmlu_pro run/model → bare key matches |
-| `bbq:subject=all,method=multiple_choice_joint,output_format_instructions=mcqa,max_train_instances=0,model=…` | `bbq:model=allenai/olmo-2-…` | `output_format_instructions`/`max_train_instances` are hand-authored, absent from the official dir name (the very drift the NOTES document) |
-| `mmlu:subject=abstract_algebra,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b` | `mmlu:subject=abstract_algebra,model=allenai/olmo-7b` | keep `subject=` (disambiguates among 48); drop `method`/`eval_split` if absent officially (confirm via Change 4) |
+| `bbq:subject=all,method=multiple_choice_joint,output_format_instructions=mcqa,max_train_instances=0,model=…` (×4 instruct) | drop `output_format_instructions=mcqa` → `bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=…` | that token is absent from the official `safety` dir (the `NOTES-bbq-instructions-drift.md` drift); reduced key → RESOLVED |
+| 5 bare `mmlu:subject=…,method=multiple_choice_joint,model=allenai/olmo-7b` (no `eval_split`) | add `eval_split=test` | bare entries are AMBIGUOUS (match several copies); the sibling entries already carry `eval_split=test` |
 
-   The recipe (method, instructions, CoT, temperature, max_tokens) now comes from
-   the matched `run_spec.json`, not the entry.
+   Everything else (`gpqa`/`ifeval`/`mmlu_pro` instruct, all 57 olmo-1.7-7b
+   `mmlu`, the olmo-7b `mmlu`+lite set) resolves unchanged. The recipe (method,
+   instructions, CoT, temperature, max_tokens) now comes from the matched
+   `run_spec.json`, not the entry. Re-run the §4.1 dry-check after editing until
+   it reports 0 NO_MATCH (and 0 AMBIGUOUS under `STRICT=1`).
 
 ### Change 2 — exporter threading (verify generalization)
 The e2e fix made `_manifest_doc` read `from_run_spec` + `precomputed_root` from
@@ -172,15 +199,15 @@ In `reproduce/olmo_models/10_run_smoke_grid.sh` / `15_run_full_grid.sh`, append
 `eval-audit-run` line is unchanged (the bridge selects the pipeline from
 `manifest['from_run_spec']`).
 
-### Change 4 — discovery dry-check (the safety net, do this FIRST)
-A CPU-only validator (no GPU, no serving) that, for every reduced run-entry,
-asserts `find_best_precomputed_run` resolves **exactly one** official dir under
-that preset's `precomputed_root`, and that the matched `run_spec.json`
-deserializes + passes preflight. Ship it as both a corpus-gated test
-(mirror `tests/test_e2e_from_spec_bundle.py`) **and** a runbook preflight
-(`reproduce/olmo_models/08_check_discovery.sh`). This catches every token
-mismatch (subject/subset, dropped/extra tokens) before a single GPU-hour. Run it
-iteratively while doing Change 1.
+### Change 4 — discovery dry-check (the safety net, do this FIRST) — **DONE**
+A CPU-only validator that, for every run-entry, resolves it against
+`precomputed_root` with the **same** matcher the replay uses and classifies
+RESOLVED / NO_MATCH / AMBIGUOUS (reporting the matched dir + its official
+deployment). **Shipped:** `eval_audit/cli/check_precomputed_discovery.py` (with a
+`--entry` override to validate reduced keys before editing presets) and the
+runbook preflight `reproduce/olmo_models/08_check_discovery.sh`. The baseline run
+is captured in §4.1. *Remaining:* fold the dry-check into a corpus-gated pytest
+(mirror `tests/test_e2e_from_spec_bundle.py`) so CI guards it.
 
 ### Change 5 — downstream verification (expected no-op)
 `20_index_local` → `30_compose` → `40_build_summary` and
@@ -211,12 +238,14 @@ files as **resolved by from-spec** (kept as the historical "why").
 
 ## 7. Open items / risks
 
-- **olmo-7b spans two precomputed roots** (mmlu v1.1.0 + lite v1.2.0). One
-  manifest carries one `precomputed_root`, so either point it at the parent
-  `/data/crfm-helm-public` (broad scan — discovery caches, but ~62 entries ×
-  full-corpus walk is the slowest case) **or** split olmo-7b into two experiments
-  (mmlu vs lite) each with a narrow root. Recommend the parent root first; measure,
-  and split only if discovery is too slow. Resolve under Change 4.
+- **olmo-7b spans two precomputed roots** (mmlu v1.1.0 + lite v1.2.0) — and the
+  instruct models span capabilities + safety. **Resolved by §4.1:** the uniform
+  parent `/data/crfm-helm-public` covers all of them and the scan is 4–6 s, so no
+  per-suite roots or experiment splits are needed.
+- **olmo-7b AMBIGUOUS entries.** 5 bare `mmlu:…,model=allenai/olmo-7b` entries omit
+  `eval_split=test` and match several official copies; discovery picks the
+  best-scoring deterministically, but add `eval_split=test` (Change 1) so the
+  intent is explicit and the dry-check is clean.
 - **Token reconciliation is per-benchmark and easy to get subtly wrong.** The
   Change-4 dry-check is the guardrail — treat a "0 matches" or ">1 match" as a
   hard stop, never run it past discovery.
