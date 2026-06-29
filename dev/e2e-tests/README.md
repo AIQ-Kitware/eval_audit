@@ -13,6 +13,10 @@ small and fast, and the comparable/incomparable pair is a positive/negative
 control. Each scenario is compared against the public microsoft/phi-2
 mmlu:philosophy run (via the `official_public_index` source in its manifest).
 
+> **Before you run:** see [`NOTES.md`](NOTES.md) for run-time gotchas not enforced
+> in code — chiefly the `.venv` pin (`transformers<5` + `huggingface_hub==0.36.2`)
+> whose absence shows up as "completed not analyzed".
+
 ## The three scenarios
 
 Each keeps its own `experiment_name`/`suite` and runs as an isolated job, and is
