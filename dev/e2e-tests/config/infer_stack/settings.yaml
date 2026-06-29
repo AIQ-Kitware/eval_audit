@@ -1,18 +1,6 @@
-# infer-stack durable settings (leasing world) for the phi-2 e2e runbook.
-#
-# This replaces the old config.yaml `active_profile` + per-profile world. The
-# leasing CLI reads these top-level keys (infer_stack/cli/commands_meta.py
-# `_SETTINGS`); `infer-stack config init` writes the same shape. The grid
-# runners point INFER_STACK_CONFIG_DIR at this dir (see ../../_lib.sh) so the
-# catalog.yaml beside this file is the one resolved.
-#
-# C-4: pin `litellm: true` (the audit talks to the LiteLLM gateway, default-B)
-# and `ui: false` (no Open WebUI needed for a benchmark run — keeps the compose
-# footprint lean). `data_dir` is intentionally NOT pinned here: it is
-# host-specific and the runners export INFER_STACK_DATA_DIR (C-2) so the managed
-# `.env`/ledger land in a repo-local, discoverable place.
 backend: compose
 litellm: true
 ui: false
 skip_display_gpus: false
 reverse_proxy: false
+data_dir: /data/service/infer-stack
