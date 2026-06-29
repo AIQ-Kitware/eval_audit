@@ -140,18 +140,40 @@ supplied at run time via `--container-image`.
 ./06_check_container_image.sh # verify the runner image exists (required; containerization is mandatory)
 ./10_run_smoke_grid.sh        # preflight: gc -> gateway bootstrap -> per scenario (vllm: export bundle -> run smoke --lease; hf: run smoke)
 ./15_run_full_grid.sh         # per scenario: same, but run the FULL manifest (the batch)
+./17_rsync_from_aiq_gpu.sh    # OPTIONAL: ran 10/15 on aiq-gpu instead? pull its mirrored /data roots back here
 ./20_index_local.sh           # eval-audit-index -> audit_results_index.csv (verifies the -full run dirs)
 ./30_compose.sh               # compose ONE virtual experiment per scenario (loops E2E_TARGETS)
 ./40_build_summary.sh         # build one publication surface per scenario
+./42_rsync_summaries_from_aiq_gpu.sh  # OPTIONAL: ran 40 on aiq-gpu? pull just its per-scenario summary dirs back here
 ```
 
 The smoke preflight (`10`) is optional once you trust the path — `15` is the run
-that feeds `20`/`30`/`40`. `30`/`40` loop over the scenarios in `E2E_TARGETS`,
+that feeds `20`/`30`/`40`. Step `17` is also optional: it's only needed when the
+grid actually ran on the **aiq-gpu** GPU box rather than locally. Because
+aiq-gpu's `/data` roots mirror this host (same absolute paths), it's a straight
+mirrored `rsync` of `RESULTS_ROOT` (and, for a full pull, `STORE_ROOT`) back here
+before indexing — pull the whole roots, or pass experiment names to narrow:
+`./17_rsync_from_aiq_gpu.sh audit-historic-grid-gpt-oss-20b-vllm`. It honors the
+same `AUDIT_RESULTS_ROOT`/`AUDIT_STORE_ROOT` overrides; set `AIQ_GPU_HOST`
+(or `~/.ssh/config`), and `DRY_RUN=1` to preview. It never deletes local-only
+files unless you opt in with `DELETE=1`. `30`/`40` loop over the scenarios in `E2E_TARGETS`,
 composing/summarizing each scenario's own manifest
 ([`e2e-phi2-vllm.yaml`](../../configs/virtual-experiments/e2e-phi2-vllm.yaml),
 [`-incomparable`](../../configs/virtual-experiments/e2e-phi2-incomparable.yaml),
 [`-hf`](../../configs/virtual-experiments/e2e-phi2-hf.yaml)) into its
 own report dir. Set `VEXP_MANIFEST=<path>` to compose/summarize just one.
+
+Step `42` is the targeted counterpart to `17` for the **final** reports: when
+`40` ran on **aiq-gpu**, it pulls each scenario's results back here (discovered
+the same way `40` builds them — looping `E2E_TARGETS`, honoring `VEXP_MANIFEST`),
+rather than the whole `STORE_ROOT`. By **default** it pulls each scenario's entire
+`<output.root>` (indexes + analysis + reports) and mirrors it with `--delete`, so
+the local copy exactly matches aiq-gpu and a previous run's stale files (e.g. an
+out-of-date `analysis/core-reports/.../core_metric_report.*`) don't linger. Narrow
+to just `reports/aggregate-summary` with `SYNC_FULL_OUTPUT=0`, keep local-only
+files with `DELETE=0`, and preview either with `DRY_RUN=1` (rsync shows what it
+would transfer **and** delete). Shares `17`'s host knobs (`AIQ_GPU_HOST`, …) via
+`_rsync_lib.sh`.
 
 ## Knobs (env vars)
 
