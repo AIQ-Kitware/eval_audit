@@ -3766,3 +3766,144 @@ unrelated: `test_run_surface.py::test_kwdagger_argv_differs_between_preview_and_
 fails whenever a venv is detected (the argv appends `--log`/`--monitor`/
 `--virtualenv_cmd` after `--run`, so its `[:-1]` slice still contains the differing
 `--run` flag) — not touched by this work.
+
+## 2026-06-29 11:35:58 -0400
+
+**Model/config.** Claude Opus 4.8 (1M context), Claude Code CLI.
+
+**Intent.** Add a script under `dev/e2e-tests/` to rsync audit results from the
+aiq-gpu GPU box, given that the two machines' `/data` directories mirror each
+other (same absolute paths).
+
+**What I built.** [`17_rsync_from_aiq_gpu.sh`](../e2e-tests/17_rsync_from_aiq_gpu.sh)
+— a pull-only mirrored rsync (`aiq-gpu:/data/<root>/` → `/data/<root>/`). It
+re-derives `RESULTS_ROOT`/`STORE_ROOT` from the same `AUDIT_*` defaults as
+`_lib.sh` (deliberately *not* sourcing `_lib.sh`, to avoid its infer-stack
+data-dir side effects on a pure fetch utility). Numbered `17` so it slots between
+the run grids (10/15) and `20_index_local.sh` — the case where the grid ran on
+aiq-gpu rather than locally. README Steps + note updated.
+
+**Design choices.** (1) Safe by default: no `--delete` (opt-in `DELETE=1`), so a
+re-run never clobbers local-only experiments — pull semantics only overwrite
+shared paths. `DRY_RUN=1` previews. (2) `--mkpath` lets it create absent local
+subdirs; `-aHz --partial` is resumable and symlink-preserving (result trees carry
+DONE/report symlinks — keep them as symlinks, which `-a` does). (3) Narrowing:
+positional args are experiment subdirs under `RESULTS_ROOT` (store auto-off
+unless `SYNC_STORE=1`); a `RESULTS_ROOT/`-prefixed path is de-duped so both bare
+names and full paths work. (4) Host via `AIQ_GPU_HOST` (default `aiq-gpu`) /
+`AIQ_GPU_USER` / `SSH_PORT`; an ERR trap prints the host + the `~/.ssh/config`
+remedy on failure.
+
+**Verified.** `bash -n` clean; exercised all three modes (full / narrowed /
+prefixed) against an `rsync` shim to confirm the assembled argv. **Not verified:**
+a real transfer — there is no `aiq-gpu` block in `~/.ssh/config` on this host
+(`ssh -G aiq-gpu` resolves the name to itself), so the user must define it or pass
+`AIQ_GPU_HOST=user@host` before the first live run.
+
+## 2026-06-29 11:48:00 -0400
+
+**Model/config.** Claude Opus 4.8 (1M context), Claude Code CLI. Follow-up to
+the 11:35 entry.
+
+**Intent.** "Sync the final 40_build_summary results" from aiq-gpu — i.e. the
+per-scenario aggregate publication surfaces, not the whole result tree.
+
+**Where 40's results live.** `40_build_summary.sh` writes
+`<output.root>/reports/aggregate-summary` per scenario, where `<output.root>`
+comes from each scenario's virtual-experiment manifest (`e2e_vexp_manifest` →
+`configs/virtual-experiments/e2e-phi2-{vllm,incomparable,hf}.yaml`). All three
+resolve under `STORE_ROOT` at
+`/data/crfm-helm-audit-store/virtual-experiments/<name>/reports/aggregate-summary`.
+
+**What I built.**
+[`42_rsync_summaries_from_aiq_gpu.sh`](../e2e-tests/42_rsync_summaries_from_aiq_gpu.sh)
+— discovers each scenario's summary dir exactly as `40` does (loop `E2E_TARGETS`,
+honor `VEXP_MANIFEST`) and pulls only those, mirrored. `SYNC_FULL_OUTPUT=1` pulls
+the whole `output.root` instead. To avoid duplicating the rsync engine, I
+factored the host-resolution + pull logic out of `17` into
+[`_rsync_lib.sh`](../e2e-tests/_rsync_lib.sh) (`aiq_remote` / `aiq_ssh_cmd` /
+`aiq_rsync_pull` / `aiq_on_err`) and refactored `17` to source it. Two real
+callers now share identical knobs (`AIQ_GPU_HOST`/`AIQ_GPU_USER`/`SSH_PORT`/
+`DRY_RUN`/`DELETE`/`RSYNC_EXTRA`), so the abstraction isn't premature.
+
+**Design choices.** (1) Path discovery without a yaml dependency: each e2e
+manifest has a single top-level `name:` and a single `root:`, so `_lib.sh`'s
+`_e2e_yaml_scalar` resolves both — better than `40`'s `PYTHON_BIN` yaml read for a
+fetch utility that may run outside the analysis venv. (2) `42` sources `_lib.sh`
+(like its sibling `40`) for `E2E_TARGETS`/`e2e_vexp_manifest`; `17` deliberately
+still does NOT (pure fetch, no infer-stack side effects) and sources only
+`_rsync_lib.sh`. The two libs are layered so both patterns work. (3) `VEXP_MANIFEST`
+contract matches `40` exactly: both `cd "$ROOT"` then open the manifest, so a
+relative `VEXP_MANIFEST` must be ROOT-relative or absolute (a wrong relative path
+WARNs + skips rather than failing hard).
+
+**Verified.** `bash -n` clean on all three. Shim-tested: `17` full-pull argv is
+byte-identical to its pre-refactor output (regression clean); `42` default emits
+the three `reports/aggregate-summary` mirrored pulls; `SYNC_FULL_OUTPUT=1` +
+user@host + port + `DELETE` + single `VEXP_MANIFEST` assemble correctly. **Not
+verified:** a live transfer — still no `aiq-gpu` block in `~/.ssh/config` here.
+
+## 2026-06-29 12:10:00 -0400
+
+**Model/config.** Claude Opus 4.8 (1M context), Claude Code CLI. Same session.
+
+**Change.** Per user request, flipped `42_rsync_summaries_from_aiq_gpu.sh`
+defaults: `SYNC_FULL_OUTPUT` now defaults to **1** (pull the whole `output.root`,
+not just `reports/aggregate-summary`) and `DELETE` now defaults to **1**
+(mirror with `rsync --delete`). Motivation: the diagnosed failure left a *stale*
+`analysis/core-reports/.../core_metric_report.*` (June 25) sitting next to a
+fresh `experiment_summary.json` that recorded `n_built_reports: 0` — an additive
+pull would preserve that misleading leftover. A delete-mirror of the full root
+makes the local copy exactly match aiq-gpu. Both knobs stay overridable
+(`SYNC_FULL_OUTPUT=0` → summary-only, `DELETE=0` → additive); `DRY_RUN=1` keeps
+`--delete` in the argv so the preview shows deletions too.
+
+**Scope.** Only `42`. Left `17` (generic whole-root puller) safe-by-default —
+delete-mirroring all of `STORE_ROOT`/`RESULTS_ROOT` is far more destructive and
+wasn't requested. `DELETE` set in `42` (not the shared `_rsync_lib.sh`), so the
+lib default and `17` are untouched. Shim-tested: default emits 3× full-root
+`--delete` pulls; overrides and DRY_RUN behave.
+
+## 2026-06-29 12:30:00 -0400
+
+**Model/config.** Claude Opus 4.8 (1M context), Claude Code CLI. Same session.
+
+**Symptom.** After the transformers<5 / hub==0.36.2 env fix, vllm + incomparable
+analyzed (rows=1) but the **hf** scenario still showed "completed not analyzed".
+
+**Root cause (from the captured conversion traceback,
+`/data/.../eee/by-run-path/5783e060d17edf8e/status.json`).** The from-spec
+deployment-rewrite records `adapter_spec.model_deployment = huggingface/phi-2-local`
+(local HF client; model + tokenizer = microsoft/phi-2 in the run's
+`prod_env/model_deployments.yaml`). The HELM→EEE converter
+(`every_eval_ever.adapter._extract_model_info`) calls
+`get_model_deployment("huggingface/phi-2-local")`. HELM checks the EXPLICIT
+registry first, then — on miss — a dynamic `huggingface/<id>` generator
+(`huggingface_model_deployments.get_huggingface_model_deployment`) that EAGERLY
+`AutoTokenizer.from_pretrained("phi-2-local")` to build the deployment → `OSError:
+phi-2-local is not a local folder`. The converter only registers HELM *builtin*
+configs (at adapter import), never the run's prod_env, so the explicit override
+is missing and the generator fires. **vLLM escapes purely by prefix:** `vllm/...`
+has no generator, so `get_model_deployment` raises NotFound and the adapter falls
+back to `adapter_spec.model` (microsoft/phi-2). The `huggingface/` prefix is the
+poison.
+
+**Fix.** `eval_audit/normalized/eee_artifacts.py`: new
+`_register_run_local_helm_configs(run_path)` walks up to the run's `prod_env/` and
+`register_configs_from_directory(...)` it BEFORE `transform_from_directory`, in
+both `convert_helm_run_to_cached_eee` and `convert_local_helm_run_to_eee`
+(records the dir under `status["registered_prod_env"]`). Explicit-registry-first
+lookup means the run's `huggingface/phi-2-local` now wins and the eager generator
+never runs. Proven **output-identical** for vllm/incomparable: with or without the
+explicit deployment, `_extract_model_info` yields name=id=microsoft/phi-2,
+developer=microsoft, platform=vllm (the converter never `from_pretrained`s, so the
+deployment is metadata-only) — zero regression. Best-effort + additive (returns
+None / swallows errors; never aborts a conversion).
+
+**Verified.** Drove the venv site-packages with agent's matching cpython-3.14.5
+(venv interpreter symlink is dangling for the `agent` user) + repo-first
+PYTHONPATH so the patched code ran: cleared the failed cache and re-converted the
+hf run → `status=generated` (was conversion_failed). `eval_audit` is an editable
+install, so the fix is live in the user's venv. Next: user re-runs
+`./30_compose.sh && ./40_build_summary.sh` for hf (reuses the now-cached
+conversion → rows=1). **Uncommitted**, pending their end-to-end confirmation.
