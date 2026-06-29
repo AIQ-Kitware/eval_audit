@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the FULL manifest for each of the six OLMo presets via per-run GPU leasing.
+# Run the FULL manifest for each of the seven OLMo presets via per-run GPU leasing.
 #
 # This is the heavy counterpart to 10_run_smoke_grid.sh: where the smoke grid
 # runs 1-4 cheap entries per model as a preflight, the full grid runs every

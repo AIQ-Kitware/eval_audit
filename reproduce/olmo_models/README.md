@@ -7,14 +7,22 @@ is a fast end-to-end exercise of the run path; the full grid is the actual
 reproducibility batch, and the downstream index → compose → summary steps operate
 on it.
 
+> **Faithful replay (from-spec) is the default.** Each local run **replays the
+> official HELM `run_spec.json` verbatim** rather than reconstructing the recipe
+> from a hand-authored run-entry. The grids pass `--from-spec` to
+> `export-benchmark-bundle` unconditionally (every OLMo preset is comparable —
+> there is no temperature negative control), so the local reproduction differs
+> from the official **only by model execution**: a metric difference isolates the
+> model, not recipe drift. See [From-spec replay](#from-spec-replay) below.
+
 The grouping is deliberately **additive**: each preset keeps its own
 `experiment_name`/`suite` and runs as an isolated job; the virtual experiment
 re-stamps their index rows under one name (`olmo-models`) for reporting.
-The six per-model experiments remain independently analyzable. (Sharing a literal
+The seven per-experiment results remain independently analyzable. (Sharing a literal
 `experiment_name` across the presets would be destructive — Stage 5 filters by
-exact `experiment_name`, so per-model reports would no longer be addressable.)
+exact `experiment_name`, so per-experiment reports would no longer be addressable.)
 
-## The six targets
+## The targets — seven experiments over six models
 
 Each has an infer-stack profile `<preset>-single`. The presets declare
 `access_kind: vllm-direct`, but **this runbook routes through the LiteLLM gateway
@@ -22,14 +30,25 @@ Each has an infer-stack profile `<preset>-single`. The presets declare
 (see below). Ordered smallest → largest (the grids run them in this order). Each
 preset has a `-smoke` and a `-full` experiment; the grouped report uses `-full`:
 
-| preset | profile | full `experiment_name` |
-|---|---|---|
-| `allenai-olmoe-1b-7b-0125-instruct` | `allenai-olmoe-1b-7b-0125-instruct-single` | `audit-allenai-olmoe-1b-7b-0125-instruct-full` |
-| `allenai-olmo-7b` | `allenai-olmo-7b-single` | `audit-allenai-olmo-7b-full` |
-| `allenai-olmo-1-7-7b` | `allenai-olmo-1-7-7b-single` | `audit-allenai-olmo-1-7-7b-full` |
-| `allenai-olmo-2-1124-7b-instruct` | `allenai-olmo-2-1124-7b-instruct-single` | `audit-allenai-olmo-2-1124-7b-instruct-full` |
-| `allenai-olmo-2-1124-13b-instruct` | `allenai-olmo-2-1124-13b-instruct-single` | `audit-allenai-olmo-2-1124-13b-instruct-full` |
-| `allenai-olmo-2-0325-32b-instruct` | `allenai-olmo-2-0325-32b-instruct-single` | `audit-allenai-olmo-2-0325-32b-instruct-full` |
+| preset | profile | full `experiment_name` | `precomputed_root` (from-spec source) |
+|---|---|---|---|
+| `allenai-olmoe-1b-7b-0125-instruct` | `allenai-olmoe-1b-7b-0125-instruct-single` | `audit-allenai-olmoe-1b-7b-0125-instruct-full` | `/data/crfm-helm-public` |
+| `allenai-olmo-7b-mmlu` | `allenai-olmo-7b-single` | `audit-allenai-olmo-7b-mmlu-full` | `/data/crfm-helm-public/mmlu` |
+| `allenai-olmo-7b-lite` | `allenai-olmo-7b-single` | `audit-allenai-olmo-7b-lite-full` | `/data/crfm-helm-public/lite` |
+| `allenai-olmo-1-7-7b` | `allenai-olmo-1-7-7b-single` | `audit-allenai-olmo-1-7-7b-full` | `/data/crfm-helm-public/mmlu` |
+| `allenai-olmo-2-1124-7b-instruct` | `allenai-olmo-2-1124-7b-instruct-single` | `audit-allenai-olmo-2-1124-7b-instruct-full` | `/data/crfm-helm-public` |
+| `allenai-olmo-2-1124-13b-instruct` | `allenai-olmo-2-1124-13b-instruct-single` | `audit-allenai-olmo-2-1124-13b-instruct-full` | `/data/crfm-helm-public` |
+| `allenai-olmo-2-0325-32b-instruct` | `allenai-olmo-2-0325-32b-instruct-single` | `audit-allenai-olmo-2-0325-32b-instruct-full` | `/data/crfm-helm-public` |
+
+**Why seven rows for six models:** `allenai/olmo-7b` was run by HELM under **two
+official suites** — the full-MMLU suite (`/mmlu` v1.1.0) and HELM-Lite (`/lite`
+v1.2.0). The per-subject MMLU runs exist in *both* (the Lite dir name is a
+token-subset of the MMLU one), so a shared `precomputed_root` would make from-spec
+discovery ambiguous. Splitting olmo-7b into **`-mmlu`** and **`-lite`** — each with
+its own per-suite root — lets every discovery key resolve to exactly one official
+run. Both experiments serve the same model via the one `allenai-olmo-7b-single`
+endpoint. (`08_check_discovery.sh` enforces 0 NO_MATCH / 0 AMBIGUOUS across all
+seven.)
 
 The presets and their smoke/full `run_entries` already live in
 [`eval_audit/integrations/infer_stack/adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py)
@@ -49,10 +68,17 @@ ships its own infer-stack config (new catalog/leasing schema):
 - [`config/infer_stack/settings.yaml`](config/infer_stack/settings.yaml) —
   durable leasing settings (`litellm: true`, `ui: false`, `backend: compose`).
 
-`_lib.sh` sets `INFER_STACK_CONFIG_DIR` to that dir by default (and
-`INFER_STACK_DATA_DIR`, so `infer-stack env` and `acquire` agree on where the
-managed `.env`/ledger live — C-2). All six endpoints have been validated to
-resolve via the real `infer_stack.leasing.Catalog`.
+`_lib.sh` sets `INFER_STACK_CONFIG_DIR` to that dir by default and resolves
+`INFER_STACK_DATA_DIR` **once** (then exports it, so `infer-stack env` and the
+bracket's `acquire` agree on where the managed `.env`/ledger live — C-2). The data
+dir is also **bind-mounted into the vLLM/LiteLLM containers** (HF weight cache +
+gateway route table), so it must live on a docker-mountable big disk; the
+resolution order is `INFER_STACK_DATA_DIR` env > the `data_dir:` pin in
+[`config/infer_stack/settings.yaml`](config/infer_stack/settings.yaml) >
+`${INFER_STACK_DATA_ROOT:-/data/service}/infer-stack`, and `_lib.sh` warns loudly
+(rather than silently relocating to an NFS `$HOME`) if the chosen dir is unwritable
+or on NFS/autofs. All six endpoints have been validated to resolve via the real
+`infer_stack.leasing.Catalog`.
 
 **Still verify before a real run** (these are best-effort defaults, flagged in
 the catalog.yaml comments):
@@ -81,14 +107,15 @@ guidance if any is missing.
 ```bash
 ./docker/build.sh         # build eval-audit-helm-runner:dev (containerized HELM is ON by default)
 ./00_check_env.sh         # eval-audit-check-env
-./05_check_profiles.sh    # verify the six <preset>-single endpoints are defined
+./05_check_profiles.sh    # verify the <preset>-single endpoints are defined
 ./06_check_hf_auth.sh     # verify a HuggingFace token (gated gpqa dataset needs it)
 ./07_check_container_image.sh  # verify docker + the container image (required; containerization is mandatory)
-./10_run_smoke_grid.sh    # preflight: gc -> gateway bootstrap -> per model (export bundle -> run smoke --lease)
+./08_check_discovery.sh   # from-spec preflight: every run-entry resolves 1:1 to an official run_spec.json (0 NO_MATCH / 0 AMBIGUOUS)
+./10_run_smoke_grid.sh    # preflight: gc -> gateway bootstrap -> per model (export --from-spec bundle -> run smoke --lease)
 ./15_run_full_grid.sh     # per model: same, but run the FULL manifest (the reproducibility batch)
 ./20_index_local.sh       # eval-audit-index -> audit_results_index.csv (verifies the -full run dirs)
 ./30_compose.sh           # build the virtual experiment from the -full runs (the grouping step)
-./40_build_summary.sh     # aggregate publication surface across all six
+./40_build_summary.sh     # aggregate publication surface across all seven
 ```
 
 `./docker/build.sh` is a required prerequisite — containerization is mandatory
@@ -142,6 +169,43 @@ Leasing is the **orthogonal** axis (always on via `--lease`): the container pins
 where the HELM client runs; the lease acquires the served model's GPU. See
 [`eval_audit/pipelines/lease_bracket.py`](../../eval_audit/pipelines/lease_bracket.py).
 
+## From-spec replay
+
+Faithful replay is the **default and only** path for this runbook (the grids pass
+`--from-spec` to `export-benchmark-bundle` unconditionally — every OLMo preset is
+comparable, so unlike the phi-2 e2e there is no negative-control carve-out). The
+chain:
+
+1. **Discovery.** Each preset's `run_entries` are reduced to bare *discovery keys*
+   (benchmark stem + `model=` + only the disambiguating tokens that appear in the
+   official dir name). The exporter resolves each key against the preset's
+   `precomputed_root` with a token-subset matcher and locates the **one** official
+   HELM run dir, whose `run_spec.json` is the authoritative recipe.
+   `08_check_discovery.sh` runs this same matcher offline (CPU-only) and fails on
+   any NO_MATCH (nothing to replay) or AMBIGUOUS (the suite split / root scoping
+   failed to disambiguate) — run it after any preset edit.
+2. **Replay.** The bundle manifest carries `from_run_spec: true` +
+   `precomputed_root`; the kwdagger bridge selects the replay pipeline from that
+   field and drives HELM from the discovered `run_spec.json` **verbatim** — method,
+   instructions (incl. any opt-in run-expander the run name doesn't show), CoT,
+   temperature, token limits all come from the official spec, not the entry. This
+   is what makes the [BBQ instruction drift](NOTES-bbq-instructions-drift.md) and
+   the [dropped run-expander keys](NOTES-dropped-run-expander-keys.md) vanish by
+   construction.
+3. **Deployment rewrite.** The official spec names the official endpoint
+   (`together/olmo-7b`, `huggingface/olmo-2-…`, …). The exporter sets the
+   manifest's `model_deployment` to the bundle's **own** local name
+   (`vllm/allenai-<model>`) and the replay rewrites `adapter_spec.model_deployment`
+   to it — so the produced run records the *local* endpoint and the audit reports
+   `same_deployment=no` (the one recipe fact that legitimately differs is the
+   engine). A pure by-name replay would instead record the official name and mask
+   the substitution; the rewrite is what keeps it honest.
+
+The methodological payoff: a metric difference between the local and official run
+isolates **model execution**, because every other recipe fact is the official one,
+replayed verbatim. See
+[`docs/planning/olmo-from-run-spec-migration-plan.md`](../../docs/planning/olmo-from-run-spec-migration-plan.md).
+
 ## Knobs (env vars)
 
 - `OLMO_CONTAINER_IMAGE` (default `eval-audit-helm-runner:dev`) — the image the
@@ -153,7 +217,12 @@ where the HELM client runs; the lease acquires the served model's GPU. See
 - `VEXP_MANIFEST` — override the grouping manifest path
 - `INFER_STACK_CONFIG_DIR` — infer-stack config providing the OLMo endpoints
 - `INFER_STACK_DATA_DIR` — where the managed LiteLLM `.env` + lease ledger live
-  (C-2); defaults to the XDG location, override to a big-disk path per host
+  AND the dir bind-mounted into the containers (C-2); resolution is env > the
+  `settings.yaml` `data_dir:` pin > `${INFER_STACK_DATA_ROOT:-/data/service}/infer-stack`.
+  Must be a docker-mountable big disk (never NFS `$HOME`); `_lib.sh` warns if it
+  isn't
+- `INFER_STACK_DATA_ROOT` (default `/data/service`) — relocates just the *parent*
+  of the default data dir for hosts whose big disk isn't `/data/service`
 - `LITELLM_PORT` — LiteLLM gateway host port (default `14042`)
 - `OLMO_KEEP_GOING=1` — in `10_run_smoke_grid.sh` / `15_run_full_grid.sh`, attempt
   every model and report failures at the end instead of stopping on the first
@@ -170,17 +239,20 @@ where the HELM client runs; the lease acquires the served model's GPU. See
 ## What this assumes / produces
 
 - **Local-only by default.** The manifest has no `official_public_index` source,
-  so the report is the union of the six local full runs; comparability facts a
+  so the report is the union of the seven local full runs; comparability facts a
   public counterpart would supply collapse to `status=unknown` and surface as
   `comparability_unknown:*` warnings — expected for a local-only batch, not a bug.
   To compare against public HELM, uncomment the `official_public_index` source in
   the manifest (needs the public index + Stage-1 filter inventory present).
-  - **BBQ prompt drift (recipe hurdle).** When comparing against public HELM, the
-    BBQ runs on the four instruct models flag `comparability_drift:same_instructions`
-    because public HELM injects an `output_format_instructions` run-expander that is
-    invisible in the run name. The presets now match it; see
-    [`NOTES-bbq-instructions-drift.md`](NOTES-bbq-instructions-drift.md) for the full
-    write-up and the generalizable "the run name is not the recipe" lesson.
+  - **BBQ prompt drift — resolved by from-spec.** Public HELM injects an
+    `output_format_instructions` run-expander into the four instruct models' BBQ
+    runs that is invisible in the run name, so a run-entry reconstruction sent a
+    *different prompt* (`comparability_drift:same_instructions`). Faithful replay
+    makes this vanish by construction: the BBQ `adapter_spec.instructions` now comes
+    from the matched official `run_spec.json`, so `same_instructions` holds without
+    any hand-added token. See [`NOTES-bbq-instructions-drift.md`](NOTES-bbq-instructions-drift.md)
+    (kept as the historical case study for the generalizable "the run name is not
+    the recipe" lesson).
 - **LiteLLM / openai-compatible transport.** `10_run_smoke_grid.sh` /
   `15_run_full_grid.sh` read the master key once via `infer-stack env
   LITELLM_MASTER_KEY` at a one-time gateway bootstrap (the managed `.env` is

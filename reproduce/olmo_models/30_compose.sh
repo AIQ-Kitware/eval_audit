@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compose the OLMo-models virtual experiment: filter the six full experiments
+# Compose the OLMo-models virtual experiment: filter the seven full experiments
 # out of the audit index, re-stamp them under a single experiment name
 # (olmo-models), and run analyze_experiment per packet. This is the grouping
 # step. Requires the local index produced by 20_index_local.sh; it does not

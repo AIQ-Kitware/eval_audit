@@ -127,7 +127,8 @@ if [[ -n "$HF_TOKEN_VALUE" ]]; then
 fi
 unset HF_TOKEN_VALUE
 
-# The six OLMo presets, ordered smallest -> largest so a cheap model surfaces a
+# The seven OLMo from-spec experiments (six models; olmo-7b is split into -mmlu /
+# -lite, see below), ordered smallest -> largest so a cheap model surfaces a
 # pipeline failure before the expensive 32B load. Each row is "preset:endpoint".
 # The infer-stack catalog endpoint is the preset name with a "-single" suffix,
 # and the per-mode experiment_name is "audit-<preset>-smoke" /

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the smoke manifest for each of the six OLMo presets via per-run GPU leasing.
+# Run the smoke manifest for each of the seven OLMo presets via per-run GPU leasing.
 #
 # High-throughput per-run-lease fan-out (handoff §13): each scheduled HELM run
 # self-acquires its model's GPU lease (`acquire --queue`, queue-and-wait when the

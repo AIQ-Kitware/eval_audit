@@ -1,16 +1,33 @@
 # Reproduction hurdle: BBQ `output_format_instructions` (the silent prompt drift)
 
-**TL;DR.** Public-HELM BBQ runs prepend `"Answer with only a single
-letter."` to the prompt via an *opt-in* run-expander
-(`output_format_instructions=mcqa`) that does **not** appear in the
-persisted run name. A naive local replay of `bbq:...,method=multiple_choice_joint`
-omits the expander and sends a *different prompt* — same scenario, same
-method, same model, different instructions. This surfaces as a
-`comparability_drift:same_instructions` warning and is a genuine
-recipe-comparability hurdle, not a numeric reproducibility failure. The
-OLMo presets in
-[`adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py) now
-carry `output_format_instructions=mcqa` on the BBQ entries to match.
+> **✅ RESOLVED BY FROM-SPEC (kept as the historical "why").** The OLMo
+> reproduction now **replays the official `run_spec.json` verbatim** (the
+> from-spec migration —
+> [`docs/planning/olmo-from-run-spec-migration-plan.md`](../../docs/planning/olmo-from-run-spec-migration-plan.md)).
+> The local BBQ recipe *is* the official one: `adapter_spec.instructions` is
+> exactly what the matched official safety-suite run used, so
+> `same_instructions` holds **by construction** and the drift documented below
+> cannot occur. The "## The fix" section (hand-adding
+> `output_format_instructions=mcqa` to the run entries) was the run-entry-era
+> remedy and is **superseded**: under from-spec that token is *dropped* from the
+> discovery key (it is absent from the official dir name — the recipe comes from
+> `run_spec.json`, not the entry; migration plan §4.1). This document is kept as
+> the historical case study for the generalizable lesson — *the run name is not
+> the recipe* — which is exactly why faithful replay is the correct method.
+
+**TL;DR (historical, run-entry era).** Public-HELM BBQ runs prepend
+`"Answer with only a single letter."` to the prompt via an *opt-in*
+run-expander (`output_format_instructions=mcqa`) that does **not** appear in
+the persisted run name. A naive local replay of
+`bbq:...,method=multiple_choice_joint` omits the expander and sends a
+*different prompt* — same scenario, same method, same model, different
+instructions. This surfaces as a `comparability_drift:same_instructions`
+warning and is a genuine recipe-comparability hurdle, not a numeric
+reproducibility failure. The run-entry-era fix had the OLMo presets in
+[`adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py) carry
+`output_format_instructions=mcqa` on the BBQ entries to match; **from-spec
+supersedes this** (see banner above) — faithful replay matches the official
+instructions without the token.
 
 ## Symptom
 

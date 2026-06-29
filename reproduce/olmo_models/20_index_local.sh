@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Re-index the local audit results so all six OLMo full experiments land in
+# Re-index the local audit results so all seven OLMo full experiments land in
 # $AUDIT_STORE_ROOT/indexes/audit_results_index.csv, which the virtual-experiment
 # composer reads in the next step. The grouped report is built from the FULL
 # runs (audit-<preset>-full); the smoke grid is a preflight only.

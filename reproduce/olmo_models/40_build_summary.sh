@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the aggregate publication surface for the OLMo-models virtual experiment,
 # running against the synthesized index slice produced by 30_compose.sh. This is
-# the single grouped report spanning all six OLMo full runs.
+# the single grouped report spanning all seven OLMo full runs.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"

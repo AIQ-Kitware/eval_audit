@@ -1,5 +1,17 @@
 # Reference: HELM run-expander keys that "drop" out of run names
 
+> **✅ RESOLVED BY FROM-SPEC for the OLMo reproduction (kept as the reference).**
+> This entire "droppable expander" footgun is moot now that the OLMo runbook
+> **replays the official `run_spec.json` verbatim** (the from-spec migration —
+> [`docs/planning/olmo-from-run-spec-migration-plan.md`](../../docs/planning/olmo-from-run-spec-migration-plan.md)):
+> there is no recipe reconstruction from run names, so no expander can be silently
+> dropped — the materialized `adapter_spec`/`metric_specs` come straight from the
+> matched official spec. The run-entries that remain in the presets are reduced to
+> bare *discovery keys* (benchmark stem + `model=` + only disambiguating tokens
+> present in the official dir name); everything else is read from the spec. Kept as
+> the key-by-key reference for *why* faithful replay is the correct method and for
+> any future run-entry-based work outside the from-spec path.
+
 **Why this matters.** A HELM run entry is a string like
 `bbq:subject=all,method=multiple_choice_joint,output_format_instructions=mcqa,max_train_instances=0,model=...`.
 Each `key=value` pair either feeds a scenario/adapter argument or maps to a
