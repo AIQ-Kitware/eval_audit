@@ -22,7 +22,9 @@ sources:
     fpath: /data/crfm-helm-audit-store/indexes/audit_results_index.csv
     include_experiments:
       - audit-allenai-olmoe-1b-7b-0125-instruct-full
-      - audit-allenai-olmo-7b-full
+      # olmo-7b split into two from-spec experiments (full-MMLU + HELM-Lite suites)
+      - audit-allenai-olmo-7b-mmlu-full
+      - audit-allenai-olmo-7b-lite-full
       - audit-allenai-olmo-1-7-7b-full
       - audit-allenai-olmo-2-1124-7b-instruct-full
       - audit-allenai-olmo-2-1124-13b-instruct-full

@@ -163,7 +163,18 @@ the e2e; once that image carries `materialize_helm_run_from_spec` + the
 inherits it. Verify the pinned digest includes both (`07_check_container_image.sh`).
 The converter `prod_env` fix (`b5c4cfe`) is already in the tree.
 
-### Change 1 — reconcile run-entries + add from-spec fields (the core change)
+### Change 1 — reconcile run-entries + add from-spec fields (the core change) — **DONE**
+**Outcome:** all 7 presets resolve 1:1 (149 entries, smoke + full, 0 NO_MATCH /
+0 AMBIGUOUS under `--strict`). **olmo-7b was split** (per the user decision) into
+`allenai-olmo-7b-mmlu` (57 eval_split=test → `/data/crfm-helm-public/mmlu`) and
+`allenai-olmo-7b-lite` (19 → `/data/crfm-helm-public/lite`: the 14 lite
+benchmarks + the 5 HELM-Lite MMLU subjects) — both serve the one
+`allenai-olmo-7b-single` endpoint; `OLMO_TARGETS` and `olmo-models.yaml` updated.
+The bbq `output_format_instructions=mcqa` drop was the only token reduction
+needed; the 5 olmo-7b mmlu pairs are NOT dupes (each variant reproduces a
+different official suite — see §4.1), so they were kept and disambiguated by the
+split, not removed.
+
 Per preset, in `adapter.py`'s `smoke_manifest` / `full_manifest`:
 1. **Add** `precomputed_root: <per-table>`, `container_network: host`,
    `container_gpus: none`, `hf_cache_dir: ~/.cache/eval-audit-hf` (mirror the

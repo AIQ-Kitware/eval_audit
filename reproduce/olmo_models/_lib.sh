@@ -86,7 +86,11 @@ unset HF_TOKEN_VALUE
 # "audit-<preset>-full" (smoke is a preflight; the full runs feed indexing).
 OLMO_TARGETS=(
   "allenai-olmoe-1b-7b-0125-instruct:allenai-olmoe-1b-7b-0125-instruct-single"
-  "allenai-olmo-7b:allenai-olmo-7b-single"
+  # olmo-7b is split into two from-spec experiments (-mmlu / -lite) reproducing its
+  # full-MMLU and HELM-Lite official runs from per-suite precomputed_roots; both
+  # serve the same model, so both point at the one allenai-olmo-7b-single endpoint.
+  "allenai-olmo-7b-mmlu:allenai-olmo-7b-single"
+  "allenai-olmo-7b-lite:allenai-olmo-7b-single"
   "allenai-olmo-1-7-7b:allenai-olmo-1-7-7b-single"
   "allenai-olmo-2-1124-7b-instruct:allenai-olmo-2-1124-7b-instruct-single"
   "allenai-olmo-2-1124-13b-instruct:allenai-olmo-2-1124-13b-instruct-single"

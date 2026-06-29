@@ -143,7 +143,12 @@ def main(argv: list[str] | None = None) -> int:
         "repeatable. Lets you validate a reduced discovery key before editing the "
         "preset (migration plan Change 1).",
     )
-    ap.add_argument("--precomputed-root", required=True, type=Path)
+    ap.add_argument(
+        "--precomputed-root",
+        type=Path,
+        default=None,
+        help="root to search; defaults to the preset's manifest precomputed_root",
+    )
     ap.add_argument("--mode", choices=("smoke", "full"), default="full")
     ap.add_argument(
         "--strict",
@@ -153,15 +158,31 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     args = ap.parse_args(argv)
 
-    root: Path = args.precomputed_root
-    if not root.is_dir():
-        raise SystemExit(f"precomputed_root does not exist: {root}")
-
     if not args.preset and not args.entry:
         raise SystemExit("provide --preset and/or one or more --entry")
     entries = list(args.entry)
     if args.preset:
         entries = _load_run_entries(args.preset, args.mode) + entries
+
+    root: Path | None = args.precomputed_root
+    if root is None:
+        # Default to the preset's own precomputed_root, so the dry-check validates
+        # against the exact root the from-spec replay will use.
+        if not args.preset:
+            raise SystemExit("--precomputed-root is required when no --preset is given")
+        from eval_audit.integrations.infer_stack.adapter import PRESET_CONFIGS
+
+        pr = (PRESET_CONFIGS[args.preset].get(f"{args.mode}_manifest") or {}).get(
+            "precomputed_root"
+        )
+        if not pr:
+            raise SystemExit(
+                f"preset {args.preset!r} {args.mode}_manifest has no precomputed_root; "
+                "pass --precomputed-root explicitly"
+            )
+        root = Path(pr)
+    if not root.is_dir():
+        raise SystemExit(f"precomputed_root does not exist: {root}")
     print(
         f"[discovery] preset={args.preset or '(--entry)'} mode={args.mode} "
         f"root={root} entries={len(entries)} — enumerating runs…",

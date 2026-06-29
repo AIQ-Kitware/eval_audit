@@ -25,19 +25,20 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
 
-PRECOMPUTED_ROOT="${PRECOMPUTED_ROOT:-/data/crfm-helm-public}"
 MODE="${MODE:-full}"
 strict_flag=(); [[ "${STRICT:-0}" == 1 ]] && strict_flag=(--strict)
-
-if [[ ! -d "$PRECOMPUTED_ROOT" ]]; then
-  echo "FAIL: PRECOMPUTED_ROOT not found: $PRECOMPUTED_ROOT" >&2
-  echo "  (set PRECOMPUTED_ROOT to the public HELM corpus root)" >&2
-  exit 1
+# By default each preset is checked against ITS OWN manifest precomputed_root
+# (olmo-7b-mmlu -> /mmlu, olmo-7b-lite -> /lite, instruct -> the parent). Set
+# PRECOMPUTED_ROOT to force one root for every preset (debugging only).
+root_override=()
+if [[ -n "${PRECOMPUTED_ROOT:-}" ]]; then
+  [[ -d "$PRECOMPUTED_ROOT" ]] || { echo "FAIL: PRECOMPUTED_ROOT not found: $PRECOMPUTED_ROOT" >&2; exit 1; }
+  root_override=(--precomputed-root "$PRECOMPUTED_ROOT")
 fi
 
 echo "=================================================================="
 echo "== from-spec discovery dry-check (Change 4)"
-echo "==   root=$PRECOMPUTED_ROOT  mode=$MODE"
+echo "==   root=${PRECOMPUTED_ROOT:-<per-preset precomputed_root>}  mode=$MODE"
 echo "=================================================================="
 
 failed_presets=()
@@ -48,7 +49,7 @@ for target in "${OLMO_TARGETS[@]}"; do
   echo "-- $preset"
   echo "------------------------------------------------------------------"
   if PYTHONPATH="$ROOT" "$PYTHON_BIN" -m eval_audit.cli.check_precomputed_discovery \
-       --preset "$preset" --precomputed-root "$PRECOMPUTED_ROOT" --mode "$MODE" \
+       --preset "$preset" --mode "$MODE" "${root_override[@]}" \
        "${strict_flag[@]}"; then
     :
   else

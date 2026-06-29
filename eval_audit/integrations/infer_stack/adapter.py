@@ -471,9 +471,18 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
     # exact duplicate of ``e2e-phi_2-vllm-philosophy`` (whose smoke/full manifests
     # now carry container_network: host + hf_cache_dir, so it runs in-container
     # too). The image is supplied per-run via ``eval-audit-run --container-image``.
-    "allenai-olmo-7b": {
+    # allenai/olmo-7b is reproduced under TWO official HELM suites, split into
+    # two experiments so each from-spec discovery key resolves to exactly one
+    # official run (migration plan §4.1 + the olmo-7b suite-split decision):
+    #   -mmlu: the full MMLU suite (eval_split=test, /mmlu v1.1.0)
+    #   -lite: HELM-Lite (commonsense/gsm/legalbench/med_qa/narrative_qa/wmt_14
+    #          + the 5 curated HELM-Lite MMLU subjects, /lite v1.2.0).
+    # The per-subject mmlu runs exist in BOTH suites (lite's dir name is a
+    # token-subset of mmlu's), so a shared root would be ambiguous; per-suite
+    # precomputed_root is what disambiguates.
+    "allenai-olmo-7b-mmlu": {
         "profile": "allenai-olmo-7b-single",
-        "bundle_name": "allenai-olmo-7b",
+        "bundle_name": "allenai-olmo-7b-mmlu",
         "access_kind": "vllm-direct",
         "model_deployment_name": "vllm/allenai-olmo-7b",
         # G1: HELM model/tokenizer aliases (moved out of the deleted infer_stack
@@ -489,67 +498,45 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
         # returns ContextWindowExceededError. Keep <= models.yaml max_model_len.
         "helm_max_sequence_and_generated_tokens_length": 2016,
         "smoke_manifest": {
-            "experiment_name": "audit-allenai-olmo-7b-smoke",
-            "description": "Smoke-test batch for allenai/olmo-7b; run_entries from candidate_runs.json.",
+            "experiment_name": "audit-allenai-olmo-7b-mmlu-smoke",
+            "description": "Smoke batch for allenai/olmo-7b (mmlu suite); from-spec replay of the official run_spec.json.",
             "run_entries": [
-                "commonsense:method=multiple_choice_joint,dataset=openbookqa,model=allenai/olmo-7b",
+                "mmlu:subject=abstract_algebra,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
             ],
-            "suite": "audit-allenai-olmo-7b-smoke",
+            "suite": "audit-allenai-olmo-7b-mmlu-smoke",
             "max_eval_instances": 5,
+            # From-spec recipe SOURCE (migration plan Change 1): the official
+            # run_spec.json is discovered under this root. mmlu
+            # suite only, so the per-subject mmlu runs that exist in BOTH suites
+            # resolve unambiguously (the other suite's dir is not under this root).
+            "precomputed_root": "/data/crfm-helm-public/mmlu",
             # Containerized HELM ("docker pipeline") is mandatory; the grid passes
             # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
-            # network=host so the in-container
-            # HELM client reaches the host-served model (vLLM behind LiteLLM);
-            # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
-            # entries have no local-HF judge model). See docs/container-execution.md.
+            # network=host so the in-container HELM client reaches the
+            # host-served model (vLLM behind LiteLLM); gpus=none keeps HELM off
+            # the serving GPUs (MC/exact-match entries, no local-HF judge).
             "container_network": "host",
             "hf_cache_dir": "~/.cache/eval-audit-hf",
             "container_gpus": "none",
         },
         "full_manifest": {
-            "experiment_name": "audit-allenai-olmo-7b-full",
-            "description": "Full local-reproduction batch for allenai/olmo-7b; run_entries sourced from candidate_runs.json.",
+            "experiment_name": "audit-allenai-olmo-7b-mmlu-full",
+            "description": "Full batch for allenai/olmo-7b (mmlu suite); from-spec replay of the official run_spec.json.",
             "run_entries": [
-                "commonsense:method=multiple_choice_joint,dataset=openbookqa,model=allenai/olmo-7b",
-                "gsm:model=allenai/olmo-7b",
-                "legalbench:subset=abercrombie,model=allenai/olmo-7b",
-                "legalbench:subset=corporate_lobbying,model=allenai/olmo-7b",
-                "legalbench:subset=function_of_decision_section,model=allenai/olmo-7b",
-                "legalbench:subset=international_citizenship_questions,model=allenai/olmo-7b",
-                "legalbench:subset=proa,model=allenai/olmo-7b",
-                # ── DISABLED: ``math:`` × 7 subjects (algebra,
-                # counting_and_probability, geometry, intermediate_algebra,
-                # number_theory, prealgebra, precalculus) at level=1,
-                # CoT=True. HELM's MATHScenario loads the
-                # ``hendrycks/competition_math`` HuggingFace dataset, which
-                # has been **disabled on the Hub** (API reports
-                # ``disabled: true``; file resolves return HTTP 401). The
-                # script-based loader therefore can't fetch
-                # ``competition_math.py`` and dies with
-                # ``LocalEntryNotFoundError`` ("Couldn't find a dataset
-                # script ... Couldn't find on the Hub either"). This is a
-                # recipe/environment failure (dataset unavailable), not a
-                # reproducibility failure — filtered out until a surviving
-                # mirror is wired in as a declared substitution.
-                "med_qa:model=allenai/olmo-7b",
                 "mmlu:subject=abstract_algebra,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
-                "mmlu:subject=abstract_algebra,method=multiple_choice_joint,model=allenai/olmo-7b",
                 "mmlu:subject=anatomy,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=astronomy,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=business_ethics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=clinical_knowledge,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=college_biology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=college_chemistry,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
-                "mmlu:subject=college_chemistry,method=multiple_choice_joint,model=allenai/olmo-7b",
                 "mmlu:subject=college_computer_science,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=college_mathematics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=college_medicine,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=college_physics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=computer_security,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
-                "mmlu:subject=computer_security,method=multiple_choice_joint,model=allenai/olmo-7b",
                 "mmlu:subject=conceptual_physics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=econometrics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
-                "mmlu:subject=econometrics,method=multiple_choice_joint,model=allenai/olmo-7b",
                 "mmlu:subject=electrical_engineering,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=elementary_mathematics,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=formal_logic,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
@@ -591,36 +578,101 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 "mmlu:subject=security_studies,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=sociology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=us_foreign_policy,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
-                "mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=allenai/olmo-7b",
                 "mmlu:subject=virology,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
                 "mmlu:subject=world_religions,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b",
+            ],
+            "suite": "audit-allenai-olmo-7b-mmlu-full",
+            "max_eval_instances": 1000,
+            # From-spec recipe SOURCE (migration plan Change 1): the official
+            # run_spec.json is discovered under this root. mmlu
+            # suite only, so the per-subject mmlu runs that exist in BOTH suites
+            # resolve unambiguously (the other suite's dir is not under this root).
+            "precomputed_root": "/data/crfm-helm-public/mmlu",
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container HELM client reaches the
+            # host-served model (vLLM behind LiteLLM); gpus=none keeps HELM off
+            # the serving GPUs (MC/exact-match entries, no local-HF judge).
+            "container_network": "host",
+            "hf_cache_dir": "~/.cache/eval-audit-hf",
+            "container_gpus": "none",
+        },
+    },
+    "allenai-olmo-7b-lite": {
+        "profile": "allenai-olmo-7b-single",
+        "bundle_name": "allenai-olmo-7b-lite",
+        "access_kind": "vllm-direct",
+        "model_deployment_name": "vllm/allenai-olmo-7b",
+        # G1: HELM model/tokenizer aliases (moved out of the deleted infer_stack
+        # models.yaml). Base model → completions protocol (G2).
+        "helm_model_name": "allenai/olmo-7b",
+        "helm_tokenizer_name": "allenai/olmo-7b",
+        "protocol_mode": "completions",
+        # Reserve 32 tokens below max-model-len (2048) so the live vLLM path
+        # never trips its hard prompt+generation budget: HELM truncates the
+        # *raw* prompt to this budget, but the served client adds a few tokens
+        # (BOS / chat-template wrapper) HELM can't see. Without the reserve,
+        # num_output_tokens-heavy run_entries overflow by ~1-13 tokens and vLLM
+        # returns ContextWindowExceededError. Keep <= models.yaml max_model_len.
+        "helm_max_sequence_and_generated_tokens_length": 2016,
+        "smoke_manifest": {
+            "experiment_name": "audit-allenai-olmo-7b-lite-smoke",
+            "description": "Smoke batch for allenai/olmo-7b (lite suite); from-spec replay of the official run_spec.json.",
+            "run_entries": [
+                "commonsense:method=multiple_choice_joint,dataset=openbookqa,model=allenai/olmo-7b",
+            ],
+            "suite": "audit-allenai-olmo-7b-lite-smoke",
+            "max_eval_instances": 5,
+            # From-spec recipe SOURCE (migration plan Change 1): the official
+            # run_spec.json is discovered under this root. lite
+            # suite only, so the per-subject mmlu runs that exist in BOTH suites
+            # resolve unambiguously (the other suite's dir is not under this root).
+            "precomputed_root": "/data/crfm-helm-public/lite",
+            # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+            # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
+            # network=host so the in-container HELM client reaches the
+            # host-served model (vLLM behind LiteLLM); gpus=none keeps HELM off
+            # the serving GPUs (MC/exact-match entries, no local-HF judge).
+            "container_network": "host",
+            "hf_cache_dir": "~/.cache/eval-audit-hf",
+            "container_gpus": "none",
+        },
+        "full_manifest": {
+            "experiment_name": "audit-allenai-olmo-7b-lite-full",
+            "description": "Full batch for allenai/olmo-7b (lite suite); from-spec replay of the official run_spec.json.",
+            "run_entries": [
+                "commonsense:method=multiple_choice_joint,dataset=openbookqa,model=allenai/olmo-7b",
+                "gsm:model=allenai/olmo-7b",
+                "legalbench:subset=abercrombie,model=allenai/olmo-7b",
+                "legalbench:subset=corporate_lobbying,model=allenai/olmo-7b",
+                "legalbench:subset=function_of_decision_section,model=allenai/olmo-7b",
+                "legalbench:subset=international_citizenship_questions,model=allenai/olmo-7b",
+                "legalbench:subset=proa,model=allenai/olmo-7b",
+                "med_qa:model=allenai/olmo-7b",
+                "mmlu:subject=abstract_algebra,method=multiple_choice_joint,model=allenai/olmo-7b",
+                "mmlu:subject=college_chemistry,method=multiple_choice_joint,model=allenai/olmo-7b",
+                "mmlu:subject=computer_security,method=multiple_choice_joint,model=allenai/olmo-7b",
+                "mmlu:subject=econometrics,method=multiple_choice_joint,model=allenai/olmo-7b",
+                "mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=allenai/olmo-7b",
                 "narrative_qa:model=allenai/olmo-7b",
-                # ── DISABLED: ``natural_qa:`` × 2 modes (closedbook,
-                # openbook_longans). HELM's NaturalQuestions scenario fetches
-                # the dev shards (``nq-dev-0X.jsonl.gz``) from the public
-                # ``gs://natural_questions`` GCS bucket, which has **revoked
-                # anonymous reads** (HTTP 403 ``AccessDenied``). HELM downloads
-                # them with an unauthenticated ``urllib`` request, and the
-                # bucket denies even *authenticated* callers (it dropped
-                # ``allAuthenticatedUsers`` too — confirmed by an authenticated
-                # GET), so there is no credential that unblocks the fetch. This
-                # is a recipe/environment failure (dataset access-restricted),
-                # not a reproducibility failure — filtered out until a
-                # surviving mirror is wired in as a declared substitution.
                 "wmt_14:language_pair=cs-en,model=allenai/olmo-7b",
                 "wmt_14:language_pair=de-en,model=allenai/olmo-7b",
                 "wmt_14:language_pair=fr-en,model=allenai/olmo-7b",
                 "wmt_14:language_pair=hi-en,model=allenai/olmo-7b",
                 "wmt_14:language_pair=ru-en,model=allenai/olmo-7b",
             ],
-            "suite": "audit-allenai-olmo-7b-full",
+            "suite": "audit-allenai-olmo-7b-lite-full",
             "max_eval_instances": 1000,
+            # From-spec recipe SOURCE (migration plan Change 1): the official
+            # run_spec.json is discovered under this root. lite
+            # suite only, so the per-subject mmlu runs that exist in BOTH suites
+            # resolve unambiguously (the other suite's dir is not under this root).
+            "precomputed_root": "/data/crfm-helm-public/lite",
             # Containerized HELM ("docker pipeline") is mandatory; the grid passes
             # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
-            # network=host so the in-container
-            # HELM client reaches the host-served model (vLLM behind LiteLLM);
-            # gpus=none keeps HELM off the serving GPUs (these MC/exact-match
-            # entries have no local-HF judge model). See docs/container-execution.md.
+            # network=host so the in-container HELM client reaches the
+            # host-served model (vLLM behind LiteLLM); gpus=none keeps HELM off
+            # the serving GPUs (MC/exact-match entries, no local-HF judge).
             "container_network": "host",
             "hf_cache_dir": "~/.cache/eval-audit-hf",
             "container_gpus": "none",
@@ -644,9 +696,10 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             "experiment_name": "audit-allenai-olmo-2-0325-32b-instruct-smoke",
             "description": "Smoke-test batch for allenai/olmo-2-0325-32b-instruct; run_entries from candidate_runs.json.",
             "run_entries": [
-                "bbq:subject=all,method=multiple_choice_joint,output_format_instructions=mcqa,max_train_instances=0,model=allenai/olmo-2-0325-32b-instruct",
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmo-2-0325-32b-instruct",
             ],
             "suite": "audit-allenai-olmo-2-0325-32b-instruct-smoke",
+            "precomputed_root": "/data/crfm-helm-public",
             "max_eval_instances": 5,
             # Containerized HELM ("docker pipeline") is mandatory; the grid passes
             # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
@@ -662,12 +715,13 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             "experiment_name": "audit-allenai-olmo-2-0325-32b-instruct-full",
             "description": "Full local-reproduction batch for allenai/olmo-2-0325-32b-instruct; run_entries sourced from candidate_runs.json. Includes 1 gated-dataset run(s) (require HuggingFace auth).",
             "run_entries": [
-                "bbq:subject=all,method=multiple_choice_joint,output_format_instructions=mcqa,max_train_instances=0,model=allenai/olmo-2-0325-32b-instruct",
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmo-2-0325-32b-instruct",
                 "gpqa:subset=gpqa_main,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-0325-32b-instruct",
                 "ifeval:num_output_tokens=2048,model=allenai/olmo-2-0325-32b-instruct",
                 "mmlu_pro:subject=all,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-0325-32b-instruct",
             ],
             "suite": "audit-allenai-olmo-2-0325-32b-instruct-full",
+            "precomputed_root": "/data/crfm-helm-public",
             "max_eval_instances": 1000,
             # Containerized HELM ("docker pipeline") is mandatory; the grid passes
             # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
@@ -700,6 +754,7 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 "mmlu:subject=abstract_algebra,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
             ],
             "suite": "audit-allenai-olmo-1-7-7b-smoke",
+            "precomputed_root": "/data/crfm-helm-public/mmlu",
             "max_eval_instances": 5,
             # Containerized HELM ("docker pipeline") is mandatory; the grid passes
             # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
@@ -774,6 +829,7 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 "mmlu:subject=world_religions,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-1.7-7b",
             ],
             "suite": "audit-allenai-olmo-1-7-7b-full",
+            "precomputed_root": "/data/crfm-helm-public/mmlu",
             "max_eval_instances": 1000,
             # Containerized HELM ("docker pipeline") is mandatory; the grid passes
             # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
@@ -802,9 +858,10 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             "experiment_name": "audit-allenai-olmo-2-1124-13b-instruct-smoke",
             "description": "Smoke-test batch for allenai/olmo-2-1124-13b-instruct; run_entries from candidate_runs.json.",
             "run_entries": [
-                "bbq:subject=all,method=multiple_choice_joint,output_format_instructions=mcqa,max_train_instances=0,model=allenai/olmo-2-1124-13b-instruct",
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmo-2-1124-13b-instruct",
             ],
             "suite": "audit-allenai-olmo-2-1124-13b-instruct-smoke",
+            "precomputed_root": "/data/crfm-helm-public",
             "max_eval_instances": 5,
             # Containerized HELM ("docker pipeline") is mandatory; the grid passes
             # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
@@ -820,12 +877,13 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             "experiment_name": "audit-allenai-olmo-2-1124-13b-instruct-full",
             "description": "Full local-reproduction batch for allenai/olmo-2-1124-13b-instruct; run_entries sourced from candidate_runs.json. Includes 1 gated-dataset run(s) (require HuggingFace auth).",
             "run_entries": [
-                "bbq:subject=all,method=multiple_choice_joint,output_format_instructions=mcqa,max_train_instances=0,model=allenai/olmo-2-1124-13b-instruct",
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmo-2-1124-13b-instruct",
                 "gpqa:subset=gpqa_main,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-1124-13b-instruct",
                 "ifeval:num_output_tokens=2048,model=allenai/olmo-2-1124-13b-instruct",
                 "mmlu_pro:subject=all,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-1124-13b-instruct",
             ],
             "suite": "audit-allenai-olmo-2-1124-13b-instruct-full",
+            "precomputed_root": "/data/crfm-helm-public",
             "max_eval_instances": 1000,
             # Containerized HELM ("docker pipeline") is mandatory; the grid passes
             # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
@@ -856,6 +914,7 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 "gpqa:subset=gpqa_main,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-1124-7b-instruct",
             ],
             "suite": "audit-allenai-olmo-2-1124-7b-instruct-smoke",
+            "precomputed_root": "/data/crfm-helm-public",
             "max_eval_instances": 5,
             # Containerized HELM ("docker pipeline") is mandatory; the grid passes
             # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
@@ -872,11 +931,12 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             "description": "Full local-reproduction batch for allenai/olmo-2-1124-7b-instruct; run_entries sourced from candidate_runs.json. Includes 1 gated-dataset run(s) (require HuggingFace auth).",
             "run_entries": [
                 "gpqa:subset=gpqa_main,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-1124-7b-instruct",
-                "bbq:subject=all,method=multiple_choice_joint,output_format_instructions=mcqa,max_train_instances=0,model=allenai/olmo-2-1124-7b-instruct",
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmo-2-1124-7b-instruct",
                 "ifeval:num_output_tokens=2048,model=allenai/olmo-2-1124-7b-instruct",
                 "mmlu_pro:subject=all,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-1124-7b-instruct",
             ],
             "suite": "audit-allenai-olmo-2-1124-7b-instruct-full",
+            "precomputed_root": "/data/crfm-helm-public",
             "max_eval_instances": 1000,
             # Containerized HELM ("docker pipeline") is mandatory; the grid passes
             # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
@@ -905,9 +965,10 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             "experiment_name": "audit-allenai-olmoe-1b-7b-0125-instruct-smoke",
             "description": "Smoke-test batch for allenai/olmoe-1b-7b-0125-instruct; run_entries from candidate_runs.json.",
             "run_entries": [
-                "bbq:subject=all,method=multiple_choice_joint,output_format_instructions=mcqa,max_train_instances=0,model=allenai/olmoe-1b-7b-0125-instruct",
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmoe-1b-7b-0125-instruct",
             ],
             "suite": "audit-allenai-olmoe-1b-7b-0125-instruct-smoke",
+            "precomputed_root": "/data/crfm-helm-public",
             "max_eval_instances": 5,
             # Containerized HELM ("docker pipeline") is mandatory; the grid passes
             # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
@@ -923,12 +984,13 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             "experiment_name": "audit-allenai-olmoe-1b-7b-0125-instruct-full",
             "description": "Full local-reproduction batch for allenai/olmoe-1b-7b-0125-instruct; run_entries sourced from candidate_runs.json. Includes 1 gated-dataset run(s) (require HuggingFace auth).",
             "run_entries": [
-                "bbq:subject=all,method=multiple_choice_joint,output_format_instructions=mcqa,max_train_instances=0,model=allenai/olmoe-1b-7b-0125-instruct",
+                "bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=allenai/olmoe-1b-7b-0125-instruct",
                 "gpqa:subset=gpqa_main,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmoe-1b-7b-0125-instruct",
                 "ifeval:num_output_tokens=2048,model=allenai/olmoe-1b-7b-0125-instruct",
                 "mmlu_pro:subject=all,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmoe-1b-7b-0125-instruct",
             ],
             "suite": "audit-allenai-olmoe-1b-7b-0125-instruct-full",
+            "precomputed_root": "/data/crfm-helm-public",
             "max_eval_instances": 1000,
             # Containerized HELM ("docker pipeline") is mandatory; the grid passes
             # `eval-audit-run --container-image "$OLMO_CONTAINER_IMAGE"`.
