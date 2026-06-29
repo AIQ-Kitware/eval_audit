@@ -92,12 +92,21 @@ run_one() {
   #    pre-serve: each scheduled HELM run self-acquires "$endpoint" via --lease
   #    below; ref-counting coalesces a model's run_entries onto one deployment and
   #    the admission queue serializes models that can't co-host.
+  #
+  #    --from-spec is UNCONDITIONAL for OLMo (no e2e-style `e2e_uses_from_spec`
+  #    carve-out): every OLMo preset is comparable — there is no temperature
+  #    negative control whose deviation faithful replay would erase. The exporter
+  #    reads each preset's `precomputed_root` + emits `from_run_spec: true` and the
+  #    native `vllm/allenai-<model>` rewrite target (migration plan Change 2/3); the
+  #    bridge then selects the replay pipeline from `manifest['from_run_spec']`, so
+  #    the `eval-audit-run` line below is unchanged.
   "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
     --preset "$preset" \
     --bundle-root "$bundle_root" \
     --access-kind openai-compatible \
     --base-url "${LITELLM_BASE_URL}/v1" \
-    --api-key-value "$LEASE_MASTER_KEY"
+    --api-key-value "$LEASE_MASTER_KEY" \
+    --from-spec
 
   # 2. Optionally clear a prior run so kwdagger's skip_existing doesn't no-op this
   #    model. The smoke experiment_name is "audit-<preset>-smoke" and its results
