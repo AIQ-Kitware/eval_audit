@@ -132,6 +132,28 @@ stage_committed(){
     git -C "$src" archive --format=tar HEAD | tar -C "$dst" -xf -
 }
 
+# eval_audit is the superproject, not a submodule, and we only need the package
+# itself + its packaging files (uv_build reads pyproject.toml + README.md, and the
+# editable install registers the [project.entry-points.helm] plugins). Stage just
+# those paths so helm-run *inside* the image loads the same HELM overrides the host
+# venv does (e.g. the allenai/olmo-7b tokenizer repoint) — without dragging the
+# whole superproject (submodules, docs, tests, results) into the build context.
+EVAL_AUDIT_PATHS=(eval_audit pyproject.toml README.md)
+stage_eval_audit_committed(){
+    local dst="$1"
+    mkdir -p "$dst"
+    git -C "${REPO_ROOT}" archive --format=tar HEAD "${EVAL_AUDIT_PATHS[@]}" | tar -C "$dst" -xf -
+}
+copy_eval_audit_worktree(){
+    local dst="$1"
+    mkdir -p "$dst"
+    tar -C "${REPO_ROOT}" \
+        --exclude='__pycache__' \
+        --exclude='*.pyc' \
+        --exclude='*.egg-info' \
+        -cf - "${EVAL_AUDIT_PATHS[@]}" | tar -C "$dst" -xf -
+}
+
 log "Staging source (BUILD_FROM=${BUILD_FROM}) into ${STAGING_DIR}"
 rm -rf "${STAGING_DIR}"
 mkdir -p "${STAGING_DIR}"
@@ -139,10 +161,12 @@ mkdir -p "${STAGING_DIR}"
 if [[ "${BUILD_FROM}" == "committed" ]]; then
     stage_committed "${HELM_SUBMODULE}" "${STAGING_DIR}/helm"
     stage_committed "${MAGNET_SUBMODULE}" "${STAGING_DIR}/aiq-magnet"
+    stage_eval_audit_committed "${STAGING_DIR}/eval-audit"
 elif [[ "${BUILD_FROM}" == "worktree" ]]; then
     log "WARNING: worktree build is NON-REPRODUCIBLE (includes uncommitted state)"
     copy_worktree "${HELM_SUBMODULE}" "${STAGING_DIR}/helm"
     copy_worktree "${MAGNET_SUBMODULE}" "${STAGING_DIR}/aiq-magnet"
+    copy_eval_audit_worktree "${STAGING_DIR}/eval-audit"
 else
     die "BUILD_FROM must be 'committed' or 'worktree', got '${BUILD_FROM}'"
 fi

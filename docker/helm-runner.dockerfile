@@ -111,6 +111,27 @@ uv pip install -e /opt/src/aiq-magnet
 python -c "import helm, magnet; print('helm', getattr(helm, '__version__', '?'), '| magnet', magnet.__version__)"
 EOF
 
+# --- eval_audit HELM plugins (editable, --no-deps) -----------------------------
+# helm-run discovers HELM overrides via [project.entry-points.helm], but only for
+# packages installed in ITS environment. The host venv has eval_audit; this image
+# did not — so in-container helm-run fell back to the built-in allenai/olmo-7b
+# tokenizer config (trust_remote_code -> needs hf_olmo) and died, instead of the
+# eval_audit repoint to the transformers-native allenai/OLMo-7B-hf tokenizer.
+# Installing eval_audit here registers that entry point (and any future HELM
+# override) in-container, so the pinned image matches the host recipe.
+#
+# --no-deps is deliberate: the plugin only imports helm.benchmark.* (already
+# present), so its full dep tree (pandas/plotly/sklearn/kaleido/...) is dead
+# weight here, and a full resolve could pull crfm-helm from PyPI over the pinned
+# editable submodule. The /opt/src tree (incl. this dir) is copied to the final
+# stage, so the editable install resolves there too.
+COPY eval-audit/ /opt/src/eval-audit/
+RUN --mount=type=cache,target=/root/.cache/uv <<'EOF'
+set -eux
+uv pip install -e /opt/src/eval-audit --no-deps
+python -c "import eval_audit.integrations.helm_plugins; print('eval_audit helm plugins import ok')"
+EOF
+
 # ------------------------------------------------------------------------------
 # Stage 2: final — slim CUDA runtime + the prebuilt venv and source.
 # ------------------------------------------------------------------------------
@@ -148,7 +169,32 @@ ENV VIRTUAL_ENV=/opt/venv \
 # — e.g. a dangling venv python symlink. The builder's own import check passes
 # even when the final image is broken, because the managed interpreter still
 # exists there; this check is what actually guards the shipped image.
-RUN python --version && python -c "import helm, magnet; print('final-stage import ok')"
+#
+# Also assert the eval_audit HELM entry-point override actually resolves the way
+# helm-run will at run time. load_entry_point_plugins() swallows per-plugin import
+# errors (it only warns, then HELM silently falls back to the built-in config), so
+# a broken plugin would otherwise ship undetected and resurface as the in-container
+# "needs hf_olmo" tokenizer error. Exercise the real discovery path and confirm the
+# allenai/olmo-7b alias is repointed to the transformers-native -hf tokenizer.
+RUN <<'EOF'
+set -eux
+python --version
+python - <<'PY'
+import helm, magnet  # noqa: F401  -- interpreter + core imports sound
+from importlib.metadata import entry_points
+from helm.benchmark.run import load_entry_point_plugins
+from helm.benchmark.tokenizer_config_registry import get_tokenizer_config
+
+names = {ep.name for ep in entry_points().select(group="helm")}
+assert "eval-audit-tokenizer-overrides" in names, f"helm entry point missing: {sorted(names)}"
+
+load_entry_point_plugins("helm")  # the exact codepath helm-run main() runs
+tc = get_tokenizer_config("allenai/olmo-7b")
+got = (tc.tokenizer_spec.args or {}).get("pretrained_model_name_or_path") if tc else None
+assert got == "allenai/OLMo-7B-hf", f"olmo-7b tokenizer override not applied: {got!r}"
+print("final-stage import ok; eval_audit olmo-7b tokenizer override active")
+PY
+EOF
 
 # HuggingFace cache lives at a mount point, NOT baked into the image. The
 # eval_audit node bind-mounts a host directory here at run time. Setting HF_HOME
