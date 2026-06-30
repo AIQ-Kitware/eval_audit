@@ -141,7 +141,7 @@ supplied at run time via `--container-image`.
 ```bash
 ./00_check_env.sh             # eval-audit-check-env
 ./05_check_profiles.sh        # verify the phi2-single endpoint is defined (vLLM scenarios)
-./06_check_container_image.sh # verify the runner image exists (required; containerization is mandatory)
+./06_check_container_image.sh # verify the runner image exists AND probe its python env (langdetect + huggingface_hub==0.36.2); required, containerization is mandatory
 ./10_run_smoke_grid.sh        # preflight: gc -> gateway bootstrap -> per scenario (vllm: export bundle -> run smoke --lease; hf: run smoke)
 ./15_run_full_grid.sh         # per scenario: same, but run the FULL manifest (the batch)
 ./17_rsync_from_aiq_gpu.sh    # OPTIONAL: ran 10/15 on aiq-gpu instead? pull its mirrored /data roots back here
