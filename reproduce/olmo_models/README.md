@@ -3,9 +3,14 @@
 Runs the OLMo presets for the six AllenAI models in two passes — a cheap
 **smoke** preflight and the **full** candidate sweep — and folds the **full**
 results into a **single grouped report** via a virtual experiment. The smoke grid
-is a fast end-to-end exercise of the run path; the full grid is the actual
-reproducibility batch, and the downstream index → compose → summary steps operate
-on it.
+is a fast end-to-end exercise of the run path — and deliberately carries two
+recipe **canaries**: `wmt_14` (on `olmo-7b`) loads a `huggingface_hub`-version
+sensitive dataset and scores via `sacrebleu`, and `ifeval` (on
+`olmo-2-1124-7b-instruct`) imports `langdetect` — both from `crfm-helm[metrics]`.
+A mis-built or stale runner image (`[heim]` instead of `[all]`, or a floated hub)
+therefore fails this cheap preflight rather than dying deep in the full grid. The
+full grid is the actual reproducibility batch, and the downstream index → compose
+→ summary steps operate on it.
 
 > **Faithful replay (from-spec) is the default.** Each local run **replays the
 > official HELM `run_spec.json` verbatim** rather than reconstructing the recipe

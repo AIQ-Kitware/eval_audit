@@ -620,6 +620,13 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             "description": "Smoke batch for allenai/olmo-7b (lite suite); from-spec replay of the official run_spec.json.",
             "run_entries": [
                 "commonsense:method=multiple_choice_joint,dataset=openbookqa,model=allenai/olmo-7b",
+                # Canary (promoted from full_manifest): wmt_14 loads a HF dataset
+                # whose id resolution is huggingface_hub-version sensitive (the
+                # "wmt-14 isn't a valid HF dataset" failure) and scores via sacrebleu
+                # from crfm-helm[metrics]. Keeping it in the SMOKE set makes a stale
+                # or mis-built ([heim]-only / floated-hub) runner image fail this
+                # cheap preflight instead of deep in the full grid.
+                "wmt_14:language_pair=fr-en,model=allenai/olmo-7b",
             ],
             "suite": "audit-allenai-olmo-7b-lite-smoke",
             "max_eval_instances": 5,
@@ -912,6 +919,14 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
             "description": "Smoke-test batch for allenai/olmo-2-1124-7b-instruct; run_entries from candidate_runs.json.",
             "run_entries": [
                 "gpqa:subset=gpqa_main,use_chain_of_thought=true,use_few_shot=false,num_output_tokens=2048,model=allenai/olmo-2-1124-7b-instruct",
+                # Canary (promoted from full_manifest): ifeval's metric imports
+                # langdetect, which lives only in crfm-helm[metrics]/[cleva] — a
+                # [heim]-built runner image dies here with "ModuleNotFoundError:
+                # langdetect". One ifeval entry in the SMOKE set catches a
+                # mis-built/stale image on this cheap preflight, not the full grid.
+                # (The container env is shared across models, so a single instruct
+                # canary suffices for the whole grid.)
+                "ifeval:num_output_tokens=2048,model=allenai/olmo-2-1124-7b-instruct",
             ],
             "suite": "audit-allenai-olmo-2-1124-7b-instruct-smoke",
             "precomputed_root": "/data/crfm-helm-public",
