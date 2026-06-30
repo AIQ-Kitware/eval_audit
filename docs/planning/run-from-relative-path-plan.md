@@ -174,19 +174,15 @@ In the `from_run_spec` branch of `build_schedule_params`, when
 matrix value `helm.run_spec_rel_paths` (JSON-encoded map, like
 `lease_endpoints`). The docker-from-spec node passes the map through; the node
 resolves its own row by `map[run_entry]` (Change 1 + the node's per-run
-run_entry). No new matrix axis ⇒ **no dependency on kwdagger zip-vs-product
-semantics** — the robustness reason to prefer the map over a parallel
-`helm.run_spec_rel_path` axis (a parallel axis risks an N×N cross-product unless
-kwdagger is confirmed to zip equal-length axes; the map sidesteps that question
-entirely, just as `lease_endpoints` does).
-
-> **Cheaper variant, gated on a fact-check.** If kwdagger is confirmed to *zip*
-> equal-length matrix axes (not cross-product), the bridge can instead resolve
-> each absolute spec path itself and emit a parallel `helm.run_spec_json` axis
-> zipped with `helm.run_entry` — reusing the CLI's existing explicit-path mode
-> with **zero magnet change and no image rebuild**. Verify kwdagger's matrix
-> expansion before taking this; if it cross-products, it silently fans out wrong.
-> Default to the broadcast map (Change 1–3) unless that verification passes.
+run_entry). A broadcast map — not a parallel axis — is **required**, not merely
+preferred: **kwdagger does not zip; it always cross-products its matrix axes**
+(confirmed). So a parallel `helm.run_spec_rel_path` (or `helm.run_spec_json`)
+axis of length N alongside `helm.run_entry` of length N would expand to **N×N
+jobs**, pairing every run_entry with every rel-path — silently wrong. The single
+per-run axis stays `helm.run_entry`; everything else that varies per run must be
+a broadcast value the node resolves against its own run_entry, exactly as
+`lease_endpoints` already does. This also means the magnet node change (Change 1
++ 4) is **unavoidable** — there is no zero-rebuild shortcut via a parallel axis.
 
 ### Change 4 — from-spec docker node (`helm_docker_pipeline.py`)
 Thread `run_spec_rel_paths` through `MaterializeHelmRunFromSpecDockerNode` as a
@@ -326,10 +322,12 @@ matcher change, no negative guard, possibly no per-model root split)."
   be a schedule-time hard error (Change 5 validation), not a fall-through to
   discovery — falling through would reintroduce the drift for that one entry
   silently.
-- **kwdagger zip semantics (only if taking the Change 3 cheaper variant).** The
-  parallel-axis optimization is correct *only* if kwdagger zips equal-length axes.
-  Unverified here (kwdagger not importable in this env). Default to the broadcast
-  map, which is immune.
+- **kwdagger cross-products (confirmed) ⇒ the broadcast map is mandatory.**
+  kwdagger always takes the Cartesian product of matrix axes, so per-run data
+  cannot ride a parallel axis (it would fan out N×N). The `{run_entry: rel_path}`
+  broadcast map resolved at the node is the only correct carriage; there is no
+  zero-rebuild parallel-axis shortcut. (This is why Change 1 + 4 — the in-container
+  magnet change — are unavoidable.)
 - **Container rebuild discipline.** Changes 1+4 are in-container; gitlink bump +
   rebuild + re-pin before any grid uses the new node ([[container-env-frozen-at-build-time]]).
 - **Judge/annotator deployments (inherited, unchanged).** By-name judge
