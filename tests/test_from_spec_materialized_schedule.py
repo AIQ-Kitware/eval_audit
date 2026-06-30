@@ -68,6 +68,8 @@ def test_materialized_path_emits_submatrix_not_run_entry_axis() -> None:
     params = build_schedule_params(
         manifest,
         resolved_image=_FAKE_IMAGE,
+        # leasing requested ⇒ per-run frozen endpoints ride the submatrix
+        lease_entries={"helm.lease_queue": [True]},
         materialized_runs=runs,
         staging_root="/exp/materialized_run_specs",
     )
@@ -100,8 +102,9 @@ def test_materialized_params_expand_to_exactly_n_jobs() -> None:
     }
     runs = _materialized(4)
     params = build_schedule_params(
-        manifest, resolved_image=_FAKE_IMAGE, materialized_runs=runs,
-        staging_root="/exp/materialized_run_specs",
+        manifest, resolved_image=_FAKE_IMAGE,
+        lease_entries={"helm.lease_queue": [True]},  # leasing on ⇒ endpoints emitted
+        materialized_runs=runs, staging_root="/exp/materialized_run_specs",
     )
     # mirror schedule.py: pop 'pipeline', expand the matrix
     param_arg = {k: v for k, v in params.items() if k != "pipeline"}
@@ -117,6 +120,18 @@ def test_materialized_params_expand_to_exactly_n_jobs() -> None:
         assert job["helm.lease_endpoint"] == rec.lease_endpoint
         assert job["helm.run_entry"] == rec.run_entry
     assert {j["helm.run_spec_json"] for j in jobs} == set(by_spec)
+
+
+def test_frozen_lease_endpoint_omitted_without_lease() -> None:
+    """A frozen source's lease endpoint must NOT force-lease a non-leased run."""
+    runs = _materialized(2)  # records carry lease_endpoint=ep0/ep1
+    params = build_schedule_params(
+        {"from_run_spec": True, "run_entries": [], "max_eval_instances": 1, "suite": "s"},
+        resolved_image=_FAKE_IMAGE, materialized_runs=runs, staging_root="/stage",
+        lease_entries=None,  # no --lease
+    )
+    for entry in params["matrix"]["submatrices"]:
+        assert "helm.lease_endpoint" not in entry
 
 
 def test_materialized_runs_without_lease_omit_endpoint() -> None:
@@ -236,6 +251,8 @@ def test_prepare_request_materializes_and_emits_submatrix(tmp_path: Path) -> Non
     # staging mount knob present; no corpus mount on this path
     assert "helm.staging_root" in matrix
     assert "helm.precomputed_root" not in matrix
+    # no --lease here ⇒ the source's frozen lease_endpoint is not emitted
+    assert "helm.lease_endpoint" not in matrix["submatrices"][0]
 
 
 def test_prepare_request_materialized_lease_uses_per_run_endpoint(tmp_path: Path) -> None:

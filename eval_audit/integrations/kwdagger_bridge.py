@@ -271,7 +271,12 @@ def build_schedule_params(
                 "helm.run_spec_json": rec.run_spec_json,
                 "helm.run_entry": rec.run_entry,
             }
-            if rec.lease_endpoint:
+            # The frozen source records each run's lease endpoint, but leasing is
+            # opt-in: only emit it (⇒ only render the acquire/release bracket) when
+            # leasing was actually requested (lease_entries present). Otherwise a
+            # frozen endpoint would force-lease a non-leased run. Mirrors the
+            # run-entry path, where lease_endpoint reaches cfg only via lease_entries.
+            if lease_entries and rec.lease_endpoint:
                 entry["helm.lease_endpoint"] = rec.lease_endpoint
             submatrices.append(entry)
         matrix["submatrices"] = submatrices
