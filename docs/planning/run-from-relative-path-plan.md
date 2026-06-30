@@ -91,6 +91,13 @@ lease roles are both retired (§4).
    one job (`util_param_grid.py:731` `submatrix_variants`). A `submatrices` list of
    N complete per-run dicts over a singleton base ⇒ **exactly N jobs**, each =
    broadcast singletons + that run's fields. This is the carriage (§4.2).
+   **Verified** against the vendored kwdagger by a contract test
+   ([`tests/test_kwdagger_submatrix_contract.py`](../../tests/test_kwdagger_submatrix_contract.py)):
+   it exercises the exact `schedule.py` path (`expand_param_grid` over the
+   `params` dict with `pipeline` popped, `submatrices` read from inside `matrix`)
+   and proves N records → N jobs with tuples intact, while the same data as
+   parallel plain axes fans out to N×N and mis-pairs — the failure the submatrix
+   avoids. A submodule bump that changed the semantics fails there, loudly.
 
 2. **`--run-spec-json` and scalar `lease_endpoint` are already shipping.** The
    from-spec CLI's explicit-path mode and the lease bracket's scalar
