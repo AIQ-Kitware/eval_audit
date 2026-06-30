@@ -14,7 +14,7 @@ This image is intentionally **independent** of the legacy
 
 | File | Purpose |
 |---|---|
-| `helm-runner.dockerfile` | Multi-stage (CUDA devel builder → CUDA runtime final) image; Python 3.11; `crfm-helm[heim]` + `aiq-magnet` editable-installed into `/opt/venv`. |
+| `helm-runner.dockerfile` | Multi-stage (CUDA devel builder → CUDA runtime final) image; Python 3.11; `crfm-helm[all]` + `aiq-magnet` editable-installed into `/opt/venv` with `huggingface_hub==0.36.2` pinned. |
 | `entrypoint.sh` | Runs the wrapped command; on exit writes `container_provenance.json` and chowns the output dir back to the host user. |
 | `build.sh` | Stages pristine (committed) source via `git archive`, resolves provenance shas, builds with BuildKit, optionally pushes. |
 | `helm-runner.dockerignore` | Build-context safety net (copied into the staging dir by `build.sh`). |

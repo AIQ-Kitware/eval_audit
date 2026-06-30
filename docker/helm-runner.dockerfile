@@ -36,7 +36,7 @@ ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.9.27
 ARG PYTHON_VERSION=3.11
 
 # ------------------------------------------------------------------------------
-# Stage 1: builder — create /opt/venv with HELM[heim] + aiq-magnet installed.
+# Stage 1: builder — create /opt/venv with HELM[all] + aiq-magnet installed.
 # ------------------------------------------------------------------------------
 FROM ${UV_IMAGE} AS uv
 FROM ${CUDA_DEVEL_IMAGE} AS builder
@@ -77,7 +77,7 @@ RUN uv venv /opt/venv --python=${PYTHON_VERSION} --python-preference only-manage
 # disk at a stable path that is identical in the final stage.
 #
 # Layer ordering is deliberately heavy-deps-first / fast-changing-last so the
-# expensive layer survives the edits that happen most. crfm-helm[heim] pulls the
+# expensive layer survives the edits that happen most. crfm-helm[all] pulls the
 # entire heavy dependency set (torch, transformers, jax, flax, ...) and is a
 # pinned upstream submodule that changes rarely; aiq-magnet is a thin wrapper
 # (its deps are crfm-helm + light pure-Python packages, all satisfied by helm's
@@ -86,7 +86,7 @@ RUN uv venv /opt/venv --python=${PYTHON_VERSION} --python-preference only-manage
 #   * COPY + install magnet LAST -> a magnet-only edit re-runs just this small
 #     layer; its deps are already satisfied, so uv only re-links the editable pkg.
 # Keeping both in one COPY+RUN (as before) made any magnet edit re-run the whole
-# helm[heim] install (re-link + bytecode-compile of the full dep tree). The uv
+# helm[all] install (re-link + bytecode-compile of the full dep tree). The uv
 # cache mount persists resolved wheels across rebuilds either way.
 WORKDIR /opt/src
 
@@ -94,8 +94,22 @@ WORKDIR /opt/src
 COPY helm/ /opt/src/helm/
 RUN --mount=type=cache,target=/root/.cache/uv <<'EOF'
 set -eux
-uv pip install -e '/opt/src/helm[heim]'
-python -c "import helm; print('helm', getattr(helm, '__version__', '?'))"
+# [all] (not [heim]) so the text scenario + metric deps are present — notably
+# langdetect (ifeval / cleva metrics) and the full scenario set. [heim] is the
+# image-generation extra and omits [metrics]/[scenarios]/[cleva], so a text
+# benchmark run dies with "ModuleNotFoundError: langdetect".
+#
+# Pin huggingface_hub to the version HELM's dataset loaders are validated against
+# (matches the e2e venv). Left to float under datasets~=3.1 it can resolve to a
+# hub whose repo-resolution API breaks old-style dataset ids (e.g. wmt14 ->
+# "not a valid HF dataset"). Co-install so uv resolves the pin instead of a
+# transitive float; an incompatible pin then fails the build loudly here.
+uv pip install -e '/opt/src/helm[all]' 'huggingface_hub==0.36.2'
+python - <<'PY'
+import helm, huggingface_hub
+print('helm', getattr(helm, '__version__', '?'), '| huggingface_hub', huggingface_hub.__version__)
+assert huggingface_hub.__version__ == '0.36.2', huggingface_hub.__version__
+PY
 EOF
 
 # --- light, frequently-invalidated layer: aiq-magnet (installed LAST) ----------
@@ -180,13 +194,14 @@ RUN <<'EOF'
 set -eux
 python --version
 python - <<'PY'
-import helm, magnet  # noqa: F401  -- interpreter + core imports sound
+import helm, magnet, huggingface_hub  # noqa: F401  -- interpreter + core imports sound
 from importlib.metadata import entry_points
 from helm.benchmark.run import load_entry_point_plugins
 from helm.benchmark.tokenizer_config_registry import get_tokenizer_config
 
 names = {ep.name for ep in entry_points().select(group="helm")}
 assert "eval-audit-tokenizer-overrides" in names, f"helm entry point missing: {sorted(names)}"
+assert huggingface_hub.__version__ == "0.36.2", f"shipped hf_hub drifted from pin: {huggingface_hub.__version__}"
 
 load_entry_point_plugins("helm")  # the exact codepath helm-run main() runs
 tc = get_tokenizer_config("allenai/olmo-7b")

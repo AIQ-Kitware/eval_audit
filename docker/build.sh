@@ -5,7 +5,7 @@ docker/build.sh
 
 Build the eval-audit HELM runner image (docker/helm-runner.dockerfile).
 
-The image bundles a pinned crfm-helm[heim] + aiq-magnet environment used by the
+The image bundles a pinned crfm-helm[all] + aiq-magnet environment used by the
 eval_audit kwdagger pipeline to run HELM in a reproducible, auditable container.
 
 Source staging
@@ -66,7 +66,7 @@ REPO_ROOT="$(realpath "${SCRIPT_DIR}/..")"
 : "${PYTHON_VERSION:=3.11}"
 : "${STAGING_DIR:=${REPO_ROOT}/.build-staging/helm-runner}"
 # UV_COMPILE_BYTECODE=1 in the dockerfile makes uv pre-compile the whole
-# crfm-helm[heim] dep tree via a pool of parallel interpreters; under a low
+# crfm-helm[all] dep tree via a pool of parallel interpreters; under a low
 # container nofile limit that pool exhausts FDs and dies with EMFILE
 # ("os error 24"). Raise the build-step FD ceiling. Override BUILD_NOFILE=0 to
 # omit the flag (e.g. if a docker version rejects --ulimit through BuildKit).
@@ -200,7 +200,7 @@ print_summary
 
 log "Building ${IMAGE_QUALNAME}"
 # Raise the FD ceiling for RUN steps so uv's parallel bytecode compilation of
-# the helm[heim] dep tree doesn't hit EMFILE. BUILD_NOFILE=0 opts out.
+# the helm[all] dep tree doesn't hit EMFILE. BUILD_NOFILE=0 opts out.
 ULIMIT_ARGS=()
 if [[ "${BUILD_NOFILE}" != "0" ]]; then
     ULIMIT_ARGS=(--ulimit "nofile=${BUILD_NOFILE}:${BUILD_NOFILE}")
