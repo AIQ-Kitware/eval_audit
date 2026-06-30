@@ -52,20 +52,24 @@ in the *locator* role.**
 
 **The fix has two moves, one per user instruction:**
 
-1. **Resolve before kwdagger, on the host.** The official corpus is laid out as
+1. **Resolve *and substitute* before kwdagger, on the host.** The official corpus
+   is laid out as
    `<public_root>/<suite>/benchmark_output/runs/<version>/<run_name>/run_spec.json`
    (e.g. `lite/benchmark_output/runs/v1.0.0/wmt_14:.../run_spec.json`). The tuple
    `(public_root, relative_path)` names that file **exactly**. The eval_audit
-   tools resolve it to an **absolute path to a real `run_spec.json` on disk** at
-   schedule time — where there is full Python + filesystem access — and validate
-   it exists and deserializes. A bad address fails **loud, early, on the host**,
-   not mid-run inside a container. Discovery stops being a run-time, in-container
-   token scan and becomes a schedule-time, host-side path resolution.
+   tools — where there is full Python + filesystem access — read it, apply the
+   declared field substitutions as **raw-JSON edits** (set
+   `adapter_spec.model_deployment` to the local name, `adapter_spec.max_eval_instances`
+   to the cap), and write a **materialized substituted copy** to a staging dir on
+   disk. A bad address fails **loud, early, on the host**, not mid-run inside a
+   container. Discovery stops being a run-time, in-container token scan and becomes
+   a schedule-time, host-side resolve-and-materialize.
 
-2. **Hand kwdagger a list of absolute specs.** With each run resolved to a path,
-   the scheduler matrix's one per-run axis becomes the **absolute `run_spec.json`
-   path** — no run-entry, no token relation, no version-relative normalization.
-   The existing `--run-spec-json <path>` replay mode consumes it directly.
+2. **Hand kwdagger a list of materialized specs.** The scheduler matrix's one
+   per-run axis becomes the **absolute path to the run's materialized
+   `run_spec.json`** — no run-entry, no token relation, no version-relative
+   normalization, and already fully substituted. The existing `--run-spec-json
+   <path>` replay mode consumes it verbatim (no in-container rewrite needed).
 
 `public_root` is the per-machine mount (it already varies across
 yardrat/namek/aiq-gpu); `relative_path` is the stable, drift-free identifier,
@@ -95,12 +99,24 @@ lease roles are both retired (§4).
    Driving them per-run from the host needs **no in-container code** ⇒ no magnet
    change, no gitlink bump, no rebuild. Every change below is host-side eval_audit.
 
-3. **`precomputed_root` is already mounted `:ro` at an identical path.** The
-   from-spec docker node bind-mounts it (`helm_docker_pipeline.py:177`). The
-   absolute path the host resolves (`<root>/<rel_path>/run_spec.json`) therefore
-   resolves to the *same* path inside the container — so passing it as
-   `--run-spec-json` Just Works with no new mount. (The optional materialized-copy
-   variant in §4.6 is the only thing that would add a mount.)
+3. **Materialized copies relocate the recipe source from the corpus to a tiny
+   staging dir.** Because substitution happens on the host, the container reads the
+   run's recipe from the **materialized copy**, not the public corpus. So the
+   runner box no longer needs the (large) `/data/crfm-helm-public` corpus mounted
+   at all — only the small staging dir of materialized specs, bind-mounted `:ro` at
+   an identical host=container path (the same mechanism the docker node already uses
+   for `precomputed_root`, `helm_docker_pipeline.py:177`). This both adds the
+   staging mount and lets the from-spec path **drop the `precomputed_root` mount**.
+
+3b. **Raw-JSON substitution needs no HELM on the host and cannot drift.** The
+   materializer edits only the two scalar fields and re-dumps; it does **not**
+   round-trip through HELM's cattrs codec, so it preserves every other key
+   byte-for-byte (no silent field-drop — the failure mode `run-from-run-spec-json-plan.md`
+   §1 warns about). The pinned in-container HELM still deserializes the copy at run
+   time, so the image remains the source of *execution* truth; the host only does
+   scalar edits. A consequence: the in-container `--model-deployment` /
+   `--max-eval-instances` rewrite is **not exercised** on this path (the copy is
+   pre-substituted) — it stays available for other callers, unchanged.
 
 4. **Identity / pairing is independent of the locator.** `adapter_spec.model` is
    never rewritten, so the produced run dir name stays `run_spec.name`. Stages 4–6
@@ -115,11 +131,14 @@ lease roles are both retired (§4).
 
 ---
 
-## 3. Decision: host-side resolution + submatrix zip (Option C)
+## 3. Decision: host-side resolve-and-materialize + submatrix zip (Option C)
 
-Resolve each run's `run_spec.json` to an absolute path **on the host at schedule
-time**, and emit the per-run tuple `(run_spec_json, lease_endpoint,
-model_deployment, run_entry-label)` as one **submatrix dict per run**.
+**On the host, at schedule time**, resolve each run's `(public_root, rel_path)` to
+the official `run_spec.json`, apply the field substitutions as raw-JSON edits, and
+write a **materialized substituted copy** to a staging dir. Then emit the per-run
+tuple `(run_spec_json=<materialized copy>, lease_endpoint, run_entry-label)` as one
+**submatrix dict per run**. Substitution is baked into the copy, so no
+`model_deployment` rewrite travels in-container.
 
 This supersedes the two designs considered earlier in this plan's history:
 - **Broadcast-map (prior revision):** carry `{run_entry: rel_path}` and resolve
@@ -138,22 +157,29 @@ token-subset locator is removed from every path that used it.
 
 ## 4. Changes (all host-side eval_audit)
 
-### 4.1 Schedule-time resolver (new)
-A host-side step (in `manifests/builders.py` or a small `resolve_run_specs`
+### 4.1 Schedule-time resolver + materializer (new)
+A host-side step (in `manifests/builders.py` or a small `materialize_run_specs`
 helper) that, for each in-scope run, takes `(precomputed_root, relative_path)` and:
-- joins to the absolute `run_spec.json` path (appending `run_spec.json` if the
-  rel-path names a directory);
-- asserts it **exists** and **deserializes** (`json.loads`; optionally
-  `from_json(..., RunSpec)` if HELM is importable on the host — not required);
-- reads `adapter_spec.model_deployment` (the rewrite "from") for the report;
-- emits a per-run record `{run_spec_json: <abs>, model_deployment: <local|None>,
-  lease_endpoint: <resolved|None>, run_entry: <label>}`.
+- joins to the absolute official `run_spec.json` path (appending `run_spec.json`
+  if the rel-path names a directory) and asserts it **exists**;
+- `json.load`s it and applies the substitutions as **raw scalar edits**: set
+  `adapter_spec.model_deployment` to the local name (when a rewrite is declared)
+  and `adapter_spec.max_eval_instances` to the cap (when set) — every other key is
+  left exactly as the official file had it;
+- `json.dump`s the result to a per-run staging path
+  (`<staging>/<run-id>/run_spec.json`) and writes a sidecar
+  `materialization.json` recording the official source path, rel-path,
+  `precomputed_root`, and each field's `from→to` (the diffable provenance record);
+- emits a per-run record `{run_spec_json: <staging copy>, lease_endpoint:
+  <resolved|None>, run_entry: <label>}`.
 
 Resolution failure is a **hard, host-side error naming the path tried** — the
 whole value of exact addressing is that "not found" is precise, not a silent
 best-effort match. The rel-paths are resolved **once, against the corpus snapshot
 the operator is looking at** (the exporter can freeze them at export time, §4.5),
-turning a run-time token scan into a pinned, inspectable address.
+turning a run-time token scan into a pinned, inspectable address. The staging dir
+lives under the experiment result dir; copies are a few KB each and double as the
+exact recipe each run replayed.
 
 ### 4.2 Bridge — emit a submatrix (`kwdagger_bridge.py`)
 In the `from_run_spec` branch of `build_schedule_params`, replace the
@@ -163,21 +189,22 @@ In the `from_run_spec` branch of `build_schedule_params`, replace the
 matrix:
   helm.suite: [<suite>]
   helm.container_image: ["<digest>"]
-  helm.model_deployments_fpath: ["<override.yaml>"]
-  helm.precomputed_root: ["/data/crfm-helm-public"]   # still mounted :ro
-  helm.max_eval_instances: [<N>]                       # broadcast (or per-run in submatrix)
+  helm.model_deployments_fpath: ["<override.yaml>"]   # still registers the local deployment(s)
+  helm.staging_root: ["<exp>/materialized_run_specs"] # bind-mounted :ro (replaces the corpus mount)
   submatrices:
-    - helm.run_spec_json: "/data/crfm-helm-public/lite/benchmark_output/runs/v1.0.0/<run>/run_spec.json"
-      helm.model_deployment: "vllm/allenai-olmo-7b"    # rewrite target (in-container)
+    - helm.run_spec_json: "<exp>/materialized_run_specs/<run-id>/run_spec.json"  # materialized copy
       helm.lease_endpoint: "<catalog endpoint for this run>"
       helm.run_entry: "<original run-entry string>"    # label / provenance only
-    - helm.run_spec_json: ".../run_spec.json"
+    - helm.run_spec_json: "<exp>/materialized_run_specs/<run-id>/run_spec.json"
       ...
 ```
 
 Each submatrix dict shares no original-matrix key with the singleton base, so it
 matches and yields exactly one merged job (§2.1) — N runs ⇒ N jobs, no
-cross-product. The per-run fields travel together (the zip we need).
+cross-product. The per-run fields travel together (the zip we need). The copy is
+pre-substituted, so **no `helm.model_deployment` / `helm.max_eval_instances`
+rewrite is emitted** — the inner CLI replays the copy verbatim. `precomputed_root`
+is **not** in the matrix (no corpus mount; the recipe source is the staging copy).
 
 ### 4.3 From-spec docker node — declare `run_spec_json` (`helm_docker_pipeline.py`)
 Add `run_spec_json` to `MaterializeHelmRunFromSpecDockerNode.algo_params`
@@ -206,18 +233,18 @@ entry's matched official dir (the dry-check resolves it); at export it records
 a known corpus, and is then **pinned** into the manifest. Inline
 `model_deployment=<local>` stays available as the rewrite target + label.
 
-### 4.6 Optional — materialize substituted copies (provenance enhancement)
-Primary design passes the **official** spec path and lets the in-container CLI
-apply `--model-deployment` / `--max-eval-instances` (unchanged, already tested).
-*Optionally*, the resolver can instead write a **substituted copy** to a staging
-dir via **raw-JSON field edits** (`json.load` → set `adapter_spec.model_deployment`
-+ `adapter_spec.max_eval_instances` → `json.dump`). Raw editing needs **no HELM on
-the host** and preserves every other key byte-for-byte (no codec round-trip ⇒ no
-silent field-drift), yielding an artifact you can `diff` against the official spec
-to show exactly the 1–2 changed fields. Cost: the staging dir must be bind-mounted
-`:ro` into the container (a small docker-node addition). Recommend shipping the
-primary (official-path) form first; add materialized copies if the methodology
-section wants the diffable artifact.
+### 4.6 Docker node — mount the staging dir, drop the corpus mount (`helm_docker_pipeline.py`)
+The materialized copies live under the staging dir, so the from-spec docker node
+bind-mounts `staging_root` `:ro` at an identical host=container path (the same
+host-side `-v {p}:{p}:ro` rendering it already does for `precomputed_root`,
+`helm_docker_pipeline.py:177` — command rendering, **not** an image change) and
+**stops mounting `precomputed_root`**. Net operational win: the runner box no
+longer needs the large `/data/crfm-helm-public` corpus present at run time — only
+the tiny staging dir — and the from-spec bridge branch no longer needs to
+*require* `precomputed_root` as a container input (it is now a host-only resolver
+input, §4.1). `_prepare_container_execution` resolves `staging_root` to an absolute
+path and `mkdir`s it as the host user, exactly as it does for the HF cache /
+`precomputed_root` today.
 
 ### 4.7 Dry-check becomes an existence check (`check_precomputed_discovery.py`)
 With frozen rel-paths the dry-check stops re-running the token matcher: for each
@@ -228,18 +255,23 @@ missing/unreadable" (corpus moved / snapshot changed) — exactly the drift we w
 surfaced loudly. Keep the old token-subset mode for *producing* the initial map.
 
 ### 4.8 Tests
-- **Resolver:** rel-path→abs join (dir vs file); loud error on missing file /
-  missing `precomputed_root`; reads the official deployment.
+- **Resolver + materializer:** rel-path→abs join (dir vs file); loud error on
+  missing file / missing `precomputed_root`; the materialized copy changes **only**
+  `adapter_spec.{model_deployment, max_eval_instances}` and every other key is
+  byte-identical to the official (the no-drift guarantee); the `materialization.json`
+  sidecar records the correct `from→to`.
 - **Bridge submatrix:** N records ⇒ N grid items, no cross-product (assert against
-  `extended_github_action_matrix`); broadcast singletons present on each.
+  `extended_github_action_matrix`); broadcast singletons present on each; no
+  `model_deployment`/`max_eval_instances` rewrite key emitted (substitution baked).
 - **Leasing:** per-run scalar `lease_endpoint` reaches the bracket; run-entry parse
   no longer consulted on the from-spec path.
-- **Parity:** the path frozen by the exporter == the dir token-subset discovery
-  would have located, and the replayed `run_spec.json` is byte-identical between
-  the two locators (addressing change is recipe-neutral).
-- **Raw-JSON substitution (if §4.6):** only `adapter_spec.{model_deployment,
-  max_eval_instances}` change; all other keys byte-identical to the official.
-- **e2e:** flip the existing from-spec e2e to path addressing.
+- **Mounts:** the docker node renders the `staging_root` `:ro` mount and **no**
+  `precomputed_root` mount on the from-spec path.
+- **Parity:** the rel-path frozen by the exporter == the dir token-subset discovery
+  would have located; and replaying the materialized copy yields a run dir
+  byte-identical (modulo the substituted fields) to the in-container-rewrite path —
+  proving host materialization is recipe-neutral.
+- **e2e:** flip the existing from-spec e2e to materialized-path addressing.
 
 ---
 
@@ -247,13 +279,15 @@ surfaced loudly. Keep the old token-subset mode for *producing* the initial map.
 
 - **Comparison / pairing / index.** Produced dir name stays `run_spec.name`;
   Stages 4–6 untouched (§2.4). Locator-only change.
-- **Substitution semantics.** `--model-deployment` still yields
-  `same_deployment=no`; `adapter_spec.model` is never touched; field set stays
-  `model_deployment` + `max_eval_instances`. ("Replacing the fields as specified"
-  maps to exactly these two.) The §4.6 variant moves *where* they apply (host raw
-  edit) without changing *what* they do.
+- **Substitution semantics.** The produced run still records the local deployment
+  (⇒ `same_deployment=no`); `adapter_spec.model` is never touched; the field set
+  stays `model_deployment` + `max_eval_instances` ("replacing the fields as
+  specified" maps to exactly these two). Materializing moves *where* they apply
+  (host raw-JSON edit instead of in-container `dataclasses.replace`) without
+  changing *what* they do — the resulting recipe is identical (§4.8 parity).
 - **The runner image.** No rebuild — the explicit-path replay and scalar lease are
-  already in the pinned image (§2.2).
+  already in the pinned image (§2.2); the staging mount is host-side command
+  rendering (§4.6).
 
 ---
 
@@ -276,14 +310,16 @@ Fan-out then becomes pure scheduler wiring, with **no scheduler-internals change
 and no in-container change**:
 
 1. **One submatrix, one entry per run** (§4.2): each entry carries its own
-   `run_spec_json` (resolved path), `lease_endpoint` (resolved host-side), and
-   `model_deployment` (rewrite target). These are zipped by construction —
-   exactly the per-run tuple fan-out needs.
-2. **Shared narrow roots collapse.** Models that needed *separate* narrow
-   `precomputed_root`s purely to keep token discovery unambiguous (the olmo-7b
-   `/mmlu` vs `/lite` split, multi-model plan §4.4) can now share **one** root —
-   the absolute path disambiguates by construction, so the AMBIGUOUS hazard that
-   forced the split is gone.
+   materialized `run_spec_json` (already substituted, including the per-run local
+   deployment) and `lease_endpoint` (resolved host-side). These are zipped by
+   construction — exactly the per-run tuple fan-out needs, with the per-model
+   deployment difference already baked into each copy.
+2. **Shared narrow roots collapse; no corpus on the runner.** Models that needed
+   *separate* narrow `precomputed_root`s purely to keep token discovery unambiguous
+   (the olmo-7b `/mmlu` vs `/lite` split, multi-model plan §4.4) can now share
+   **one** host-side root — the absolute path disambiguates by construction. And
+   since each run replays its materialized copy, the GPU box needs no corpus mount
+   at all (§4.6) — only the tiny staging dir.
 3. **Leasing is per-run and explicit** (§4.4) — co-host/serialize across
    `INFER_STACK_ALLOWED_GPUS` is driven by each entry's resolved endpoint; no run
    name parsing.
@@ -311,41 +347,48 @@ negative guard, no per-model root split, no rebuild).
   that one run).
 - **`submatrices` semantics.** Per-run tuples must go in `submatrices` (zip), never
   parallel plain axes (→ N×N). One place — the bridge — emits them; tested in §4.8.
-- **Host vs in-container faithfulness.** Primary design does **no** schema-touching
-  work on the host (it passes the official path; substitution stays in the pinned
-  HELM). The §4.6 copy variant only ever does raw-JSON scalar edits, so it never
-  re-serializes through a host HELM (no field-drift). Either way the pinned image
-  remains the source of recipe truth.
+- **Host materialization faithfulness.** The materializer does **only** raw-JSON
+  scalar edits — it never re-serializes through a host HELM codec, so it cannot
+  drop/rename keys (no field-drift; §2.3b). The pinned in-container HELM still
+  deserializes the copy at run time, so the image remains the source of *execution*
+  truth. The §4.8 no-drift test guards this.
+- **Staging-dir lifecycle.** Copies are written at schedule time as the host user
+  and mounted `:ro`; they must outlive the run (they are the replayed recipe + the
+  provenance record). Treat the staging dir as part of the experiment result tree,
+  not a temp dir.
 - **Judge/annotator deployments (inherited).** By-name judge substitution remains
-  an open item from `run-from-run-spec-json-plan.md` §10 — orthogonal to addressing.
+  an open item from `run-from-run-spec-json-plan.md` §10 — orthogonal to addressing
+  (a judge rewrite would be another raw-JSON edit in the materializer).
 
 ## 8. Sequencing
 
-1. **Resolver** (§4.1) + unit tests — host-side, no scheduler needed.
+1. **Resolver + materializer** (§4.1) + unit tests (incl. the no-drift guarantee) —
+   host-side, no scheduler needed.
 2. **Bridge submatrix emission** (§4.2) + **node `run_spec_json` param** (§4.3) +
-   **per-run lease** (§4.4) + tests (§4.8). All host-side; **no rebuild**.
+   **staging mount / drop corpus mount** (§4.6) + **per-run lease** (§4.4) + tests
+   (§4.8). All host-side; **no rebuild**.
 3. **Exporter freeze + dry-check existence mode** (§4.5, §4.7).
-4. **Flip the e2e** to path addressing; confirm byte-identical replayed spec vs the
-   discovery locator (parity).
+4. **Flip the e2e** to materialized-path addressing; confirm the replayed run is
+   recipe-identical to the in-container-rewrite path (parity).
 5. **Multi-model fan-out** (§6): combined bundle + submatrix + `tmux_workers=N`;
    GPU smoke that N models co-host/serialize under leasing and `same_deployment=no`
    holds. Wiring only.
-6. *(Optional)* materialized-copy variant (§4.6) if the methodology wants diffable
-   substituted specs.
 
 ## 9. Why this over the alternatives
 
-| | run-entry token discovery (today) | broadcast `{run_entry: rel_path}` map (prior revision) | **host resolve + submatrix (this plan)** |
+| | run-entry token discovery (today) | broadcast `{run_entry: rel_path}` map (prior revision) | **host materialize + submatrix (this plan)** |
 |---|---|---|---|
-| Where resolution happens | in-container, run time | in-container, run time | **host, schedule time** |
-| Locator | token-subset match | exact map lookup | **exact path, resolved up-front** |
+| Where resolution + substitution happens | in-container, run time | in-container, run time | **host, schedule time (raw-JSON edit)** |
+| Locator | token-subset match | exact map lookup | **exact path → materialized copy** |
 | Per-run carriage | `helm.run_entry` axis | broadcast map + node resolver | **submatrix tuple (zip)** |
 | Magnet change / rebuild | — | **yes** (in-container resolver) | **none** (existing `--run-spec-json`) |
+| Recipe source in container | corpus `:ro` mount | corpus `:ro` mount | **tiny staging dir (no corpus)** |
 | Leasing | parse `model_deployment=` off run name | same | **resolved scalar per run** |
 | When "not found" | best-effort / ambiguous | run-time KeyError | **host-side, loud, names the path** |
 | Multi-model cost | matcher strip + guard + root split | broadcast map + rebuild | **submatrix entries only** |
 
-Host-side resolution removes the locator's drift at the source and surfaces a bad
-address early and loudly; submatrices carry the per-run tuple without a rebuild or
-a broadcast-map indirection; and the multi-model GPU fan-out drops from a matcher
-project to bundle-and-grid wiring.
+Host materialization removes the locator's drift at the source, surfaces a bad
+address early and loudly, and yields a diffable substituted-recipe artifact per
+run; submatrices carry the per-run tuple without a rebuild or a broadcast-map
+indirection; the runner no longer needs the public corpus; and the multi-model GPU
+fan-out drops from a matcher project to bundle-and-grid wiring.
