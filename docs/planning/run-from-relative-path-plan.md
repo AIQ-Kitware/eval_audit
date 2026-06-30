@@ -1,6 +1,15 @@
 # Addressing reproductions by `(public_root, relative_path)` — plan
 
-**Status:** PLAN (not implemented).
+**Status:** PARTIALLY IMPLEMENTED (2026-06-30). The host-side execution core is
+landed + tested (no GPU/daemon needed): the resolver+materializer (§4.1), the
+bridge submatrix emission + per-run leasing (§4.2/4.4), the from-spec docker node
+`run_spec_json` param + staging mount / dropped corpus mount (§4.3/4.6), the
+manifest `run_spec_sources` schema, and the `make-manifest --run-spec-sources-fpath`
+producer flag (§4.5 schema part). The kwdagger submatrix contract is pinned
+(§2.1). **Remaining:** exporter auto-freeze of rel-paths in `adapter.py` (§4.5
+producer side), the dry-check existence mode (§4.7), the e2e flip + GPU smoke
+(§4.8/§8.4-5), and the in-cluster verification of config→`--run_spec_json` mapping
+and per-run job-dir uniqueness.
 **Goal:** stop using the **run name** (the HELM run-entry string) as the
 identifier that *locates* the official run to reproduce. Instead, **before
 kwdagger runs**, the eval_audit tools resolve each run to a **real
