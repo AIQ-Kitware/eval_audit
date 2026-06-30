@@ -43,12 +43,15 @@ def test_from_spec_node_swaps_executable_and_adds_deployment_param():
     assert node.name == "helm"
     assert node.primary_out_key == "done_fname"
     assert node.out_paths == MaterializeHelmRunDockerNode.out_paths
-    # The from-spec node extends the run-entry node's algo identity with exactly
-    # one field: model_deployment (the optional deployment-rewrite target, default
-    # None => pure by-name). See from-spec-deployment-rewrite-plan.md Change 3.
+    # The from-spec node extends the run-entry node's algo identity with two
+    # fields: model_deployment (the optional deployment-rewrite target, default
+    # None => pure by-name; from-spec-deployment-rewrite-plan.md Change 3) and
+    # run_spec_json (the materialized exact-path spec this run replays; default
+    # None on the discovery path). See run-from-relative-path-plan.md §4.3.
     assert node.algo_params == {
         **MaterializeHelmRunDockerNode.algo_params,
         "model_deployment": None,
+        "run_spec_json": None,
     }
     # model is never an algo param — the model identity always replays verbatim.
     assert "model" not in node.algo_params
