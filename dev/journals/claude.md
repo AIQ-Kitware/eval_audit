@@ -4086,6 +4086,6 @@ Rejected alternatives: (a) add `ai2-olmo`/`hf_olmo` to the image — contradicts
 
 **Notes for a future agent.** phi-2 *does* have an official `wmt_14` run (`/data/crfm-helm-public/lite/.../v1.1.0/wmt_14:...,model=microsoft_phi-2`), so a from-spec wmt_14 canary WAS available — but the e2e smoke manifest is scoped `precomputed_root: /data/crfm-helm-public/mmlu` (mmlu subtree, deliberately narrow for fast/unambiguous discovery), so adding wmt_14 would have needed either a risky root broadening or a separate scoped manifest + its own HF-override config + grid wiring. Moot now (user declined the canary), but that's why it wasn't a one-line add like OLMo's.
 
-**Open question (flagged to user).** The earlier OLMo smoke canary (commit bf2b976) adds wmt_14+ifeval to the OLMo smoke set. The "no canary for the smoke test" instruction may extend to it — awaiting confirmation whether to revert bf2b976 (and its journal 676746d) or keep it. The OLMo + e2e image probes stand regardless.
+**Resolved.** Asked the user whether "no canary" extended to the OLMo smoke canary (commit bf2b976, wmt_14+ifeval). Answer: **keep it** — "no canary" was specific to the e2e runbook. End state: OLMo smoke = MC entries + canaries + 07 probe; e2e smoke = no canary + 06 probe. Both runbooks share the image-env probe.
 
 **State.** `impl/run-from-run-spec`; e2e probe committed. `submodules/cmd_queue` gitlink still pre-existing/unstaged. Container-side checks still need the GPU-box rebuild + digest re-pin to pass against a real image.
