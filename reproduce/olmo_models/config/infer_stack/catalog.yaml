@@ -67,6 +67,22 @@ endpoints:
       max_num_batched_tokens: 2048
       max_num_seqs: 16
       enable_prefix_caching: true
+      # Serve OLMo-7B's weights with OLMo-1.7's tokenizer. OLMo-7B-hf's
+      # tokenizer.json has a post_processor that appends <|endoftext|> (EOS) to
+      # every sequence; under vLLM's default add_special_tokens=True that EOS
+      # terminates the prompt, and the base model reads it as a document
+      # boundary -> it emits a fixed, prompt-INDEPENDENT continuation ("The first
+      # thing you need to do...") for every input (MMLU and lite alike), which is
+      # the reproduction-breaking nonsense. The two tokenizer.json files are
+      # byte-identical (vocab+merges+normalizer+pre_tokenizer+decoder hashes all
+      # match; tokenizer_config.json identical) EXCEPT that post_processor --
+      # OLMo-1.7 dropped it -- so this swap == "OLMo-7B's own tokenizer minus the
+      # spurious EOS", with identical encoding. (Verified live: /v1/completions
+      # add_special_tokens:false took prompt_tokens 13->12 and output -> "Paris
+      # is the capital of France.") vLLM serve has no add_special_tokens flag and
+      # the catalog has no such field, so the tokenizer swap is the config-only
+      # fix. Pin --tokenizer-revision <sha> here if you need to freeze it.
+      extra_args: ['--tokenizer', 'allenai/OLMo-1.7-7B-hf']
 
   allenai-olmo-1-7-7b-single:
     engine: vllm
