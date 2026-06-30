@@ -162,8 +162,10 @@ pass the image at run time via `eval-audit-run --container-image
 "$OLMO_CONTAINER_IMAGE"`. Build the image first with `./docker/build.sh`;
 `07_check_container_image.sh` verifies it is present (a required preflight — there
 is no host-venv fallback). The gated **gpqa** dataset works in-container: `_lib.sh`
-exports `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN`, which the docker pipeline forwards
-into the container.
+exports `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN`, and the scheduler writes that token
+into the mounted HF cache (`<hf_cache_dir>/token`) so the in-container HELM reads
+it at `$HF_HOME/token` — the docker node's bare `-e HF_TOKEN` does not survive
+kwdagger's fresh tmux pane, so this on-disk hand-off is what carries auth.
 
 Leasing is the **orthogonal** axis (always on via `--lease`): the container pins
 where the HELM client runs; the lease acquires the served model's GPU. See
@@ -277,8 +279,10 @@ replayed verbatim. See
   run from `candidate_runs.json`, including ones tagged `requires-gated-dataset`
   — `gpqa` on the OLMo-2 / OLMoE instruct models (and the **smoke** entry for
   `allenai/olmo-2-1124-7b-instruct`). `_lib.sh` exports `HF_TOKEN` /
-  `HUGGING_FACE_HUB_TOKEN` from the env or a cached `huggingface-cli login` so
-  HELM can download them; `06_check_hf_auth.sh` verifies a token is present. The
+  `HUGGING_FACE_HUB_TOKEN` from the env or a cached `huggingface-cli login`, and
+  the scheduler writes that token into the mounted HF cache so the in-container
+  HELM reads it at `$HF_HOME/token` (the bare `-e HF_TOKEN` does not survive
+  kwdagger's tmux pane); `06_check_hf_auth.sh` verifies a token is present. The
   token's account must have accepted the gated dataset's terms (e.g.
   [Idavidrein/gpqa](https://huggingface.co/datasets/Idavidrein/gpqa)). The
   non-gated entries still run without a token; the gated ones (incl. the

@@ -31,8 +31,12 @@
 #
 # HuggingFace auth: _lib.sh exports HF_TOKEN / HUGGING_FACE_HUB_TOKEN (from the
 # env or a cached `huggingface-cli login`) into the environment eval-audit-run
-# inherits, so HELM can pull gated datasets — the full run-entry sets include
-# gpqa on the OLMo-2 / OLMoE instruct models. Run ./06_check_hf_auth.sh first.
+# inherits. eval-audit-run's scheduler then writes that token into the mounted HF
+# cache (<hf_cache_dir>/token) so the in-container HELM reads it at $HF_HOME/token
+# — the docker node's bare `-e HF_TOKEN` cannot survive kwdagger's fresh tmux
+# pane, so the on-disk hand-off is what actually carries auth. This lets HELM pull
+# gated datasets — the full run-entry sets include gpqa on the OLMo-2 / OLMoE
+# instruct models. Run ./06_check_hf_auth.sh first.
 #
 # Default is fail-fast. Set OLMO_KEEP_GOING=1 to attempt every model and report
 # which ones failed at the end instead of stopping on the first error.

@@ -80,9 +80,13 @@ docker run --rm \
   container runs as root, so downloads land root-owned. A dedicated dir keeps
   ownership consistent and avoids leaving root-owned files inside a personal
   cache.
-- The token is forwarded via `-e HF_TOKEN` / `-e HUGGING_FACE_HUB_TOKEN` from
-  the worker environment (never baked into the image); `${HF_HOME}/token` is the
-  on-disk fallback.
+- **Token delivery is on-disk, not env-forwarded.** At schedule time
+  `kwdagger_bridge._prepare_container_execution` writes the resolved
+  `$HF_TOKEN`/`$HUGGING_FACE_HUB_TOKEN` into `<hf_cache_dir>/token`; the
+  container reads it at `$HF_HOME/token`. The `-e HF_TOKEN` /
+  `-e HUGGING_FACE_HUB_TOKEN` flags are a best-effort secondary path — bare
+  `-e VAR` only forwards a value present in the **job** shell, which kwdagger's
+  fresh tmux pane does not inherit. The token is never baked into the image.
 
 ### Permissions
 

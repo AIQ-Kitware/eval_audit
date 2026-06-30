@@ -8,6 +8,15 @@
 #
 # _lib.sh already exported HF_TOKEN / HUGGING_FACE_HUB_TOKEN if one was found in
 # the env or the cached `huggingface-cli login`; here we just check + report.
+#
+# How the token reaches the container: NOT via the docker node's `-e HF_TOKEN`
+# (that bare form can't survive kwdagger's fresh tmux pane — the job shell does
+# not inherit this shell's ad-hoc export). Instead eval-audit-run's scheduler
+# (kwdagger_bridge._prepare_container_execution) writes the resolved env token
+# into the mounted HF cache dir as `<hf_cache_dir>/token`, which the container
+# reads at `$HF_HOME/token` (HF_HOME=/hf-cache). So all this preflight needs to
+# confirm is that a usable token is present in THIS env — the scheduler does the
+# rest at run time.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
@@ -38,3 +47,5 @@ fi
 
 echo "Note: identity is confirmed, but gated-dataset *access* (accepted terms) is"
 echo "      only proven when the run actually downloads the dataset."
+echo "Note: at run time the scheduler writes this token into the mounted HF cache"
+echo "      (<hf_cache_dir>/token); the container reads it at \$HF_HOME/token."

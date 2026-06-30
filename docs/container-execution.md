@@ -97,9 +97,17 @@ docker run --rm \
   is root-owned; a dedicated dir keeps ownership consistent and avoids leaving
   root-owned files inside a personal cache. The dir is created (host-owned) at
   schedule time if missing.
-- The token is forwarded via `-e HF_TOKEN` / `-e HUGGING_FACE_HUB_TOKEN` from
-  the worker environment (never baked into the image); `${HF_HOME}/token` is the
-  on-disk fallback.
+- **Token delivery is on-disk, not env-forwarded.** At schedule time the bridge
+  (`kwdagger_bridge._prepare_container_execution`) writes the resolved token
+  (`$HF_TOKEN`/`$HUGGING_FACE_HUB_TOKEN` from the env that ran `eval-audit-run`)
+  into the cache dir as `<hf_cache_dir>/token`; the container reads it at
+  `$HF_HOME/token` (HF_HOME=/hf-cache). The docker node *also* emits
+  `-e HF_TOKEN` / `-e HUGGING_FACE_HUB_TOKEN`, but that bare `-e VAR` form only
+  forwards a value already set in the **job** shell — and kwdagger runs each job
+  in a fresh tmux pane that does not inherit the scheduling shell's ad-hoc
+  exports, so the env path can't be relied on. The token is never baked into the
+  image. If you'd rather not depend on the env, drop the token in the cache dir
+  yourself (`HF_HOME=<hf_cache_dir> huggingface-cli login`).
 
 ## Permissions
 
