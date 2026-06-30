@@ -183,6 +183,62 @@ def test_prepare_schedule_request_container(tmp_path: Path, monkeypatch: pytest.
     assert (tmp_path / "hf").is_dir()
 
 
+def _stub_image_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        kwdagger_bridge,
+        "resolve_image_digest",
+        lambda image, runtime="docker": ResolvedImage(
+            requested=image,
+            run_ref=PINNED,
+            digest="sha256:" + "a" * 64,
+            digest_kind="repo_digest",
+            pinned=True,
+        ),
+    )
+    monkeypatch.setattr(kwdagger_bridge, "runtime_version", lambda runtime="docker": "29.0.0")
+
+
+def test_prepare_schedule_request_materializes_hf_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # The docker node's bare ``-e HF_TOKEN`` cannot reach the container under the
+    # tmux backend (fresh pane, empty worker environ), so the scheduler — which
+    # DOES inherit the user's env — writes the resolved token into the mounted HF
+    # cache as ``<hf_cache_dir>/token``, the path the container reads via
+    # HF_HOME=/hf-cache. See kwdagger_bridge._prepare_container_execution.
+    _stub_image_resolution(monkeypatch)
+    monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+    monkeypatch.setenv("HF_TOKEN", "hf_unit_test_token")
+
+    manifest_fpath = _write_container_manifest(tmp_path)
+    kwdagger_bridge.prepare_schedule_request(
+        manifest_fpath, run=False, root_dpath=tmp_path / "results"
+    )
+
+    token_fpath = tmp_path / "hf" / "token"
+    assert token_fpath.read_text().strip() == "hf_unit_test_token"
+    # Secret on disk => owner-only perms.
+    assert (token_fpath.stat().st_mode & 0o777) == 0o600
+
+
+def test_prepare_schedule_request_no_token_writes_no_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # With no token in the scheduling env there is nothing to promote, and we must
+    # not clobber a token a user may have logged into the dir directly: leave it.
+    _stub_image_resolution(monkeypatch)
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+
+    manifest_fpath = _write_container_manifest(tmp_path)
+    kwdagger_bridge.prepare_schedule_request(
+        manifest_fpath, run=False, root_dpath=tmp_path / "results"
+    )
+
+    assert (tmp_path / "hf").is_dir()
+    assert not (tmp_path / "hf" / "token").exists()
+
+
 def test_prepare_schedule_request_requires_container_image(tmp_path: Path):
     # Containerization is mandatory: a manifest with no container_image (and no
     # --container-image override) is rejected — the bare host-venv pipeline was

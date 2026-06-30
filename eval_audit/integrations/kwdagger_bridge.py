@@ -346,6 +346,31 @@ def _prepare_container_execution(
         hf_path.mkdir(parents=True, exist_ok=True)
         manifest["hf_cache_dir"] = str(hf_path)
 
+        # Materialize the resolved HF token into the mounted cache as the
+        # on-disk credential the container actually reads. The docker node also
+        # emits ``-e HF_TOKEN -e HUGGING_FACE_HUB_TOKEN``, but that bare
+        # ``-e VAR`` form only forwards a value already present in the *job*
+        # shell's environment — and kwdagger runs each job in a fresh tmux pane
+        # that does NOT inherit this scheduling shell's ad-hoc exports
+        # (cmd_queue's tmux backend ships an empty worker environ by design, to
+        # avoid logging secrets to plaintext). So a token exported by e.g.
+        # reproduce/olmo_models/_lib.sh never reaches the container that way.
+        # This process *did* inherit it (eval-audit-run runs in the user's
+        # shell), so write it to ``<hf_cache_dir>/token`` — which the container
+        # reads at ``$HF_HOME/token`` (HF_HOME=/hf-cache) — restoring the on-disk
+        # auth channel the bare host-venv path used to get for free. Mirrors
+        # huggingface_hub's own precedence (env wins over file): write whenever
+        # the env carries a token, but stay idempotent so we don't churn a token
+        # a user logged into this dir directly (env empty => left untouched).
+        env_token = (
+            os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN") or ""
+        ).strip()
+        if env_token:
+            token_fpath = hf_path / "token"
+            if not token_fpath.exists() or token_fpath.read_text().strip() != env_token:
+                token_fpath.write_text(env_token + "\n")
+                token_fpath.chmod(0o600)
+
     # precomputed_root is bind-mounted at the same absolute path inside the
     # container, so resolve it now.
     precomputed_root = manifest.get("precomputed_root")
