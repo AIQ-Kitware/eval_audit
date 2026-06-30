@@ -58,6 +58,16 @@ class ManifestSpec:
     # by-name override for hf, the bundle for vLLM). Inert on the run-entry path.
     # See docs/planning/from-spec-deployment-rewrite-plan.md.
     model_deployment: str | None = None
+    # Exact-path replay (rel-path plan). When non-empty (with ``from_run_spec=True``),
+    # each entry fully specifies one official run to replay by its path relative to
+    # ``precomputed_root`` instead of run-entry token discovery:
+    # ``{run_entry (label), rel_path, model_deployment?, lease_endpoint?, max_eval_instances?}``.
+    # At schedule time the materializer reads ``<precomputed_root>/<rel_path>/run_spec.json``,
+    # applies the declared substitutions as raw-JSON edits, and Stage 3 replays the
+    # materialized copy verbatim (so the in-container rewrite is not exercised on this
+    # path). When empty, the run-entry path (``run_entries``) is used unchanged.
+    # See docs/planning/run-from-relative-path-plan.md.
+    run_spec_sources: list[dict[str, Any]] = field(default_factory=list)
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:

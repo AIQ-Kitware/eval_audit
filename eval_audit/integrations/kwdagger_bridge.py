@@ -8,7 +8,10 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from eval_audit.manifests.run_spec_materializer import MaterializedRunSpec
 
 from eval_audit.infra.api import audit_root
 from eval_audit.infra.yaml_io import dump_yaml, load_manifest
@@ -143,6 +146,31 @@ def build_lease_matrix_entries(
         ]
     if endpoint:
         entries["helm.lease_endpoint"] = [str(endpoint)]
+    entries.update(
+        build_broadcast_lease_knobs(
+            manifest, ttl_override=ttl_override, catalog_override=catalog_override,
+            queue=queue,
+        )
+    )
+    return entries
+
+
+def build_broadcast_lease_knobs(
+    manifest: dict[str, Any],
+    *,
+    ttl_override: str | None = None,
+    catalog_override: str | None = None,
+    queue: bool = True,
+) -> dict[str, Any]:
+    """The endpoint-free lease knobs (ttl / catalog / queue), broadcast to all runs.
+
+    Used directly by the **exact-path** replay path, where each run's
+    ``lease_endpoint`` is carried per-run in the submatrix (resolved at schedule
+    time) rather than parsed from a run-entry — so only these three broadcast
+    knobs come from the manifest. ``build_lease_matrix_entries`` reuses this for
+    the run-entry path after adding the endpoint(s).
+    """
+    entries: dict[str, Any] = {}
     ttl = ttl_override or manifest.get("lease_ttl")
     if ttl:
         entries["helm.lease_ttl"] = [str(ttl)]
@@ -157,23 +185,39 @@ def build_schedule_params(
     manifest: dict[str, Any],
     resolved_image: ResolvedImage | None = None,
     lease_entries: dict[str, Any] | None = None,
+    *,
+    materialized_runs: list["MaterializedRunSpec"] | None = None,
+    staging_root: str | None = None,
 ) -> dict[str, Any]:
     """Build the ``kwdagger schedule --params`` payload from a manifest.
 
     Containerized execution is mandatory, so ``resolved_image`` must be set;
-    every run goes through the docker pipeline. ``lease_entries`` (the per-run
-    GPU-lease matrix knobs) merge in when present — leasing is the orthogonal
-    axis, rendered by the docker node's lease bracket. Raises if no image was
-    resolved (the bare host-venv pipelines have been removed).
+    every run goes through the docker pipeline. ``lease_entries`` (the GPU-lease
+    matrix knobs) merge in when present — leasing is the orthogonal axis,
+    rendered by the docker node's lease bracket. Raises if no image was resolved
+    (the bare host-venv pipelines have been removed).
 
-    When ``manifest['from_run_spec']`` is set, the faithful-replay pipeline
-    (:data:`_DOCKER_FROM_SPEC_PIPELINE`) is selected instead of the run-entry
-    pipeline; that path requires ``precomputed_root`` (the recipe source).
+    Three execution shapes, in priority order:
+
+    * **Exact-path replay** (``from_run_spec`` + ``materialized_runs``): the
+      schedule-time materializer already resolved + substituted each official
+      ``run_spec.json`` into a staging copy. Each run is one ``submatrices`` entry
+      (kwdagger's zip primitive) carrying its materialized spec path, label, and
+      per-run lease endpoint — no run-entry token discovery, no corpus mount.
+    * **From-spec discovery** (``from_run_spec``, no materialized runs): the legacy
+      run-entry path that locates the official dir in-container; requires
+      ``precomputed_root``.
+    * **Run-entry reconstruction** (default).
     """
-    matrix = {
-        "helm.run_entry": list(manifest["run_entries"]),
-        "helm.max_eval_instances": [manifest["max_eval_instances"]],
-        "helm.precomputed_root": manifest.get("precomputed_root", None),
+    if resolved_image is None:
+        raise ValueError(
+            "containerized execution is required: pass --container-image or set "
+            "container_image in the manifest. The bare host-venv pipeline has "
+            "been removed — every HELM run is pinned to a container image."
+        )
+
+    # Broadcast knobs shared by every execution shape.
+    matrix: dict[str, Any] = {
         "helm.suite": [manifest.get("suite", "audit-smoke")],
         "helm.require_per_instance_stats": [
             manifest.get("require_per_instance_stats", True)
@@ -192,15 +236,8 @@ def build_schedule_params(
     if enable_local_hf:
         matrix["helm.enable_local_huggingface_models"] = [json.dumps(enable_local_hf)]
 
-    if resolved_image is None:
-        raise ValueError(
-            "containerized execution is required: pass --container-image or set "
-            "container_image in the manifest. The bare host-venv pipeline has "
-            "been removed — every HELM run is pinned to a container image."
-        )
-
     # Containerized execution: pin the (already-resolved) image and pass the
-    # docker-runner knobs through to MaterializeHelmRunDockerNode.
+    # docker-runner knobs through to the docker node.
     matrix["helm.container_image"] = [resolved_image.run_ref]
     matrix["helm.container_shm_size"] = [str(manifest.get("container_shm_size", "32g"))]
     if manifest.get("hf_cache_dir"):
@@ -217,18 +254,41 @@ def build_schedule_params(
     if lease_entries:
         matrix.update(lease_entries)
 
-    # Pipeline selection: faithful run_spec.json replay vs run-entry-string
-    # reconstruction. The from-spec pipeline always uses discovery (it is keyed
-    # on run-entry strings; the explicit --run-spec-json input is for ad-hoc CLI
-    # use), so precomputed_root is mandatory — it is the recipe source from which
-    # the official run_spec.json is read, not just a reuse cache.
+    # --- Exact-path replay (materialized run_spec.json copies) -----------------
+    # The submatrix is kwdagger's zip primitive (verified in
+    # tests/test_kwdagger_submatrix_contract.py): one dict per run carrying that
+    # run's materialized spec path + label + (optional) lease endpoint, so the
+    # per-run tuple travels together with no NxN cross-product. Substitution is
+    # already baked into the copy, so no model_deployment / max_eval_instances
+    # rewrite is emitted, and precomputed_root is NOT mounted — the recipe source
+    # is the tiny staging dir, not the corpus. See run-from-relative-path-plan.md.
+    if manifest.get("from_run_spec") and materialized_runs:
+        if staging_root:
+            matrix["helm.staging_root"] = [str(staging_root)]
+        submatrices: list[dict[str, Any]] = []
+        for rec in materialized_runs:
+            entry: dict[str, Any] = {
+                "helm.run_spec_json": rec.run_spec_json,
+                "helm.run_entry": rec.run_entry,
+            }
+            if rec.lease_endpoint:
+                entry["helm.lease_endpoint"] = rec.lease_endpoint
+            submatrices.append(entry)
+        matrix["submatrices"] = submatrices
+        return {"pipeline": _DOCKER_FROM_SPEC_PIPELINE, "matrix": matrix}
+
+    # --- Run-entry axis (run-entry reconstruction OR from-spec discovery) ------
+    matrix["helm.run_entry"] = list(manifest["run_entries"])
+    matrix["helm.max_eval_instances"] = [manifest["max_eval_instances"]]
+    matrix["helm.precomputed_root"] = manifest.get("precomputed_root", None)
+
     if manifest.get("from_run_spec"):
         if not manifest.get("precomputed_root"):
             raise ValueError(
-                "from_run_spec=true requires 'precomputed_root': the official "
-                "run_spec.json is read from the matched run dir under it. Set "
-                "--precomputed-root (eval-audit-make-manifest) or precomputed_root "
-                "in the manifest."
+                "from_run_spec=true requires either 'run_spec_sources' (exact-path "
+                "replay, the preferred form) or 'precomputed_root' (run-entry "
+                "discovery): the official run_spec.json must be locatable. Set "
+                "--run-spec-rel-path / --precomputed-root (eval-audit-make-manifest)."
             )
         # Deployment-rewrite target (opt-in). When set, the from-spec node rewrites
         # adapter_spec.model_deployment to this LOCAL name so the produced run
@@ -268,41 +328,78 @@ def prepare_schedule_request(
         str.maketrans({c: "-" for c in " !@#$%^&*()+={}[]|\\:;\"'<>,?/~`"})
     )
 
-    # Per-run GPU leasing (opt-in, §5/§13). infer-stack owns every GPU, so the
-    # HELM *client* must request none. Leasing and containerization are
-    # orthogonal (see eval_audit.pipelines.lease_bracket): a containerized leased
-    # client gets container_gpus="none"; a bare host-venv leased client is just
-    # an HTTP caller to the served endpoint and uses no GPU regardless. Default
-    # container_gpus to "none" so the *containerized* leased path never fights
-    # infer-stack over GPU indices (inert on the bare path, which ignores
-    # container knobs).
-    lease_entries: dict[str, Any] | None = None
-    if lease:
-        manifest.setdefault("container_gpus", "none")
-        lease_entries = build_lease_matrix_entries(
-            manifest,
-            ttl_override=lease_ttl,
-            catalog_override=lease_catalog,
-            queue=lease_queue,
-        )
-
     # Containerized execution (opt-in). A CLI override wins over the manifest.
+    # Done before materialization so precomputed_root is resolved to an absolute
+    # host path (the materializer reads the official run_spec.json from it).
     if container_image is not None:
         manifest["container_image"] = container_image
     resolved_image, container_provenance = _prepare_container_execution(
         manifest, experiment_name
     )
 
+    # Experiment result root (the runtime uses it too) — resolved up-front so the
+    # materializer can stage substituted run_spec.json copies under it.
+    resolved_root = (
+        Path(root_dpath).expanduser().resolve()
+        if root_dpath is not None
+        else experiment_result_dpath(experiment_name)
+    )
+
+    # Exact-path replay (rel-path plan): on the host, before kwdagger, resolve
+    # each (precomputed_root, rel_path) to the official run_spec.json and write a
+    # substituted copy to a staging dir. The matrix then carries materialized copy
+    # paths (one submatrix entry per run), not run-entry token-discovery keys.
+    materialized_runs: list[MaterializedRunSpec] | None = None
+    staging_root: str | None = None
+    if manifest.get("from_run_spec") and manifest.get("run_spec_sources"):
+        from eval_audit.manifests.run_spec_materializer import (
+            coerce_sources,
+            materialize_run_specs,
+        )
+
+        precomputed_root = manifest.get("precomputed_root")
+        if not precomputed_root:
+            raise ValueError(
+                "from_run_spec with run_spec_sources requires 'precomputed_root' "
+                "(the host root the rel_paths resolve against)."
+            )
+        staging_root = str((resolved_root / "materialized_run_specs").resolve())
+        materialized_runs = materialize_run_specs(
+            coerce_sources(manifest["run_spec_sources"]),
+            precomputed_root=precomputed_root,
+            staging_dir=staging_root,
+            default_max_eval_instances=manifest.get("max_eval_instances"),
+        )
+
+    # Per-run GPU leasing (opt-in, §5/§13). infer-stack owns every GPU, so the
+    # HELM *client* must request none (container_gpus="none"). On the exact-path
+    # replay each run's lease endpoint is carried per-run in the submatrix, so
+    # only the broadcast knobs (ttl/catalog/queue) come from the manifest here;
+    # the run-entry path resolves the endpoint from the manifest's lease facts.
+    lease_entries: dict[str, Any] | None = None
+    if lease:
+        manifest.setdefault("container_gpus", "none")
+        if materialized_runs is not None:
+            lease_entries = build_broadcast_lease_knobs(
+                manifest, ttl_override=lease_ttl, catalog_override=lease_catalog,
+                queue=lease_queue,
+            )
+        else:
+            lease_entries = build_lease_matrix_entries(
+                manifest, ttl_override=lease_ttl, catalog_override=lease_catalog,
+                queue=lease_queue,
+            )
+
     params = build_schedule_params(
-        manifest, resolved_image=resolved_image, lease_entries=lease_entries
+        manifest,
+        resolved_image=resolved_image,
+        lease_entries=lease_entries,
+        materialized_runs=materialized_runs,
+        staging_root=staging_root,
     )
     runtime = KWDaggerRuntime(
         queue_name=runtime_queue_name,
-        root_dpath=(
-            Path(root_dpath).expanduser().resolve()
-            if root_dpath is not None
-            else experiment_result_dpath(experiment_name)
-        ),
+        root_dpath=resolved_root,
         devices=str(devices if devices is not None else manifest.get("devices", "0,1")),
         tmux_workers=int(
             tmux_workers

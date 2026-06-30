@@ -62,6 +62,9 @@ _CONTAINER_KEYS = frozenset(
         "container_ipc_host",
         "container_mounts",
         "container_network",
+        # Staging dir holding materialized run_spec.json copies (exact-path
+        # replay). A mount knob: bind-mounted :ro, never forwarded to the CLI.
+        "staging_root",
     }
 )
 
@@ -113,6 +116,10 @@ class MaterializeHelmRunDockerNode(LeaseBracketMixin, MaterializeHelmRunNode):
         "container_ipc_host": False,
         "container_mounts": None,
         "container_network": None,
+        # Staging dir for materialized run_spec.json copies (exact-path replay):
+        # an identity-neutral mount knob (the recipe identity is the spec path,
+        # an algo_param on the from-spec node), bind-mounted :ro at the same path.
+        "staging_root": None,
         **LEASE_PERF_PARAMS,
     }
 
@@ -178,6 +185,14 @@ class MaterializeHelmRunDockerNode(LeaseBracketMixin, MaterializeHelmRunNode):
         if precomputed_root:
             p = q(str(precomputed_root))
             lines.append(f"-v {p}:{p}:ro")
+        # Exact-path replay: the materialized run_spec.json copies live under the
+        # staging dir; mount it :ro at the same path so the from-spec CLI reads the
+        # copy named by --run-spec-json. On this path precomputed_root is absent
+        # (the recipe source is the staging copy, not the corpus), so no corpus mount.
+        staging_root = cfg.get("staging_root")
+        if staging_root:
+            s = q(str(staging_root))
+            lines.append(f"-v {s}:{s}:ro")
         model_deployments_fpath = cfg.get("model_deployments_fpath")
         if model_deployments_fpath:
             m = q(str(model_deployments_fpath))
@@ -245,6 +260,11 @@ class MaterializeHelmRunFromSpecDockerNode(MaterializeHelmRunDockerNode):
     algo_params = {
         **MaterializeHelmRunDockerNode.algo_params,
         "model_deployment": None,
+        # Exact-path replay: absolute path to the materialized run_spec.json this
+        # run replays (``--run-spec-json``). It is algo identity — a different spec
+        # path (a different official recipe, or different substitutions) is a
+        # different run, so it also gives each fanned-out run a distinct job dir.
+        "run_spec_json": None,
     }
 
 
