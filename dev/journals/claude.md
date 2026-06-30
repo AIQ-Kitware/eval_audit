@@ -4075,3 +4075,17 @@ Rejected alternatives: (a) add `ai2-olmo`/`hf_olmo` to the image — contradicts
 **Design insight.** *A canary is only useful if the harness can actually run it.* For from-spec replay that means "an official run of this scenario exists for this model" — you cannot synthesize a wmt_14 smoke for a model HELM never ran on wmt_14. The available-official-runs set (candidate_runs.json / the precomputed_root tree) is the menu; pick canaries that (a) are on it and (b) traverse the fragile code path (dataset resolution, optional-extra import). One canary per failure-mode suffices when the thing under test (the container image) is shared across all grid items.
 
 **State.** Five commits on `impl/run-from-run-spec` this session (token materialize; container docs; `[all]`+hub pin; 07 probe; smoke canaries) + journals. Not pushed. `submodules/cmd_queue` gitlink still modified+unstaged (pre-existing). Still needs the GPU-box rebuild + digest re-pin before any of the container-side checks pass against a real image.
+
+## 2026-06-30 11:55:00 -0400
+
+**Model / harness.** Claude Opus 4.8 (1M context), claude-opus-4-8[1m], Claude Code CLI / VSCode. Continues the container-test segment.
+
+**User intent.** Make the e2e runbook test the docker container analogously to OLMo. Mid-task the user clarified: **no smoke-scenario canary** — just the container test.
+
+**What I did (commit 99e27c5).** Added the same image-env probe to `dev/e2e-tests/06_check_container_image.sh` (the e2e twin of OLMo's `07`): CPU-only `docker run --entrypoint python` asserting `langdetect` imports + `huggingface_hub==0.36.2`, keyed off `$E2E_CONTAINER_IMAGE`. Updated the e2e README's preflight line. Did NOT add a scenario canary.
+
+**Notes for a future agent.** phi-2 *does* have an official `wmt_14` run (`/data/crfm-helm-public/lite/.../v1.1.0/wmt_14:...,model=microsoft_phi-2`), so a from-spec wmt_14 canary WAS available — but the e2e smoke manifest is scoped `precomputed_root: /data/crfm-helm-public/mmlu` (mmlu subtree, deliberately narrow for fast/unambiguous discovery), so adding wmt_14 would have needed either a risky root broadening or a separate scoped manifest + its own HF-override config + grid wiring. Moot now (user declined the canary), but that's why it wasn't a one-line add like OLMo's.
+
+**Open question (flagged to user).** The earlier OLMo smoke canary (commit bf2b976) adds wmt_14+ifeval to the OLMo smoke set. The "no canary for the smoke test" instruction may extend to it — awaiting confirmation whether to revert bf2b976 (and its journal 676746d) or keep it. The OLMo + e2e image probes stand regardless.
+
+**State.** `impl/run-from-run-spec`; e2e probe committed. `submodules/cmd_queue` gitlink still pre-existing/unstaged. Container-side checks still need the GPU-box rebuild + digest re-pin to pass against a real image.
