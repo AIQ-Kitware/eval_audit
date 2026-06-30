@@ -4010,3 +4010,27 @@ Rejected alternatives: (a) add `ai2-olmo`/`hf_olmo` to the image — contradicts
 3. *Match the served vocab, not just "an OLMo tokenizer."* The repoint to `OLMo-7B-hf` is correct specifically because catalog.yaml serves `OLMo-7B-hf`; a different -hf conversion would be a subtle tokenization mismatch.
 
 **State / next steps.** `docker/build.sh` + `docker/helm-runner.dockerfile` edited; working tree otherwise clean. User must **rebuild the runner image on aiq-gpu** (`./docker/build.sh`) — the new final-stage guard will confirm the override before the image is usable — then re-run Change 5 GPU smoke. The two olmo-7b presets should now tokenize without `hf_olmo`. Not yet committed (awaiting the user's go / a successful GPU rebuild).
+
+## 2026-06-30 09:05:00 -0400
+
+**Model / harness.** Claude Opus 4.8 (1M context), claude-opus-4-8[1m], Claude Code CLI in the VSCode extension.
+
+**User intent.** The user hit `Dataset 'Idavidrein/gpqa' is a gated dataset on the Hub. You must be authenticated to access it.` running the OLMo runbook (10/15 grid), and asked whether the Docker run lacks access to their HF auth. After diagnosis they asked me to implement the fix.
+
+**Diagnosis (the real bug).** Auth never reached the container, and it's a latent gap that containerization exposed:
+- The docker node forwards auth only via the bare `-e HF_TOKEN -e HUGGING_FACE_HUB_TOKEN` ([helm_docker_pipeline.py:165]). Bare `-e VAR` forwards a value *only if it is set in the job shell that runs `docker run`*.
+- But kwdagger runs each job in a **fresh tmux pane** (default backend; [kwdagger_bridge.py:47-48,312]), and cmd_queue's tmux backend ships an **empty worker `environ`** by design (explicit TODO in `submodules/cmd_queue/cmd_queue/backends/tmux.py` ~L633: "we dont want to log secrets to plaintext"). So `_lib.sh`'s `export HF_TOKEN` into the *launching* shell never survives into the pane → `-e HF_TOKEN` forwards nothing.
+- Why it worked **before the container**: the host-venv path ran HELM as the user with `HF_HOME` defaulting to `~/.cache/huggingface`, reading the persistent `huggingface-cli login` token off disk in-process. The tmux env gap existed then too but was masked. The container severs that channel three ways: runs as root in an isolated FS; sets `HF_HOME=/hf-cache`; and mounts a **dedicated** `~/.cache/eval-audit-hf` (not the personal cache, by ownership-hygiene design) which doesn't hold the login token. The dedicated-cache decision is the proximate cause; the `-e HF_TOKEN` line made it *look* covered.
+
+**Fix.** Restore the on-disk channel instead of fighting tmux. In `kwdagger_bridge._prepare_container_execution` — which runs in the scheduling process that *did* inherit the env — after creating `hf_cache_dir`, write the resolved `HF_TOKEN`/`HUGGING_FACE_HUB_TOKEN` to `<hf_cache_dir>/token` (0600), idempotently (only when the env carries a token and content differs, so a token a user logged into the dir directly is never clobbered). The container then reads it at `$HF_HOME/token`. Left the `-e HF_TOKEN` line as harmless belt-and-suspenders; `helm_docker_pipeline.py` unchanged. Chose the bridge over `_lib.sh` so the fix covers *every* containerized run (e2e + future grids), not just OLMo.
+
+**Footprint.** Code+test: `kwdagger_bridge.py`, `tests/test_container_execution.py` (+2 tests: token materialized w/ 0600; no token => no file). Preflight: `06_check_hf_auth.sh` (describe the disk hand-off). Docs: `docs/container-execution.md`, `docker/README.md`. Runbook comments: `10_run_smoke_grid.sh`, `15_run_full_grid.sh`, `reproduce/olmo_models/README.md` (×2). This journal.
+
+**Validation (no docker/GPU here).** `py_compile` OK; `bash -n` on the three scripts OK; `tests/test_container_execution.py` 10 passed (`.venv/bin/python`; the default `.venv-1` lacks pytest). Could not exercise the real tmux→docker→datasets path on this host.
+
+**Design insights.**
+1. *A redundant channel that silently carries the load hides the breakage of the primary one.* The on-disk default-location token did all the work for years; the `-e HF_TOKEN` "primary" path was never actually exercised, so its tmux-incompatibility went unnoticed until the redundant channel was removed.
+2. *When you relocate where a process runs (host→container, or across an env boundary like a tmux pane), re-audit not just what's installed but what's reachable — env, credentials, mounts.* Same lesson as the prior olmo-7b entry-point fix, now for secrets.
+3. *Hygiene and reachability can trade off.* The dedicated-cache-dir choice (good: no root-owned files in the personal cache) is exactly what broke auth reachability. The fix keeps the hygiene win and re-adds reachability by materializing the token into that same dir.
+
+**State / next steps.** Working tree edits only; not committed (awaiting user's go). To verify end-to-end the user should re-run `06_check_hf_auth.sh` then a single gated smoke (e.g. `allenai/olmo-2-1124-7b-instruct`) and confirm `<hf_cache_dir>/token` appears and gpqa downloads. Caveat still stands: the token's account must have accepted the gpqa terms (identity ≠ access).
