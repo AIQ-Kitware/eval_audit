@@ -225,11 +225,29 @@ is **not** in the matrix (no corpus mount; the recipe source is the staging copy
 ### 4.3 From-spec docker node — declare `run_spec_json` (`helm_docker_pipeline.py`)
 Add `run_spec_json` to `MaterializeHelmRunFromSpecDockerNode.algo_params`
 (alongside the existing `model_deployment`) so the bridge can thread the per-run
-path into the inner `--run-spec-json=...`. It is `algo` identity: a different spec
-path is a different run (a changed official recipe forces recompute — closes the
-`run-from-run-spec-json-plan.md` §7 "hash the spec into identity" gap for free,
-since the path *is* the version-pinned address). No magnet change — the CLI flag
-exists.
+path into the inner `--run-spec-json=...`. It is `algo` identity (kwdagger's
+`algo_id = hash(algo_params)`, perf/out excluded — `pipeline.py:2037`), so the spec
+path determines whether a run is skipped (`DONE` sentinel) or recomputed.
+
+**Caching is content-addressed.** The materializer names the copy
+`run_spec.<sha256(final bytes)[:16]>.json` (§4.1), so the path reflects the *recipe
+content*, not just the rel-path. Because the official `run_spec.json` is immutable,
+the only thing that changes the hash is our own substitution — so an identical
+recipe reuses the same path (skip) while a changed field (notably
+`max_eval_instances`, which is baked into the copy and is otherwise *not* a matrix
+algo_param here) yields a new path and a clean recompute. This closes the stale-reuse
+hole a plain rel-path-keyed name would leave, and subsumes the
+`run-from-run-spec-json-plan.md` §7 "hash the spec into identity" item. No magnet
+change — the CLI flag exists.
+
+Caching scenarios (for operators): (1) re-running the same exact-path manifest under
+the same root → skips; (2) existing run-entry / from-spec-*discovery* manifests are
+untouched (their matrices/identity are preserved) → skip as before; (3) *migrating*
+an existing experiment from the discovery path to the exact-path path changes the
+algo_param set (`run_spec_json` appears; `model_deployment`/`max_eval_instances`
+move into the copy) → a one-time recompute. The content hash embeds the absolute
+staging root, so identity is per-root (not portable across trees) — acceptable since
+kwdagger's `skip_existing` is scoped to `root_dpath` anyway.
 
 ### 4.4 Leasing — per-run scalar endpoint (`lease_bracket.py`, bridge)
 Each run's `lease_endpoint` is resolved **on the host** at schedule time (the
