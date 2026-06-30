@@ -1,0 +1,24 @@
+# infer-stack durable settings for the OLMo-7B deployment-matrix MWE.
+#
+# Mirrors the production OLMo settings (../../config/infer_stack/settings.yaml):
+# point INFER_STACK_CONFIG_DIR at THIS directory and the catalog.yaml beside this
+# file is resolved. litellm: true (the harness queries the LiteLLM gateway at
+# :14042); ui: false (no Open WebUI for a debug batch).
+#
+# data_dir is BIND-MOUNTED into the vLLM/LiteLLM containers (HF weight cache +
+# gateway route table) and must live on a docker-mountable big disk. It is pinned
+# to the same path as the production OLMo run so the large OLMo weights are shared
+# (no re-download). Resolution order is env > this pin > default, so override per
+# host with INFER_STACK_DATA_DIR.
+#
+# ⚠️ This shares the docker-compose PROJECT with the production OLMo run. The
+# matrix brings models up one at a time with `release --evict` between them, so
+# do NOT run it concurrently with a production OLMo grid (the evicts would tear
+# down each other's containers). Isolate by exporting a distinct
+# INFER_STACK_DATA_DIR for the debug run if you need them side by side.
+backend: compose
+litellm: true
+ui: false
+skip_display_gpus: false
+reverse_proxy: false
+data_dir: /data/service/infer-stack

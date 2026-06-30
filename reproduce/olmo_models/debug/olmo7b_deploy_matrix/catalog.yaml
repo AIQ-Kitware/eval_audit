@@ -1,0 +1,217 @@
+# infer-stack serving catalog — OLMo-7B *deployment matrix* (debug / MWE).
+#
+# Purpose
+# -------
+# Minimum working example for the bug "olmo 7b repeats nonsense regardless of
+# prompt during reproductions". The local vLLM run emits prompt-INDEPENDENT
+# pretraining boilerplate ("The first thing you need to do is to make sure that
+# you have a g…before you start playing.") for *every* narrative_qa instance,
+# while the official together/olmo-7b run conditions on the prompt normally
+# (prompts_equal=True in the request_state_diff — the input reaches vLLM fine).
+#
+# This catalog enumerates the deployment variants of OLMo-7B as separate
+# infer-stack endpoints so we can bring each up one at a time and compare the
+# completions side by side (see compare_deployments.py + run_matrix.sh). Each
+# axis is isolated so the comparison *attributes* the failure to one knob.
+#
+# Why a separate catalog (not the production one)
+# -----------------------------------------------
+# The production endpoint lives at
+# reproduce/olmo_models/config/infer_stack/catalog.yaml
+# (`allenai-olmo-7b-single`). This debug catalog is additive and self-contained:
+# point INFER_STACK_CONFIG_DIR at this directory to load it. Nothing here
+# touches the production run.
+#
+# How infer-stack turns these into `vllm serve` flags (load-bearing)
+# ------------------------------------------------------------------
+# infer_stack.profile_runtime.vllm_args emits ONLY a fixed flag set
+# (--served-model-name, --tensor-parallel-size, --data-parallel-size,
+# --max-model-len, --gpu-memory-utilization, --max-num-batched-tokens,
+# --max-num-seqs, optional --enable-prefix-caching) followed verbatim by
+# `runtime.extra_args`. The model-spec `revision`/`dtype`/`quantization` and the
+# structural `chat_template`/`trust_remote_code` are used for the *coalescing
+# compat-key* only — they are NOT rendered onto the command line. So every
+# variant knob we actually want vLLM to see (--dtype, --trust-remote-code,
+# --revision, --hf-overrides …) MUST live in `extra_args`.
+#
+# Each endpoint also gets a DISTINCT served name (the endpoint name, since we set
+# no `public_name`). Two endpoints that differ only in `extra_args` would share a
+# compat-key and COALESCE onto one container (extra_args is not structural), so
+# the distinct names are what keep these as separate, independently-launched
+# deployments. Render them yourself with render_commands.py to confirm the flags.
+#
+# `--enforce-eager` everywhere: skips torch.compile + CUDA-graph capture (the
+# dominant vLLM startup cost, model-size-independent). We're comparing recipes,
+# not measuring throughput, so eager startup is the right trade.
+#
+# ⚠️ HF source ids: `allenai/OLMo-7B-hf` and `allenai/OLMo-7B` are the original
+# Feb-2024 7B (release_date 2024-02-01 in HELM model_metadata — this is what the
+# official together/olmo-7b served). `allenai/OLMo-7B-0724-hf` is the *July-2024*
+# re-release: a DIFFERENT checkpoint, included as a deliberate non-match control.
+# Confirm exact ids/revisions on the HF Hub before citing numbers.
+
+models:
+  # Original Feb-2024 OLMo-7B, HF-converted (vLLM-native OLMoForCausalLM). This
+  # is the weight set that matches the official together/olmo-7b run. Its
+  # config.json declares torch_dtype: float32 — which is the whole story below.
+  olmo-7b-hf:
+    source: hf://allenai/OLMo-7B-hf
+
+  # Original Feb-2024 OLMo-7B in the native ai2-olmo checkpoint format (NOT the
+  # "-hf" conversion). Needs --trust-remote-code (custom modeling code). Same
+  # weights as olmo-7b-hf in principle; serving it tests whether the conversion
+  # vs native path changes anything.
+  olmo-7b-orig:
+    source: hf://allenai/OLMo-7B
+
+  # July-2024 re-release of 7B (improved training). DIFFERENT checkpoint from the
+  # official run — a non-match control: it should generate sensibly but its
+  # numbers are not expected to match the official together/olmo-7b artifact.
+  olmo-7b-0724-hf:
+    source: hf://allenai/OLMo-7B-0724-hf
+
+endpoints:
+  # ── Axis 1: dtype (model = OLMo-7B-hf, protocol = completions) ─────────────
+  # The decisive axis for this bug. OLMo-1 (7B) has activation outliers that
+  # exceed float16's ~6.5e4 dynamic range; in fp16 they overflow to inf/NaN in
+  # attention, the model stops conditioning on its prompt, and it collapses to
+  # the prompt-independent pretraining boilerplate seen in the report. bfloat16
+  # keeps the wide exponent range and is healthy; float32 is the slow control.
+
+  # vLLM `--dtype auto` reads config torch_dtype (float32) and DOWNCASTS
+  # float32 → float16 (vLLM's documented auto rule), so "auto" == the bug.
+  # This endpoint is expected to REPRODUCE the nonsense.
+  olmo7b-dbg-auto:
+    engine: vllm
+    reclaim: stop
+    model: olmo-7b-hf
+    protocol: completions
+    runtime:
+      max_model_len: 2048
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 2048
+      max_num_seqs: 16
+      extra_args: ['--dtype', 'auto', '--enforce-eager']
+
+  # Explicit float16 — proves the failure is fp16 itself, not an "auto"
+  # mis-detection. Expected to REPRODUCE the nonsense, identically to auto.
+  olmo7b-dbg-fp16:
+    engine: vllm
+    reclaim: stop
+    model: olmo-7b-hf
+    protocol: completions
+    runtime:
+      max_model_len: 2048
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 2048
+      max_num_seqs: 16
+      extra_args: ['--dtype', 'float16', '--enforce-eager']
+
+  # bfloat16 — the FIX. Expected to be HEALTHY (conditions on each prompt).
+  olmo7b-dbg-bf16:
+    engine: vllm
+    reclaim: stop
+    model: olmo-7b-hf
+    protocol: completions
+    runtime:
+      max_model_len: 2048
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 2048
+      max_num_seqs: 16
+      extra_args: ['--dtype', 'bfloat16', '--enforce-eager']
+
+  # float32 — full-precision control. Expected HEALTHY; the closest numeric
+  # match to a CPU/HF float32 reference, at ~2x the VRAM and slower.
+  olmo7b-dbg-fp32:
+    engine: vllm
+    reclaim: stop
+    model: olmo-7b-hf
+    protocol: completions
+    runtime:
+      max_model_len: 2048
+      gpu_memory_utilization: 0.9
+      max_num_batched_tokens: 2048
+      max_num_seqs: 8
+      extra_args: ['--dtype', 'float32', '--enforce-eager']
+
+  # ── Axis 2: protocol (model = OLMo-7B-hf, dtype = bf16) ────────────────────
+  # The *other* documented way to get garbage from a base model: serve it as
+  # chat. OLMo-7B-hf ships NO chat_template.jinja (confirmed: the HF cache
+  # records it under .no_exist), so /chat/completions either errors or applies a
+  # default wrapper that mangles the raw HELM prompt. narrative_qa is a base
+  # completion scenario; the correct recipe is `protocol: completions`. This
+  # endpoint exists to demonstrate the failure mode, NOT to reproduce the run.
+  # (Even with the healthy bf16 dtype, chat framing is wrong here.)
+  olmo7b-dbg-chat-bf16:
+    engine: vllm
+    reclaim: stop
+    model: olmo-7b-hf
+    protocol: chat
+    runtime:
+      max_model_len: 2048
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 2048
+      max_num_seqs: 16
+      extra_args: ['--dtype', 'bfloat16', '--enforce-eager']
+
+  # ── Axis 3: model identity / checkpoint (dtype = bf16, completions) ────────
+  # Native ai2-olmo checkpoint (not the -hf conversion) + --trust-remote-code.
+  # Tests the conversion path against the original modeling code on the same
+  # Feb-2024 weights. Expected HEALTHY and close to olmo7b-dbg-bf16.
+  olmo7b-dbg-orig-bf16:
+    engine: vllm
+    reclaim: stop
+    model: olmo-7b-orig
+    protocol: completions
+    runtime:
+      max_model_len: 2048
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 2048
+      max_num_seqs: 16
+      trust_remote_code: true            # structural only; the real flag is in extra_args
+      extra_args: ['--dtype', 'bfloat16', '--trust-remote-code', '--enforce-eager']
+
+  # July-2024 re-release (DIFFERENT checkpoint). Non-match control: HEALTHY
+  # generations expected, but its metrics should NOT match the official
+  # together/olmo-7b artifact — useful to show "healthy but wrong checkpoint"
+  # is distinct from "right checkpoint, broken dtype".
+  olmo7b-dbg-0724-bf16:
+    engine: vllm
+    reclaim: stop
+    model: olmo-7b-0724-hf
+    protocol: completions
+    runtime:
+      max_model_len: 2048
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 2048
+      max_num_seqs: 16
+      extra_args: ['--dtype', 'bfloat16', '--enforce-eager']
+
+# `infer-stack acquire <bundle>` would try to co-host all of these; they each
+# take a whole GPU (reclaim: stop), so DO NOT acquire the bundle directly. The
+# bundle is a convenient name for `catalog endpoint list` / run_matrix.sh, which
+# brings them up one at a time with a release in between.
+bundles:
+  olmo7b-deploy-matrix:
+    - olmo7b-dbg-auto
+    - olmo7b-dbg-fp16
+    - olmo7b-dbg-bf16
+    - olmo7b-dbg-fp32
+    - olmo7b-dbg-chat-bf16
+    - olmo7b-dbg-orig-bf16
+    - olmo7b-dbg-0724-bf16
+
+# ── Axis 4: engine (documented, not an infer-stack vLLM endpoint) ───────────
+# Two more "ways to deploy" that are NOT vLLM endpoints and so are driven by the
+# MWE scripts rather than this catalog:
+#   * HuggingFace transformers (the ground-truth reference): olmo_hf_reference.py
+#     loads allenai/OLMo-7B-hf with AutoModelForCausalLM at a chosen torch_dtype
+#     and greedy-decodes the same prompts. This is the "what should OLMo say"
+#     oracle the vLLM variants are compared against.
+#   * Together API (the official deployment, together/olmo-7b): external, needs
+#     an API key, and is the artifact the audit already compares to. Not run
+#     here; the official completions in the report ARE this row.
+# An Ollama OLMo-1 7B endpoint could be added (engine: ollama) if a faithful
+# GGUF of the Feb-2024 base model is available, but OLMo-1 base GGUFs are scarce
+# and quantization confounds the dtype comparison, so it is intentionally
+# omitted from the matrix.

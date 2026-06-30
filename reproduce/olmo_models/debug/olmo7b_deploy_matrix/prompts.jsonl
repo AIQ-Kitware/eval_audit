@@ -1,0 +1,6 @@
+{"id": "narrativeqa_funeral", "prompt": "Pat is a high-school student. After a classmate spreads copies of a private journal, the truth about Sebastian comes out at his funeral, where Cecile hands out the journal to the mourners.\nQuestion: Where does Cecile distribute copies of Sebastian's journal?\nAnswer:", "expect": "should reference the funeral / Sebastian's funeral"}
+{"id": "narrativeqa_victim", "prompt": "Falder is a young clerk who, out of love, alters a cheque. He is caught and put on trial. Crushed by the legal machinery, he becomes the victim of the terrible system he cannot escape.\nQuestion: What does Falder find himself the victim of?\nAnswer:", "expect": "should reference the system / the law"}
+{"id": "fact_capital_france", "prompt": "Question: What is the capital of France?\nAnswer:", "expect": "Paris"}
+{"id": "fact_arithmetic", "prompt": "Compute the following.\n2 + 2 =", "expect": "4"}
+{"id": "cont_ocean", "prompt": "The largest ocean on Earth is the", "expect": "Pacific (Ocean)"}
+{"id": "cont_sky", "prompt": "On a clear day, the color of the sky is", "expect": "blue"}
