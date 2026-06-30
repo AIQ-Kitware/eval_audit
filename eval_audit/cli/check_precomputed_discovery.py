@@ -29,6 +29,15 @@ Usage::
 
 Exit code is nonzero if any entry is ``NO_MATCH`` (a hard discovery failure);
 ``AMBIGUOUS`` warns but does not fail unless ``--strict`` is given.
+
+**Existence-check mode (``--manifest``, rel-path plan §4.7).** Once rel-paths are
+frozen into a manifest's ``run_spec_sources`` (``export-benchmark-bundle
+--freeze-rel-paths``), discovery never runs at execution time, so the question is
+no longer "will a match be found?" but "does the frozen path still resolve?".
+``--manifest <manifest.yaml>`` validates each ``run_spec_sources`` entry by
+asserting ``<precomputed_root>/<rel_path>/run_spec.json`` exists and deserializes
+(``NO_MATCH`` / ``AMBIGUOUS`` are impossible by construction). The only failure is
+a frozen path that moved/broke — surfaced loudly, nonzero exit, before a GPU run.
 """
 
 from __future__ import annotations
@@ -128,6 +137,83 @@ def _classify(entry: str, runs: list[_Run]) -> _EntryResult:
     return _EntryResult(entry, status, cands, best, _official_deployment(best.path))
 
 
+def _validate_frozen_manifest(path: Path, *, as_json: bool) -> int:
+    """Existence-check a frozen exact-path manifest (rel-path plan §4.7).
+
+    For each ``run_spec_sources`` entry, assert
+    ``<precomputed_root>/<rel_path>/run_spec.json`` **exists** and **deserializes**,
+    and report its official ``adapter_spec.model_deployment`` (the rewrite "from").
+    Token-subset matching never runs here, so ``NO_MATCH`` / ``AMBIGUOUS`` are
+    impossible by construction — the only failure is a frozen path that moved or
+    broke (corpus relaid out / snapshot changed), which is exactly the drift to
+    surface loudly before a GPU run. Stronger and simpler than the token preflight:
+    an exact-existence check cannot go ambiguous.
+    """
+    from eval_audit.infra.yaml_io import load_manifest
+    from eval_audit.manifests.run_spec_materializer import resolve_official_run_spec
+
+    manifest = load_manifest(path)
+    root = manifest.get("precomputed_root")
+    sources = manifest.get("run_spec_sources") or []
+    if not root:
+        raise SystemExit(f"{path}: manifest has no precomputed_root")
+    if not sources:
+        raise SystemExit(
+            f"{path}: manifest has no run_spec_sources (not an exact-path manifest)"
+        )
+
+    rows: list[tuple[str, str, str, str | None, str | None]] = []
+    n_ok = n_bad = 0
+    for source in sources:
+        rel = source["rel_path"]
+        entry = source.get("run_entry", rel)
+        status, deployment, error = "OK", None, None
+        try:
+            spec_path = resolve_official_run_spec(root, rel)
+            spec = json.loads(spec_path.read_text())
+            deployment = (spec.get("adapter_spec") or {}).get("model_deployment")
+        except Exception as exc:  # missing path, or unreadable/invalid JSON
+            status, error = "MISSING", str(exc)
+        rows.append((entry, rel, status, deployment, error))
+        n_ok += status == "OK"
+        n_bad += status != "OK"
+
+    if as_json:
+        print(
+            json.dumps(
+                {
+                    "manifest": str(path),
+                    "precomputed_root": str(root),
+                    "summary": {"OK": n_ok, "MISSING": n_bad},
+                    "entries": [
+                        {
+                            "run_entry": e,
+                            "rel_path": r,
+                            "status": st,
+                            "official_deployment": dep,
+                            "error": err,
+                        }
+                        for (e, r, st, dep, err) in rows
+                    ],
+                },
+                indent=2,
+            )
+        )
+    else:
+        for entry, rel, status, deployment, error in rows:
+            print(f"[{status:7}] {entry}")
+            print(f"          rel_path={rel}")
+            if deployment:
+                print(f"          deploy(official)={deployment}")
+            if error:
+                print(f"          error={error}")
+        print(
+            f"\n[validate] {path.name}: {len(sources)} frozen sources — "
+            f"{n_ok} OK, {n_bad} MISSING"
+        )
+    return 1 if n_bad else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
@@ -149,6 +235,16 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="root to search; defaults to the preset's manifest precomputed_root",
     )
+    ap.add_argument(
+        "--manifest",
+        type=Path,
+        default=None,
+        help="Existence-check mode (rel-path plan §4.7): validate a FROZEN "
+        "exact-path manifest's run_spec_sources — assert each rel_path's "
+        "run_spec.json exists + deserializes (no token discovery; NO_MATCH/"
+        "AMBIGUOUS impossible). Reports the official deployment; nonzero exit if "
+        "any frozen path is missing/unreadable. Mutually exclusive with --preset/--entry.",
+    )
     ap.add_argument("--mode", choices=("smoke", "full"), default="full")
     ap.add_argument(
         "--strict",
@@ -157,6 +253,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     args = ap.parse_args(argv)
+
+    # Existence-check mode: validate a frozen exact-path manifest (no discovery).
+    if args.manifest is not None:
+        if args.preset or args.entry:
+            raise SystemExit("--manifest cannot be combined with --preset/--entry")
+        return _validate_frozen_manifest(args.manifest, as_json=args.json)
 
     if not args.preset and not args.entry:
         raise SystemExit("provide --preset and/or one or more --entry")
