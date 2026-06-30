@@ -1328,6 +1328,93 @@ def _lease_facts(
     return out
 
 
+def _strip_local_deployment(
+    run_entry: str, local_names: "frozenset[str]"
+) -> tuple[str, str | None]:
+    """Drop a ``model_deployment=<name>`` token from a run-entry for discovery,
+    but ONLY when ``<name>`` is a LOCAL deployment (rel-path plan §6, the
+    "local-only" rule). The official run dir never carries a local token, so it
+    must be stripped to match; an official/private token (e.g. a stanfordhealthcare
+    deployment) is kept so it still discriminates. Returns
+    ``(discovery_query, stripped_local_name_or_None)``.
+    """
+    bench, sep, rest = run_entry.partition(":")
+    if not sep:
+        return run_entry, None
+    kept: list[str] = []
+    token: str | None = None
+    for kv in rest.split(","):
+        key, _, value = kv.partition("=")
+        if key.strip() == "model_deployment" and value.strip() in local_names:
+            token = value.strip()
+        else:
+            kept.append(kv)
+    query = f"{bench}:{','.join(kept)}" if kept else bench
+    return query, token
+
+
+def _freeze_run_spec_sources(
+    spec: dict[str, Any],
+    *,
+    precomputed_root: str,
+    model_entries: list[dict[str, Any]],
+    lease_facts: dict[str, Any] | None,
+    runs: list[Any],
+) -> list[dict[str, Any]]:
+    """Resolve each preset run-entry to its EXACT rel-path once and freeze a
+    ``run_spec_sources`` list (rel-path plan §4.5).
+
+    This is the *only* remaining use of token-subset discovery: it runs here, at
+    export, against a known corpus snapshot (``runs`` already enumerated under
+    ``precomputed_root``), and pins the matched official run dir as a path relative
+    to the root. The materialized-replay path then reads that exact path — no
+    run-time discovery. A ``NO_MATCH`` / ``AMBIGUOUS`` entry is a hard error:
+    freezing a wrong or ambiguously-chosen match would pin the wrong recipe.
+
+    Each frozen source carries its own ``model_deployment`` (the LOCAL rewrite
+    target) and ``lease_endpoint``, so a MULTI-deployment bundle freezes a per-run
+    rewrite target — lifting the single-deployment restriction the discovery path
+    imposes (``export_benchmark_bundle`` ``rewrite_deployment``).
+    """
+    from eval_audit.cli import check_precomputed_discovery as dc
+
+    root = Path(precomputed_root)
+    local_names = frozenset(entry["name"] for entry in model_entries)
+    single_name = model_entries[0]["name"] if len(model_entries) == 1 else None
+    lease_scalar = (lease_facts or {}).get("lease_endpoint")
+    lease_map = (lease_facts or {}).get("lease_endpoints") or {}
+
+    sources: list[dict[str, Any]] = []
+    for run_entry in spec["run_entries"]:
+        query, local_token = _strip_local_deployment(run_entry, local_names)
+        deployment = local_token or single_name
+        if deployment is None:
+            raise ValueError(
+                f"cannot freeze run-entry {run_entry!r}: a multi-deployment bundle "
+                "needs an inline model_deployment=<local> token to name the rewrite "
+                "target, but none was present."
+            )
+        result = dc._classify(query, runs)
+        if result.status != "RESOLVED":
+            raise ValueError(
+                f"cannot freeze run-entry {run_entry!r}: discovery is "
+                f"{result.status} under {precomputed_root!r} "
+                f"({len(result.candidates)} candidates). Narrow precomputed_root or "
+                "fix the entry before exporting an exact-path bundle."
+            )
+        rel_path = str(Path(result.best.path).relative_to(root))
+        source: dict[str, Any] = {
+            "run_entry": run_entry,
+            "rel_path": rel_path,
+            "model_deployment": deployment,
+        }
+        endpoint = lease_scalar or lease_map.get(deployment)
+        if endpoint:
+            source["lease_endpoint"] = endpoint
+        sources.append(source)
+    return sources
+
+
 def _manifest_doc(
     *,
     spec: dict[str, Any],
@@ -1336,6 +1423,7 @@ def _manifest_doc(
     from_run_spec: bool = False,
     precomputed_root: str | None = None,
     model_deployment: str | None = None,
+    run_spec_sources: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     # From-spec replay: the generated manifest must carry from_run_spec: true and a
     # precomputed_root (the recipe SOURCE the bridge requires). Because this builder
@@ -1375,6 +1463,13 @@ def _manifest_doc(
         # keeps the official deployment name).
         if model_deployment is not None:
             doc["model_deployment"] = model_deployment
+        # Exact-path replay (rel-path plan §4.5): frozen run_spec_sources. When
+        # present, the bridge addresses each official run by its pinned rel-path
+        # and the materializer applies the substitutions host-side — superseding
+        # run-entry token discovery (run_entries is kept as labels). Per-source
+        # model_deployment lifts the single-deployment restriction below.
+        if run_spec_sources is not None:
+            doc["run_spec_sources"] = run_spec_sources
     for key in _CONTAINER_SPEC_KEYS:
         if key in spec:
             doc[key] = spec[key]
@@ -1514,15 +1609,48 @@ def materialize_benchmark_bundle(
     # From-spec replay records the LOCAL deployment so the audit reports
     # same_deployment=no. The rewrite target is the bundle's own deployment name —
     # the exact name model_deployments.yaml registers — so target and registration
-    # agree by construction (the §3 invariant holds with no drift). Only a
-    # single-deployment bundle has an unambiguous target; a multi-deployment
-    # from-spec bundle would need a per-run rewrite (out of scope), so it stays
-    # pure by-name (model_deployment unset).
+    # agree by construction (the §3 invariant holds with no drift). On the
+    # *discovery* from-spec path only a single-deployment bundle has an unambiguous
+    # manifest-level target; a multi-deployment bundle stays pure by-name. The
+    # *exact-path* path (--freeze-rel-paths) instead carries a per-run rewrite
+    # target inside each frozen source, so this restriction does not apply there.
     rewrite_deployment = (
         model_entries[0]["name"]
         if from_run_spec and len(model_entries) == 1
         else None
     )
+
+    # Exact-path replay (rel-path plan §4.5): resolve each run-entry to its pinned
+    # rel-path NOW, against the corpus snapshot, and freeze run_spec_sources into the
+    # generated manifests. Discovery (token-subset) runs exactly here, once. The
+    # corpus is enumerated once per distinct root and shared across smoke/full.
+    smoke_sources = full_sources = None
+    if freeze_rel_paths:
+        from eval_audit.cli import check_precomputed_discovery as dc
+
+        runs_cache: dict[str, list[Any]] = {}
+
+        def _runs_for(root: str) -> list[Any]:
+            if root not in runs_cache:
+                runs_cache[root] = dc._enumerate_runs(Path(root))
+            return runs_cache[root]
+
+        smoke_root = precomputed_root or smoke_spec.get("precomputed_root")
+        full_root = precomputed_root or full_spec.get("precomputed_root")
+        if not smoke_root or not full_root:
+            raise ValueError(
+                "--freeze-rel-paths requires a precomputed_root (per-spec or "
+                "--precomputed-root): it is the corpus the rel-paths resolve against."
+            )
+        smoke_sources = _freeze_run_spec_sources(
+            smoke_spec, precomputed_root=smoke_root, model_entries=model_entries,
+            lease_facts=lease_facts, runs=_runs_for(smoke_root),
+        )
+        full_sources = _freeze_run_spec_sources(
+            full_spec, precomputed_root=full_root, model_entries=model_entries,
+            lease_facts=lease_facts, runs=_runs_for(full_root),
+        )
+
     benchmark_smoke_manifest = _manifest_doc(
         spec=smoke_spec,
         model_deployments_fpath=model_deployments_fpath,
@@ -1530,6 +1658,7 @@ def materialize_benchmark_bundle(
         from_run_spec=from_run_spec,
         precomputed_root=precomputed_root,
         model_deployment=rewrite_deployment,
+        run_spec_sources=smoke_sources,
     )
     benchmark_full_manifest = _manifest_doc(
         spec=full_spec,
@@ -1538,6 +1667,7 @@ def materialize_benchmark_bundle(
         from_run_spec=from_run_spec,
         precomputed_root=precomputed_root,
         model_deployment=rewrite_deployment,
+        run_spec_sources=full_sources,
     )
     benchmark_smoke_path = output_dir / "benchmark_smoke_manifest.yaml"
     benchmark_full_path = output_dir / "benchmark_full_manifest.yaml"
@@ -1604,7 +1734,11 @@ def export_benchmark_bundle(
     vllm_root: Path | None = None,
     from_run_spec: bool = False,
     precomputed_root: str | None = None,
+    freeze_rel_paths: bool = False,
 ) -> dict[str, Any]:
+    # Exact-path replay is a from-spec variant: freezing rel-paths implies it.
+    if freeze_rel_paths:
+        from_run_spec = True
     preset_cfg = PRESET_CONFIGS.get(preset or "", {})
     specs = _profile_specs(profile, preset_cfg)
     resolved_config_dir = config_dir or vllm_root

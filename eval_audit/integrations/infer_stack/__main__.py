@@ -68,6 +68,19 @@ def main(argv: list[str] | None = None) -> None:
             "smoke/full precomputed_root is used."
         ),
     )
+    s.add_argument(
+        "--freeze-rel-paths",
+        action="store_true",
+        help=(
+            "Exact-path replay (rel-path plan §4.5): resolve each run-entry to its "
+            "EXACT path relative to precomputed_root NOW (the only place token "
+            "discovery runs) and freeze run_spec_sources into the generated "
+            "manifests. The replay then addresses each official run by that pinned "
+            "path and materializes a substituted copy host-side — no run-time "
+            "discovery. Implies --from-spec; a NO_MATCH/AMBIGUOUS entry fails the "
+            "export. Per-run rewrite targets make multi-deployment bundles work."
+        ),
+    )
     s.set_defaults(cmd_name="export-benchmark-bundle")
 
     args = parser.parse_args(argv)
@@ -94,6 +107,7 @@ def main(argv: list[str] | None = None) -> None:
         api_key_value=args.api_key_value,
         from_run_spec=args.from_spec,
         precomputed_root=args.precomputed_root,
+        freeze_rel_paths=args.freeze_rel_paths,
     )
     print(json.dumps({
         "bundle_dir": str(result["bundle_dir"]),
