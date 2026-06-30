@@ -36,6 +36,24 @@ def _load_run_specs(fpath: str | None) -> list[str]:
     return list(dict.fromkeys(run_specs))
 
 
+def _load_run_spec_sources(fpath: str) -> list[dict[str, Any]]:
+    """Load exact-path replay sources (rel-path plan §4.5).
+
+    A YAML/JSON list of ``{run_entry, rel_path, model_deployment?, lease_endpoint?,
+    max_eval_instances?}``. Validated + normalized through ``RunSpecSource`` so the
+    same coercion the materializer uses guards the manifest.
+    """
+    from eval_audit.manifests.run_spec_materializer import (
+        RunSpecSource,
+        source_to_dict,
+    )
+
+    data = kwutil.Yaml.load(Path(fpath))
+    if not isinstance(data, list):
+        raise TypeError(f"run_spec sources at {fpath} must decode to a list")
+    return [source_to_dict(RunSpecSource.from_dict(dict(item))) for item in data]
+
+
 def _load_run_details(fpath: str | None) -> list[dict[str, Any]]:
     path = Path(fpath) if fpath else repo_run_details_fpath()
     if not path.exists():
@@ -140,6 +158,7 @@ def _build_manifest(
     from_run_spec: bool = False,
     precomputed_root: str | None = None,
     model_deployment: str | None = None,
+    run_spec_sources: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return ManifestSpec(
         experiment_name=experiment_name,
@@ -153,6 +172,7 @@ def _build_manifest(
         from_run_spec=from_run_spec,
         precomputed_root=precomputed_root,
         model_deployment=model_deployment,
+        run_spec_sources=list(run_spec_sources or []),
     ).to_dict()
 
 
@@ -194,7 +214,22 @@ def main(argv: list[str] | None = None) -> None:
         help=(
             "Root searched for official HELM run dirs. In --from-run-spec mode "
             "this is the RECIPE SOURCE the run_spec.json is read from (mandatory). "
-            "Bind-mounted read-only into the run container at its same path."
+            "On the run-entry discovery path it is bind-mounted read-only into the "
+            "container; on the exact-path replay path (--run-spec-sources-fpath) it "
+            "is the HOST root the rel_paths resolve against (the container instead "
+            "mounts the tiny staging dir of materialized copies)."
+        ),
+    )
+    parser.add_argument(
+        "--run-spec-sources-fpath",
+        default=None,
+        help=(
+            "Exact-path replay (rel-path plan): a YAML/JSON list of "
+            "{run_entry, rel_path, model_deployment?, lease_endpoint?, "
+            "max_eval_instances?}. Each names an official run by its path relative "
+            "to --precomputed-root; the schedule-time materializer reads it, applies "
+            "the substitutions as raw-JSON edits, and Stage 3 replays the copy. "
+            "Implies --from-run-spec; supersedes run-entry token discovery."
         ),
     )
     parser.add_argument(
@@ -211,6 +246,17 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
 
+    run_spec_sources: list[dict[str, Any]] = []
+    if args.run_spec_sources_fpath:
+        # Exact-path replay is a from-spec variant; turn it on implicitly so the
+        # bridge routes to the from-spec pipeline.
+        args.from_run_spec = True
+        run_spec_sources = _load_run_spec_sources(args.run_spec_sources_fpath)
+        if not run_spec_sources:
+            raise SystemExit(
+                f"{args.run_spec_sources_fpath} contained no run_spec sources"
+            )
+
     if args.from_run_spec and not args.precomputed_root:
         raise SystemExit(
             "--from-run-spec requires --precomputed-root (the recipe source from "
@@ -224,9 +270,19 @@ def main(argv: list[str] | None = None) -> None:
         )
 
     defaults = env_defaults()
-    run_entries = _load_run_specs(args.run_specs_fpath)
-    run_details = _load_run_details(args.run_details_fpath)
-    detail_lut = _detail_lut(run_details)
+    sources_by_label: dict[str, dict[str, Any]] = {}
+    if run_spec_sources:
+        # The run-entry "list" is the sources' labels; reuse the existing
+        # filter/sort/shard/limit machinery on them, then keep the matching sources.
+        for source in run_spec_sources:
+            sources_by_label.setdefault(source["run_entry"], source)
+        run_entries = list(sources_by_label)
+        run_details = []
+        detail_lut = {}
+    else:
+        run_entries = _load_run_specs(args.run_specs_fpath)
+        run_details = _load_run_details(args.run_details_fpath)
+        detail_lut = _detail_lut(run_details)
 
     run_entries = _filter_run_entries(
         run_entries,
@@ -246,6 +302,11 @@ def main(argv: list[str] | None = None) -> None:
         run_entries = run_entries[: args.limit]
     if not run_entries:
         raise SystemExit("No run entries matched the requested filters")
+
+    # Exact-path replay: keep the sources whose label survived filtering, in the
+    # resulting order, so run_spec_sources and run_entries stay aligned.
+    if run_spec_sources:
+        run_spec_sources = [sources_by_label[entry] for entry in run_entries]
 
     max_eval_instances = (
         args.max_eval_instances
@@ -279,6 +340,7 @@ def main(argv: list[str] | None = None) -> None:
         from_run_spec=args.from_run_spec,
         precomputed_root=args.precomputed_root,
         model_deployment=args.model_deployment,
+        run_spec_sources=run_spec_sources,
     )
 
     out_fpath = Path(args.output)
