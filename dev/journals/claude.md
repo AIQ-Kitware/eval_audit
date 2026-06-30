@@ -4059,3 +4059,19 @@ Rejected alternatives: (a) add `ai2-olmo`/`hf_olmo` to the image — contradicts
 3. *Map each smoke check to a failure you actually hit.* The probe's two checks each cite the concrete error (langdetect ModuleNotFoundError; wmt14 "not a valid HF dataset"), so a future failure points straight at the cause and the fix (`./docker/build.sh` + re-pin).
 
 **State / next steps.** Three commits on `impl/run-from-run-spec` this segment (token materialize earlier; `[all]`+hub pin; smoke probe) + journal. Not pushed. The user must **rebuild on the GPU box** (`./docker/build.sh`) and re-pin `OLMO_CONTAINER_IMAGE`/manifest digests — until then `07` will (correctly) fail against the old image. Then re-run a text smoke that exercises langdetect (ifeval) and wmt to confirm end to end. `submodules/cmd_queue` gitlink left modified+unstaged (pre-existing, not ours).
+
+## 2026-06-30 11:20:00 -0400
+
+**Model / harness.** Claude Opus 4.8 (1M context), claude-opus-4-8[1m], Claude Code CLI / VSCode extension. Continues the container-env segment above.
+
+**User intent.** Beyond the 07 image probe, make the smoke *grid runs* (against the served models) use scenarios that actually exercise the failure paths, so the cheap preflight catches a mis-built image end-to-end — not just a static probe.
+
+**What I did (commit bf2b976).** Promoted one entry from each affected preset's `full_manifest` into its `smoke_manifest` (PRESET_CONFIGS in `adapter.py`):
+- `allenai-olmo-7b-lite` += `wmt_14:language_pair=fr-en,model=allenai/olmo-7b` — exercises the hf_hub-sensitive dataset load + sacrebleu ([metrics]).
+- `allenai-olmo-2-1124-7b-instruct` += `ifeval:num_output_tokens=2048,...` — its metric imports langdetect ([metrics]/[cleva]).
+
+**Constraint that shaped it.** Smoke entries must be replayable `--from-spec`, i.e. an official `run_spec.json` must exist under the preset's `precomputed_root`. So the choice wasn't free: wmt_14 only exists for `olmo-7b` (lite suite, `/data/crfm-helm-public/lite`); ifeval only for the four *instruct* models (capabilities suite, whole-root precomputed_root). Verified both target run dirs exist on `/data`, and both entries already sit in the same preset's full_manifest — so promoting them is zero-risk (same discovery path, proven replayable). Confirmed via dict introspection that both landed in smoke ∩ full.
+
+**Design insight.** *A canary is only useful if the harness can actually run it.* For from-spec replay that means "an official run of this scenario exists for this model" — you cannot synthesize a wmt_14 smoke for a model HELM never ran on wmt_14. The available-official-runs set (candidate_runs.json / the precomputed_root tree) is the menu; pick canaries that (a) are on it and (b) traverse the fragile code path (dataset resolution, optional-extra import). One canary per failure-mode suffices when the thing under test (the container image) is shared across all grid items.
+
+**State.** Five commits on `impl/run-from-run-spec` this session (token materialize; container docs; `[all]`+hub pin; 07 probe; smoke canaries) + journals. Not pushed. `submodules/cmd_queue` gitlink still modified+unstaged (pre-existing). Still needs the GPU-box rebuild + digest re-pin before any of the container-side checks pass against a real image.
