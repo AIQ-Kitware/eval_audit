@@ -160,8 +160,10 @@ per-run `container_provenance.json` sidecar.
 `hf_cache_dir`, `container_gpus: none`) live in the presets; the grids always
 pass the image at run time via `eval-audit-run --container-image
 "$OLMO_CONTAINER_IMAGE"`. Build the image first with `./docker/build.sh`;
-`07_check_container_image.sh` verifies it is present (a required preflight — there
-is no host-venv fallback). The gated **gpqa** dataset works in-container: `_lib.sh`
+`07_check_container_image.sh` verifies it is present **and** probes its python env
+(langdetect importable from `crfm-helm[all]`, `huggingface_hub==0.36.2`) so a
+stale digest built before a recipe fix fails the preflight instead of mid-grid (a
+required preflight — there is no host-venv fallback). The gated **gpqa** dataset works in-container: `_lib.sh`
 exports `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN`, and the scheduler writes that token
 into the mounted HF cache (`<hf_cache_dir>/token`) so the in-container HELM reads
 it at `$HF_HOME/token` — the docker node's bare `-e HF_TOKEN` does not survive
