@@ -245,8 +245,10 @@ def test_prepare_request_materializes_and_emits_submatrix(tmp_path: Path) -> Non
     assert materialized["adapter_spec"]["max_eval_instances"] == 5  # experiment default cap
     assert materialized["name"] == _OFFICIAL_SPEC["name"]
 
-    # provenance sidecar is alongside the copy
-    assert (copy_path.parent / "materialization.json").is_file()
+    # the copy filename is content-addressed, with a paired provenance sidecar
+    assert copy_path.name.startswith("run_spec.") and copy_path.name.endswith(".json")
+    sidecar = copy_path.with_name(copy_path.name.replace(".json", ".materialization.json"))
+    assert sidecar.is_file()
 
     # staging mount knob present; no corpus mount on this path
     assert "helm.staging_root" in matrix

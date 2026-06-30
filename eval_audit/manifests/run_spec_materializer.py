@@ -14,9 +14,17 @@ to the public-HELM root; before kwdagger runs, this module:
    those scalars and re-dumps, so every other key is preserved exactly: no cattrs
    round-trip, hence none of the silent field-drift that
    ``docs/planning/run-from-run-spec-json-plan.md`` §1 warns about;
-3. **materializes** a substituted copy to a staging dir, plus a
-   ``materialization.json`` sidecar recording the official source, the rel-path,
-   and each field's ``from -> to`` (the diffable provenance record).
+3. **materializes** a substituted copy to a staging dir as
+   ``run_spec.<content-hash>.json`` (the hash is over the final substituted bytes),
+   plus a paired ``...materialization.json`` sidecar recording the official source,
+   the rel-path, and each field's ``from -> to`` (the diffable provenance record).
+
+The content hash in the filename makes the copy's path — which the from-spec node
+carries as its **algo identity** (``run_spec_json``) — content-addressed: because
+the official ``run_spec.json`` is immutable, the only thing that changes the path
+is our own substitution, so an identical recipe reuses the same path (kwdagger
+skips via the ``DONE`` sentinel) while any changed field (e.g.
+``max_eval_instances``) yields a new path and a clean recompute.
 
 The materialized copy is what Stage 3 replays verbatim (``--run-spec-json``), so the
 in-container ``--model-deployment`` / ``--max-eval-instances`` rewrite is not
@@ -86,6 +94,11 @@ class MaterializedRunSpec:
     lease_endpoint: str | None
     # {field_name: {"from": <official>, "to": <substituted>}} — only changed fields.
     substitutions: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Hash of the final substituted bytes. It is embedded in ``run_spec_json``'s
+    # filename so the path — which is the from-spec node's algo identity — is
+    # CONTENT-addressed: a changed substitution (e.g. max_eval_instances) ⇒ new
+    # hash ⇒ new path ⇒ kwdagger recomputes; identical recipe ⇒ same path ⇒ skip.
+    content_hash: str = ""
 
 
 def _opt_str(value: Any) -> str | None:
@@ -188,12 +201,20 @@ def materialize_run_spec(
             adapter_spec[_MAX_EVAL_INSTANCES_KEY] = cap
             substitutions[_MAX_EVAL_INSTANCES_KEY] = {"from": before, "to": cap}
 
+    # Stable formatting (sorted keys, trailing newline) so identical recipes
+    # produce byte-identical text — the basis for both determinism and the
+    # content hash.
+    text = json.dumps(spec, indent=2, sort_keys=True) + "\n"
+    # The official content is immutable, so the only thing that can change the
+    # effective recipe is OUR substitution; hashing the final bytes captures
+    # exactly that. The hash is appended to the filename so ``run_spec_json``
+    # (the from-spec node's algo identity) is content-addressed.
+    content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
     run_dir = Path(staging_dir).expanduser() / _run_id(source)
     run_dir.mkdir(parents=True, exist_ok=True)
-    copy_path = run_dir / "run_spec.json"
-    # Stable formatting (sorted keys, trailing newline) so repeated materialization
-    # is byte-identical — supports the deterministic-output guarantee.
-    copy_path.write_text(json.dumps(spec, indent=2, sort_keys=True) + "\n")
+    copy_path = run_dir / f"run_spec.{content_hash}.json"
+    copy_path.write_text(text)
 
     result = MaterializedRunSpec(
         run_entry=source.run_entry,
@@ -202,6 +223,7 @@ def materialize_run_spec(
         rel_path=source.rel_path,
         lease_endpoint=source.lease_endpoint,
         substitutions=substitutions,
+        content_hash=content_hash,
     )
 
     sidecar = {
@@ -211,10 +233,13 @@ def materialize_run_spec(
         "precomputed_root": str(Path(precomputed_root).expanduser().resolve()),
         "official_run_spec_json": result.official_run_spec_json,
         "materialized_run_spec_json": result.run_spec_json,
+        "content_hash": content_hash,
         "lease_endpoint": source.lease_endpoint,
         "substitutions": substitutions,
     }
-    (run_dir / "materialization.json").write_text(
+    # Sidecar paired to the spec by content hash (so a re-materialization with
+    # different content keeps its own provenance rather than clobbering it).
+    (run_dir / f"run_spec.{content_hash}.materialization.json").write_text(
         json.dumps(sidecar, indent=2, sort_keys=True) + "\n"
     )
     return result

@@ -120,10 +120,16 @@ def test_substitutions_record_and_sidecar(tmp_path: Path) -> None:
     assert result.substitutions["max_eval_instances"] == {"from": 1000, "to": 10}
     assert result.lease_endpoint == "catalog/olmo-7b"
 
-    sidecar = json.loads((Path(result.run_spec_json).parent / "materialization.json").read_text())
+    copy = Path(result.run_spec_json)
+    # the spec filename embeds the content hash, with a paired sidecar
+    assert copy.name == f"run_spec.{result.content_hash}.json"
+    sidecar = json.loads(
+        copy.with_name(f"run_spec.{result.content_hash}.materialization.json").read_text()
+    )
     assert sidecar["official_run_spec_json"] == result.official_run_spec_json
     assert sidecar["rel_path"] == _REL_DIR
     assert sidecar["substitutions"] == result.substitutions
+    assert sidecar["content_hash"] == result.content_hash
     assert sidecar["lease_endpoint"] == "catalog/olmo-7b"
 
 
@@ -171,6 +177,31 @@ def test_materialization_is_deterministic(tmp_path: Path) -> None:
     r2 = materialize_run_spec(source, precomputed_root=tmp_path, staging_dir=staging)
     assert r1.run_spec_json == r2.run_spec_json  # same deterministic staging id
     assert Path(r2.run_spec_json).read_bytes() == bytes1  # byte-identical
+
+
+def test_cap_change_yields_distinct_content_addressed_path(tmp_path: Path) -> None:
+    """Identity hole closed: a different max_eval_instances ⇒ different content ⇒
+    different filename ⇒ kwdagger recomputes (no stale reuse). Same recipe ⇒ same
+    path ⇒ skip."""
+    _write_official(tmp_path, _REL_DIR)
+    staging = tmp_path / "staging"
+    base = dict(rel_path=_REL_DIR, model_deployment="vllm/allenai-olmo-7b")
+    r5 = materialize_run_spec(
+        RunSpecSource(run_entry="x", max_eval_instances=5, **base),
+        precomputed_root=tmp_path, staging_dir=staging,
+    )
+    r10 = materialize_run_spec(
+        RunSpecSource(run_entry="x", max_eval_instances=10, **base),
+        precomputed_root=tmp_path, staging_dir=staging,
+    )
+    assert r5.content_hash != r10.content_hash
+    assert r5.run_spec_json != r10.run_spec_json  # ⇒ different algo identity
+    # same recipe (cap 5 again) reuses the exact same content-addressed path
+    r5_again = materialize_run_spec(
+        RunSpecSource(run_entry="x", max_eval_instances=5, **base),
+        precomputed_root=tmp_path, staging_dir=staging,
+    )
+    assert r5_again.run_spec_json == r5.run_spec_json
 
 
 def test_distinct_deployments_do_not_collide(tmp_path: Path) -> None:
