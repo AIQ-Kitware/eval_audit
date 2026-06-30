@@ -4034,3 +4034,28 @@ Rejected alternatives: (a) add `ai2-olmo`/`hf_olmo` to the image — contradicts
 3. *Hygiene and reachability can trade off.* The dedicated-cache-dir choice (good: no root-owned files in the personal cache) is exactly what broke auth reachability. The fix keeps the hygiene win and re-adds reachability by materializing the token into that same dir.
 
 **State / next steps.** Working tree edits only; not committed (awaiting user's go). To verify end-to-end the user should re-run `06_check_hf_auth.sh` then a single gated smoke (e.g. `allenai/olmo-2-1124-7b-instruct`) and confirm `<hf_cache_dir>/token` appears and gpqa downloads. Caveat still stands: the token's account must have accepted the gpqa terms (identity ≠ access).
+
+## 2026-06-30 10:35:00 -0400
+
+**Model / harness.** Claude Opus 4.8 (1M context), claude-opus-4-8[1m], Claude Code CLI in the VSCode extension. Same session as the HF-token entry above.
+
+**User intent.** Two more in-container failures from the OLMo grid: `ModuleNotFoundError: langdetect` and `wmt-14 isn't a valid HF dataset`. User asked whether docker controls its own python env or is host-affected, then to fix the dockerfile (use `[all]`, pin hf_hub `0.36.2`), then to add smoketest coverage that catches these. Standing instruction reaffirmed: commit logical units as completed, don't ask.
+
+**Key fact established.** The runner image is fully self-contained: its venv (`/opt/venv`, uv-managed standalone CPython 3.11) is built from pristine `git archive` source at build time; at `docker run` the only host crossings are bind-mounts (out/hf_cache/precomputed/model dirs) + a few env vars — no host site-packages, no PYTHONPATH. So a host `pip install` has zero effect inside the container; missing deps / wrong versions are properties of the *image* and only a rebuild changes them. (Same lesson the eval_audit-not-in-image fix already recorded.)
+
+**Root causes.**
+- *langdetect*: image installed `crfm-helm[heim]` ([dockerfile:97]). `[heim]` is the image-generation extra; `langdetect` lives only in `[metrics]`/`[cleva]`, which `[all]` pulls. `[heim]` was simply the wrong extra for text benchmarks.
+- *wmt-14*: no hf_hub pin → it floated under `datasets~=3.1` to a version whose repo-resolution API breaks old-style dataset ids.
+
+**Fixes (all in the image + a preflight; commits 9ce6427, 0fdc745).**
+1. `dockerfile:97` → `uv pip install -e '/opt/src/helm[all]' 'huggingface_hub==0.36.2'`. Co-install so uv honors the pin (incompatible pin fails the build). Assert the pin in BOTH the install layer and the *final* stage (the latter guards the shipped image against a later layer bumping the hub). Updated `[heim]`→`[all]` comments in dockerfile + build.sh + README (left `magnet-heim`, the legacy Dockerfile chain, alone).
+2. `07_check_container_image.sh` now probes the *actual* image (CPU-only `docker run --entrypoint python`): langdetect imports + `huggingface_hub==0.36.2`. The build guards only fire on rebuild; the probe catches the dangerous case the build can't — a **stale `OLMO_CONTAINER_IMAGE` digest** built before the fix, before it wastes a grid run.
+
+**Validation (no docker/GPU here).** `bash -n` OK; both embedded PY heredocs (dockerfile + 07) AST-parse; probe control-flow proven via a host stand-in (correctly returns nonzero here, where the deps/pin are absent). Could not build the image or run the real probe on this analysis host.
+
+**Design insights.**
+1. *Build-time guards and preflight probes catch disjoint failure modes.* A build assertion only protects the artifact it produces; it says nothing about a previously-built artifact you're still pointing at. For frozen artifacts (pinned image digests), pair the build guard with a runtime probe of the *resolved* artifact.
+2. *Pin secrets-of-resolution, not just top-level packages.* `[all]` fixes the dep set but not the hub version; transitive floats (`huggingface_hub` under `datasets~=3.1`) are their own reproducibility variable and need their own pin + assertion.
+3. *Map each smoke check to a failure you actually hit.* The probe's two checks each cite the concrete error (langdetect ModuleNotFoundError; wmt14 "not a valid HF dataset"), so a future failure points straight at the cause and the fix (`./docker/build.sh` + re-pin).
+
+**State / next steps.** Three commits on `impl/run-from-run-spec` this segment (token materialize earlier; `[all]`+hub pin; smoke probe) + journal. Not pushed. The user must **rebuild on the GPU box** (`./docker/build.sh`) and re-pin `OLMO_CONTAINER_IMAGE`/manifest digests — until then `07` will (correctly) fail against the old image. Then re-run a text smoke that exercises langdetect (ifeval) and wmt to confirm end to end. `submodules/cmd_queue` gitlink left modified+unstaged (pre-existing, not ours).
