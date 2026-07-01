@@ -155,7 +155,9 @@ the same blocks set `container_gpus: none` because the OLMo run entries
 (commonsense / gsm / legalbench / med_qa / mmlu / gpqa) are
 multiple-choice / exact-match / classification metrics with **no LLM-judge
 annotator that loads a local HF model** — so the HELM container needs no GPU and
-must stay off the serving GPUs (`INFER_STACK_ALLOWED_GPUS`, default 2,3).
+must stay off the serving GPUs. Serving placement is **unrestricted by default**
+— infer-stack uses every detected GPU; export `INFER_STACK_ALLOWED_GPUS=<csv>` to
+pin it to specific cards on a shared machine.
 
 The experiment names are unchanged (`audit-<preset>-{smoke,full}`), so the
 downstream index → compose → summary stages need no changes — runs just gain a

@@ -74,8 +74,9 @@ Same `experiment_name` (`audit-<preset>-{smoke,full}`) either way.
   gsm / legalbench / med_qa / mmlu / gpqa) are multiple-choice, exact-match, or
   classification metrics with **no LLM-judge annotator** that loads a local HF
   model — so the HELM container needs no GPU and must stay off the serving GPUs
-  (2,3). *Validated by the smoke grid; drop this to follow the scheduler's
-  `$CUDA_VISIBLE_DEVICES` if a scenario ever needs a local model.*
+  (now unrestricted by default — infer-stack uses all detected GPUs;
+  `INFER_STACK_ALLOWED_GPUS` pins it on a shared machine). *If a scenario ever
+  needs a local model, follow the scheduler's `$CUDA_VISIBLE_DEVICES` instead.*
 - **`hf_cache_dir: ~/.cache/eval-audit-hf`** — dedicated, root-owned audit cache
   (the container runs as root), matching the e2e default.
 - Gated **gpqa** already works: [`_lib.sh`](../../reproduce/olmo_models/_lib.sh)

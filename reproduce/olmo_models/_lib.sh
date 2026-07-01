@@ -16,10 +16,12 @@ RESULTS_ROOT="${AUDIT_RESULTS_ROOT:-/data/crfm-helm-audit}"
 VEXP_MANIFEST="${VEXP_MANIFEST:-$ROOT/configs/virtual-experiments/olmo-models.yaml}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
-# Restrict serving to specific physical GPUs on a shared machine. first_fit will
-# only ever place vLLM on these indices (real indices preserved). Need >=2 for
-# the 32B tp=2 profile. Override per-host; unset = use whatever infer-stack detects.
-export INFER_STACK_ALLOWED_GPUS="${INFER_STACK_ALLOWED_GPUS:-2,3}"
+# GPU placement: NO restriction by default — infer-stack serves across ALL
+# detected GPUs, so the per-run-lease fan-out can spread models over every card
+# (first_fit preserves real indices). On a SHARED machine, export
+# INFER_STACK_ALLOWED_GPUS=<csv> to pin serving to specific physical indices (keep
+# >=2 free for the 32B tp=2 profile). infer-stack reads that env var directly, so
+# we intentionally set no default here (unset ⇒ all detected GPUs).
 
 # infer-stack catalog providing the six OLMo models + <preset>-single endpoints.
 # Defaults to the config dir shipped alongside this runbook (settings.yaml +
