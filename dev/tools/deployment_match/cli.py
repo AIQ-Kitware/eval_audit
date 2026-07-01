@@ -204,7 +204,7 @@ def cmd_dry_run(args: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     grid_dir = Path(args.grid_dir)
     out_dir = Path(args.out) if args.out else grid_dir / "results"
-    serve_mod.run_grid(grid_dir, out_dir, allowed_gpus=args.gpus,
+    serve_mod.run_grid(grid_dir, out_dir, allowed_gpus=args.allowed_gpus,
                        litellm_port=args.litellm_port, base_url=args.base_url,
                        timeout=args.timeout, dry=args.dry)
     if not args.dry:
@@ -283,7 +283,7 @@ def cmd_auto(args: argparse.Namespace) -> int:
     _print_grid_summary(resolution, g)
 
     results = out / "results"
-    serve_mod.run_grid(out, results, allowed_gpus=args.gpus,
+    serve_mod.run_grid(out, results, allowed_gpus=args.allowed_gpus,
                        litellm_port=args.litellm_port, base_url=args.base_url,
                        timeout=args.timeout, dry=args.dry)
     if args.dry:
@@ -359,7 +359,10 @@ def main(argv: list[str] | None = None) -> int:
     rn = sub.add_parser("run", help="serve each endpoint and probe its cells (GPU host)")
     rn.add_argument("--grid-dir", required=True, help="dir with catalog.yaml/cells.json/oracle.json")
     rn.add_argument("--out", default=None, help="results dir (default: <grid-dir>/results)")
-    rn.add_argument("--gpus", default=None, help="INFER_STACK_ALLOWED_GPUS, e.g. '0'")
+    rn.add_argument("--allowed-gpus", default=None,
+                    help="OPTIONAL restrict placement to these GPUs "
+                    "(INFER_STACK_ALLOWED_GPUS); default: let infer-stack place on "
+                    "any available GPU (acquire --queue)")
     rn.add_argument("--litellm-port", type=int, default=14042)
     rn.add_argument("--base-url", default=None, help="override gateway base url")
     rn.add_argument("--timeout", type=float, default=120.0)
@@ -375,7 +378,9 @@ def main(argv: list[str] | None = None) -> int:
     au.add_argument("--run", required=True, help="the public HELM run dir")
     _run_opts(au); _grid_opts(au)
     au.add_argument("--out", required=True)
-    au.add_argument("--gpus", default=None, help="INFER_STACK_ALLOWED_GPUS, e.g. '0'")
+    au.add_argument("--allowed-gpus", default=None,
+                    help="OPTIONAL restrict placement to these GPUs; default: let "
+                    "infer-stack place on any available GPU (acquire --queue)")
     au.add_argument("--litellm-port", type=int, default=14042)
     au.add_argument("--base-url", default=None)
     au.add_argument("--timeout", type=float, default=120.0)

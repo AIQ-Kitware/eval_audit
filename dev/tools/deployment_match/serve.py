@@ -18,6 +18,13 @@ runs in-process via :mod:`probe`. ``--dry`` prints the exact plan without
 touching a GPU, so the whole flow is inspectable on CPU. Point
 ``INFER_STACK_CONFIG_DIR`` at the grid dir so the generated ``catalog.yaml`` +
 ``settings.yaml`` are the active catalog.
+
+GPU selection is infer-stack's job, not ours: ``acquire --queue`` lets its
+placement planner pick any available GPU (and wait when the fleet is busy). We do
+NOT request specific GPUs. ``allowed_gpus`` is an *optional* operator restriction
+(``INFER_STACK_ALLOWED_GPUS``) — left unset, placement uses every detected
+(non-display) GPU; an operator's own exported ``INFER_STACK_ALLOWED_GPUS`` is
+preserved (we only override it when ``allowed_gpus`` is explicitly passed).
 """
 
 from __future__ import annotations
@@ -86,8 +93,12 @@ def run_grid(grid_dir: str | Path, out_dir: str | Path, *,
 
     env = os.environ.copy()
     env["INFER_STACK_CONFIG_DIR"] = str(grid_dir)
+    # Only restrict placement when an operator explicitly asks; otherwise leave
+    # any exported INFER_STACK_ALLOWED_GPUS untouched and let infer-stack place.
     if allowed_gpus:
         env["INFER_STACK_ALLOWED_GPUS"] = allowed_gpus
+        _log(f"[run] restricting placement to GPUs {allowed_gpus} "
+             "(operator override); default is any available GPU")
 
     groups = group_cells_by_endpoint(cells)
     _log(f"[run] grid_dir={grid_dir} gateway={base} endpoints={len(groups)} "
@@ -101,8 +112,10 @@ def run_grid(grid_dir: str | Path, out_dir: str | Path, *,
         for endpoint, ep_cells in groups.items():
             _log(f"\n==================== {endpoint} "
                  f"({len(ep_cells)} cell(s)) ====================")
-            _sh(["infer-stack", "acquire", endpoint, "--yes", "--env-file", envfile],
-                env, dry=dry)
+            # --queue: use whatever GPU infer-stack reports available, waiting for
+            # one to free if the fleet is busy (we never request a specific GPU).
+            _sh(["infer-stack", "acquire", endpoint, "--queue", "--yes",
+                 "--env-file", envfile], env, dry=dry)
             if not dry and master_key is None:
                 master_key = _sh(["infer-stack", "env", "LITELLM_MASTER_KEY"],
                                  env, dry=dry, capture=True) or None

@@ -59,8 +59,13 @@ The whole pipeline — dry-run (sample+grid) → run (serve+probe) → score →
 confirm(plan) — in one command. Run it on a GPU host:
 ```bash
 dev/tools/deployment_match/cli.py auto \
-  --run "/data/.../narrative_qa:model=allenai_olmo-7b" --n 12 --gpus 0 --out /tmp/dm-olmo
+  --run "/data/.../narrative_qa:model=allenai_olmo-7b" --n 12 --out /tmp/dm-olmo
 ```
+GPU selection is infer-stack's job: `run`/`auto` use `acquire --queue`, so
+placement picks any available GPU (and waits when the fleet is busy) — you do not
+request specific GPUs. Pass `--allowed-gpus 0,1` only to *restrict* placement (an
+operator override; an exported `INFER_STACK_ALLOWED_GPUS` is honored either way).
+
 Add `--dry` to stop after emitting the grid + serve plan (CPU-only, no GPU) so you
 can inspect the recipes before committing GPU time; `--skip-confirm` to skip the
 confirm-plan step. The individual subcommands below are the same steps if you want
@@ -81,9 +86,11 @@ Bring up each `catalog.yaml` endpoint one at a time and probe every request
 variant against it (two-tier loop: `infer-stack acquire` → `probe.query_cell` for
 each cell → `release --evict`), writing one result JSON per cell:
 ```bash
-dev/tools/deployment_match/cli.py run --grid-dir /tmp/dm-olmo --gpus 0
+dev/tools/deployment_match/cli.py run --grid-dir /tmp/dm-olmo
 # preview the acquire/probe/release plan with no GPU:
-dev/tools/deployment_match/cli.py run --grid-dir /tmp/dm-olmo --gpus 0 --dry
+dev/tools/deployment_match/cli.py run --grid-dir /tmp/dm-olmo --dry
+# (optional) restrict placement to specific GPUs:
+dev/tools/deployment_match/cli.py run --grid-dir /tmp/dm-olmo --allowed-gpus 0,1
 ```
 
 ### Score
