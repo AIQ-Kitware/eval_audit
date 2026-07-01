@@ -91,6 +91,41 @@ def test_materialized_path_emits_submatrix_not_run_entry_axis() -> None:
     assert "helm.model_deployment" not in matrix    # baked into the copy
 
 
+def test_submatrix_run_entry_strips_model_deployment_token() -> None:
+    # Regression: the from-spec node uses helm.run_entry as the locator query for
+    # the produced run dir, and HELM dir names encode model=… but never
+    # model_deployment=…. A multi-deployment freeze carries an inline
+    # model_deployment=<local> token on each run_entry (the per-run rewrite
+    # target); if it reached the locator the token-subset match would fail and the
+    # node would raise "produced run directory could not be located". The bridge
+    # must strip it, leaving the bare discovery key that resolves 1:1.
+    runs = [
+        MaterializedRunSpec(
+            run_entry=(
+                "mmlu:subject=anatomy,model=allenai/olmo-1.7-7b,"
+                "model_deployment=vllm/allenai-olmo-1.7-7b"
+            ),
+            run_spec_json="/stage/run0/run_spec.json",
+            official_run_spec_json="/o",
+            rel_path="r",
+            lease_endpoint="ep0",
+        )
+    ]
+    params = build_schedule_params(
+        {"from_run_spec": True, "run_entries": [], "max_eval_instances": 5, "suite": "s"},
+        resolved_image=_FAKE_IMAGE,
+        materialized_runs=runs,
+        staging_root="/stage",
+        lease_entries={"helm.lease_queue": [True]},
+    )
+    entry = params["matrix"]["submatrices"][0]
+    assert entry["helm.run_entry"] == "mmlu:subject=anatomy,model=allenai/olmo-1.7-7b"
+    assert "model_deployment=" not in entry["helm.run_entry"]
+    # the spec path + per-run lease endpoint still ride the same submatrix entry
+    assert entry["helm.run_spec_json"] == "/stage/run0/run_spec.json"
+    assert entry["helm.lease_endpoint"] == "ep0"
+
+
 def test_materialized_params_expand_to_exactly_n_jobs() -> None:
     """End-to-end through the real kwdagger grid: N submatrix entries -> N jobs."""
     manifest = {

@@ -43,6 +43,33 @@ _DOCKER_FROM_SPEC_PIPELINE = (
 )
 
 
+def _locator_run_entry(run_entry: str) -> str:
+    """Drop any ``model_deployment=<name>`` token from a run-entry label.
+
+    The from-spec node uses the run-entry as ``requested_desc`` to LOCATE the
+    produced run dir (``find_run_in_out_dpath`` / ``find_best_precomputed_run``,
+    a token-subset match). But HELM run dir names encode ``model=…`` and never
+    ``model_deployment=…`` — the deployment rewrite leaves ``run_spec.name``
+    unchanged (see ``apply_adapter_substitutions``). So an inline
+    ``model_deployment=`` token — carried by exact-path *multi-deployment*
+    run-entries as the per-run rewrite target (rel-path plan §6) — is spurious
+    for locating: it is never a subset of the produced dir name, so the match
+    fails and the node raises "produced run directory could not be located". Strip
+    it here so the locator query is the same bare discovery key the single-model
+    path (and ``08_check_discovery``) already resolve 1:1. The deployment itself is
+    unaffected — it is baked into the materialized ``run_spec.json`` and recorded
+    on the index row.
+    """
+    bench, sep, rest = run_entry.partition(":")
+    if not sep:
+        return run_entry
+    kept = [
+        kv for kv in rest.split(",")
+        if kv.split("=", 1)[0].strip() != "model_deployment"
+    ]
+    return f"{bench}:{','.join(kept)}" if kept else bench
+
+
 def _detect_virtualenv_cmd() -> str | None:
     """Return a shell command that activates the venv eval-audit-run is
     running in, or ``None`` if no venv is detected.
@@ -269,7 +296,11 @@ def build_schedule_params(
         for rec in materialized_runs:
             entry: dict[str, Any] = {
                 "helm.run_spec_json": rec.run_spec_json,
-                "helm.run_entry": rec.run_entry,
+                # Strip the inline model_deployment token: the node uses this as
+                # the locator query, and HELM dir names never encode
+                # model_deployment (see _locator_run_entry). Without this, a
+                # multi-deployment freeze can't locate its produced run dir.
+                "helm.run_entry": _locator_run_entry(rec.run_entry),
             }
             # The frozen source records each run's lease endpoint, but leasing is
             # opt-in: only emit it (⇒ only render the acquire/release bracket) when
