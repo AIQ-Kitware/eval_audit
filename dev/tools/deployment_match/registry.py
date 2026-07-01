@@ -139,12 +139,29 @@ def _local_tokenizer_json(repo: str) -> Path | None:
     return None
 
 
+def post_processor_appends_special(post_processor: Any) -> bool:
+    """Pure predicate: does a tokenizer.json ``post_processor`` inject a special
+    token into the ``single`` template? (the OLMo EOS-append signature).
+
+    Handles ``TemplateProcessing`` directly and ``Sequence`` recursively. Pure so
+    it is unit-testable without a cached tokenizer.
+    """
+    if not isinstance(post_processor, dict):
+        return False
+    kind = post_processor.get("type")
+    if kind == "TemplateProcessing":
+        single = post_processor.get("single") or []
+        return any("SpecialToken" in piece for piece in single)
+    if kind == "Sequence":
+        return any(post_processor_appends_special(p)
+                   for p in post_processor.get("processors") or [])
+    return False
+
+
 def tokenizer_appends_special(repo: str) -> bool | None:
     """True/False if a cached tokenizer.json's post_processor injects specials.
 
-    None when the tokenizer.json is not locally available to inspect. Detects the
-    ``TemplateProcessing`` post-processor whose ``single`` template contains a
-    ``SpecialToken`` (the OLMo EOS-append signature).
+    None when the tokenizer.json is not locally available to inspect.
     """
     tj = _local_tokenizer_json(repo)
     if not tj:
@@ -153,17 +170,7 @@ def tokenizer_appends_special(repo: str) -> bool | None:
         doc = json.loads(tj.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001
         return None
-    pp = doc.get("post_processor") or {}
-
-    def _has_special(processor: dict[str, Any]) -> bool:
-        if processor.get("type") == "TemplateProcessing":
-            single = processor.get("single") or []
-            return any("SpecialToken" in piece for piece in single)
-        if processor.get("type") == "Sequence":
-            return any(_has_special(p) for p in processor.get("processors") or [])
-        return False
-
-    return _has_special(pp)
+    return post_processor_appends_special(doc.get("post_processor") or {})
 
 
 def resolve(model: str, model_deployment: str, *,
