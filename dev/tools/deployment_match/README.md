@@ -33,7 +33,7 @@ outputs.** This tool is that sweep, made general.
 | `report.py`   | ranking table, per-instance snippet matrix, `best_deployment.yaml` |
 | `serve.py`    | Phase 2 driver: two-tier acquire→probe→release over the grid (infer-stack + `probe`) |
 | `confirm.py`  | Phase 3: winning single-cell catalog + plan + `build_pair_report(official, local)` |
-| `cli.py`      | `sample` / `grid` / `dry-run` / `run` / `score` / `confirm` / `selftest` |
+| `cli.py`      | `auto` (one-shot) · `sample` / `grid` / `dry-run` / `run` / `score` / `confirm` / `selftest` |
 
 Stdlib-only core; `eval_audit` (request_state_diff, presets) and `infer_stack`
 (command render) are optional enrichment. Run under the repo `.venv` (needs
@@ -53,6 +53,18 @@ stays a full axis by design — the search decides empirically, nothing is prune
 on theory.
 
 ## Usage
+
+### One-shot: `auto` (chains everything)
+The whole pipeline — dry-run (sample+grid) → run (serve+probe) → score →
+confirm(plan) — in one command. Run it on a GPU host:
+```bash
+dev/tools/deployment_match/cli.py auto \
+  --run "/data/.../narrative_qa:model=allenai_olmo-7b" --n 12 --gpus 0 --out /tmp/dm-olmo
+```
+Add `--dry` to stop after emitting the grid + serve plan (CPU-only, no GPU) so you
+can inspect the recipes before committing GPU time; `--skip-confirm` to skip the
+confirm-plan step. The individual subcommands below are the same steps if you want
+to run them piecemeal (e.g. score on a different machine than you served on).
 
 ### Dry-run (CPU, no GPU) — Phase 1
 Extract the sample, resolve the model, render the grid + exact `vllm serve` lines:

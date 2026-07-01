@@ -263,6 +263,54 @@ def _resolution_for_score(orc, args, cells_path):
                                 source_override=getattr(args, "source", None))
 
 
+def cmd_auto(args: argparse.Namespace) -> int:
+    """End-to-end: dry-run (sample+grid) -> run (serve+probe) -> score -> confirm.
+
+    `--dry` stops after emitting the grid + printing the serve plan (CPU-only, no
+    GPU); drop it on a GPU host to serve, probe, score, and emit the confirm plan.
+    """
+    out = Path(args.out)
+    orc = oracle_mod.load_oracle(args.run, n=args.n, strategy=args.strategy)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "oracle.json").write_text(json.dumps(orc.to_json(), indent=2))
+    print(f"[auto] {orc.run_name}: sampled {len(orc.sample)}/{orc.n_available}; "
+          f"model={orc.model} deployment={orc.model_deployment}")
+    if not oracle_mod.has_official_completions(orc):
+        print("[auto] WARN: prompt-only run (no official completions) — scoring "
+              "against official will be impossible.")
+    resolution, g = _build_grid_from_oracle(orc, args)
+    _write_grid(resolution, g, out)
+    _print_grid_summary(resolution, g)
+
+    results = out / "results"
+    serve_mod.run_grid(out, results, allowed_gpus=args.gpus,
+                       litellm_port=args.litellm_port, base_url=args.base_url,
+                       timeout=args.timeout, dry=args.dry)
+    if args.dry:
+        print("\n[auto] --dry: grid + serve plan emitted; re-run without --dry on a "
+              "GPU host to serve, probe, score, and confirm.")
+        return 0
+
+    cmd_score(argparse.Namespace(
+        oracle=str(out / "oracle.json"), results=str(results),
+        cells=str(out / "cells.json"), source=args.source, out=str(results)))
+
+    if not args.skip_confirm:
+        best = results / "best_deployment.yaml"
+        if best.exists():
+            cmd_confirm(argparse.Namespace(
+                best=str(best), run=str(args.run), local_run=None,
+                out=str(out / "confirm")))
+    print(f"\n[auto] done. ranking={results}/ranking.txt  "
+          f"best={results}/best_deployment.yaml")
+    if not args.skip_confirm:
+        print(f"[auto] confirm plan={out}/confirm/confirm_plan.md — produce a full "
+              f"local run per the plan, then: {Path(__file__).name} confirm "
+              f"--best {results}/best_deployment.yaml --run {args.run} "
+              f"--local-run <dir> --out {out}/confirm")
+    return 0
+
+
 def cmd_confirm(args: argparse.Namespace) -> int:
     res = confirm_mod.confirm(args.best, args.run, args.out, local_run=args.local_run)
     print(f"[confirm] winner={res['winner_cell']}")
@@ -322,6 +370,18 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--results", required=True); sc.add_argument("--cells", default=None)
     sc.add_argument("--source", default=None); sc.add_argument("--out", required=True)
     sc.set_defaults(func=cmd_score)
+
+    au = sub.add_parser("auto", help="end-to-end: dry-run -> run -> score -> confirm")
+    au.add_argument("--run", required=True, help="the public HELM run dir")
+    _run_opts(au); _grid_opts(au)
+    au.add_argument("--out", required=True)
+    au.add_argument("--gpus", default=None, help="INFER_STACK_ALLOWED_GPUS, e.g. '0'")
+    au.add_argument("--litellm-port", type=int, default=14042)
+    au.add_argument("--base-url", default=None)
+    au.add_argument("--timeout", type=float, default=120.0)
+    au.add_argument("--dry", action="store_true", help="stop after the grid + serve plan (no GPU)")
+    au.add_argument("--skip-confirm", action="store_true", help="skip the confirm-plan step")
+    au.set_defaults(func=cmd_auto)
 
     cf = sub.add_parser("confirm", help="confirm the winner vs official (plan + compare-pair)")
     cf.add_argument("--best", required=True, help="best_deployment.yaml from `score`")
