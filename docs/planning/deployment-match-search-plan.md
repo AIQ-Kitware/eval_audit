@@ -1,6 +1,10 @@
 # Deployment-match search — plan
 
-Status: PLAN (approved axes below via AskUserQuestion 2026-07-01). Not yet implemented.
+Status: IMPLEMENTED (all phases, 2026-07-01) at `dev/tools/deployment_match/`.
+Phase 1 core+dry-run (ab9ccce), Phase 2 serve+probe driver (86ad959), Phase 3
+confirm/compare-pair (aee205b), Phase 4 pytest (792ce21). Serving (Phase 2 `run`)
+needs a GPU host; everything else is CPU-validated. Axes approved via
+AskUserQuestion 2026-07-01.
 
 ## Goal
 
@@ -177,15 +181,18 @@ is the authoritative metric-level finish.
 
 ## Phasing
 
-1. **Core lib + CLI + dry-run** (CPU-validatable): oracle reader/sampler, grid
-   generator, scorer, report. Validate on `/data` public runs (extract + render;
-   no serving).
-2. **infer-stack serving driver** (GPU): generalize `run_matrix.sh`.
-3. **Winner confirmation** via `eval-audit-compare-pair`.
-4. **Tests**: gpt2 HELM fixture (`submodules/every_eval_ever/tests/data/helm/`) →
-   extraction; synthetic candidate outputs → scorer ranks correctly; grid → all
-   distinct compat-keys; sibling-tokenizer suggestion fires on a
-   post-processor-bearing tokenizer.
+1. ✓ **Core lib + CLI + dry-run** (`ab9ccce`): oracle reader/sampler, grid
+   generator, scorer, report; `sample`/`grid`/`dry-run`/`score`. CPU-validated on
+   `/data` public runs.
+2. ✓ **infer-stack serving driver** (`86ad959`): `serve.py` + `cli run` — the
+   two-tier acquire→probe→release loop (one container per serve-recipe, request
+   variants probed per container). `--dry` prints the plan on CPU.
+3. ✓ **Winner confirmation** (`aee205b`): `confirm.py` + `cli confirm` — winning
+   single-cell catalog + plan + `build_pair_report(official, local)`; probe-only
+   caveat surfaced.
+4. ✓ **Tests** (`792ce21`): 11 pytest cases — oracle extraction from the gpt2
+   HELM fixture, official-fact lookup, the pure tokenizer predicate, grid shape +
+   distinct compat-keys, scorer ranking.
 
 ## Risks / open items
 

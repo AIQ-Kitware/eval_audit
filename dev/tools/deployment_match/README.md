@@ -31,7 +31,9 @@ outputs.** This tool is that sweep, made general.
 | `probe.py`    | OpenAI-compatible client; sends the recipe verbatim + request-time knobs (incl. `add_special_tokens`) |
 | `score.py`    | candidate-vs-official scorer (exact/quasi/similarity/first-word) + composite ranking + collapse diagnostic |
 | `report.py`   | ranking table, per-instance snippet matrix, `best_deployment.yaml` |
-| `cli.py`      | `sample` / `grid` / `dry-run` / `score` / `selftest` |
+| `serve.py`    | Phase 2 driver: two-tier acquire→probe→release over the grid (infer-stack + `probe`) |
+| `confirm.py`  | Phase 3: winning single-cell catalog + plan + `build_pair_report(official, local)` |
+| `cli.py`      | `sample` / `grid` / `dry-run` / `run` / `score` / `confirm` / `selftest` |
 
 Stdlib-only core; `eval_audit` (request_state_diff, presets) and `infer_stack`
 (command render) are optional enrichment. Run under the repo `.venv` (needs
@@ -62,11 +64,15 @@ PYTHONPATH=submodules/infer_stack .venv/bin/python \
 ```
 Writes `oracle.json`, `catalog.yaml`, `cells.json`, `grid.json`, `resolution.json`.
 
-### Serve + probe (GPU host) — Phase 2 (see the plan)
-Bring up each `catalog.yaml` endpoint one at a time (infer-stack `acquire` →
-probe every request-variant with `probe.query_cell` → `release --evict`), writing
-one result JSON per cell into `results/`. (Driver script is Phase 2; the OLMo
-`run_matrix.sh` is the template.)
+### Serve + probe (GPU host)
+Bring up each `catalog.yaml` endpoint one at a time and probe every request
+variant against it (two-tier loop: `infer-stack acquire` → `probe.query_cell` for
+each cell → `release --evict`), writing one result JSON per cell:
+```bash
+dev/tools/deployment_match/cli.py run --grid-dir /tmp/dm-olmo --gpus 0
+# preview the acquire/probe/release plan with no GPU:
+dev/tools/deployment_match/cli.py run --grid-dir /tmp/dm-olmo --gpus 0 --dry
+```
 
 ### Score
 Rank the probed cells against the oracle:
@@ -76,6 +82,23 @@ Rank the probed cells against the oracle:
   --cells /tmp/dm-olmo/cells.json --out /tmp/dm-olmo/results
 ```
 Writes `ranking.txt`, `snippets.txt`, `scored.json`, `best_deployment.yaml`.
+
+### Confirm the winner (authoritative)
+Emit a one-endpoint catalog + a plan to reproduce the winner at full scale, and —
+once you have a full local run dir — compare it to the official run with the
+audit's `build_pair_report`:
+```bash
+dev/tools/deployment_match/cli.py confirm \
+  --best /tmp/dm-olmo/results/best_deployment.yaml \
+  --run  /data/.../narrative_qa:model=allenai_olmo-7b \
+  --local-run <full_local_run_dir> --out /tmp/dm-olmo/confirm
+# omit --local-run to just emit serve/catalog.yaml + confirm_plan.md
+```
+
+## Tests
+
+`tests/test_deployment_match.py` (11 cases): run under the repo `.venv`
+(`.venv/bin/python -m pytest tests/test_deployment_match.py -o addopts=""`).
 
 ## Reading the output
 
