@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""Deployment-match search CLI.
+
+Subcommands:
+
+  sample   Extract the oracle (recipe + sampled instances + official completions)
+           from a public HELM run.  -> oracle.json
+  grid     Resolve the model + generate the deployment grid.  -> catalog.yaml,
+           cells.json, grid.json (+ rendered vllm commands if infer_stack imports)
+  dry-run  sample + grid in one shot (CPU-only; no serving). The Phase-1 path.
+  score    Rank cell result JSONs (from probe / run) against the oracle. ->
+           ranking.txt, snippets.txt, best_deployment.yaml, scored.json
+  selftest Run the scorer self-test (no run / no server).
+
+Run under the repo .venv (needs pyyaml; eval_audit/infer_stack are optional
+enrichment):
+
+  PYTHONPATH=submodules/infer_stack .venv/bin/python \
+      dev/tools/deployment_match/cli.py dry-run \
+      --run /data/crfm-helm-public/lite/benchmark_output/runs/v1.2.0/narrative_qa:model=allenai_olmo-7b \
+      --n 12 --out /tmp/dm-olmo
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+
+import grid as grid_mod          # noqa: E402
+import oracle as oracle_mod      # noqa: E402
+import registry as registry_mod  # noqa: E402
+import report as report_mod      # noqa: E402
+import score as score_mod        # noqa: E402
+
+try:
+    import yaml
+except ModuleNotFoundError:  # pragma: no cover
+    yaml = None
+
+
+def _need_yaml() -> None:
+    if yaml is None:
+        raise SystemExit("pyyaml is required; run under the repo .venv "
+                         "(.venv/bin/python).")
+
+
+def _ensure_infer_stack_importable() -> bool:
+    try:
+        import infer_stack  # noqa: F401
+        return True
+    except ModuleNotFoundError:
+        for parent in HERE.parents:
+            cand = parent / "submodules" / "infer_stack"
+            if (cand / "infer_stack" / "__init__.py").exists():
+                sys.path.insert(0, str(cand))
+                try:
+                    import infer_stack  # noqa: F401
+                    return True
+                except Exception:  # noqa: BLE001
+                    return False
+    return False
+
+
+def _render_vllm_commands(catalog_dict: dict) -> list[str]:
+    """Best-effort: render the exact `vllm serve` line per endpoint."""
+    if not _ensure_infer_stack_importable():
+        return ["(infer_stack not importable — skipping command render; "
+                "PYTHONPATH=submodules/infer_stack to enable)"]
+    import shlex
+    from infer_stack.leasing.catalog import Catalog
+    from infer_stack.leasing.compose import _vllm_service
+    from infer_stack.leasing.models import Deployment
+
+    cat = Catalog.from_dict(catalog_dict)
+    images = {"vllm": "vllm/vllm-openai:<pinned>"}
+    state = {"hf_cache": "<hf-cache>"}
+    out = []
+    keys = {n: cat.resolve_endpoint(n).compat_key for n in cat.endpoints}
+    out.append(f"{len(cat.endpoints)} endpoints, {len(set(keys.values()))} distinct "
+               f"compat-keys ({'no coalescing' if len(set(keys.values())) == len(keys) else 'COALESCING!'})")
+    for name in sorted(cat.endpoints):
+        req = cat.resolve_endpoint(name)
+        dep = Deployment(id=f"dep-{name}", compat_key=req.compat_key, engine="vllm",
+                         sharing=req.sharing, capacity=req.capacity, spec=req.spec,
+                         served={req.endpoint: req.served}, state="live",
+                         created_at=0.0, updated_at=0.0)
+        svc = _vllm_service(dep, gpus=[0], host_port=None, images=images, state=state)
+        out.append(f"# {name}\n  vllm serve " +
+                   " ".join(shlex.quote(a) for a in svc["command"]))
+    return out
+
+
+# --------------------------------------------------------------------------- #
+def cmd_sample(args: argparse.Namespace) -> int:
+    orc = oracle_mod.load_oracle(args.run, n=args.n, strategy=args.strategy)
+    if not oracle_mod.has_official_completions(orc):
+        print("WARN: no official completions in this run (prompt-only) — scoring "
+              "against official will be impossible.", file=sys.stderr)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(orc.to_json(), indent=2))
+    print(f"[sample] {orc.run_name}: {len(orc.sample)}/{orc.n_available} instances "
+          f"-> {out}")
+    print(f"[sample] model={orc.model} deployment={orc.model_deployment} recipe={orc.recipe}")
+    return 0
+
+
+def _build_grid_from_oracle(orc, args):
+    resolution = registry_mod.resolve(
+        orc.model, orc.model_deployment,
+        source_override=args.source, protocol_override=args.protocol)
+    spec = None
+    if getattr(args, "grid", None):
+        _need_yaml()
+        spec = yaml.safe_load(Path(args.grid).read_text())
+    g = grid_mod.build_grid(resolution, spec=spec)
+    return resolution, g
+
+
+def _write_grid(resolution, g, out_dir: Path) -> None:
+    _need_yaml()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    catalog = g.to_catalog()
+    (out_dir / "catalog.yaml").write_text(yaml.safe_dump(catalog, sort_keys=False))
+    (out_dir / "cells.json").write_text(json.dumps([c.__dict__ for c in g.cells], indent=2))
+    (out_dir / "grid.json").write_text(json.dumps(g.to_json(), indent=2))
+    (out_dir / "resolution.json").write_text(json.dumps(resolution.__dict__, indent=2))
+
+
+def _print_grid_summary(resolution, g) -> None:
+    print(f"[grid] model={resolution.model} source={resolution.hf_source} "
+          f"protocol={resolution.protocol}"
+          f"{'' if resolution.protocol_resolved else ' (UNRESOLVED)'}")
+    print(f"[grid] official: tokenizer={resolution.official_tokenizer} "
+          f"max_seq_len={resolution.official_max_sequence_length}")
+    for n in resolution.notes:
+        print(f"[grid]   note: {n}")
+    print(f"[grid] {len(g.serve_recipes)} serve-recipes x {len(g.request_variants)} "
+          f"request-variants = {len(g.cells)} cells"
+          f"{f' (+{g.capped} over cap dropped)' if g.capped else ''}")
+    for n in g.notes:
+        print(f"[grid]   note: {n}")
+
+
+def cmd_grid(args: argparse.Namespace) -> int:
+    orc = oracle_mod.Oracle.from_json(json.loads(Path(args.oracle).read_text()))
+    resolution, g = _build_grid_from_oracle(orc, args)
+    out_dir = Path(args.out)
+    _write_grid(resolution, g, out_dir)
+    _print_grid_summary(resolution, g)
+    print("\n[grid] rendered vllm commands:")
+    for line in _render_vllm_commands(g.to_catalog()):
+        print(line)
+    print(f"\n[grid] wrote catalog.yaml / cells.json / grid.json -> {out_dir}")
+    return 0
+
+
+def cmd_dry_run(args: argparse.Namespace) -> int:
+    out_dir = Path(args.out)
+    orc = oracle_mod.load_oracle(args.run, n=args.n, strategy=args.strategy)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "oracle.json").write_text(json.dumps(orc.to_json(), indent=2))
+    print(f"[dry-run] {orc.run_name}: sampled {len(orc.sample)}/{orc.n_available}; "
+          f"model={orc.model} deployment={orc.model_deployment}")
+    print(f"[dry-run] recipe={orc.recipe}")
+    if not oracle_mod.has_official_completions(orc):
+        print("[dry-run] WARN: prompt-only run (no official completions).")
+    resolution, g = _build_grid_from_oracle(orc, args)
+    _write_grid(resolution, g, out_dir)
+    _print_grid_summary(resolution, g)
+    print("\n[dry-run] rendered vllm commands:")
+    for line in _render_vllm_commands(g.to_catalog()):
+        print(line)
+    print(f"\n[dry-run] sampled instance ids: "
+          f"{', '.join(s.instance_id for s in orc.sample)}")
+    print(f"[dry-run] wrote oracle.json / catalog.yaml / cells.json / grid.json -> {out_dir}")
+    print("[dry-run] next (GPU host): serve each catalog endpoint and probe the cells, "
+          "then `score`.")
+    return 0
+
+
+def cmd_score(args: argparse.Namespace) -> int:
+    orc = oracle_mod.Oracle.from_json(json.loads(Path(args.oracle).read_text()))
+    results_dir = Path(args.results)
+    cell_docs = [json.loads(p.read_text()) for p in sorted(results_dir.glob("*.json"))
+                 if p.name not in ("scored.json", "best_deployment.json")]
+    if not cell_docs:
+        raise SystemExit(f"no cell result JSONs in {results_dir}")
+    scored = score_mod.rank(cell_docs, _oracle_sample_dicts(orc))
+    # cells_by_id for serve-knob lookup in best_deployment
+    cells_by_id: dict = {}
+    cells_path = Path(args.cells) if args.cells else results_dir.parent / "cells.json"
+    if cells_path.exists():
+        for c in json.loads(cells_path.read_text()):
+            cells_by_id[c["cell_id"]] = c
+
+    resolution = _resolution_for_score(orc, args, cells_path)
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ranking = report_mod.render_ranking(scored)
+    snippets = report_mod.render_snippets(scored, _oracle_sample_dicts(orc))
+    best = report_mod.best_deployment(scored, cells_by_id, resolution)
+    print(ranking)
+    print(snippets)
+    (out_dir / "ranking.txt").write_text(ranking + "\n")
+    (out_dir / "snippets.txt").write_text(snippets + "\n")
+    (out_dir / "scored.json").write_text(json.dumps(scored, indent=2))
+    _need_yaml()
+    (out_dir / "best_deployment.yaml").write_text(yaml.safe_dump(best, sort_keys=False))
+    print(f"\n[score] winner: {best.get('winner_cell')} "
+          f"(composite={best.get('composite')})  -> {out_dir}/best_deployment.yaml")
+    for n in best.get("notes", []):
+        print(f"[score]   note: {n}")
+    return 0
+
+
+def _oracle_sample_dicts(orc) -> list[dict]:
+    from dataclasses import asdict
+    return [asdict(s) for s in orc.sample]
+
+
+def _resolution_for_score(orc, args, cells_path):
+    # Prefer the resolution.json written next to cells.json (has hf_source etc.).
+    res_path = cells_path.parent / "resolution.json" if cells_path else None
+    if res_path and res_path.exists():
+        return registry_mod.Resolution(**json.loads(res_path.read_text()))
+    return registry_mod.resolve(orc.model, orc.model_deployment,
+                                source_override=getattr(args, "source", None))
+
+
+def cmd_selftest(_args: argparse.Namespace) -> int:
+    return score_mod.selftest()
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    def _run_opts(p):
+        p.add_argument("--n", type=int, default=16)
+        p.add_argument("--strategy", default="spread-by-length",
+                       choices=["spread-by-length", "head", "random"])
+
+    def _grid_opts(p):
+        p.add_argument("--source", default=None, help="override the local HF source repo")
+        p.add_argument("--protocol", default=None, choices=["completions", "chat"])
+        p.add_argument("--grid", default=None, help="grid spec YAML (axes/runtime/cap)")
+
+    s = sub.add_parser("sample"); s.add_argument("--run", required=True)
+    _run_opts(s); s.add_argument("--out", required=True); s.set_defaults(func=cmd_sample)
+
+    g = sub.add_parser("grid"); g.add_argument("--oracle", required=True)
+    _grid_opts(g); g.add_argument("--out", required=True); g.set_defaults(func=cmd_grid)
+
+    d = sub.add_parser("dry-run"); d.add_argument("--run", required=True)
+    _run_opts(d); _grid_opts(d); d.add_argument("--out", required=True)
+    d.set_defaults(func=cmd_dry_run)
+
+    sc = sub.add_parser("score"); sc.add_argument("--oracle", required=True)
+    sc.add_argument("--results", required=True); sc.add_argument("--cells", default=None)
+    sc.add_argument("--source", default=None); sc.add_argument("--out", required=True)
+    sc.set_defaults(func=cmd_score)
+
+    st = sub.add_parser("selftest"); st.set_defaults(func=cmd_selftest)
+
+    args = ap.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
