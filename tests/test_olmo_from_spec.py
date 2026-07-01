@@ -46,10 +46,18 @@ from eval_audit.reports.core_metric_curves import _same_value_fact  # noqa: E402
 
 PUBLIC_ROOT = Path("/data/crfm-helm-public")
 
-# Derive the OLMo preset set from the registry (not a hardcoded list) so a newly
-# added OLMo preset is automatically covered — and is matched against the corpus —
-# rather than silently skipped.
-OLMO_PRESETS = sorted(k for k in PRESET_CONFIGS if k.startswith("allenai-olmo"))
+# Derive the single-model OLMo preset set from the registry (not a hardcoded list)
+# so a newly added OLMo preset is automatically covered — and matched against the
+# corpus — rather than silently skipped. The combined multi-model preset
+# (``profiles:``) is excluded here: its run_entries carry inline
+# ``model_deployment=<local>`` tokens that the bare-key dry-check can't match, so it
+# gets its own local-strip-aware check below (``test_combined_preset_*``).
+OLMO_PRESETS = sorted(
+    k
+    for k, cfg in PRESET_CONFIGS.items()
+    if k.startswith("allenai-olmo") and "profiles" not in cfg
+)
+COMBINED_PRESET = "allenai-olmo-combined"
 
 requires_corpus = pytest.mark.skipif(
     not PUBLIC_ROOT.exists(),
@@ -58,10 +66,14 @@ requires_corpus = pytest.mark.skipif(
 
 
 def test_seven_olmo_presets_registered():
-    # The migration is scoped to exactly seven presets (the original six, with
-    # olmo-7b split into -mmlu/-lite so each discovery key resolves 1:1). A drift
-    # in this count means a preset was added/removed without updating the plan.
+    # The migration is scoped to exactly seven SINGLE-model presets (the original
+    # six, with olmo-7b split into -mmlu/-lite so each discovery key resolves 1:1).
+    # A drift in this count means a single-model preset was added/removed without
+    # updating the plan. The combined multi-model preset is a separate aggregate
+    # (``profiles:``, excluded from OLMO_PRESETS) and is covered by
+    # ``test_combined_preset_*`` — it must not inflate this count.
     assert len(OLMO_PRESETS) == 7, OLMO_PRESETS
+    assert COMBINED_PRESET in PRESET_CONFIGS and COMBINED_PRESET not in OLMO_PRESETS
 
 
 # --------------------------------------------------------------------------
@@ -116,6 +128,65 @@ def test_discovery_resolves_one_to_one(preset, mode, root, runs_by_root):
     # exists in two suites; the replay would pick one nondeterministically-by-score.
     assert not ambiguous, f"{preset}/{mode} AMBIGUOUS ({len(ambiguous)}): {ambiguous[:3]}"
     assert results, f"{preset}/{mode} has no run_entries"
+
+
+# --------------------------------------------------------------------------
+# Combined multi-model preset (olmo-multi-model-from-spec-plan.md §4.4)
+# --------------------------------------------------------------------------
+
+
+def test_combined_preset_wiring():
+    # Pure structural checks for the combined preset (no corpus). Every run_entry
+    # must carry an inline model_deployment naming one of the bundle's own five
+    # profiles — that inline token is what a multi-deployment freeze uses as the
+    # per-run rewrite target + lease key. Each profile must declare a protocol_mode
+    # (guards the OLMo-7B "The" chat-templating failure).
+    from eval_audit.integrations.infer_stack.adapter import _strip_local_deployment
+
+    cfg = PRESET_CONFIGS[COMBINED_PRESET]
+    profiles = cfg["profiles"]
+    assert len(profiles) == 5, profiles
+    local_names = frozenset(p["model_deployment_name"] for p in profiles)
+    assert len(local_names) == 5, "duplicate deployment name across profiles"
+    for p in profiles:
+        assert p.get("protocol_mode") in ("chat", "completions"), p
+    for mode in ("smoke", "full"):
+        entries = cfg[f"{mode}_manifest"]["run_entries"]
+        assert entries, f"{mode} has no run_entries"
+        for entry in entries:
+            _query, token = _strip_local_deployment(entry, local_names)
+            assert token in local_names, (
+                f"{mode}: {entry!r} has no inline local deployment token"
+            )
+
+
+@requires_corpus
+def test_combined_preset_resolves_with_local_strip(runs_by_root):
+    # Multi-model analogue of test_discovery_resolves_one_to_one. The combined
+    # preset's entries carry an inline model_deployment=<local> token; freezing
+    # (``_freeze_run_spec_sources``) strips it for discovery (``_strip_local_deployment``
+    # — local-only) and reuses it as the per-run rewrite target. Mirror exactly
+    # that here — strip -> classify — asserting 0 NO_MATCH / 0 AMBIGUOUS under the
+    # shared parent root, so a --freeze-rel-paths export would resolve every source.
+    from eval_audit.integrations.infer_stack.adapter import _strip_local_deployment
+
+    cfg = PRESET_CONFIGS[COMBINED_PRESET]
+    local_names = frozenset(p["model_deployment_name"] for p in cfg["profiles"])
+    for mode in ("smoke", "full"):
+        block = cfg[f"{mode}_manifest"]
+        root = block["precomputed_root"]
+        assert root, f"{mode} has no precomputed_root"
+        runs = runs_by_root(root)
+        no_match, ambiguous = [], []
+        for entry in block["run_entries"]:
+            query, _token = _strip_local_deployment(entry, local_names)
+            result = dc._classify(query, runs)
+            if result.status == "NO_MATCH":
+                no_match.append(entry)
+            elif result.status == "AMBIGUOUS":
+                ambiguous.append(entry)
+        assert not no_match, f"{mode} NO_MATCH ({len(no_match)}): {no_match[:3]}"
+        assert not ambiguous, f"{mode} AMBIGUOUS ({len(ambiguous)}): {ambiguous[:3]}"
 
 
 # --------------------------------------------------------------------------
