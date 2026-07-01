@@ -1,0 +1,42 @@
+schema_version: 1
+name: olmo-models-combined
+description: >
+  Single COMBINED multi-model OLMo full-reproduction batch (the
+  allenai-olmo-combined preset) grouped into one virtual experiment. Unlike
+  olmo-models.yaml — which folds SEVEN separate single-model experiments together
+  — this scopes to ONE experiment (audit-allenai-olmo-combined-full) whose
+  run_entries span five OLMo models (olmo-1.7-7b + the four OLMo-2 / OLMoE
+  instruct models), produced by a single fan-out schedule (eval-audit-run
+  --tmux-workers). The per-model / per-recipe packets still fall out of the
+  core-report planner's pairing by logical run key, so the report reads the same
+  as the single-model grouping — it's just produced by one schedule instead of
+  seven. Local-only by default: there is no active official_public_index source,
+  so the report is the union of the local runs; comparability facts a public
+  counterpart would supply collapse to status=unknown and surface as
+  comparability_unknown:* warnings — expected for a local-only batch, not a bug.
+
+scope:
+  # Matches olmo / olmo-1.7 / olmo-2 / olmoe served-model names. The
+  # include_experiments list below is the hard bound; this regex is a
+  # second, defensive narrowing on the model axis.
+  models:
+    - "regex:^allenai/olmo"
+
+sources:
+  - kind: audit_index
+    fpath: /data/crfm-helm-audit-store/indexes/audit_results_index.csv
+    include_experiments:
+      # One experiment, five models — the combined fan-out full run.
+      - audit-allenai-olmo-combined-full
+
+  # Optional comparison side. Uncomment to compare the local runs against public
+  # HELM rows (requires the public index + Stage-1 filter inventory to exist).
+  # 40_build_summary.sh falls back to --no-filter-inventory while this is off.
+  # - kind: official_public_index
+  #   fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
+  #   pre_filter:
+  #     kind: helm_stage1
+  #     inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
+
+output:
+  root: /data/crfm-helm-audit-store/virtual-experiments/olmo-models-combined
