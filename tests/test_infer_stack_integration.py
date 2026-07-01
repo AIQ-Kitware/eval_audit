@@ -148,7 +148,7 @@ def test_olmo_base_preset_defaults_to_direct_vllm(tmp_path: Path) -> None:
     config_dir = _make_config_dir(tmp_path)
     result = export_benchmark_bundle(
         "",
-        preset="allenai-olmo-7b",
+        preset="allenai-olmo-7b-mmlu",
         bundle_root=tmp_path / "olmo-direct",
         config_dir=config_dir,
     )
@@ -170,7 +170,7 @@ def test_olmo_base_preset_routed_through_gateway(tmp_path: Path) -> None:
     config_dir = _make_config_dir(tmp_path)
     result = export_benchmark_bundle(
         "",
-        preset="allenai-olmo-7b",
+        preset="allenai-olmo-7b-mmlu",
         bundle_root=tmp_path / "olmo-gateway",
         config_dir=config_dir,
         access_kind="openai-compatible",
@@ -299,7 +299,7 @@ def test_protocol_mode_override_satisfies_bare_profile(tmp_path: Path) -> None:
     # Override beats the preset's declared value (olmo-7b declares completions).
     result_chat = export_benchmark_bundle(
         "",
-        preset="allenai-olmo-7b",
+        preset="allenai-olmo-7b-mmlu",
         bundle_root=tmp_path / "olmo-override-chat",
         config_dir=config_dir,
         protocol_mode="chat",

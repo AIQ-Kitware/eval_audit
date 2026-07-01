@@ -133,3 +133,52 @@ def test_freeze_multi_deployment_without_token_is_error(tmp_path, monkeypatch) -
             model_entries=[{"name": "vllm/a"}, {"name": "vllm/b"}],
             lease_facts=None, runs=[run],
         )
+
+
+# --------------------------------------------------------------------------- #
+# freeze wiring through the PUBLIC materialize path                            #
+# --------------------------------------------------------------------------- #
+def test_materialize_threads_freeze_rel_paths_into_manifest(tmp_path, monkeypatch) -> None:
+    # Regression guard for the freeze WIRING (not just the helper the tests above
+    # call directly): materialize_benchmark_bundle used ``freeze_rel_paths`` in its
+    # body but omitted it from its signature, and export_benchmark_bundle never
+    # passed it — so every real ``--freeze-rel-paths`` export raised NameError. The
+    # helper tests above call _freeze_run_spec_sources directly and so missed it.
+    # Drive the public entrypoint and assert run_spec_sources actually lands.
+    import yaml
+
+    from eval_audit.integrations.infer_stack import adapter as A
+    from eval_audit.integrations.infer_stack.adapter import (
+        ServingFacts,
+        materialize_benchmark_bundle,
+    )
+
+    run = _fixture_run(tmp_path)
+    _patch_classify(monkeypatch, run)
+    monkeypatch.setattr(dc, "_enumerate_runs", lambda root: [run])
+    # Keep the test hermetic w.r.t. HELM's alias config.
+    monkeypatch.setattr(A, "_assert_helm_aliases_exist", lambda *a, **k: None)
+
+    result = materialize_benchmark_bundle(
+        facts=[ServingFacts(
+            endpoint="olmo-ep", served_model_name="olmo-ep",
+            hf_model_id="allenai/olmo-7b", max_model_len=2048,
+        )],
+        output_dir=tmp_path / "bundle",
+        profile_specs=[{
+            "profile": "olmo-ep",
+            "access_kind": "vllm-direct",  # no gateway key needed
+            "protocol_mode": "completions",
+            "model_deployment_name": "vllm/allenai-olmo-7b",
+            "helm_model_name": "allenai/olmo-7b",
+            "helm_tokenizer_name": "allenai/olmo-7b",
+        }],
+        from_run_spec=True,
+        precomputed_root=str(tmp_path),
+        freeze_rel_paths=True,  # <-- the parameter that used to NameError
+    )
+    smoke = yaml.safe_load(result["benchmark_smoke_manifest_path"].read_text())
+    assert smoke["from_run_spec"] is True
+    assert smoke.get("run_spec_sources"), "freeze_rel_paths did not thread into the manifest"
+    assert smoke["run_spec_sources"][0]["rel_path"] == _REL
+    assert smoke["run_spec_sources"][0]["model_deployment"] == "vllm/allenai-olmo-7b"

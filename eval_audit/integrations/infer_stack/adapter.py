@@ -1504,6 +1504,7 @@ def materialize_benchmark_bundle(
     lease_catalog: Path | str | None = None,
     from_run_spec: bool = False,
     precomputed_root: str | None = None,
+    freeze_rel_paths: bool = False,
 ) -> dict[str, Any]:
     output_dir = output_dir.resolve()
     preset_cfg = PRESET_CONFIGS.get(preset or "", {})
@@ -1779,4 +1780,5 @@ def export_benchmark_bundle(
         lease_catalog=lease_catalog,
         from_run_spec=from_run_spec,
         precomputed_root=precomputed_root,
+        freeze_rel_paths=freeze_rel_paths,
     )
