@@ -38,6 +38,7 @@ import registry as registry_mod  # noqa: E402
 import report as report_mod      # noqa: E402
 import score as score_mod        # noqa: E402
 import serve as serve_mod        # noqa: E402
+import confirm as confirm_mod    # noqa: E402
 
 try:
     import yaml
@@ -262,6 +263,22 @@ def _resolution_for_score(orc, args, cells_path):
                                 source_override=getattr(args, "source", None))
 
 
+def cmd_confirm(args: argparse.Namespace) -> int:
+    res = confirm_mod.confirm(args.best, args.run, args.out, local_run=args.local_run)
+    print(f"[confirm] winner={res['winner_cell']}")
+    print(f"[confirm] plan -> {res['plan']}")
+    print(f"[confirm] winning serve catalog -> {res['serve_catalog']}")
+    if "pair_report" in res:
+        pr = res["pair_report"]
+        print(f"[confirm] compare-pair diagnosis={pr['diagnosis_label']} "
+              f"run_level_agree_ratio={pr['run_level_agree_ratio']}")
+        print(f"[confirm] pair report -> {pr['txt']}")
+    else:
+        print("[confirm] no --local-run given; run the plan on a GPU host, then "
+              "re-run with --local-run <dir> to compare.")
+    return 0
+
+
 def cmd_selftest(_args: argparse.Namespace) -> int:
     return score_mod.selftest()
 
@@ -305,6 +322,13 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--results", required=True); sc.add_argument("--cells", default=None)
     sc.add_argument("--source", default=None); sc.add_argument("--out", required=True)
     sc.set_defaults(func=cmd_score)
+
+    cf = sub.add_parser("confirm", help="confirm the winner vs official (plan + compare-pair)")
+    cf.add_argument("--best", required=True, help="best_deployment.yaml from `score`")
+    cf.add_argument("--run", required=True, help="the official HELM run dir")
+    cf.add_argument("--local-run", default=None, help="full local run dir to compare (optional)")
+    cf.add_argument("--out", required=True)
+    cf.set_defaults(func=cmd_confirm)
 
     st = sub.add_parser("selftest"); st.set_defaults(func=cmd_selftest)
 
