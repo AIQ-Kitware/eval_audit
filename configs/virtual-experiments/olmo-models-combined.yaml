@@ -10,10 +10,10 @@ description: >
   --tmux-workers). The per-model / per-recipe packets still fall out of the
   core-report planner's pairing by logical run key, so the report reads the same
   as the single-model grouping — it's just produced by one schedule instead of
-  seven. Local-only by default: there is no active official_public_index source,
-  so the report is the union of the local runs; comparability facts a public
-  counterpart would supply collapse to status=unknown and surface as
-  comparability_unknown:* warnings — expected for a local-only batch, not a bug.
+  seven. Comparison against public HELM is ON (the official_public_index source
+  below, mirroring olmo-models.yaml): each local run is paired with its official
+  counterpart by logical run key. Comment that source out to make the report
+  local-only (comparisons then disable with missing_official_component).
 
 scope:
   # Matches olmo / olmo-1.7 / olmo-2 / olmoe served-model names. The
@@ -29,14 +29,14 @@ sources:
       # One experiment, five models — the combined fan-out full run.
       - audit-allenai-olmo-combined-full
 
-  # Optional comparison side. Uncomment to compare the local runs against public
-  # HELM rows (requires the public index + Stage-1 filter inventory to exist).
-  # 40_build_summary.sh falls back to --no-filter-inventory while this is off.
-  # - kind: official_public_index
-  #   fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
-  #   pre_filter:
-  #     kind: helm_stage1
-  #     inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
+  # Comparison side: pair each local run with its official public-HELM run by
+  # logical run key. Comment out to make the report local-only (40_build_summary.sh
+  # then falls back to --no-filter-inventory since compose writes no scoped inventory).
+  - kind: official_public_index
+    fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
+    pre_filter:
+      kind: helm_stage1
+      inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
 
 output:
   root: /data/crfm-helm-audit-store/virtual-experiments/olmo-models-combined
