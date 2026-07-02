@@ -115,8 +115,41 @@ def test_setup_renders_queueing_acquire_with_per_node_env_file() -> None:
 def test_teardown_releases_the_same_env_file() -> None:
     cfg = {"out_dpath": "/results/exp/helm/abcd", "lease_endpoint": "phi2-single"}
     assert render_lease_teardown(cfg) == (
-        "infer-stack release --env-file /results/exp/helm/abcd/lease.env"
+        "infer-stack release --yes --env-file /results/exp/helm/abcd/lease.env"
     )
+
+
+def test_teardown_mirrors_acquire_catalog_and_never_prompts() -> None:
+    """Regression: teardown lacked --yes (release converges too — inside a trap
+    a diff prompt wedges the worker on a bare pty) and --catalog (a release
+    rendered against the default-path catalog rebuilds the gateway route table
+    without the superset, recreating the gateway under concurrent runs)."""
+    cfg = {
+        "out_dpath": "/o",
+        "lease_endpoint": "ep",
+        "lease_catalog": "/repo/catalog.yaml",
+    }
+    teardown = render_lease_teardown(cfg)
+    assert "--yes" in teardown
+    assert "--catalog /repo/catalog.yaml" in teardown
+
+
+def test_setup_renders_an_explicit_queue_timeout() -> None:
+    """Regression: acquire carried no --timeout, so infer-stack's 600 s default
+    capped the admission-queue wait — every worker queued behind a multi-hour
+    run failed with PlacementError after 10 minutes."""
+    setup = render_lease_setup({"out_dpath": "/o", "lease_endpoint": "ep"})
+    assert "--timeout 14400" in setup  # _DEFAULT_LEASE_TIMEOUT = 4h
+
+    setup = render_lease_setup(
+        {"out_dpath": "/o", "lease_endpoint": "ep", "lease_timeout": "90m"}
+    )
+    assert "--timeout 5400" in setup
+
+    setup = render_lease_setup(
+        {"out_dpath": "/o", "lease_endpoint": "ep", "lease_timeout": 1800}
+    )
+    assert "--timeout 1800" in setup
 
 
 def test_setup_defaults_ttl_and_queue() -> None:
