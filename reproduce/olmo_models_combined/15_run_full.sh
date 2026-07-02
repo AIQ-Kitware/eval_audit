@@ -67,6 +67,14 @@ echo "== scheduling the full fan-out (tmux_workers=$OLMO_TMUX_WORKERS) =="
 eval-audit-run --run=1 "$OLMO_COMBINED_BUNDLE_ROOT/full_manifest.yaml" \
   --container-image "$OLMO_CONTAINER_IMAGE" --lease --tmux-workers "$OLMO_TMUX_WORKERS"
 
+# Fold in the base OLMo-7B suites (can't share the combined bundle's root — see
+# _lib.sh). Each is its own single-model fan-out bundle against a narrow per-suite
+# root, landing in the same virtual experiment. Scheduled after the combined
+# bundle (eval-audit-run blocks); the fan-out still spreads each suite's runs.
+for preset in "${OLMO_COMBINED_EXTRA_PRESETS[@]}"; do
+  olmo_run_extra_preset "$preset" full
+done
+
 echo
 echo "Reclaiming any leaked leases (infer-stack gc)…"
 infer-stack gc --yes || echo "WARN: 'infer-stack gc' returned nonzero; continuing." >&2

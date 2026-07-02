@@ -6,7 +6,9 @@ containerization, **different scheduling**: instead of running the presets one a
 a time in a serial bash loop, this runbook runs a **single multi-deployment
 preset** — `allenai-olmo-combined` — exported with `--freeze-rel-paths` and
 scheduled with `eval-audit-run --tmux-workers N`, so **five OLMo models fan out
-across GPUs under one schedule**.
+across GPUs under one schedule**. The sixth model, the base `olmo-7b`, can't join
+that bundle (see below), so it runs as two extra single-model suites folded into
+the **same virtual experiment** — the grouped report covers all six OLMo models.
 
 See [`docs/planning/olmo-multi-model-from-spec-plan.md`](../../docs/planning/olmo-multi-model-from-spec-plan.md)
 §4.4/§4.7 for the design.
@@ -16,20 +18,23 @@ See [`docs/planning/olmo-multi-model-from-spec-plan.md`](../../docs/planning/olm
 | | `../olmo_models` (single-model) | `olmo_models_combined` (this) |
 |---|---|---|
 | Presets | seven single-model (`OLMO_TARGETS` loop) | one multi-deployment (`allenai-olmo-combined`) |
-| Models | six (olmo-7b split into `-mmlu`/`-lite`) | **five** (olmo-7b excluded — see below) |
+| Models | six (olmo-7b split into `-mmlu`/`-lite`) | **all six** — five in the fan-out bundle + olmo-7b as two extra suites (see below) |
 | Scheduling | serial: one `eval-audit-run` per preset | **one** `eval-audit-run` over the combined manifest |
 | Concurrency | one model served at a time | `--tmux-workers N` → N concurrent leased runs |
 | Export | `--from-spec` (discovery replay) | `--from-spec --freeze-rel-paths` (exact-path replay) |
 | Deployment target | one manifest-level rewrite target | **per-run** inline `model_deployment=<local>` |
-| Experiments | seven (`audit-<preset>-full`) | **one** (`audit-allenai-olmo-combined-full`) |
+| Experiments | seven (`audit-<preset>-full`) | three (`audit-allenai-olmo-combined-full` + olmo-7b `-mmlu`/`-lite`), one vexp |
 | Grouping manifest | [`olmo-models.yaml`](../../configs/virtual-experiments/olmo-models.yaml) | [`olmo-models-combined.yaml`](../../configs/virtual-experiments/olmo-models-combined.yaml) |
 
-**Why five models, not six.** `allenai/olmo-7b` was run by HELM under two suites
+**Why olmo-7b rides separately.** `allenai/olmo-7b` was run by HELM under two suites
 (`/mmlu` and `/lite`) whose per-subject MMLU dirs are token-subsets of each other,
-so it is **ambiguous under the shared parent root** this bundle freezes against. It
-keeps the narrow per-suite roots and stays in the single-model runbook. The other
-five (`olmo-1.7-7b` + the four OLMo-2 / OLMoE instruct models) all resolve 1:1
-under `/data/crfm-helm-public`, so they share one root and one bundle cleanly.
+so it is **ambiguous under the shared parent root** the combined bundle freezes
+against. The other five (`olmo-1.7-7b` + the four OLMo-2 / OLMoE instruct models)
+all resolve 1:1 under `/data/crfm-helm-public`, so they share one bundle cleanly.
+olmo-7b instead runs as its two single-model suites (`allenai-olmo-7b-mmlu` /
+`-lite`) against their narrow `/mmlu` and `/lite` roots — exported + scheduled by
+`10`/`15` right after the combined bundle (`OLMO_COMBINED_EXTRA_PRESETS` in
+`_lib.sh`) — and all three experiments are folded into the one virtual experiment.
 
 **Why `--freeze-rel-paths` is mandatory here.** A multi-deployment bundle has no
 single manifest-level rewrite target — each run needs its own. The exact-path
@@ -59,14 +64,14 @@ is shipped here.
 ```bash
 ../olmo_models/docker/build.sh   # build eval-audit-helm-runner:dev (shared image; containerization is ON)
 ./00_check_env.sh                # eval-audit-check-env
-./05_check_profiles.sh           # verify the five <model>-single endpoints are defined
+./05_check_profiles.sh           # verify the six <model>-single endpoints are defined
 ./06_check_hf_auth.sh            # verify a HuggingFace token (gated gpqa dataset needs it)
 ./07_check_container_image.sh    # verify docker + the pinned image (required)
 ./08_check_discovery.sh          # freeze the bundle (resolves 1:1 or fails) + validate every frozen run_spec.json exists
 ./10_run_smoke.sh                # smoke: gc -> gateway bootstrap -> export --freeze-rel-paths -> run smoke --lease --tmux-workers N
 ./15_run_full.sh                 # full reproducibility batch (same, full manifest)
 ./20_index_local.sh              # eval-audit-index -> audit_results_index.csv (verifies the combined-full run dir)
-./30_compose.sh                  # build the virtual experiment from the combined-full run
+./30_compose.sh                  # build the virtual experiment from all three full runs
 ./40_build_summary.sh            # aggregate publication surface
 ```
 

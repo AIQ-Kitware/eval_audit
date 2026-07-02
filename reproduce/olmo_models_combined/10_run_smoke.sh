@@ -73,6 +73,12 @@ echo "== scheduling the smoke fan-out (tmux_workers=$OLMO_TMUX_WORKERS) =="
 eval-audit-run --run=1 "$OLMO_COMBINED_BUNDLE_ROOT/smoke_manifest.yaml" \
   --container-image "$OLMO_CONTAINER_IMAGE" --lease --tmux-workers "$OLMO_TMUX_WORKERS"
 
+# Fold in the base OLMo-7B suites (can't share the combined bundle's root — see
+# _lib.sh), so the smoke also exercises olmo-7b's exact-path path.
+for preset in "${OLMO_COMBINED_EXTRA_PRESETS[@]}"; do
+  olmo_run_extra_preset "$preset" smoke
+done
+
 # Final backstop: reclaim any lease a hard-killed job leaked.
 echo
 echo "Reclaiming any leaked leases (infer-stack gc)…"

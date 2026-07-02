@@ -58,6 +58,20 @@ for mode in smoke full; do
     --manifest "$scratch/${mode}_manifest.yaml"
 done
 
+# Also freeze-check the base OLMo-7B suites (folded into the same vexp). Each has
+# its OWN narrow precomputed_root (baked in its manifest block) that disambiguates
+# the /mmlu vs /lite MMLU overlap, so no PRECOMPUTED_ROOT override is applied here.
+for preset in "${OLMO_COMBINED_EXTRA_PRESETS[@]}"; do
+  echo
+  echo "-- extra suite: freezing ${preset} (own narrow root) --"
+  "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
+    --preset "$preset" --bundle-root "$scratch/$preset" --from-spec --freeze-rel-paths
+  for mode in smoke full; do
+    "$PYTHON_BIN" -m eval_audit.cli.check_precomputed_discovery \
+      --manifest "$scratch/$preset/${mode}_manifest.yaml"
+  done
+done
+
 echo
 echo "=================================================================="
 echo "OK: combined preset freezes cleanly (0 NO_MATCH / 0 AMBIGUOUS) and every"

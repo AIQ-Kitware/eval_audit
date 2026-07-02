@@ -1,16 +1,16 @@
 schema_version: 1
 name: olmo-models-combined
 description: >
-  Single COMBINED multi-model OLMo full-reproduction batch (the
-  allenai-olmo-combined preset) grouped into one virtual experiment. Unlike
-  olmo-models.yaml — which folds SEVEN separate single-model experiments together
-  — this scopes to ONE experiment (audit-allenai-olmo-combined-full) whose
-  run_entries span five OLMo models (olmo-1.7-7b + the four OLMo-2 / OLMoE
-  instruct models), produced by a single fan-out schedule (eval-audit-run
-  --tmux-workers). The per-model / per-recipe packets still fall out of the
-  core-report planner's pairing by logical run key, so the report reads the same
-  as the single-model grouping — it's just produced by one schedule instead of
-  seven. Comparison against public HELM is ON (the official_public_index source
+  Combined multi-model OLMo full-reproduction batch grouped into one virtual
+  experiment covering all SIX OLMo models. Five (olmo-1.7-7b + the four OLMo-2 /
+  OLMoE instruct models) come from the allenai-olmo-combined fan-out preset as one
+  experiment (audit-allenai-olmo-combined-full); the base olmo-7b can't share that
+  bundle's parent root (its MMLU is ambiguous across the /mmlu and /lite suites),
+  so it rides as two extra single-model experiments
+  (audit-allenai-olmo-7b-{mmlu,lite}-full) folded in here. The per-model /
+  per-recipe packets fall out of the core-report planner's pairing by logical run
+  key, so the report reads like the single-model grouping — just produced by the
+  fan-out runbook. Comparison against public HELM is ON (the official_public_index source
   below, mirroring olmo-models.yaml): each local run is paired with its official
   counterpart by logical run key. Comment that source out to make the report
   local-only (comparisons then disable with missing_official_component).
@@ -26,8 +26,12 @@ sources:
   - kind: audit_index
     fpath: /data/crfm-helm-audit-store/indexes/audit_results_index.csv
     include_experiments:
-      # One experiment, five models — the combined fan-out full run.
+      # Five models from the combined fan-out bundle...
       - audit-allenai-olmo-combined-full
+      # ...plus the base olmo-7b, run as two single-model suites against narrow
+      # per-suite roots (it can't join the shared-parent-root fan-out bundle).
+      - audit-allenai-olmo-7b-mmlu-full
+      - audit-allenai-olmo-7b-lite-full
 
   # Comparison side: pair each local run with its official public-HELM run by
   # logical run key. Comment out to make the report local-only (40_build_summary.sh

@@ -18,7 +18,9 @@ if [[ -z "$available" ]]; then
 fi
 
 missing=()
-for endpoint in "${OLMO_COMBINED_ENDPOINTS[@]}"; do
+# The five combined-bundle endpoints + the base olmo-7b endpoint (its two suites
+# are folded into the same virtual experiment).
+for endpoint in "${OLMO_COMBINED_ENDPOINTS[@]}" "$OLMO_COMBINED_EXTRA_ENDPOINT"; do
   if ! grep -qw -- "$endpoint" <<<"$available"; then
     missing+=("$endpoint")
   fi
