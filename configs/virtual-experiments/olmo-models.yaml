@@ -4,11 +4,10 @@ description: >
   Full local-reproduction batches for the six AllenAI OLMo presets, grouped into
   one virtual experiment. Each preset runs its complete candidate run-entry set
   (audit-<preset>-full); the smoke grid is a preflight only and is not folded in
-  here. Local-only by default: there is no official_public_index source, so the
-  report is the union of the six local full runs re-stamped under a single
-  experiment name. Comparability facts that the planner would otherwise derive
-  from a public counterpart collapse to status=unknown and surface as
-  comparability_unknown:* warnings — expected for a local-only batch, not a bug.
+  here. Comparison against public HELM is ON (the official_public_index source
+  below): each of the six local full runs is paired with its official counterpart
+  by logical run key. Comment that source out to make the report local-only — the
+  planner then disables comparisons with missing_official_component.
 
 scope:
   # Matches olmo / olmo-1.7 / olmo-2 / olmoe served-model names. The
@@ -30,9 +29,9 @@ sources:
       - audit-allenai-olmo-2-1124-13b-instruct-full
       - audit-allenai-olmo-2-0325-32b-instruct-full
 
-  # Optional comparison side. Uncomment to compare the local full runs against
-  # public HELM rows (requires the public index + Stage-1 filter inventory to
-  # exist).
+  # Comparison side: pair each local full run with its official public-HELM run by
+  # logical run key (requires the public index + Stage-1 filter inventory to exist).
+  # Comment out to make the report local-only.
   - kind: official_public_index
     fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
     pre_filter:

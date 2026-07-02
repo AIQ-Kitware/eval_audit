@@ -249,12 +249,11 @@ replayed verbatim. See
 
 ## What this assumes / produces
 
-- **Local-only by default.** The manifest has no `official_public_index` source,
-  so the report is the union of the seven local full runs; comparability facts a
-  public counterpart would supply collapse to `status=unknown` and surface as
-  `comparability_unknown:*` warnings — expected for a local-only batch, not a bug.
-  To compare against public HELM, uncomment the `official_public_index` source in
-  the manifest (needs the public index + Stage-1 filter inventory present).
+- **Compared against public HELM.** The grouping manifest's `official_public_index`
+  source pairs each of the seven local full runs with its official counterpart by
+  logical run key (needs the public index + Stage-1 filter inventory present). To
+  make the report local-only, comment that source out — comparisons then disable
+  with `missing_official_component`.
   - **BBQ prompt drift — resolved by from-spec.** Public HELM injects an
     `output_format_instructions` run-expander into the four instruct models' BBQ
     runs that is invisible in the run name, so a run-entry reconstruction sent a

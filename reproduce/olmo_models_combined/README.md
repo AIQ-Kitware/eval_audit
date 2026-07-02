@@ -103,10 +103,11 @@ Everything the single-model runbook documents applies (inherited from its
   `model_deployment=<local>` tokens would NO_MATCH the bare-key matcher. Teaching
   the `--preset` mode the same local-strip (plan §4.3) would let `08` skip the
   scratch export; until then the freeze-then-existence-check is the faithful gate.
-- **Local-only report by default** (no `official_public_index` source): the
-  `comparability_unknown:*` warnings are expected, not a bug. Uncomment the source
-  in [`olmo-models-combined.yaml`](../../configs/virtual-experiments/olmo-models-combined.yaml)
-  to compare against public HELM.
+- **Compared against public HELM.** The grouping manifest's `official_public_index`
+  source pairs each local run with its official counterpart by logical run key
+  (mirroring `olmo-models.yaml`). Comment that source out in
+  [`olmo-models-combined.yaml`](../../configs/virtual-experiments/olmo-models-combined.yaml)
+  to make the report local-only.
 
 ## Output layout
 
