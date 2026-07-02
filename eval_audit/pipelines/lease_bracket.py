@@ -45,6 +45,7 @@ LEASE_KEYS = frozenset(
         "lease_endpoint",
         "lease_endpoints",
         "lease_ttl",
+        "lease_timeout",
         "lease_catalog",
         "lease_queue",
         "lease_snapshot",
@@ -62,6 +63,29 @@ LEASE_PERF_PARAMS: dict[str, Any] = {key: None for key in LEASE_KEYS}
 # than expiring mid-run (design §8). Per-endpoint overrides flow via the
 # manifest's ``lease_ttl``.
 _DEFAULT_LEASE_TTL = "4h"
+
+# Default acquire budget (admission-queue wait + model cold-load). infer-stack's
+# own ``--timeout`` default is 600 s, which contradicts the design: the whole
+# point of ``--queue`` here is that runs which cannot co-host wait for each
+# other, and a predecessor's HELM run takes hours — a 10-minute queue budget
+# would fail most of a fanned-out grid with PlacementError. Must be rendered
+# explicitly on every acquire. Per-run overrides flow via ``lease_timeout``.
+_DEFAULT_LEASE_TIMEOUT = "4h"
+
+
+def _duration_seconds(text: Any) -> int:
+    """Parse ``30m``/``2h``/``90s``/plain-seconds into whole seconds.
+
+    infer-stack's ``acquire --timeout`` takes plain seconds (unlike ``--ttl``,
+    which parses duration suffixes), so the manifest-friendly duration form is
+    converted here. Infinite forms are deliberately unsupported: an unbounded
+    queue wait would hold a cmd_queue worker forever.
+    """
+    text = str(text).strip().lower()
+    units = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+    if text and text[-1] in units:
+        return int(float(text[:-1]) * units[text[-1]])
+    return int(float(text))
 
 # The fixed gateway path each lease.env is written under, relative to the node's
 # own output dir (``out_dpath``). setup writes it (``acquire --env-file``);
@@ -150,9 +174,14 @@ def render_lease_setup(cfg: dict[str, Any]) -> str | None:
     queue = cfg.get("lease_queue")
     queue = True if queue is None else bool(queue)
 
+    timeout_s = _duration_seconds(cfg.get("lease_timeout") or _DEFAULT_LEASE_TIMEOUT)
+
     acquire = ["infer-stack", "acquire", q(endpoint), "--ttl", q(ttl), "--yes"]
     if queue:
         acquire.append("--queue")
+    # Always explicit: infer-stack's 600 s default is far too short for the
+    # queue-serializes-multi-hour-runs design (see _DEFAULT_LEASE_TIMEOUT).
+    acquire += ["--timeout", str(timeout_s)]
     acquire += ["--env-file", env_file]
     catalog = cfg.get("lease_catalog")
     if catalog:
@@ -183,13 +212,26 @@ def render_lease_teardown(cfg: dict[str, Any]) -> str | None:
     cmd_queue arms this as an always-run trap (EXIT/INT/TERM) *only* if setup
     succeeded, so it releases exactly the lease setup acquired — on success,
     failure, and SIGTERM. Returns ``None`` when no lease is requested.
+
+    The teardown mirrors acquire's ``--yes`` and ``--catalog``: release also
+    converges the compose project, so (a) it must never block on an interactive
+    diff prompt inside a trap nobody can answer (release builds its backend
+    with ``assume_yes = not isatty()``, which happens to hold under cmd_queue's
+    tee pipeline but not on a bare pty), and (b) it must render with the SAME
+    catalog as acquire — the static-superset gateway route table is derived
+    from it, and a mismatched render recreates the gateway container mid-flight
+    for every other concurrently leased run.
     """
     endpoint = _resolve_lease_endpoint(cfg)
     if not endpoint:
         return None
     out_dpath = str(cfg["out_dpath"])
     env_file = shlex.quote(f"{out_dpath}/{_LEASE_ENV_BASENAME}")
-    return f"infer-stack release --env-file {env_file}"
+    release = ["infer-stack", "release", "--yes", "--env-file", env_file]
+    catalog = cfg.get("lease_catalog")
+    if catalog:
+        release += ["--catalog", shlex.quote(str(catalog))]
+    return " ".join(release)
 
 
 def render_magnet_command(

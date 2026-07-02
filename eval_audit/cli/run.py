@@ -63,6 +63,16 @@ def main(argv: list[str] | None = None) -> None:
         ),
     )
     parser.add_argument(
+        "--lease-timeout",
+        default=None,
+        help=(
+            "Acquire budget covering admission-queue wait + model cold-load "
+            "(e.g. 4h, 90m, or plain seconds). Overrides the manifest's "
+            "lease_timeout (default 4h — infer-stack's own 600s default is far "
+            "too short for queued multi-hour grids)."
+        ),
+    )
+    parser.add_argument(
         "--lease-catalog",
         default=None,
         help=(
@@ -92,6 +102,7 @@ def main(argv: list[str] | None = None) -> None:
         container_image=args.container_image,
         lease=args.lease,
         lease_ttl=args.lease_ttl,
+        lease_timeout=args.lease_timeout,
         lease_catalog=args.lease_catalog,
         lease_queue=not args.no_queue,
     )

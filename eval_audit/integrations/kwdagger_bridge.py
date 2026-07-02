@@ -140,6 +140,7 @@ def build_lease_matrix_entries(
     manifest: dict[str, Any],
     *,
     ttl_override: str | None = None,
+    timeout_override: str | None = None,
     catalog_override: str | None = None,
     queue: bool = True,
 ) -> dict[str, Any]:
@@ -175,8 +176,9 @@ def build_lease_matrix_entries(
         entries["helm.lease_endpoint"] = [str(endpoint)]
     entries.update(
         build_broadcast_lease_knobs(
-            manifest, ttl_override=ttl_override, catalog_override=catalog_override,
-            queue=queue,
+            manifest, ttl_override=ttl_override,
+            timeout_override=timeout_override,
+            catalog_override=catalog_override, queue=queue,
         )
     )
     return entries
@@ -186,6 +188,7 @@ def build_broadcast_lease_knobs(
     manifest: dict[str, Any],
     *,
     ttl_override: str | None = None,
+    timeout_override: str | None = None,
     catalog_override: str | None = None,
     queue: bool = True,
 ) -> dict[str, Any]:
@@ -201,6 +204,9 @@ def build_broadcast_lease_knobs(
     ttl = ttl_override or manifest.get("lease_ttl")
     if ttl:
         entries["helm.lease_ttl"] = [str(ttl)]
+    timeout = timeout_override or manifest.get("lease_timeout")
+    if timeout:
+        entries["helm.lease_timeout"] = [str(timeout)]
     catalog = catalog_override or manifest.get("lease_catalog")
     if catalog:
         entries["helm.lease_catalog"] = [str(Path(catalog).expanduser().resolve())]
@@ -350,6 +356,7 @@ def prepare_schedule_request(
     container_image: str | None = None,
     lease: bool = False,
     lease_ttl: str | None = None,
+    lease_timeout: str | None = None,
     lease_catalog: str | None = None,
     lease_queue: bool = True,
 ) -> KWDaggerScheduleRequest:
@@ -417,13 +424,15 @@ def prepare_schedule_request(
         manifest.setdefault("container_gpus", "none")
         if materialized_runs is not None:
             lease_entries = build_broadcast_lease_knobs(
-                manifest, ttl_override=lease_ttl, catalog_override=lease_catalog,
-                queue=lease_queue,
+                manifest, ttl_override=lease_ttl,
+                timeout_override=lease_timeout,
+                catalog_override=lease_catalog, queue=lease_queue,
             )
         else:
             lease_entries = build_lease_matrix_entries(
-                manifest, ttl_override=lease_ttl, catalog_override=lease_catalog,
-                queue=lease_queue,
+                manifest, ttl_override=lease_ttl,
+                timeout_override=lease_timeout,
+                catalog_override=lease_catalog, queue=lease_queue,
             )
 
     params = build_schedule_params(

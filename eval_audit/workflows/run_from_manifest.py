@@ -24,6 +24,7 @@ def run_from_manifest(
     container_image: str | None = None,
     lease: bool = False,
     lease_ttl: str | None = None,
+    lease_timeout: str | None = None,
     lease_catalog: str | None = None,
     lease_queue: bool = True,
 ) -> dict[str, Any]:
@@ -39,6 +40,7 @@ def run_from_manifest(
         container_image=container_image,
         lease=lease,
         lease_ttl=lease_ttl,
+        lease_timeout=lease_timeout,
         lease_catalog=lease_catalog,
         lease_queue=lease_queue,
     )
