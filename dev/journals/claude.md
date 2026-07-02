@@ -4194,3 +4194,15 @@ Rejected alternatives: (a) add `ai2-olmo`/`hf_olmo` to the image — contradicts
 ## 2026-07-01 11:10:58 -0400
 
 **User catch (correctness fix).** "Why are you requesting certain GPUs when it should be based on what infer-stack reports as available?" Right — the driver + docs defaulted to `--gpus 0`, which sets `INFER_STACK_ALLOWED_GPUS=0` and overrides infer-stack's own availability-based placement. Fixed: `serve.py` now runs `infer-stack acquire <ep> --queue` (verified in `commands_leasing.py`: `--queue` → `wait_for_placement`, i.e. use any available GPU, wait when busy; `allowed_gpus`/`INFER_STACK_ALLOWED_GPUS` unset → placement uses every non-display GPU). Added the `auto` one-shot earlier this turn (`d703ad4`), then this fix: renamed the flag `--gpus`→`--allowed-gpus` (reframed as an OPTIONAL operator restriction, default off), stopped defaulting it in all README/examples, and made the driver never override an operator's exported `INFER_STACK_ALLOWED_GPUS` unless `--allowed-gpus` is explicitly passed. Validated on CPU: `run --dry` emits `acquire … --queue` with no GPU pinned; `--allowed-gpus 1,2` logs the restriction and still queues. py_compile clean; the 11 tests are unaffected (no GPU logic in them). Takeaway: leasing/placement is infer-stack's responsibility — a client should ask for a lease and let admission choose the GPU, not pin one.
+
+## 2026-07-02 14:03:37 -0400
+
+**Model / harness.** Claude Fable 5 (claude-fable-5), Claude Code CLI / VSCode.
+
+**User intent.** Review `jons/fable-commits` and, once confirmed clean, merge it into `impl/run-from-run-spec`.
+
+**Assessment.** `jons/fable-commits` = one commit past the shared base `a287933`: `098d84f` (lease-bracket integration fixes — explicit `acquire --timeout` via new `lease_timeout` knob defaulting to 4h rendered as plain seconds; teardown `release` mirrors acquire's `--yes` and `--catalog`). Verified the claims against infer-stack itself: acquire's timeout default really is 600 plain seconds (`commands_leasing.py`), and `ReleaseCLI` inherits `--yes`/`--catalog` from `_ApprovalMixin`, whose help text confirms the same-catalog requirement. `lease_timeout` lands in `LEASE_KEYS` → `LEASE_PERF_PARAMS`, so it's excluded from kwdagger job identity — timeout changes won't invalidate cached runs (correct). File sets of the two branches are disjoint (lease/run pipeline code vs. olmo configs + docs), and `git merge-tree --write-tree` dry-ran clean.
+
+**Merged.** `git merge --no-ff jons/fable-commits` → `71249b9` on `impl/run-from-run-spec`. `tests/test_lease_bracket.py` = 27 passed post-merge. Submodule gitlinks (`cmd_queue`, `infer_stack`) remain pre-existing/unstaged, untouched by either branch.
+
+**Takeaway.** When a commit's rationale rests on another component's CLI contract (here infer-stack's 600s default and release's converge-and-prompt behavior), verify the contract in that component's source before merging — the submodule checkout makes this a one-grep check.
