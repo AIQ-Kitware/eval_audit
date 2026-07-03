@@ -265,6 +265,22 @@ class MaterializeHelmRunFromSpecDockerNode(MaterializeHelmRunDockerNode):
         # path (a different official recipe, or different substitutions) is a
         # different run, so it also gives each fanned-out run a distinct job dir.
         "run_spec_json": None,
+        # P1-21: in from-spec DISCOVERY mode precomputed_root IS the recipe
+        # source — the corpus dir that supplies the official run_spec.json being
+        # replayed. Switching corpus roots changes *what* is computed, so it must
+        # be algo identity, not the identity-neutral perf param it is on the base
+        # node (where switching roots silently reused stale results). On the
+        # exact-path replay path precomputed_root is absent (recipe source is the
+        # staging copy named by run_spec_json), so this is a no-op there.
+        "precomputed_root": None,
+    }
+
+    # Drop precomputed_root from the inherited perf params: it is promoted to
+    # algo identity above (P1-21) and must not live in both.
+    perf_params = {
+        k: v
+        for k, v in MaterializeHelmRunDockerNode.perf_params.items()
+        if k != "precomputed_root"
     }
 
 

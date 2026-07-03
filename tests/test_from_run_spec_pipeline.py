@@ -45,16 +45,25 @@ def test_from_spec_node_swaps_executable_and_adds_deployment_param():
     assert node.name == "helm"
     assert node.primary_out_key == "done_fname"
     assert node.out_paths == MaterializeHelmRunDockerNode.out_paths
-    # The from-spec node extends the run-entry node's algo identity with two
-    # fields: model_deployment (the optional deployment-rewrite target, default
-    # None => pure by-name; from-spec-deployment-rewrite-plan.md Change 3) and
-    # run_spec_json (the materialized exact-path spec this run replays; default
-    # None on the discovery path). See run-from-relative-path-plan.md §4.3.
+    # The from-spec node extends the run-entry node's algo identity with:
+    # model_deployment (the optional deployment-rewrite target, default None =>
+    # pure by-name; from-spec-deployment-rewrite-plan.md Change 3), run_spec_json
+    # (the materialized exact-path spec this run replays; default None on the
+    # discovery path), and precomputed_root (P1-21: the corpus dir supplying the
+    # official run_spec.json in discovery mode — recipe identity, promoted off
+    # the base node's identity-neutral perf param). See
+    # run-from-relative-path-plan.md §4.3.
     assert node.algo_params == {
         **MaterializeHelmRunDockerNode.algo_params,
         "model_deployment": None,
         "run_spec_json": None,
+        "precomputed_root": None,
     }
+    # P1-21: precomputed_root is algo identity here and must NOT also live in
+    # perf (where it was identity-neutral and reused stale results across roots).
+    assert "precomputed_root" in node.algo_params
+    assert "precomputed_root" not in node.perf_params
+    assert "precomputed_root" in MaterializeHelmRunDockerNode.perf_params
     # model is never an algo param — the model identity always replays verbatim.
     assert "model" not in node.algo_params
     assert node.algo_params["model_deployment"] is None
