@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+
+from loguru import logger
+
 from eval_audit.infra.report_layout import (
     experiments_analysis_root,
     legacy_repo_publication_root,
@@ -29,6 +32,7 @@ def _load_all_repro_rows(
     extra_analysis_roots: list[Path] | None = None,
     *,
     skip_canonical_scan: bool = False,
+    unreadable_out: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     # Scan the canonical store location plus the publication-side and
     # legacy-repo symlink trees so experiments that haven't been re-run
@@ -65,10 +69,16 @@ def _load_all_repro_rows(
         ]
     )
     deduped: dict[tuple[str | None, str | None], dict[str, Any]] = {}
+    unreadable: list[str] = []
     for report_json in report_jsons:
         try:
             bundle = load_core_report_bundle(report_json)
-        except Exception:
+        except Exception as ex:
+            # P1-10: a corrupt/unreadable bundle used to be silently skipped, so
+            # its run reported as "completed_not_yet_analyzed" with no warning
+            # anywhere. Log it and surface the count to the caller.
+            logger.warning(f"Unreadable core report bundle skipped: {report_json} ({ex!r})")
+            unreadable.append(str(report_json))
             continue
         report = bundle["report"]
         packet = bundle["packet"]
@@ -168,4 +178,11 @@ def _load_all_repro_rows(
             ),
         }
         deduped[(experiment_name, run_entry, row["packet_id"] or row["report_dir"])] = row
+    if unreadable:
+        logger.warning(
+            f"{len(unreadable)} core report bundle(s) were unreadable and excluded "
+            "from the summary; see per-file warnings above."
+        )
+        if unreadable_out is not None:
+            unreadable_out.extend(unreadable)
     return list(deduped.values())

@@ -286,6 +286,33 @@ def test_tol010_sankey_buckets_on_the_0p01_curve_point_not_0p1(tmp_path, monkeyp
     assert _bucket_agreement(0.30) != _bucket_agreement(0.99)
 
 
+def test_unreadable_core_report_bundle_is_surfaced_not_silent(tmp_path, monkeypatch):
+    """P1-10: a corrupt core_metric_report.json must be counted + reported via
+    the unreadable_out channel, not silently skipped (which left its run
+    reporting as 'completed_not_yet_analyzed' with no warning)."""
+    canonical_root = tmp_path / "audit_store" / "analysis" / "experiments"
+    good = canonical_root / "exp-a" / "core-reports" / "core-metrics-good"
+    bad = canonical_root / "exp-a" / "core-reports" / "core-metrics-bad"
+    _write_core_report_packet(good, experiment_name="exp-a", run_entry="bench:model=good", single_run=False)
+    _write_core_report_packet(bad, experiment_name="exp-a", run_entry="bench:model=bad", single_run=False)
+    # Corrupt the bad bundle's report JSON.
+    (bad / "core_metric_report.json").write_text("{ this is not valid json ")
+
+    from eval_audit.reports.summary import loading as summary_loading
+
+    monkeypatch.setattr(summary_loading, "experiments_analysis_root", lambda: canonical_root)
+    monkeypatch.setattr(summary_loading, "publication_experiments_root", lambda: tmp_path / "pub")
+    monkeypatch.setattr(summary_loading, "legacy_repo_publication_root", lambda: tmp_path / "legacy")
+
+    unreadable: list[str] = []
+    rows = build_reports_summary._load_all_repro_rows(unreadable_out=unreadable)
+
+    assert len(rows) == 1  # only the good packet
+    assert len(unreadable) == 1
+    assert unreadable[0].endswith("core_metric_report.json")
+    assert "core-metrics-bad" in unreadable[0]
+
+
 def test_sample_artifact_lookup_is_derived_from_packet_comparison_ids(tmp_path):
     report_dir = tmp_path / "report"
     _write_core_report_packet(report_dir, experiment_name="exp-a", run_entry="bench:model=a", single_run=False)

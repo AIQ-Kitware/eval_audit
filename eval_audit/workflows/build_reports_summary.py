@@ -269,6 +269,7 @@ def _render_scope_summary(
     max_items_per_breakdown: int,
     include_visuals: bool = True,
     top_level_summary_root: Path | None = None,
+    unreadable_reports: list[str] | None = None,
 ) -> None:
     """Render a summary tree under ``summary_root``.
 
@@ -1004,6 +1005,12 @@ def _render_scope_summary(
         "n_completed": n_completed,
         "n_failed": n_failed,
         "n_analyzed": n_analyzed,
+        # P1-10: corrupt/unreadable core_metric_report.json bundles are excluded
+        # from the analyzed set; surface how many + which, so a silent drop in
+        # n_analyzed (runs falling back to "completed_not_yet_analyzed") is
+        # visible rather than mysterious.
+        "n_unreadable_reports": len(unreadable_reports or []),
+        "unreadable_reports": list(unreadable_reports or []),
         "breakdown_dims": breakdown_dims,
         "operational_sankey": operational_art,
         "filter_to_attempt_sankey": filter_to_attempt_art,
@@ -1252,9 +1259,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     _raise_fd_limit()  # Note: this probably is not necessary, as fd limits are usually due to a VM issue.
     configure_plotly_chrome()
+    unreadable_reports: list[str] = []
     all_repro_rows = _load_all_repro_rows(
         extra_analysis_roots=args.analysis_root,
         skip_canonical_scan=args.no_canonical_scan,
+        unreadable_out=unreadable_reports,  # P1-10: surfaced in the manifest below
     )
 
     if args.experiment_name:
@@ -1290,6 +1299,7 @@ def main(argv: list[str] | None = None) -> None:
         summary_root=scope_root,
         breakdown_dims=list(args.breakdown_dims),
         max_items_per_breakdown=args.max_items_per_breakdown,
+        unreadable_reports=unreadable_reports,
     )
     logger.info(f"Wrote executive summary root: {rich_link(scope_root)}")
 

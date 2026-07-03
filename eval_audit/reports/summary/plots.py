@@ -532,21 +532,27 @@ def _write_coverage_matrix_plot(
 ) -> dict[str, str | None]:
     """Heatmap: rows=model, cols=benchmark, color=best status for that cell."""
     # Status levels (higher = better)
+    # P1-9: analyzed-but-no-agreement-data (empty/unrecognized bucket — e.g. a
+    # join failure that produced no overlapping instances) gets its own level,
+    # so it is no longer painted as "analyzed: low agreement (<80%)" — a false
+    # reproducibility failure.
     STATUS_LEVEL = {
         "all_failed": 0,
         "completed_not_analyzed": 1,
-        "analyzed_low": 2,
-        "analyzed_moderate": 3,
-        "analyzed_high": 4,
-        "analyzed_exact": 5,
+        "analyzed_no_data": 2,
+        "analyzed_low": 3,
+        "analyzed_moderate": 4,
+        "analyzed_high": 5,
+        "analyzed_exact": 6,
     }
     STATUS_LABEL = {
         0: "all failed",
         1: "completed, not yet analyzed",
-        2: "analyzed: low agreement (<80%)",
-        3: "analyzed: moderate agreement (80-95%)",
-        4: "analyzed: high agreement (95%+)",
-        5: "analyzed: exact / near-exact",
+        2: "analyzed: no agreement data (join failure?)",
+        3: "analyzed: low agreement (<80%)",
+        4: "analyzed: moderate agreement (80-95%)",
+        5: "analyzed: high agreement (95%+)",
+        6: "analyzed: exact / near-exact",
     }
     repro_keyed = {
         (str(r.get("experiment_name")), str(r.get("run_entry"))): r
@@ -574,8 +580,13 @@ def _write_coverage_matrix_plot(
                     level = STATUS_LEVEL["analyzed_high"]
                 elif "moderate" in bucket:
                     level = STATUS_LEVEL["analyzed_moderate"]
-                else:
+                elif "low" in bucket or "zero" in bucket:
                     level = STATUS_LEVEL["analyzed_low"]
+                else:
+                    # P1-9: empty / not-an-agreement bucket (e.g.
+                    # completed_not_yet_analyzed, or a join failure that yielded
+                    # no measurable agreement) is NOT a low-agreement result.
+                    level = STATUS_LEVEL["analyzed_no_data"]
             else:
                 level = STATUS_LEVEL["completed_not_analyzed"]
         else:
@@ -639,14 +650,16 @@ def _write_coverage_matrix_plot(
             configure_plotly_chrome()
             import plotly.graph_objects as go
 
+            # 8 stops over z in [-1, 6] (P1-9 added the analyzed_no_data level).
             colorscale = [
-                [0.0 / 6, "#f0f0f0"],   # -1 not attempted (grey)
-                [1.0 / 6, "#d62728"],    # 0 all_failed (red)
-                [2.0 / 6, "#ffdd57"],    # 1 completed not analyzed (yellow)
-                [3.0 / 6, "#ff7f0e"],    # 2 analyzed low (orange)
-                [4.0 / 6, "#aec7e8"],    # 3 analyzed moderate (light blue)
-                [5.0 / 6, "#1f77b4"],    # 4 analyzed high (blue)
-                [6.0 / 6, "#2ca02c"],    # 5 analyzed exact (green)
+                [0.0 / 7, "#f0f0f0"],    # -1 not attempted (grey)
+                [1.0 / 7, "#d62728"],    # 0 all_failed (red)
+                [2.0 / 7, "#ffdd57"],    # 1 completed not analyzed (yellow)
+                [3.0 / 7, "#9edae5"],    # 2 analyzed no agreement data (pale cyan)
+                [4.0 / 7, "#ff7f0e"],    # 3 analyzed low (orange)
+                [5.0 / 7, "#aec7e8"],    # 4 analyzed moderate (light blue)
+                [6.0 / 7, "#1f77b4"],    # 5 analyzed high (blue)
+                [7.0 / 7, "#2ca02c"],    # 6 analyzed exact (green)
             ]
             fig = go.Figure(go.Heatmap(
                 z=matrix,
@@ -656,14 +669,15 @@ def _write_coverage_matrix_plot(
                 hovertemplate="%{y} × %{x}<br>%{text}<extra></extra>",
                 colorscale=colorscale,
                 zmin=-1,
-                zmax=5,
+                zmax=6,
                 colorbar={
                     "title": "Status",
-                    "tickvals": [-1, 0, 1, 2, 3, 4, 5],
+                    "tickvals": [-1, 0, 1, 2, 3, 4, 5, 6],
                     "ticktext": [
                         "not attempted",
                         "all failed",
                         "completed (not analyzed)",
+                        "analyzed: no agreement data",
                         "analyzed: low agreement",
                         "analyzed: moderate",
                         "analyzed: high",
