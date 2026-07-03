@@ -265,6 +265,24 @@ def _artifact_has_aggregate(artifact_path: Path) -> bool:
     return False
 
 
+def _status_permits_use(status_path: Path) -> bool:
+    """True if there is no ``status.json`` (legacy layout) OR it records a
+    successful conversion.
+
+    P1-7: the cached and local resolvers accepted any layout with an aggregate
+    present, unlike the official resolver which gates on ``status == "ok"``. A
+    partially-failed conversion can leave an aggregate on disk with a non-ok
+    status; without this gate it is reused forever. An absent status.json is
+    treated as legacy-permitted (the aggregate-only check still applies).
+    """
+    if not status_path.exists():
+        return True
+    try:
+        return json.loads(status_path.read_text()).get("status") == "ok"
+    except Exception:
+        return False
+
+
 def _slugify(text: str, *, max_len: int = 96) -> str:
     slug = (
         str(text)
@@ -500,7 +518,9 @@ def resolve_local_eee_artifact(
     artifact_path = parent / "eee_output"
     status_path = parent / "status.json"
     provenance_path = parent / "provenance.json"
-    if _artifact_has_aggregate(artifact_path):
+    # P1-7: require a successful status.json (when present) — an aggregate left
+    # by a partially-failed conversion must not be accepted as "found".
+    if _artifact_has_aggregate(artifact_path) and _status_permits_use(status_path):
         return EeeArtifactResolution(
             artifact_path=artifact_path.resolve(),
             status="found",

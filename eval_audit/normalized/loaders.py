@@ -429,13 +429,20 @@ class HelmRawLoader(Loader):
         # call.
         from eval_audit.normalized.eee_artifacts import (
             _artifact_has_aggregate,
+            _status_permits_use,
             convert_helm_run_to_cached_eee,
             helm_raw_cache_parent,
         )
 
         cache_parent = helm_raw_cache_parent(run_path)
         cache_artifact = cache_parent / "eee_output"
-        if not _artifact_has_aggregate(cache_artifact):
+        # P1-7: a cache hit is only valid if a successful status.json permits it;
+        # a partially-failed prior conversion can leave an aggregate with a
+        # non-ok status, which was otherwise reused forever.
+        if not (
+            _artifact_has_aggregate(cache_artifact)
+            and _status_permits_use(cache_parent / "status.json")
+        ):
             resolution = convert_helm_run_to_cached_eee(
                 run_path,
                 source_kind=ref.source_kind.value if hasattr(ref.source_kind, "value") else str(ref.source_kind),
