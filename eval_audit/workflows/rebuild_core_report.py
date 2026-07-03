@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
 import shlex
@@ -37,16 +36,10 @@ from eval_audit.reports.core_packet import (
 from eval_audit.infra.profiling import profile
 
 
-def latest_index_csv(index_dpath: Path) -> Path:
-    cands = sorted(index_dpath.glob("audit_results_index_*.csv"), reverse=True)
-    if not cands:
-        raise FileNotFoundError(f"No local index csv files found in {index_dpath}")
-    return cands[0]
-
-
-def load_rows(index_fpath: Path) -> list[dict[str, Any]]:
-    with index_fpath.open(newline="") as file:
-        return [{k: ("" if v is None else v) for k, v in row.items()} for row in csv.DictReader(file)]
+# P0-2 / R-6: single source of truth for local-index resolution + loading.
+# Re-exported here so existing `from ...rebuild_core_report import
+# latest_index_csv` call sites (analyze_experiment) keep working.
+from eval_audit.infra.index_io import latest_index_csv, load_rows  # noqa: F401
 
 
 def latest_official_index_csv(index_dpath: Path) -> Path:

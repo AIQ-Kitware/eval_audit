@@ -6,7 +6,6 @@ relocation: function bodies are unchanged.
 """
 from __future__ import annotations
 
-import csv
 import json
 import os
 import resource
@@ -27,16 +26,10 @@ DEFAULT_BREAKDOWN_DIMS = [
 CANONICAL_AGREEMENT_TOL = 0.05
 
 
-def latest_index_csv(index_dpath: Path) -> Path:
-    cands = sorted(index_dpath.glob("audit_results_index_*.csv"), reverse=True)
-    if not cands:
-        raise FileNotFoundError(f"No index csv files found in {index_dpath}")
-    return cands[0]
-
-
-def load_rows(index_fpath: Path) -> list[dict[str, Any]]:
-    with index_fpath.open(newline="") as file:
-        return [{k: ("" if v is None else v) for k, v in row.items()} for row in csv.DictReader(file)]
+# P0-2 / R-6: single source of truth for local-index resolution + loading.
+# Re-exported here so existing `from ...summary.common import
+# latest_index_csv` call sites (build_reports_summary) keep working.
+from eval_audit.infra.index_io import latest_index_csv, load_rows  # noqa: F401
 
 
 def slugify(text: str) -> str:
