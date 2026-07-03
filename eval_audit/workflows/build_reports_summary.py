@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import datetime as datetime_mod
 import shlex
+import shutil
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -250,6 +251,20 @@ def _render_breakdown_scopes(
                     "summary_root": str(child_root),
                 }
             )
+        # P1-5: prune stale value dirs from a previous config (different
+        # top_values / max_items) so the advertised filesystem-first navigation
+        # never shows outdated slices as current.
+        current_value_slugs = {slugify(value) for value in top_values}
+        for child in sorted(dim_root.iterdir()):
+            if child.is_dir() and child.name not in current_value_slugs:
+                logger.info(f"Pruning stale breakdown value dir: {rich_link(child)}")
+                shutil.rmtree(child, ignore_errors=True)
+    # P1-5: prune whole by_<dim> trees for dimensions no longer requested.
+    current_dim_names = {f"by_{dim}" for dim in breakdown_dims}
+    for child in sorted(breakdowns_root.iterdir()):
+        if child.is_dir() and child.name.startswith("by_") and child.name not in current_dim_names:
+            logger.info(f"Pruning stale breakdown dimension dir: {rich_link(child)}")
+            shutil.rmtree(child, ignore_errors=True)
     manifest_fpath = breakdowns_root / "manifest.json"
     _write_json(manifest_rows, manifest_fpath)
     link_alias(manifest_fpath, breakdowns_root, "manifest.json")

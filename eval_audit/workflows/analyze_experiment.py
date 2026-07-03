@@ -321,10 +321,12 @@ def main(argv: list[str] | None = None) -> None:
     built_report_paths = []
     skipped_run_entries: list[dict[str, Any]] = []
     packets = planning_artifact.get("packets") or []
+    current_packet_dirs: set[Path] = set()
     for packet in packets:
         run_entry = packet.get("run_entry")
         packet_id = packet.get("packet_id")
         report_dpath = reports_dpath / f'core-metrics-{slugify_identifier(str(packet_id or run_entry))}'
+        current_packet_dirs.add(report_dpath)
         try:
             argv = [
                 '--packet-id', str(packet_id),
@@ -347,11 +349,30 @@ def main(argv: list[str] | None = None) -> None:
                 'packet_id': packet_id,
                 'run_entry': run_entry,
                 'reason': 'rebuild_failed',
-                'returncode': getattr(ex, 'returncode', None),
+                # P2: SystemExit carries its status on ``.code``, not
+                # ``.returncode`` (which is always None here).
+                'returncode': getattr(ex, 'returncode', None) or getattr(ex, 'code', None),
                 'error': str(ex),
             })
             continue
         built_report_paths.append(report_dpath / 'core_metric_report.json')
+
+    # P1-4: prune stale per-packet dirs from a previous plan. Stage 6 blindly
+    # globs core-reports/core-metrics-*/; dirs left by an earlier planning
+    # artifact would inflate n_analyzed, double-count sankey rows, and race
+    # last-wins in repro_keyed. Remove any core-metrics-* dir not in the current
+    # packet set.
+    if reports_dpath.is_dir():
+        import shutil as _shutil
+        for existing in sorted(reports_dpath.glob('core-metrics-*')):
+            if not existing.is_dir():
+                continue
+            if existing not in current_packet_dirs:
+                logger.info(
+                    f"Pruning stale core-report packet dir not in the current plan: "
+                    f"{rich_link(existing)}"
+                )
+                _shutil.rmtree(existing, ignore_errors=True)
 
     summary_rows = []
     for report_json in built_report_paths:
