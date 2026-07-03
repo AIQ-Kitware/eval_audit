@@ -449,12 +449,14 @@ def _write_reproduce_sh(
     scope_value: str | None,
     index_path: Path | None = None,
     filter_inventory_json: Path | None = None,
+    extra_args: str = "",
 ) -> None:
     cmd = _build_summary_cmd(
         scope_kind=scope_kind,
         scope_value=scope_value,
         index_path=index_path,
         filter_inventory_json=filter_inventory_json,
+        extra_args=extra_args,
     )
     lines = [
         "#!/usr/bin/env bash",

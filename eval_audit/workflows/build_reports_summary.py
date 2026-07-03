@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as datetime_mod
+import shlex
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -270,6 +271,7 @@ def _render_scope_summary(
     include_visuals: bool = True,
     top_level_summary_root: Path | None = None,
     unreadable_reports: list[str] | None = None,
+    reproduce_extra_args: str = "",
 ) -> None:
     """Render a summary tree under ``summary_root``.
 
@@ -1056,6 +1058,7 @@ def _render_scope_summary(
             scope_value,
             index_path=index_fpath,
             filter_inventory_json=filter_inventory_json,
+            extra_args=reproduce_extra_args,
         )
         redraw_plots_fpath = level_001 / "redraw_plots.sh"
         _write_redraw_plots_sh(
@@ -1283,11 +1286,32 @@ def main(argv: list[str] | None = None) -> None:
         Path(args.summary_root).expanduser().resolve(),
         _scope_slug(scope_kind, scope_value),
     )
-    filter_inventory_path_for_repro = (
-        filter_inventory_json
-        if filter_inventory_json is not None
-        else (_default_filter_inventory_json() if _default_filter_inventory_json().exists() else None)
-    )
+    # P1-20: when --no-filter-inventory was passed, reproduce.sh must NOT carry
+    # a --filter-inventory-json (the old default fallback re-included the
+    # inventory the operator explicitly excluded, contradicting the flag below).
+    if args.no_filter_inventory:
+        filter_inventory_path_for_repro = None
+    else:
+        filter_inventory_path_for_repro = (
+            filter_inventory_json
+            if filter_inventory_json is not None
+            else (_default_filter_inventory_json() if _default_filter_inventory_json().exists() else None)
+        )
+    # P1-20: thread the non-default invocation flags into reproduce.sh so a
+    # from-eee/virtual build's script regenerates THE SAME report (its scoped
+    # analysis root, excluded inventory, custom summary root) rather than a
+    # different report at the default root. Canonical (all-results) builds set
+    # none of these, so their reproduce.sh is unchanged.
+    _repro_extra: list[str] = []
+    if args.no_filter_inventory:
+        _repro_extra.append("--no-filter-inventory")
+    if args.no_canonical_scan:
+        _repro_extra.append("--no-canonical-scan")
+    for _root in (args.analysis_root or []):
+        _repro_extra += ["--analysis-root", shlex.quote(str(Path(_root).expanduser().resolve()))]
+    if Path(args.summary_root).expanduser().resolve() != aggregate_summary_reports_root().resolve():
+        _repro_extra += ["--summary-root", shlex.quote(str(Path(args.summary_root).expanduser().resolve()))]
+    reproduce_extra_args = " ".join(_repro_extra)
     _render_scope_summary(
         scope_kind=scope_kind,
         scope_value=scope_value,
@@ -1300,6 +1324,7 @@ def main(argv: list[str] | None = None) -> None:
         breakdown_dims=list(args.breakdown_dims),
         max_items_per_breakdown=args.max_items_per_breakdown,
         unreadable_reports=unreadable_reports,
+        reproduce_extra_args=reproduce_extra_args,
     )
     logger.info(f"Wrote executive summary root: {rich_link(scope_root)}")
 
