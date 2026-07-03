@@ -1127,13 +1127,20 @@ class HelmRunDiff(ub.NiceRepr):
             metric_class, _ = helm_metrics.classify_metric(metric)
             gkey = (metric_class, metric)
 
-            # Determine perturbed vs unperturbed (best-effort)
-            perturbed = False
-            if hasattr(k, 'perturbation_id'):
-                perturbed = getattr(k, 'perturbation_id', None) is not None
+            # Determine perturbed vs unperturbed. P0-6: the perturbation id is
+            # nested under ``k.variant.perturbation_id`` (instance-level) or
+            # carried as ``k.stat_perturbation_id`` (stat-level) — see
+            # InstanceStatKey.is_perturbed. The old ``hasattr(k,
+            # 'perturbation_id')`` was always False on the dataclass, so every
+            # row silently bucketed 'unperturbed' and agree_ratio_perturbed was
+            # always None.
+            if hasattr(k, 'is_perturbed'):
+                perturbed = bool(k.is_perturbed)
             elif isinstance(k, tuple) and len(k) >= 3:
                 # historical tuple layout: (instance_id, tti, perturbation_id, ...)
                 perturbed = k[2] is not None
+            else:
+                perturbed = False
             variant = 'perturbed' if perturbed else 'unperturbed'
             var_stats[variant]['comparable'] += 1
 

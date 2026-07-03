@@ -89,6 +89,20 @@ class InstanceStatKey:
     sub_split: str | None
     stat_perturbation_id: str | None
 
+    @property
+    def is_perturbed(self) -> bool:
+        """True if this row is a perturbed variant.
+
+        The perturbation may be instance-level (``variant.perturbation_id``)
+        or stat-level (``stat_perturbation_id``). Consumers must not check a
+        bare ``perturbation_id`` attribute — it does not exist on this key
+        (P0-6).
+        """
+        return (
+            self.variant.perturbation_id is not None
+            or self.stat_perturbation_id is not None
+        )
+
     def as_tuple(self) -> tuple[Any, ...]:
         # legacy 7-tuple format
         return (
