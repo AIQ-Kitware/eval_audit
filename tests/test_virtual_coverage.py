@@ -156,6 +156,62 @@ def test_recipe_identical_join_via_run_spec_hash(tmp_path):
     assert not m2.matched_recipe_identical
 
 
+def test_coverage_joins_survive_run_entry_token_order_drift(tmp_path):
+    """P0-4: target<->local<->analyzed joins must key on the canonical logical
+    key. A local whose run_entry drifts from the official form only by token
+    order / a groups= token used to count as 'missing (no local repro)' and its
+    analyzed packet (keyed by the sorted canonical run_entry) matched neither
+    side. All three describe the same logical run and must join."""
+    target = {
+        "model": "eleutherai/pythia-6.9b",
+        "benchmark": "mmlu",
+        "suite_version": "v0.2.4",
+        "public_track": "classic",
+        # token order: model, subject, method
+        "logical_run_key": "mmlu:model=eleutherai_pythia-6.9b,subject=foo,method=multiple_choice_joint",
+        "run_name": "mmlu:model=eleutherai_pythia-6.9b,subject=foo,method=multiple_choice_joint",
+    }
+    local_run = tmp_path / "local-run"
+    local_run.mkdir()
+    local = {
+        "model": "eleutherai/pythia-6.9b",
+        "benchmark": "mmlu",
+        # token order: method, subject, model + a non-semantic groups= token
+        "run_entry": "mmlu:method=multiple_choice_joint,subject=foo,model=eleutherai_pythia-6.9b,groups=mmlu_foo",
+        "logical_run_key": "mmlu:method=multiple_choice_joint,subject=foo,model=eleutherai_pythia-6.9b,groups=mmlu_foo",
+        "run_path": str(local_run),
+        "run_dir": str(local_run),
+        "suite": "audit-x",
+        "experiment_name": "virt",
+    }
+
+    analysis_root = tmp_path / "analysis"
+    packet_dpath = analysis_root / "core-reports" / "core-metrics-drifted"
+    packet_dpath.mkdir(parents=True)
+    # Analyzed packet keyed by yet another token order (the canonical-merged form).
+    (packet_dpath / "components_manifest.json").write_text(
+        json.dumps(
+            {
+                "run_entry": "mmlu:subject=foo,method=multiple_choice_joint,model=eleutherai_pythia-6.9b",
+            }
+        )
+    )
+
+    coverage = compute_coverage(
+        name="virt",
+        description="test",
+        target_rows=[target],
+        local_rows=[local],
+        analysis_root=analysis_root,
+    )
+
+    assert coverage.n_target == 1
+    assert coverage.n_reproduced_logical == 1
+    assert coverage.n_completed == 1
+    assert coverage.n_analyzed == 1
+    assert coverage.missing == []
+
+
 def test_coverage_artifacts_written_with_latest_aliases(tmp_path, monkeypatch):
     # Skip the plotly+chrome render step: this test asserts on the
     # non-plotly artifacts (summary.txt / coverage.json / missing.csv);

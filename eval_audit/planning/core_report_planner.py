@@ -17,7 +17,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from eval_audit.helm.run_entries import canonical_logical_key
+from eval_audit.helm.run_entries import canonical_logical_key, logical_key_set
 from eval_audit.indexing.schema import (
     component_id_for_local,
     extract_judge_models,
@@ -981,11 +981,21 @@ def build_packet_intents(
     run_entry: str | None = None,
 ) -> list[dict[str, Any]]:
     filtered = []
+    # P0-3: match the --run-entry filter on canonical key SETS, not raw string
+    # equality. The prefilter and grouping already canonicalize; a run-entry
+    # scoped rebuild where the official spec name differs only by token order or
+    # a groups=/model_deployment= token would otherwise silently drop the
+    # official component and emit a missing_official_component packet (a25aac9).
+    wanted_keys = logical_key_set(run_entry) if run_entry is not None else set()
     for component in components:
         if experiment_name is not None and component.source_kind == "local" and component.experiment_name != experiment_name:
             continue
-        if run_entry is not None and component.logical_run_key != run_entry and component.run_entry != run_entry:
-            continue
+        if run_entry is not None:
+            have_keys = logical_key_set(
+                component.logical_run_key, component.run_entry, component.run_spec_name
+            )
+            if not (wanted_keys & have_keys):
+                continue
         filtered.append(component)
     if experiment_name is not None and run_entry is None:
         scoped_local_group_keys = {

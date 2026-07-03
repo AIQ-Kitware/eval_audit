@@ -123,6 +123,55 @@ def test_canonicalization_diagnostic_surfaces_original_keys():
     assert not any("canonicalization_stripped_groups" in w for w in packet["warnings"])
 
 
+def test_run_entry_filter_matches_canonical_keys_not_raw_strings():
+    """P0-3: a --run-entry scoped rebuild must keep the official even when its
+    spec name differs from the requested run_entry only by token order / a
+    groups= token. Old code compared raw strings, dropping the official and
+    emitting missing_official_component."""
+    local = _component(source_kind="local", component_id="local-aa", logical_run_key=LOCAL_KEY)
+    official = _component(source_kind="official", component_id="official-aa", logical_run_key=OFFICIAL_KEY)
+
+    # Request by the LOCAL key form; the official's raw key differs (order +
+    # groups=) yet is the same logical run.
+    packets = core_report_planner.build_packet_intents(
+        [local, official], experiment_name="olmo-exp", run_entry=LOCAL_KEY
+    )
+
+    assert len(packets) == 1
+    packet = packets[0]
+    assert {component["source_kind"] for component in packet["components"]} == {"local", "official"}
+    comparisons = _official_vs_local(packet)
+    assert comparisons
+    assert all(comparison["enabled"] for comparison in comparisons)
+    assert not any(
+        comparison.get("disabled_reason") == "missing_official_component"
+        for comparison in comparisons
+    )
+
+
+def test_run_entry_filter_still_excludes_a_distinct_run():
+    """Negative control: the canonical-set match must not over-match a genuinely
+    different run (different subject)."""
+    local = _component(source_kind="local", component_id="local-aa", logical_run_key=LOCAL_KEY)
+    other_local = _component(
+        source_kind="local",
+        component_id="local-an",
+        logical_run_key="mmlu:subject=anatomy,method=multiple_choice_joint,eval_split=test,model=allenai_olmo-1.7-7b",
+    )
+
+    packets = core_report_planner.build_packet_intents(
+        [local, other_local], experiment_name="olmo-exp", run_entry=LOCAL_KEY
+    )
+
+    component_ids = {
+        component["component_id"]
+        for packet in packets
+        for component in packet["components"]
+    }
+    assert "local-aa" in component_ids
+    assert "local-an" not in component_ids
+
+
 # --- Negative controls: distinct runs must NOT merge -------------------------
 
 

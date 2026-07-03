@@ -35,6 +35,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from eval_audit.helm.run_entries import canonical_logical_key
 from eval_audit.utils.hashers import stable_hash36
 from eval_audit.infra.fs_publish import (
     safe_unlink,
@@ -85,7 +86,17 @@ def _row_dim(row: dict[str, Any], dim: str, *, source_kind: str) -> str:
 
 
 def _logical_run_key(row: dict[str, Any]) -> str:
-    return str(row.get("logical_run_key") or row.get("run_entry") or row.get("run_name") or "").strip()
+    """Canonical logical key for a row (P0-4).
+
+    Reduce to the order-insensitive ``canonical_logical_key`` form so the
+    target<->local<->analyzed joins survive run_entry token-order drift and
+    stray ``groups=``/``model_deployment=`` tokens (the endemic a25aac9
+    pattern). Both sides of every join in this module route through here, so
+    keying is consistent. Falls back to the raw string when the key has no
+    ``benchmark:`` prefix to canonicalize.
+    """
+    raw = str(row.get("logical_run_key") or row.get("run_entry") or row.get("run_name") or "").strip()
+    return canonical_logical_key(raw) or raw
 
 
 # HELM's run_spec.json schema evolved across releases. These adapter_spec
@@ -245,9 +256,13 @@ def _analyzed_logical_keys(analysis_root: Path) -> tuple[set[str], dict[str, lis
             data = json.loads(components_fpath.read_text())
         except Exception:
             continue
-        run_entry = (data.get("run_entry") or data.get("logical_run_key") or "").strip()
-        if not run_entry:
+        raw_entry = (data.get("run_entry") or data.get("logical_run_key") or "").strip()
+        if not raw_entry:
             continue
+        # P0-4: key the analyzed set by the same canonical form the join uses,
+        # so a canonical-merged packet (whose run_entry is the sorted canonical
+        # key) and a token-order-drifted local both resolve here.
+        run_entry = canonical_logical_key(raw_entry) or raw_entry
         analyzed.add(run_entry)
         report_dpath = components_fpath.parent
         if len(examples[run_entry]) < 3:
@@ -346,7 +361,8 @@ def compute_coverage(
         # (slash); the planner's logical_run_key uses underscored form. Try both.
         if not analyzed_dirs:
             for r in local_logical_matches:
-                r_entry = (r.get("run_entry") or "").strip()
+                raw_entry = (r.get("run_entry") or "").strip()
+                r_entry = canonical_logical_key(raw_entry) or raw_entry
                 if r_entry and r_entry in analyzed_keys:
                     analyzed_dirs = analyzed_examples.get(r_entry, [])
                     if analyzed_dirs:

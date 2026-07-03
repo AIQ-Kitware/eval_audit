@@ -138,6 +138,39 @@ def canonical_logical_key(
     return format_run_name_from_kv(bench, {k: kv[k] for k in sorted(kv)})
 
 
+def logical_key_set(*keys: str | None) -> set[str]:
+    """Canonical-aware set of match keys for one or more raw logical run keys.
+
+    The single "what keys identify this run" API (minimal R-1). Every raw key
+    contributes its verbatim form, common separator permutations (``/`` <->
+    ``_`` <-> ``-``, since indexes sanitize inconsistently), and its
+    order-insensitive :func:`canonical_logical_key` form (which also drops
+    ``groups=``/``model_deployment=`` bookkeeping tokens). Two runs describe
+    the same logical run iff their key sets intersect — the correct, symmetric
+    test for matching/joining across index shapes where run_entry token order
+    or a stray ``groups=`` token would otherwise defeat raw-string equality
+    (the a25aac9 failure shape).
+    """
+    out: set[str] = set()
+    for key in keys:
+        if not key:
+            continue
+        out.add(key)
+        if "/" in key:
+            out.add(key.replace("/", "_"))
+            out.add(key.replace("/", "-"))
+        if "_" in key:
+            out.add(key.replace("_", "/"))
+            out.add(key.replace("_", "-"))
+        if "-" in key:
+            out.add(key.replace("-", "/"))
+            out.add(key.replace("-", "_"))
+        canonical = canonical_logical_key(key)
+        if canonical:
+            out.add(canonical)
+    return out
+
+
 def run_dir_matches_requested(run_dir_name: str, requested_desc: str) -> bool:
     req_bench, req_kv = parse_run_name_to_kv(requested_desc)
     cand_bench, cand_kv = parse_run_name_to_kv(run_dir_name)
