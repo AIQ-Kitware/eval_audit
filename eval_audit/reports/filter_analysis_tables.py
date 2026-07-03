@@ -482,8 +482,12 @@ def build_filter_reason_sankey_rows(inventory_rows: list[dict[str, Any]]) -> lis
             continue
         if not reasons:
             reasons = [UNCLASSIFIED_EXCLUSION]
-        for reason in reasons:
-            rows.append({'filter_reason': reason, 'outcome': 'excluded'})
+        # P1-12: one row per EXCLUDED RUN (its primary/first reason), not one
+        # per (run, reason). Emitting a row per reason inflated the excluded
+        # flow past the run count, so the sankey root label rendered
+        # "n=X n=Y" with Y>X (flow conservation broken). A run has exactly one
+        # outcome; attribute it to its primary reason.
+        rows.append({'filter_reason': reasons[0], 'outcome': 'excluded'})
     return rows
 
 
