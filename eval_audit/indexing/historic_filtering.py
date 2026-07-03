@@ -307,7 +307,10 @@ def build_incomplete_inventory_row(run_dir: Path) -> dict[str, Any]:
     benchmark, kv = parse_run_name_to_kv(run_name)
     model = kv.get('model')
     if isinstance(model, str):
-        model = model.replace('_', '/')
+        # P2: restore only the org separator (first underscore) — a model id is
+        # ``org/name`` sanitized to ``org_name``; replace-all corrupted names
+        # that themselves contain underscores (e.g. ``meta_llama_3``).
+        model = model.replace('_', '/', 1)
     dataset_key = None
     for key in ['dataset', 'subset', 'subject', 'task', 'demographic', 'domain', 'language_pair', 'lang', 'mode', 'difficulty', 'k', 'level']:
         if key in kv:
@@ -427,5 +430,13 @@ def build_filter_inventory_rows(
             'local_registry_source': reg_entry.source if reg_entry else None,
         })
     inventory_rows.extend(incomplete_rows)
-    inventory_rows.sort(key=lambda row: (row['selection_status'], str(row.get('model')), row['run_spec_name']))
+    # P2: add run_dir as a final tiebreaker so rows that share
+    # (selection_status, model, run_spec_name) — common among incomplete rows —
+    # sort deterministically instead of preserving the unsorted walk order.
+    inventory_rows.sort(key=lambda row: (
+        row['selection_status'],
+        str(row.get('model')),
+        row['run_spec_name'],
+        str(row.get('run_dir') or ''),
+    ))
     return inventory_rows

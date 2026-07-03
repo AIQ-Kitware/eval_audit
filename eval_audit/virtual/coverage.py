@@ -251,7 +251,11 @@ def _analyzed_logical_keys(analysis_root: Path) -> tuple[set[str], dict[str, lis
     examples: dict[str, list[str]] = defaultdict(list)
     if not analysis_root.is_dir():
         return analyzed, examples
-    for components_fpath in analysis_root.rglob("core-reports/*/components_manifest.json"):
+    # P2: sort rglob output so example_analyzed_report_dirs (capped at 3) is
+    # deterministic rather than filesystem-order dependent.
+    for components_fpath in sorted(
+        analysis_root.rglob("core-reports/*/components_manifest.json"), key=str
+    ):
         try:
             data = json.loads(components_fpath.read_text())
         except Exception:

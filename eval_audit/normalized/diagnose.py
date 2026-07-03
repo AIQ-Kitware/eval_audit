@@ -28,6 +28,7 @@ never changes a comparability fact — but the diagnosis re-labels:
 
 from __future__ import annotations
 
+import json
 import math
 from typing import Any, Mapping, Sequence
 
@@ -47,7 +48,11 @@ def _json_compatible(obj: Any) -> Any:
         return obj if math.isfinite(obj) else None
     if isinstance(obj, dict):
         return {str(k): _json_compatible(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple, set)):
+    if isinstance(obj, set):
+        # IM-12: sets have no stable iteration order (PYTHONHASHSEED-dependent);
+        # sort by the serialized value so output is deterministic.
+        return sorted((_json_compatible(v) for v in obj), key=lambda x: json.dumps(x, sort_keys=True, default=str))
+    if isinstance(obj, (list, tuple)):
         return [_json_compatible(v) for v in obj]
     try:
         if hasattr(obj, 'as_tuple') and callable(getattr(obj, 'as_tuple')):

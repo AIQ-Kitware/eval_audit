@@ -132,7 +132,10 @@ def _classify(entry: str, runs: list[_Run]) -> _EntryResult:
     ]
     if not cands:
         return _EntryResult(entry, "NO_MATCH", [], None, None)
-    best = min(cands, key=lambda r: match_score(r.name, entry))
+    # P2: break match_score ties on the run name so the chosen "best" (and the
+    # AMBIGUOUS ordering) is deterministic, not dependent on the unsorted walk
+    # order this tool's docstring promises to avoid.
+    best = min(cands, key=lambda r: (match_score(r.name, entry), r.name))
     status = "RESOLVED" if len(cands) == 1 else "AMBIGUOUS"
     return _EntryResult(entry, status, cands, best, _official_deployment(best.path))
 
