@@ -16,6 +16,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+pytest.importorskip("kwdagger")
+
 from eval_audit.pipelines.helm_docker_pipeline import helm_single_run_docker_pipeline
 from eval_audit.pipelines.lease_bracket import (
     render_lease_setup,

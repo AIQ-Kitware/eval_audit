@@ -14,7 +14,10 @@ import json
 import tempfile
 from pathlib import Path
 
+import pytest
 import yaml
+
+pytest.importorskip("kwdagger")
 
 from kwdagger.utils.util_param_grid import expand_param_grid
 

@@ -22,6 +22,10 @@ see ``submodules/kwdagger/kwdagger/schedule.py``), and read ``submatrices`` from
 """
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("kwdagger")
+
 from kwdagger.utils.util_param_grid import expand_param_grid
 
 

@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("kwdagger")
+
 from eval_audit.integrations import kwdagger_bridge
 from eval_audit.integrations.docker_provenance import (
     ResolvedImage,

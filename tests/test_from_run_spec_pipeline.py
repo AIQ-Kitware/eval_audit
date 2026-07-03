@@ -14,6 +14,8 @@ from types import SimpleNamespace
 
 import pytest
 
+pytest.importorskip("kwdagger")
+
 from eval_audit.integrations import kwdagger_bridge
 from eval_audit.manifests import builders
 from eval_audit.manifests.models import ManifestSpec
