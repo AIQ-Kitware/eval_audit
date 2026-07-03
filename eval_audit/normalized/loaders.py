@@ -208,10 +208,15 @@ class EeeArtifactLoader(Loader):
                 candidates = named
 
         # Pick the newest by retrieved_timestamp when multiple candidates remain.
-        candidates.sort(
-            key=lambda lp: float(lp[0].retrieved_timestamp or 0),
-            reverse=True,
-        )
+        # P2: a non-numeric timestamp used to raise an uncaught ValueError and
+        # fail the whole load; coerce defensively and treat unparseable as 0.
+        def _ts(lp: Any) -> float:
+            try:
+                return float(lp[0].retrieved_timestamp or 0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        candidates.sort(key=_ts, reverse=True)
         chosen_log, chosen_path = candidates[0]
 
         # Locate the matching samples.jsonl, if any.
@@ -502,7 +507,11 @@ class HelmRawLoader(Loader):
             component_id=ref.component_id,
             logical_run_key=ref.logical_run_key,
             display_name=ref.display_name,
-            extra=ref.extra,
+            # P2: merge the EEE loader's recorded provenance (run.ref.extra)
+            # over the original ref's extra — using ref.extra alone dropped the
+            # instance-source provenance the EEE load recorded, so degraded
+            # loads mislabelled their source as "helm".
+            extra={**(ref.extra or {}), **(run.ref.extra or {})},
         )
         raw_helm = _read_raw_helm_jsons(run_path)
         return NormalizedRun(
