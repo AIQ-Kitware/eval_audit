@@ -117,6 +117,15 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     setup_cli_logging()
 
+    # P2: --filter-inventory-json is only consumed by the aggregate summary
+    # build; warn if it was supplied without --build-summary so it isn't
+    # silently ignored.
+    if args.filter_inventory_json and not args.build_summary:
+        logger.warning(
+            "--filter-inventory-json is ignored without --build-summary "
+            "(it only feeds the aggregate summary build)."
+        )
+
     index_fpath = Path(args.index_fpath).expanduser().resolve()
 
     if args.all_from_index:
@@ -179,7 +188,18 @@ def main(argv: list[str] | None = None) -> None:
     print(flush=True)
     _print_summary_table(results, total_elapsed)
 
+    # P1-19: a per-experiment failure previously left the batch exiting 0 and
+    # still building the aggregate summary over the incomplete set with no
+    # signal. Warn before building over an incomplete set, and exit non-zero.
+    n_failed = sum(1 for r in results if not r["ok"])
+
     if args.build_summary:
+        if n_failed:
+            print(
+                f"\n[{_ts()}]  WARNING: {n_failed} of {len(results)} experiment(s) "
+                "failed; the aggregate summary will be built over an INCOMPLETE set.",
+                flush=True,
+            )
         print(f"\n[{_ts()}]  BEGIN build_reports_summary", flush=True)
         t0 = time.monotonic()
         cmd = ["--index-fpath", str(index_fpath)]
@@ -187,6 +207,9 @@ def main(argv: list[str] | None = None) -> None:
             cmd.extend(["--filter-inventory-json", args.filter_inventory_json])
         build_reports_summary.main(cmd)
         print(f"[{_ts()}]  END build_reports_summary ({_hms(time.monotonic() - t0)})", flush=True)
+
+    if n_failed:
+        raise SystemExit(f"{n_failed} of {len(results)} experiment(s) failed")
 
 
 if __name__ == "__main__":
