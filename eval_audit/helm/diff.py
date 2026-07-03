@@ -403,7 +403,7 @@ class HelmRunDiff(ub.NiceRepr):
             if spec_name_a == spec_name_b:
                 line_name = spec_name_a
             else:
-                line_name = '{spec_name_a} // {spec_name_b}'
+                line_name = f'{spec_name_a} // {spec_name_b}'
             writer(
                 f'{_format_bool(ok)} {self.a_name} vs {self.b_name} {line_name} '
                 f'spec={_format_bool(info["run_spec_dict_ok"])} '
@@ -1341,7 +1341,9 @@ class HelmRunDiff(ub.NiceRepr):
             }
 
         grouped_rows = []
-        for (metric_class, metric), items in sorted(by_group.items()):
+        # P2: None metric names TypeError under tuple comparison; sort on
+        # stringified group key.
+        for (metric_class, metric), items in sorted(by_group.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1]))):
             # P1-18: deterministic tie-break on serialized key.
             items = sorted(items, key=lambda r: (-float(r['abs_delta']), str(r.get('key'))))
             grouped_rows.append(
@@ -1478,7 +1480,9 @@ class HelmRunDiff(ub.NiceRepr):
                 group['mismatched'] += 1
 
         grouped_rows = []
-        for _, group in sorted(by_group.items()):
+        # P2: None metric names TypeError under tuple comparison; sort on
+        # stringified group key.
+        for _, group in sorted(by_group.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1]))):
             grouped_rows.append(
                 {
                     'metric_class': group['metric_class'],
