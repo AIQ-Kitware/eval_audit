@@ -450,7 +450,7 @@ def normalize_local_index_rows(
                 scenario_class=spec_fields.get("scenario_class") or _clean_optional_text(row.get("scenario_class")),
                 benchmark_group=spec_fields.get("benchmark_group") or _clean_optional_text(row.get("benchmark_group")),
                 model_deployment=spec_fields.get("model_deployment") or _clean_optional_text(row.get("model_deployment")),
-                max_eval_instances=_clean_optional_text(row.get("max_eval_instances")),
+                max_eval_instances=_clean_optional_text(spec_fields.get("max_eval_instances")) or _clean_optional_text(row.get("max_eval_instances")),
                 suite=_clean_optional_text(row.get("suite")),
                 public_track=None,
                 suite_version=None,
@@ -530,7 +530,7 @@ def normalize_official_index_rows(
                 scenario_class=spec_fields.get("scenario_class") or _clean_optional_text(row.get("scenario_class")),
                 benchmark_group=spec_fields.get("benchmark_group") or _clean_optional_text(row.get("benchmark_group")),
                 model_deployment=spec_fields.get("model_deployment") or _clean_optional_text(row.get("model_deployment")),
-                max_eval_instances=_clean_optional_text(row.get("max_eval_instances")),
+                max_eval_instances=_clean_optional_text(spec_fields.get("max_eval_instances")) or _clean_optional_text(row.get("max_eval_instances")),
                 suite=None,
                 public_track=_clean_optional_text(row.get("public_track")),
                 suite_version=_clean_optional_text(row.get("suite_version")),
@@ -612,9 +612,18 @@ def _unique_nonempty(values: list[str | None]) -> list[str]:
 
 
 def _fact_status(values: list[str | None]) -> tuple[str, list[str]]:
-    present = _unique_nonempty(values)
-    if not present:
-        return "unknown", []
+    # P1-1: agreement is only *verifiable* when at least two components carry a
+    # value. With one known value (all other components None), the old code
+    # returned "yes" — reporting partial knowledge as verified agreement, and
+    # spuriously emitting substitution_not_observed:judge. Count contributing
+    # (non-empty) values, not just unique ones.
+    contributing = [text for text in (_clean_optional_text(v) for v in values) if text]
+    present: list[str] = []
+    for text in contributing:
+        if text not in present:
+            present.append(text)
+    if len(contributing) < 2:
+        return "unknown", present
     if len(present) == 1:
         return "yes", present
     return "no", present

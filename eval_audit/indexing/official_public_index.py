@@ -114,7 +114,9 @@ def _scan_benchmark_output_dir(
                 'model_deployment': spec_fields['model_deployment'],
                 'scenario_class': spec_fields['scenario_class'],
                 'benchmark_group': benchmark_group,
-                'max_eval_instances': None,
+                # P1-2: carry the official cap (was hardcoded None) so
+                # same_max_eval_instances can detect drift vs a local cap.
+                'max_eval_instances': spec_fields.get('max_eval_instances'),
                 'is_structural_junk': is_structural_junk,
                 'index_generated_utc': index_generated_utc,
             })

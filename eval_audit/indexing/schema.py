@@ -247,6 +247,7 @@ def extract_run_spec_fields(run_spec_fpath: Path | str | None) -> dict[str, Any]
         'run_spec_hash': None,
         'has_run_spec_json': False,
         'judge_models': None,
+        'max_eval_instances': None,
     }
     if run_spec_fpath is None:
         return out
@@ -271,6 +272,11 @@ def extract_run_spec_fields(run_spec_fpath: Path | str | None) -> dict[str, Any]
     )
     out['scenario_class'] = (
         scenario.get('class_name') if isinstance(scenario, dict) else None
+    )
+    # P1-2: carry the official cap so same_max_eval_instances can detect a
+    # local cap (e.g. 10) diverging from the official (e.g. 1000).
+    out['max_eval_instances'] = (
+        adapter.get('max_eval_instances') if isinstance(adapter, dict) else None
     )
     out['benchmark_group'] = benchmark_group_from_run_name(run_spec_name)
     out['judge_models'] = extract_judge_models(spec)
