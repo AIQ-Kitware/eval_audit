@@ -69,7 +69,6 @@ def virtual_experiment_output(tmp_path_factory) -> Path:
     cmd = [
         sys.executable, "-m", "eval_audit.cli.build_virtual_experiment",
         "--manifest", str(manifest_fpath),
-        "--allow-single-repeat",
     ]
     subprocess.run(cmd, check=True, cwd=REPO_ROOT)
     return output_root

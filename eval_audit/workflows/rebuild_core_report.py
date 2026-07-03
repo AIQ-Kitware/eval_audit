@@ -353,7 +353,6 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--ensure-local-eee", action="store_true")
     parser.add_argument("--planner-artifact-fpath", default=None)
     parser.add_argument("--report-dpath", default=None)
-    parser.add_argument("--allow-single-repeat", action="store_true")
     parser.add_argument("--experiment-name", default=None)
     args = parser.parse_args(argv)
 
@@ -400,19 +399,21 @@ def main(argv: list[str] | None = None) -> None:
             official_index_fpath = str(Path(args.official_index_fpath).expanduser().resolve())
         else:
             official_index_fpath = str(latest_official_index_csv(Path(args.official_index_dpath).expanduser().resolve()))
-    if not args.allow_single_repeat:
-        local_components = [
-            component for component in (packet.get("components") or [])
-            if component.get("source_kind") == "local"
-        ]
-        if len(local_components) < 2 and not any(
-            comparison.get("comparison_kind") == "local_repeat" and comparison.get("enabled", True)
-            for comparison in (packet.get("comparisons") or [])
-        ):
-            logger.info(
-                "Rendering a single-run packet without local_repeat because the planner "
-                f"declared only {len(local_components)} local component(s)"
-            )
+    # D-3: the informational single-run notice is unconditional. The old
+    # --allow-single-repeat flag gated nothing (both branches rendered); it
+    # only silenced this log line, so it was deleted along with its plumbing.
+    local_components = [
+        component for component in (packet.get("components") or [])
+        if component.get("source_kind") == "local"
+    ]
+    if len(local_components) < 2 and not any(
+        comparison.get("comparison_kind") == "local_repeat" and comparison.get("enabled", True)
+        for comparison in (packet.get("comparisons") or [])
+    ):
+        logger.info(
+            "Rendering a single-run packet without local_repeat because the planner "
+            f"declared only {len(local_components)} local component(s)"
+        )
 
     components_manifest, comparisons_manifest = _render_manifests_from_planned_packet(
         packet,
@@ -562,7 +563,6 @@ def main(argv: list[str] | None = None) -> None:
         *(["--ensure-local-eee"] if planner_meta.get("ensure_local_eee") else []),
         *(["--planner-artifact-fpath", str(planner_meta["planner_artifact_fpath"])] if planner_meta.get("planner_artifact_fpath") else []),
         *(["--experiment-name", str(packet.get("experiment_name"))] if packet.get("experiment_name") else []),
-        *(["--allow-single-repeat"] if args.allow_single_repeat else []),
     ]
     reproduce_fpath = write_reproduce_script(
         report_dpath / "reproduce.sh",

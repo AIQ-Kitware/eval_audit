@@ -81,7 +81,6 @@ def main(argv: list[str] | None = None) -> None:
         required=True,
         help="Experiment to rebuild backlog for. Repeat for multiple experiments.",
     )
-    parser.add_argument("--allow-single-repeat", action="store_true")
     parser.add_argument("--build-summary", action="store_true")
     parser.add_argument("--filter-inventory-json", default=None)
     args = parser.parse_args(argv)
@@ -120,8 +119,6 @@ def main(argv: list[str] | None = None) -> None:
                 "--report-dpath",
                 str(report_dpath),
             ]
-            if args.allow_single_repeat:
-                cmd.append("--allow-single-repeat")
             print(f"REBUILD {experiment_name} :: {run_entry}", flush=True)
             try:
                 rebuild_core_report_main(cmd)

@@ -105,7 +105,6 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--index-fpath", required=True)
     parser.add_argument("--official-index-fpath", default=None)
-    parser.add_argument("--allow-single-repeat", action="store_true")
     parser.add_argument("--build-summary", action="store_true")
     parser.add_argument("--filter-inventory-json", default=None)
     parser.add_argument("--official-eee-root", default=None)
@@ -147,8 +146,6 @@ def main(argv: list[str] | None = None) -> None:
             "--experiment-name", experiment_name,
             "--index-fpath", str(index_fpath),
         ]
-        if args.allow_single_repeat:
-            cmd.append("--allow-single-repeat")
         if args.official_index_fpath:
             cmd.extend(["--official-index-fpath", str(args.official_index_fpath)])
         if args.official_eee_root:

@@ -9,8 +9,7 @@ Usage::
 
     eval-audit-build-virtual-experiment \
         --manifest configs/virtual-experiments/pythia-mmlu-stress.yaml \
-        --ensure-local-eee \
-        --allow-single-repeat
+        --ensure-local-eee
 """
 from __future__ import annotations
 
@@ -56,8 +55,6 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--manifest", required=True, help="Path to virtual-experiment YAML manifest.")
     parser.add_argument("--ensure-local-eee", action="store_true",
                         help="Convert local HELM runs to EEE on demand if canonical local artifacts are missing.")
-    parser.add_argument("--allow-single-repeat", action="store_true",
-                        help="Pass through to analyze_experiment so packets with one local component still build.")
     parser.add_argument("--official-eee-root", default=None)
     parser.add_argument("--local-eee-root", default=None)
     parser.add_argument("--compose-only", action="store_true",
@@ -180,8 +177,6 @@ def main(argv: list[str] | None = None) -> None:
         "--official-index-fpath", str(paths["official_index_fpath"]),
         "--analysis-dpath", str(analysis_dpath),
     ]
-    if args.allow_single_repeat:
-        analyze_argv.append("--allow-single-repeat")
     if args.ensure_local_eee:
         analyze_argv.append("--ensure-local-eee")
     if args.official_eee_root:

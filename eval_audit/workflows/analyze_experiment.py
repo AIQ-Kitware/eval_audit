@@ -239,7 +239,6 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument('--official-eee-root', default=None)
     parser.add_argument('--local-eee-root', default=None)
     parser.add_argument('--ensure-local-eee', action='store_true')
-    parser.add_argument('--allow-single-repeat', action='store_true')
     parser.add_argument(
         '--analysis-dpath',
         default=None,
@@ -342,8 +341,6 @@ def main(argv: list[str] | None = None) -> None:
                 argv.extend(['--local-eee-root', str(args.local_eee_root)])
             if args.ensure_local_eee:
                 argv.append('--ensure-local-eee')
-            if args.allow_single_repeat:
-                argv.append('--allow-single-repeat')
             rebuild_core_report_main(argv)
         except (Exception, SystemExit) as ex:
             skipped_run_entries.append({
@@ -571,7 +568,6 @@ def main(argv: list[str] | None = None) -> None:
         *( ['--official-eee-root', str(planning_artifact.get('official_eee_root'))] if planning_artifact.get('official_eee_root') else [] ),
         *( ['--local-eee-root', str(planning_artifact.get('local_eee_root'))] if planning_artifact.get('local_eee_root') else [] ),
         *( ['--ensure-local-eee'] if planning_artifact.get('ensure_local_eee') else [] ),
-        *( ['--allow-single-repeat'] if args.allow_single_repeat else [] ),
     ]
     reproduce_fpath = write_reproduce_script(out_dpath / 'reproduce.sh', [
         '#!/usr/bin/env bash',
