@@ -55,7 +55,7 @@
      ]
     },
     "same_suite_or_track_version": {
-     "status": "yes",
+     "status": "unknown",
      "values": [
       "eee_only_demo::v1"
      ]
@@ -64,7 +64,9 @@
   },
   "comparisons": [
    {
-    "caveats": [],
+    "caveats": [
+     "same_suite_or_track_version=unknown"
+    ],
     "comparability_facts": {
      "same_benchmark_family": {
       "status": "yes",
@@ -103,7 +105,7 @@
       ]
      },
      "same_suite_or_track_version": {
-      "status": "yes",
+      "status": "unknown",
       "values": [
        "eee_only_demo::v1"
       ]
@@ -119,7 +121,10 @@
     "enabled": true,
     "notes": "planner first-pass official-vs-local comparison",
     "reference_component_id": "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
-    "warnings": []
+    "warnings": [
+     "comparability_unknown:same_suite_or_track_version",
+     "keys_canonicalized:original_keys=['imdb:model=toy/m1-small']"
+    ]
    }
   ],
   "comparisons_manifest_path": "<OUT>/comparisons_manifest.json",
@@ -208,16 +213,23 @@
   "diagnostic_flags": [],
   "generated_utc": "<UTC>",
   "official_selection": {},
-  "packet_caveats": [],
-  "packet_id": "eee_only_pair--imdb-model-toy-m1-small",
-  "packet_warnings": [],
+  "packet_caveats": [
+   "same_suite_or_track_version=unknown"
+  ],
+  "packet_id": "eee_only_pair--imdb-model-toy_m1-small",
+  "packet_warnings": [
+   "comparability_unknown:same_suite_or_track_version",
+   "keys_canonicalized:original_keys=['imdb:model=toy/m1-small']"
+  ],
   "pairs": [
    {
     "artifact_formats": {
      "local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356": "eee",
      "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>": "eee"
     },
-    "caveats": [],
+    "caveats": [
+     "same_suite_or_track_version=unknown"
+    ],
     "comparability_facts": {
      "same_benchmark_family": {
       "status": "yes",
@@ -256,7 +268,7 @@
       ]
      },
      "same_suite_or_track_version": {
-      "status": "yes",
+      "status": "unknown",
       "values": [
        "eee_only_demo::v1"
       ]
@@ -411,6 +423,7 @@
       }
      ],
      "n_joined_pairs": 8,
+     "n_nonfinite_dropped": 0,
      "n_rows": 8,
      "overall_quantiles": {
       "abs_delta": {
@@ -712,7 +725,10 @@
       "count": 2
      }
     },
-    "warnings": []
+    "warnings": [
+     "comparability_unknown:same_suite_or_track_version",
+     "keys_canonicalized:original_keys=['imdb:model=toy/m1-small']"
+    ]
    }
   ],
   "planner_version": "core_report_packet_planner.v1",
@@ -768,7 +784,9 @@
  "warnings": {
   "comparisons": [
    {
-    "caveats": [],
+    "caveats": [
+     "same_suite_or_track_version=unknown"
+    ],
     "comparability_facts": {
      "same_benchmark_family": {
       "status": "yes",
@@ -807,7 +825,7 @@
       ]
      },
      "same_suite_or_track_version": {
-      "status": "yes",
+      "status": "unknown",
       "values": [
        "eee_only_demo::v1"
       ]
@@ -817,14 +835,22 @@
     "comparison_kind": "official_vs_local",
     "disabled_reason": null,
     "enabled": true,
-    "warnings": []
+    "warnings": [
+     "comparability_unknown:same_suite_or_track_version",
+     "keys_canonicalized:original_keys=['imdb:model=toy/m1-small']"
+    ]
    }
   ],
   "diagnostic_flags": [],
   "official_selection": {},
-  "packet_caveats": [],
-  "packet_id": "eee_only_pair--imdb-model-toy-m1-small",
-  "packet_warnings": [],
+  "packet_caveats": [
+   "same_suite_or_track_version=unknown"
+  ],
+  "packet_id": "eee_only_pair--imdb-model-toy_m1-small",
+  "packet_warnings": [
+   "comparability_unknown:same_suite_or_track_version",
+   "keys_canonicalized:original_keys=['imdb:model=toy/m1-small']"
+  ],
   "planner_version": "core_report_packet_planner.v1",
   "report_dpath": "<OUT>",
   "run_entry": "imdb:model=toy/m1-small"

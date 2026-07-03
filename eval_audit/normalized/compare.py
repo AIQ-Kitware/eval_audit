@@ -21,7 +21,10 @@ Why this split is safe:
 
 from __future__ import annotations
 
+import math
 from typing import Any, Iterable
+
+from loguru import logger
 
 from eval_audit import metrics_taxonomy as helm_metrics
 from eval_audit.normalized.joins import (
@@ -32,6 +35,21 @@ from eval_audit.normalized.joins import (
 from eval_audit.normalized.model import InstanceRecord, NormalizedRun
 
 from eval_audit.infra.profiling import profile
+
+
+def _both_finite(a_val: Any, b_val: Any) -> bool:
+    """True iff both scores are finite (not NaN/inf).
+
+    P1-15: a single NaN score poisons every ``np.quantile`` output, makes
+    ``json.dumps`` emit the invalid-JSON ``NaN`` literal, and is counted as a
+    permanent disagreement by the agreement curve. Non-finite scores are
+    filtered at row construction so downstream math and serialization stay
+    well-defined; the dropped count is reported.
+    """
+    try:
+        return math.isfinite(float(a_val)) and math.isfinite(float(b_val))
+    except (TypeError, ValueError):
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +71,7 @@ def run_level_core_rows(
     means_a = joined_metric_means(run_a)
     means_b = joined_metric_means(run_b)
     rows: list[dict[str, Any]] = []
+    n_nonfinite_dropped = 0
     for key in sorted(set(means_a) & set(means_b)):
         a_val = means_a[key]
         b_val = means_b[key]
@@ -60,6 +79,10 @@ def run_level_core_rows(
         # the legacy core_metrics path produced.
         cls, _ = helm_metrics.classify_metric(key)
         if cls != metric_class:
+            continue
+        # P1-15: drop non-finite scores before they poison quantiles/JSON.
+        if not _both_finite(a_val, b_val):
+            n_nonfinite_dropped += 1
             continue
         abs_delta = abs(a_val - b_val)
         denom = max(abs(a_val), abs(b_val), 1e-12)
@@ -72,6 +95,11 @@ def run_level_core_rows(
             "abs_delta": abs_delta,
             "rel_delta": abs_delta / denom,
         })
+    if n_nonfinite_dropped:
+        logger.warning(
+            f"run_level_core_rows: dropped {n_nonfinite_dropped} row(s) with "
+            f"non-finite scores (NaN/inf) before agreement/quantile computation"
+        )
     return rows
 
 
@@ -104,6 +132,7 @@ def instance_level_core_rows(
     rows: list[dict[str, Any]] = []
     classify = helm_metrics.classify_metric
     n_joined_pairs = 0
+    n_nonfinite_dropped = 0
     for key, rec_a, rec_b in join_instances(run_a, run_b):
         n_joined_pairs += 1
         # join_instances pairs records by (sample_hash_or_id, metric_id),
@@ -120,6 +149,11 @@ def instance_level_core_rows(
             continue
         a_val = rec_a.score
         b_val = rec_b.score
+        # P1-15: drop non-finite scores before they poison quantiles/JSON and
+        # get miscounted as permanent disagreement by the agreement curve.
+        if not _both_finite(a_val, b_val):
+            n_nonfinite_dropped += 1
+            continue
         abs_delta = abs(a_val - b_val)
         denom = max(abs(a_val), abs(b_val), 1e-12)
         rows.append({
@@ -133,7 +167,15 @@ def instance_level_core_rows(
             "abs_delta": abs_delta,
             "rel_delta": abs_delta / denom,
         })
-    return rows, {"n_joined_pairs": n_joined_pairs}
+    if n_nonfinite_dropped:
+        logger.warning(
+            f"instance_level_core_rows: dropped {n_nonfinite_dropped} row(s) with "
+            f"non-finite scores (NaN/inf) from {n_joined_pairs} joined pair(s)"
+        )
+    return rows, {
+        "n_joined_pairs": n_joined_pairs,
+        "n_nonfinite_dropped": n_nonfinite_dropped,
+    }
 
 
 # ---------------------------------------------------------------------------

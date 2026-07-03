@@ -45,7 +45,7 @@
      "values": []
     },
     "same_suite_or_track_version": {
-     "status": "yes",
+     "status": "unknown",
      "values": [
       "eee_only_demo::v1"
      ]
@@ -59,7 +59,8 @@
      "same_benchmark_family=unknown",
      "same_deployment=unknown",
      "same_instructions=unknown",
-     "same_max_eval_instances=unknown"
+     "same_max_eval_instances=unknown",
+     "same_suite_or_track_version=unknown"
     ],
     "comparability_facts": {
      "same_benchmark_family": {
@@ -89,7 +90,7 @@
       "values": []
      },
      "same_suite_or_track_version": {
-      "status": "yes",
+      "status": "unknown",
       "values": [
        "eee_only_demo::v1"
       ]
@@ -111,10 +112,12 @@
      "comparability_unknown:same_deployment",
      "comparability_unknown:same_instructions",
      "comparability_unknown:same_max_eval_instances",
+     "comparability_unknown:same_suite_or_track_version",
      "missing_run_spec:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
      "missing_scenario_class:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
      "missing_run_spec:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
-     "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356"
+     "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+     "keys_canonicalized:original_keys=['imdb:model=toy/m1-small']"
     ]
    }
   ],
@@ -209,9 +212,10 @@
    "same_benchmark_family=unknown",
    "same_deployment=unknown",
    "same_instructions=unknown",
-   "same_max_eval_instances=unknown"
+   "same_max_eval_instances=unknown",
+   "same_suite_or_track_version=unknown"
   ],
-  "packet_id": "eee_only_pair--imdb-model-toy-m1-small",
+  "packet_id": "eee_only_pair--imdb-model-toy_m1-small",
   "packet_warnings": [
    "missing_run_spec:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
    "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
@@ -221,7 +225,9 @@
    "comparability_unknown:same_benchmark_family",
    "comparability_unknown:same_deployment",
    "comparability_unknown:same_instructions",
-   "comparability_unknown:same_max_eval_instances"
+   "comparability_unknown:same_max_eval_instances",
+   "comparability_unknown:same_suite_or_track_version",
+   "keys_canonicalized:original_keys=['imdb:model=toy/m1-small']"
   ],
   "pairs": [
    {
@@ -234,7 +240,8 @@
      "same_benchmark_family=unknown",
      "same_deployment=unknown",
      "same_instructions=unknown",
-     "same_max_eval_instances=unknown"
+     "same_max_eval_instances=unknown",
+     "same_suite_or_track_version=unknown"
     ],
     "comparability_facts": {
      "same_benchmark_family": {
@@ -264,7 +271,7 @@
       "values": []
      },
      "same_suite_or_track_version": {
-      "status": "yes",
+      "status": "unknown",
       "values": [
        "eee_only_demo::v1"
       ]
@@ -419,6 +426,7 @@
       }
      ],
      "n_joined_pairs": 8,
+     "n_nonfinite_dropped": 0,
      "n_rows": 8,
      "overall_quantiles": {
       "abs_delta": {
@@ -726,10 +734,12 @@
      "comparability_unknown:same_deployment",
      "comparability_unknown:same_instructions",
      "comparability_unknown:same_max_eval_instances",
+     "comparability_unknown:same_suite_or_track_version",
      "missing_run_spec:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
      "missing_scenario_class:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
      "missing_run_spec:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
-     "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356"
+     "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+     "keys_canonicalized:original_keys=['imdb:model=toy/m1-small']"
     ]
    }
   ],
@@ -791,7 +801,8 @@
      "same_benchmark_family=unknown",
      "same_deployment=unknown",
      "same_instructions=unknown",
-     "same_max_eval_instances=unknown"
+     "same_max_eval_instances=unknown",
+     "same_suite_or_track_version=unknown"
     ],
     "comparability_facts": {
      "same_benchmark_family": {
@@ -821,7 +832,7 @@
       "values": []
      },
      "same_suite_or_track_version": {
-      "status": "yes",
+      "status": "unknown",
       "values": [
        "eee_only_demo::v1"
       ]
@@ -837,10 +848,12 @@
      "comparability_unknown:same_deployment",
      "comparability_unknown:same_instructions",
      "comparability_unknown:same_max_eval_instances",
+     "comparability_unknown:same_suite_or_track_version",
      "missing_run_spec:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
      "missing_scenario_class:official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>",
      "missing_run_spec:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
-     "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356"
+     "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
+     "keys_canonicalized:original_keys=['imdb:model=toy/m1-small']"
     ]
    }
   ],
@@ -851,9 +864,10 @@
    "same_benchmark_family=unknown",
    "same_deployment=unknown",
    "same_instructions=unknown",
-   "same_max_eval_instances=unknown"
+   "same_max_eval_instances=unknown",
+   "same_suite_or_track_version=unknown"
   ],
-  "packet_id": "eee_only_pair--imdb-model-toy-m1-small",
+  "packet_id": "eee_only_pair--imdb-model-toy_m1-small",
   "packet_warnings": [
    "missing_run_spec:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
    "missing_scenario_class:local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356",
@@ -863,7 +877,9 @@
    "comparability_unknown:same_benchmark_family",
    "comparability_unknown:same_deployment",
    "comparability_unknown:same_instructions",
-   "comparability_unknown:same_max_eval_instances"
+   "comparability_unknown:same_max_eval_instances",
+   "comparability_unknown:same_suite_or_track_version",
+   "keys_canonicalized:original_keys=['imdb:model=toy/m1-small']"
   ],
   "planner_version": "core_report_packet_planner.v1",
   "report_dpath": "<OUT>",

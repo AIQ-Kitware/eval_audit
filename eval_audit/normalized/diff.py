@@ -349,6 +349,7 @@ class NormalizedDiff:
         return {
             "n_rows": len(self.inst_rows),
             "n_joined_pairs": int(self.inst_stats.get("n_joined_pairs", 0)),
+            "n_nonfinite_dropped": int(self.inst_stats.get("n_nonfinite_dropped", 0)),
             "overall_quantiles": group_quantiles(self.inst_rows),
             "by_metric": metric_quantiles(self.inst_rows),
             "agreement_vs_abs_tol": agreement_curve(self.inst_rows, self.thresholds),
