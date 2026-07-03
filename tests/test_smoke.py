@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from eval_audit.cli.analyze_backlog import main as analyze_backlog_main
 from eval_audit.cli.check_env import main as check_env_main
 from eval_audit.cli.compare_batch import main as compare_batch_main
 from eval_audit.cli.compare_pair import main as compare_pair_main
@@ -22,6 +23,7 @@ from eval_audit.workflows.compare_batch import aggregate_report
 @pytest.mark.parametrize(
     "main",
     [
+        analyze_backlog_main,
         check_env_main,
         compare_batch_main,
         compare_pair_main,

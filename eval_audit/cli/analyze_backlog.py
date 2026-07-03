@@ -15,8 +15,11 @@ from collections import Counter
 from pathlib import Path
 
 from eval_audit.infra.logging import setup_cli_logging
-from eval_audit.infra.report_layout import experiments_analysis_root
-from eval_audit.workflows.rebuild_core_report import main as rebuild_core_report_main, slugify
+from eval_audit.infra.paths import experiment_analysis_dpath
+from eval_audit.workflows.rebuild_core_report import (
+    main as rebuild_core_report_main,
+    slugify_identifier,
+)
 from eval_audit.workflows import build_reports_summary
 
 
@@ -103,14 +106,10 @@ def main(argv: list[str] | None = None) -> None:
             f"BEGIN {experiment_name} backlog_count={len(backlog_entries)} run_inventory_csv={run_inventory_csv}",
             flush=True,
         )
-        reports_dpath = (
-            experiments_analysis_root()
-            / f"experiment-analysis-{slugify(experiment_name)}"
-            / "core-reports"
-        )
+        reports_dpath = experiment_analysis_dpath(experiment_name) / "core-reports"
         reports_dpath.mkdir(parents=True, exist_ok=True)
         for run_entry in backlog_entries:
-            report_dpath = reports_dpath / f"core-metrics-{slugify(run_entry)}"
+            report_dpath = reports_dpath / f"core-metrics-{slugify_identifier(run_entry)}"
             cmd = [
                 "--run-entry",
                 run_entry,
