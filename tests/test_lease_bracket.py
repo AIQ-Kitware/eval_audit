@@ -242,7 +242,10 @@ def test_docker_node_without_lease_has_no_bracket() -> None:
             root_dpath=td,
         )
         assert node.setup is None
-        assert node.teardown is None
+        # P2: even without a lease, teardown removes the named container so an
+        # aborted run doesn't leak it (there is no lease release to compose with).
+        assert node.teardown is not None
+        assert "docker rm -f eval-audit-helm-" in node.teardown
 
 
 def test_docker_node_constructs_without_error() -> None:

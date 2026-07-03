@@ -37,8 +37,11 @@ def test_docker_node_command_renders_expected(tmp_path: Path):
         },
         tmp_path,
     )
-    # Wrapper shape
-    assert cmd.startswith("docker run --rm")
+    # Wrapper shape. P2: a pre-clean `docker rm -f <name>` precedes the run so a
+    # container leaked by a prior SIGKILL is reaped, then `docker run --rm
+    # --name <name>` so this run's container can be torn down.
+    assert cmd.startswith("docker rm -f eval-audit-helm-")
+    assert "docker run --rm --name eval-audit-helm-" in cmd
     assert '--gpus "device=${CUDA_VISIBLE_DEVICES:-all}"' in cmd
     assert "--shm-size=32g" in cmd
     assert "-e HOST_UID=$(id -u) -e HOST_GID=$(id -g)" in cmd

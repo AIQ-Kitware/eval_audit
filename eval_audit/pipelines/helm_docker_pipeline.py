@@ -36,6 +36,7 @@ Correctness notes (validated against kwdagger / cmd_queue):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shlex
 from typing import Any
@@ -85,6 +86,18 @@ def _coerce_list(value: Any) -> list[Any]:
             return [text]
         return parsed if isinstance(parsed, list) else [parsed]
     return [value]
+
+
+def _container_name(out_dpath: str) -> str:
+    """Deterministic, docker-valid container name for one run's node dir.
+
+    The name is stable per node dir so (a) a teardown can remove the container
+    by name and (b) a re-run pre-cleans a container leaked by a prior SIGKILL
+    (which ``--rm`` can't clean up because the client was killed). Derived from
+    a hash of ``out_dpath`` to guarantee validity + uniqueness.
+    """
+    digest = hashlib.sha256(out_dpath.encode("utf-8")).hexdigest()[:16]
+    return f"eval-audit-helm-{digest}"
 
 
 class MaterializeHelmRunDockerNode(LeaseBracketMixin, MaterializeHelmRunNode):
@@ -142,7 +155,12 @@ class MaterializeHelmRunDockerNode(LeaseBracketMixin, MaterializeHelmRunNode):
         ipc_host = bool(cfg.get("container_ipc_host"))
         network = cfg.get("container_network")
 
-        lines: list[str] = ["docker run --rm"]
+        # P2: name the container so it can be torn down (teardown) and pre-
+        # cleaned before re-run if a prior SIGKILL leaked it (--rm can't reap a
+        # container whose client was killed). The pre-clean is prepended as a
+        # separate statement at final assembly.
+        container_name = _container_name(out_dpath)
+        lines: list[str] = [f"docker run --rm --name {q(container_name)}"]
 
         # Network namespace. Omitted => Docker's default bridge (correct when
         # HELM loads the model in-process). "host" => share the host namespace
@@ -213,7 +231,31 @@ class MaterializeHelmRunDockerNode(LeaseBracketMixin, MaterializeHelmRunNode):
         inner_command = render_magnet_command(
             self.executable, cfg, exclude=_CONTAINER_KEYS | _LEASE_KEYS
         )
-        return docker_prefix + " \\\n    " + inner_command
+        # P2: pre-clean a leaked container (separate statement, not a
+        # backslash-continued flag) so a re-run doesn't fail on a name conflict.
+        pre_clean = f"docker rm -f {q(container_name)} >/dev/null 2>&1 || true\n"
+        return pre_clean + docker_prefix + " \\\n    " + inner_command
+
+    @property
+    def teardown(self) -> str | None:
+        # P2: remove the (named) container on teardown so a SIGTERM/EXIT-trapped
+        # abort doesn't leak it. Runs after the lease release. SIGKILL can't be
+        # trapped, but the deterministic name lets the next run's pre-clean reap
+        # the orphan. Composed with LeaseBracketMixin's lease teardown.
+        lease = LeaseBracketMixin.teardown.fget(self)
+        cfg = dict(self.final_config)
+        out_dpath = cfg.get("out_dpath")
+        if not out_dpath:
+            return lease
+        name = _container_name(str(out_dpath))
+        rm = f"docker rm -f {shlex.quote(name)} >/dev/null 2>&1 || true"
+        return "\n".join(part for part in (lease, rm) if part)
+
+    @teardown.setter
+    def teardown(self, value: Any) -> None:
+        # Absorb ProcessNode.__init__'s construction-time assignment (see
+        # LeaseBracketMixin.teardown.setter); the value is derived dynamically.
+        pass
 
 
 def helm_single_run_docker_pipeline():

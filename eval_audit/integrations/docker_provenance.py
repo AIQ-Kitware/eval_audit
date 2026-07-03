@@ -135,8 +135,17 @@ def resolve_image_digest(image: str, runtime: str = "docker") -> ResolvedImage:
         if _repo_of(rd) == requested_repo:
             chosen = rd
             break
+    # P2: do NOT borrow a foreign repository's RepoDigest when the requested
+    # repo has none — that digest@ref names a different repository, so pinning
+    # to it is silently wrong. Fall through to the content-addressed image-id
+    # branch instead (and warn).
     if chosen is None and repo_digests:
-        chosen = repo_digests[0]
+        warnings.append(
+            f"{image!r} has no RepoDigest for its own repository "
+            f"({requested_repo!r}); available digests belong to other repos "
+            f"({[_repo_of(rd) for rd in repo_digests]}). Not borrowing a foreign "
+            "digest — pinning to the local image id instead."
+        )
 
     if chosen:
         digest = chosen.split("@", 1)[1]
@@ -149,17 +158,20 @@ def resolve_image_digest(image: str, runtime: str = "docker") -> ResolvedImage:
             warnings=warnings,
         )
 
-    # Local-only image: record the config id but we cannot pin a portable ref.
+    # Local-only image: no registry digest. Pin to the content-addressed image
+    # id so a rebuild under the same tag changes the run_ref (and thus kwdagger
+    # algo identity), forcing a recompute rather than reusing stale results (P2).
+    # ``docker run <image_id>`` runs exactly that image.
     id_proc = _run([bin_, "image", "inspect", image, "--format", "{{.Id}}"])
     image_id = id_proc.stdout.strip() or None
     warnings.append(
-        f"{image!r} has no registry digest (not pushed?). Running by tag — this "
-        "is NOT reproducible across machines. Push the image and reference it by "
-        "digest for an auditable run."
+        f"{image!r} has no registry digest (not pushed?). Running by local image "
+        "id — this is NOT reproducible across machines. Push the image and "
+        "reference it by digest for an auditable run."
     )
     return ResolvedImage(
         requested=image,
-        run_ref=image,
+        run_ref=image_id or image,
         digest=image_id,
         digest_kind="image_id" if image_id else "unresolved",
         pinned=False,

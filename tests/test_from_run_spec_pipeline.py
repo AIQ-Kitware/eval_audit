@@ -83,8 +83,10 @@ def test_from_spec_docker_command_uses_from_spec_cli(tmp_path: Path):
         },
         tmp_path,
     )
-    # Same docker wrapper as the run-entry node.
-    assert cmd.startswith("docker run --rm")
+    # Same docker wrapper as the run-entry node (incl. the P2 pre-clean +
+    # --name container-leak guard).
+    assert cmd.startswith("docker rm -f eval-audit-helm-")
+    assert "docker run --rm --name eval-audit-helm-" in cmd
     assert PINNED in cmd
     # The recipe source is bind-mounted read-only at its same path.
     assert "-v /data/crfm-helm-public:/data/crfm-helm-public:ro" in cmd
