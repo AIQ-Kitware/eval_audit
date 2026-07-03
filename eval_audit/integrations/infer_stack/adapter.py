@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 import os
 import shutil
@@ -1702,8 +1703,19 @@ def materialize_benchmark_bundle(
         )
     output_dir.mkdir(parents=True, exist_ok=True)
     model_deployments = {"model_deployments": model_entries}
-    model_deployments_path = output_dir / "model_deployments.yaml"
-    _write_yaml(model_deployments_path, model_deployments)
+    # P0-5: content-address the generated filename, mirroring the run_spec
+    # materializer's ``run_spec.<content-hash>.json`` convention. The path
+    # string enters kwdagger job identity via ``helm.model_deployments_fpath``;
+    # a fixed name meant a re-export with changed semantics (protocol_mode
+    # chat-vs-completions, tokenizer alias, max sequence length) reused GPU
+    # results computed under the OLD config (skip_existing defaults True). The
+    # docker node passes this file by explicit ``--model_deployments_fpath``
+    # (mounted at its own path), so HELM reads it by path, not by fixed name.
+    _md_text = dump_yaml(model_deployments)
+    _md_hash = hashlib.sha256(_md_text.encode("utf-8")).hexdigest()[:16]
+    model_deployments_path = output_dir / f"model_deployments.{_md_hash}.yaml"
+    model_deployments_path.parent.mkdir(parents=True, exist_ok=True)
+    model_deployments_path.write_text(_md_text, encoding="utf-8")
 
     model_deployments_fpath = _maybe_repo_relative(model_deployments_path)
     smoke_spec = preset_cfg.get(

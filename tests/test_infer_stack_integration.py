@@ -307,6 +307,34 @@ def test_protocol_mode_override_satisfies_bare_profile(tmp_path: Path) -> None:
     assert _deployment(result_chat)["client_spec"]["class_name"].endswith("VLLMChatClient")
 
 
+def test_model_deployments_filename_is_content_addressed(tmp_path: Path) -> None:
+    """P0-5: the model_deployments filename encodes a content hash, so a
+    re-export with changed semantics (protocol_mode chat vs completions ->
+    different client class) yields a different filename -> different
+    kwdagger job identity -> recompute instead of stale reuse. Identical
+    content must yield an identical (deterministic) filename."""
+    config_dir = _make_config_dir(tmp_path)
+
+    def _mdname(bundle_name: str, protocol_mode: str) -> str:
+        result = export_benchmark_bundle(
+            "phi2-single",
+            bundle_root=tmp_path / bundle_name,
+            config_dir=config_dir,
+            protocol_mode=protocol_mode,
+            api_key_value="k",
+        )
+        return Path(result["model_deployments_path"]).name
+
+    chat_name = _mdname("md-chat", "chat")
+    completions_name = _mdname("md-completions", "completions")
+    chat_name_again = _mdname("md-chat-again", "chat")
+
+    assert chat_name != completions_name  # different semantics -> different hash
+    assert chat_name == chat_name_again    # deterministic for identical content
+    for name in (chat_name, completions_name):
+        assert name.startswith("model_deployments.") and name.endswith(".yaml")
+
+
 def test_machine_local_bundle_uses_absolute_model_deployments_path(tmp_path: Path) -> None:
     config_dir = _make_config_dir(tmp_path)
     bundle_root = tmp_path / "machine-local-bundle"
@@ -318,4 +346,13 @@ def test_machine_local_bundle_uses_absolute_model_deployments_path(tmp_path: Pat
         api_key_value="explicit-test-key",
     )
     smoke = yaml.safe_load(result["benchmark_smoke_manifest_path"].read_text())
-    assert smoke["model_deployments_fpath"] == str((bundle_root / "model_deployments.yaml").resolve())
+    # P0-5: the model_deployments file is content-addressed
+    # (model_deployments.<hash16>.yaml), so the manifest points at the hashed
+    # path — absolute, inside the bundle root, and matching the file actually
+    # written. The exact name must match what the exporter returned.
+    fpath = smoke["model_deployments_fpath"]
+    assert fpath == str(result["model_deployments_path"].resolve())
+    fname = Path(fpath).name
+    assert fname.startswith("model_deployments.") and fname.endswith(".yaml")
+    assert Path(fpath).parent == bundle_root.resolve()
+    assert Path(fpath).is_file()
