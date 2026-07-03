@@ -274,8 +274,17 @@ def main(argv: list[str] | None = None) -> None:
     if run_spec_sources:
         # The run-entry "list" is the sources' labels; reuse the existing
         # filter/sort/shard/limit machinery on them, then keep the matching sources.
+        # P1-23: duplicate labels used to collapse silently via setdefault, so
+        # the manifest scheduled fewer runs than declared. Raise instead.
         for source in run_spec_sources:
-            sources_by_label.setdefault(source["run_entry"], source)
+            label = source["run_entry"]
+            if label in sources_by_label:
+                raise SystemExit(
+                    f"Duplicate run_entry label in run_spec sources: {label!r}. "
+                    "Each source must carry a unique run_entry label; duplicates "
+                    "would silently schedule fewer runs than declared."
+                )
+            sources_by_label[label] = source
         run_entries = list(sources_by_label)
         run_details = []
         detail_lut = {}

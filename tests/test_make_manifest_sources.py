@@ -89,3 +89,14 @@ def test_sources_missing_required_key_is_rejected(tmp_path: Path) -> None:
     bad = [{"run_entry": "x"}]  # no rel_path
     with pytest.raises((ValueError, SystemExit)):
         _run(tmp_path, bad, "--precomputed-root", "/data/crfm-helm-public")
+
+
+def test_duplicate_run_entry_labels_are_rejected(tmp_path: Path) -> None:
+    """P1-23: duplicate labels used to collapse silently (setdefault),
+    scheduling fewer runs than declared. Must raise."""
+    dup = [
+        _SOURCES[0],
+        {**_SOURCES[1], "run_entry": _SOURCES[0]["run_entry"]},  # same label
+    ]
+    with pytest.raises(SystemExit, match="Duplicate run_entry label"):
+        _run(tmp_path, dup, "--precomputed-root", "/data/crfm-helm-public")

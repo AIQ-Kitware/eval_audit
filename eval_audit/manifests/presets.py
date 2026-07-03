@@ -47,8 +47,11 @@ def _build_manifest(
 ) -> dict:
     missing = _validate_entries_exist(run_entries)
     if missing:
+        # P1-22: ``fpath`` is local to _validate_entries_exist; reference the
+        # canonical path helper directly so the error surfaces which entries
+        # were missing instead of raising NameError.
         raise RuntimeError(
-            f"Manifest entries were not found in {fpath}: "
+            f"Manifest entries were not found in {repo_run_specs_fpath()}: "
             + kwutil.Json.dumps(missing)
         )
     return ManifestSpec(
