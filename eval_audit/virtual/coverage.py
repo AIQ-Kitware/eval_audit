@@ -718,4 +718,9 @@ def write_coverage_artifacts(
     }
     for dim in coverage.by_dim:
         paths[f"by_{dim}_csv"] = out_dpath / f"coverage_by_{dim}.csv"
+    # IM-9: the emitted sankey artifacts were computed but dropped from the
+    # returned mapping; surface them so callers can find the funnel sankey.
+    for key, value in (sankey_paths or {}).items():
+        if value:
+            paths[f"sankey_{key}"] = Path(value)
     return paths

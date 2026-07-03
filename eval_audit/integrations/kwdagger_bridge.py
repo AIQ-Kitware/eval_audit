@@ -510,8 +510,15 @@ def _prepare_container_execution(
         if env_token:
             token_fpath = hf_path / "token"
             if not token_fpath.exists() or token_fpath.read_text().strip() != env_token:
-                token_fpath.write_text(env_token + "\n")
-                token_fpath.chmod(0o600)
+                # P2: write_text + later chmod left a world-readable window on
+                # the secret. Open O_CREAT|O_TRUNC and fchmod to 0600 BEFORE
+                # writing the token, so it is never on disk with looser perms.
+                fd = os.open(str(token_fpath), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                try:
+                    os.fchmod(fd, 0o600)
+                    os.write(fd, (env_token + "\n").encode())
+                finally:
+                    os.close(fd)
 
     # precomputed_root is bind-mounted at the same absolute path inside the
     # container, so resolve it now.
