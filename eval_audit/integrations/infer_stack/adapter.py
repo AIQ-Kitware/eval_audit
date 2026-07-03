@@ -306,11 +306,13 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 # public HELM Qwen runs use; rerunning here pulls the
                 # public run_spec via eval-audit-run, which carries the
                 # prefix through to the locally-served model.
-                # MMLU × 10 subjects (one entry per subject; HELM run
-                # naming uses subject as the only varying knob for
-                # mmlu's recipe-canonical packets).
+                # mmlu — one representative subject (like wmt_14 below;
+                # HELM run naming uses subject as the only varying knob
+                # for mmlu's recipe-canonical packets). Expanding to the
+                # full 10-subject sweep is a deliberate coverage call for
+                # the operator, not baked in here (audit D-2).
                 "mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=qwen/qwen2.5-7b-instruct-turbo,model_deployment=vllm/qwen2-5-7b-instruct-turbo-local",
-                # legalbench × 10 subjects
+                # legalbench — one representative subset (same note as mmlu)
                 "legalbench:subset=abercrombie,model=qwen/qwen2.5-7b-instruct-turbo,model_deployment=vllm/qwen2-5-7b-instruct-turbo-local",
                 # commonsense × 2
                 "commonsense:dataset=openbookqa,method=multiple_choice_joint,model=qwen/qwen2.5-7b-instruct-turbo,model_deployment=vllm/qwen2-5-7b-instruct-turbo-local",

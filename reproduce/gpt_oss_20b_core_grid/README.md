@@ -42,7 +42,7 @@ Each step is idempotent (`compute_if_missing` skips DONE markers).
 $AUDIT_STORE_ROOT/local-bundles/gpt_oss_20b_core_grid/
 ├── full_manifest.yaml       # eval-audit-run input (full, 41 entries)
 ├── smoke_manifest.yaml      # eval-audit-run input (boolq only, 5 instances)
-└── model_deployments.yaml   # LiteLLM endpoint + API key (injected at write time)
+└── model_deployments.<hash16>.yaml  # LiteLLM endpoint + API key (injected at write time); filename is content-addressed
 
 $AUDIT_RESULTS_ROOT/audit-gpt-oss-20b-core-grid/   # full run output
 $AUDIT_RESULTS_ROOT/audit-gpt-oss-20b-core-grid-smoke/
