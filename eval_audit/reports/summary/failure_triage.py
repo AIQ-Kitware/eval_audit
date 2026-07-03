@@ -82,11 +82,6 @@ def _classify_failure(job_dpath: Path, row: dict[str, Any]) -> dict[str, Any]:
             ["hendrycks/competition_math", "couldn't find 'hendrycks/competition_math'"],
         ),
         (
-            "missing_dataset_or_cached_artifact",
-            "required dataset or cached artifact was not available",
-            ["filenotfounderror", "couldn't find", "no such file or directory"],
-        ),
-        (
             "gated_dataset_access",
             "dataset exists but requires gated access credentials or approval",
             ["gated dataset on the hub", "ask for access", "datasetnotfounderror: dataset"],
@@ -109,7 +104,9 @@ def _classify_failure(job_dpath: Path, row: dict[str, Any]) -> dict[str, Any]:
         (
             "network_or_remote_service_failure",
             "remote service or network interaction failed",
-            ["connectionerror", "readtimeout", "maxretryerror", "429", "503 service unavailable"],
+            # P1-11: anchor the 429 signal — a bare "429" matched scores/ids in
+            # unrelated log lines.
+            ["connectionerror", "readtimeout", "maxretryerror", "429 too many requests", "http 429", "503 service unavailable"],
         ),
         (
             "filesystem_permission_failure",
@@ -120,6 +117,15 @@ def _classify_failure(job_dpath: Path, row: dict[str, Any]) -> dict[str, Any]:
             "interrupted_run",
             "run was interrupted before completion",
             ["keyboardinterrupt", "cancellederror", "interrupted"],
+        ),
+        (
+            # P1-11: the GENERIC file-not-found rule is checked LAST so specific,
+            # higher-confidence signals (CUDA-OOM, killed, gated/remote dataset)
+            # win — a CUDA-OOM traceback that also contains "no such file or
+            # directory" must not be mislabelled a missing-dataset failure.
+            "missing_dataset_or_cached_artifact",
+            "required dataset or cached artifact was not available",
+            ["filenotfounderror", "couldn't find", "no such file or directory"],
         ),
     ]
 
@@ -170,7 +176,10 @@ def _classify_failure(job_dpath: Path, row: dict[str, Any]) -> dict[str, Any]:
     }
 _FAILURE_CATEGORIES: dict[str, tuple[str, str]] = {
     # failure_reason -> (category_key, category_label)
-    "truncated_or_incomplete_runtime": ("hardware_timeout", "Hardware / Compute Timeout"),
+    # P1-8: truncated_or_incomplete_runtime carries NO hardware evidence — it
+    # is a weak inference from missing artifacts + a log ending without a
+    # terminal exception. Do not chart it as "Hardware / Compute Timeout".
+    "truncated_or_incomplete_runtime": ("incomplete_runtime", "Incomplete / Truncated Runtime"),
     "remote_dataset_download_failure": ("data_access", "Data Access Barrier"),
     "gated_dataset_access": ("data_access", "Data Access Barrier"),
     "missing_dataset_or_cached_artifact": ("data_access", "Data Access Barrier"),
@@ -178,22 +187,38 @@ _FAILURE_CATEGORIES: dict[str, tuple[str, str]] = {
     "missing_openai_annotation_credentials": ("missing_infrastructure", "Missing Special Infrastructure"),
     "trust_remote_code_required": ("policy_blocked", "Policy Blocked (opt-in)"),
     "malformed_run_entry": ("recipe_error", "Recipe / Configuration Error"),
+    # P1-8: positively identified infrastructure failures — previously
+    # unmapped, so they charted as "Unknown / Other".
+    "gpu_memory_or_cuda_failure": ("compute_resource", "GPU / Compute Resource"),
+    "process_killed_or_resource_exhausted": ("compute_resource", "GPU / Compute Resource"),
+    "network_or_remote_service_failure": ("network", "Network / Remote Service"),
+    "filesystem_permission_failure": ("permissions", "Filesystem / Permissions"),
+    "interrupted_run": ("interrupted", "Interrupted / Cancelled"),
+    "not_finished_yet": ("unknown", "Unknown / Other"),
     "missing_runtime_log": ("unknown", "Unknown / Other"),
     "unknown_failure": ("unknown", "Unknown / Other"),
 }
 _FAILURE_CATEGORY_ORDER = [
-    "hardware_timeout",
+    "incomplete_runtime",
+    "compute_resource",
     "data_access",
+    "network",
+    "permissions",
     "missing_infrastructure",
     "policy_blocked",
     "recipe_error",
+    "interrupted",
     "unknown",
 ]
 _FAILURE_CATEGORY_LABELS = {
-    "hardware_timeout": "Hardware / Compute Timeout",
+    "incomplete_runtime": "Incomplete / Truncated Runtime",
+    "compute_resource": "GPU / Compute Resource",
     "data_access": "Data Access Barrier",
+    "network": "Network / Remote Service",
+    "permissions": "Filesystem / Permissions",
     "missing_infrastructure": "Missing Special Infrastructure",
     "policy_blocked": "Policy Blocked (opt-in)",
     "recipe_error": "Recipe / Configuration Error",
+    "interrupted": "Interrupted / Cancelled",
     "unknown": "Unknown / Other",
 }

@@ -761,12 +761,23 @@ def _write_failure_taxonomy_plot(
             configure_plotly_chrome()
             import plotly.graph_objects as go
 
+            # P0-7: a color for every category in _FAILURE_CATEGORY_ORDER (the
+            # old map lacked policy_blocked/recipe_error -> KeyError -> the whole
+            # chart was swallowed by the outer except and never written). Missing
+            # keys degrade to grey rather than raising.
             cat_colors = {
-                "hardware_timeout": "#d62728",
+                "incomplete_runtime": "#8c564b",
+                "compute_resource": "#d62728",
                 "data_access": "#ff7f0e",
+                "network": "#1f77b4",
+                "permissions": "#e377c2",
                 "missing_infrastructure": "#9467bd",
+                "policy_blocked": "#2ca02c",
+                "recipe_error": "#bcbd22",
+                "interrupted": "#17becf",
                 "unknown": "#7f7f7f",
             }
+            _GREY = "#7f7f7f"
             fig = go.Figure()
             for cat_key in _FAILURE_CATEGORY_ORDER:
                 cat_label = _FAILURE_CATEGORY_LABELS[cat_key]
@@ -774,11 +785,15 @@ def _write_failure_taxonomy_plot(
                     sum(r["count"] for r in bar_rows if r["benchmark"] == b and r["category"] == cat_key)
                     for b in bench_order
                 ]
+                # P0-7: skip all-zero categories so the legend only lists
+                # categories that actually occurred.
+                if not any(y_vals):
+                    continue
                 fig.add_trace(go.Bar(
                     name=cat_label,
                     x=bench_order,
                     y=y_vals,
-                    marker_color=cat_colors[cat_key],
+                    marker_color=cat_colors.get(cat_key, _GREY),
                     hovertemplate=f"<b>{cat_label}</b><br>benchmark=%{{x}}<br>count=%{{y}}<extra></extra>",
                 ))
             fig.update_layout(
