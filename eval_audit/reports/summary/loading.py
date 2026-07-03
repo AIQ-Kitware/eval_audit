@@ -130,6 +130,11 @@ def _load_all_repro_rows(
             "official_instance_agree_005": agree_005,
             "official_instance_agree_bucket": _bucket_agreement(agree_005),
             "official_instance_agree_01": _find_curve_value(official_agree_curve, 0.1),
+            # Dedicated abs_tol=0.01 point (curve grid contains 1e-2). The
+            # ``_01`` key above is the abs_tol=0.1 point despite the terse
+            # name; the tol010 sankeys (titled abs_tol=0.010) must bucket on
+            # THIS key, not ``_01`` — see P0-1.
+            "official_instance_agree_010": _find_curve_value(official_agree_curve, 0.01),
             "official_runlevel_abs_max": nested_get(official, "run_level", "overall_quantiles", "abs_delta", "max"),
             "official_runlevel_abs_p90": nested_get(official, "run_level", "overall_quantiles", "abs_delta", "p90"),
             "official_instance_agree_001": _find_curve_value(official_agree_curve, 0.001),

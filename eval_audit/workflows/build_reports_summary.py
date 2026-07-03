@@ -456,7 +456,9 @@ def _render_scope_summary(
         )
 
     repro_tol001_rows = _build_repro_sankey_rows_at_tol(repro_rows, enriched_rows, "official_instance_agree_001")
-    repro_tol010_rows = _build_repro_sankey_rows_at_tol(repro_rows, enriched_rows, "official_instance_agree_01")
+    # P0-1: the tol010 variant is titled abs_tol=0.010 and must bucket on the
+    # 0.01 curve point (``_010``), not the 0.1 point (``_01``).
+    repro_tol010_rows = _build_repro_sankey_rows_at_tol(repro_rows, enriched_rows, "official_instance_agree_010")
     repro_tol050_rows = _build_repro_sankey_rows_at_tol(repro_rows, enriched_rows, "official_instance_agree_005")
     metric_sankey_rows = _expand_repro_rows_by_metric(repro_rows, enriched_rows)
     # Stage A — Universe -> Scope: pure filter-funnel ending at the
@@ -485,7 +487,8 @@ def _render_scope_summary(
         filter_inventory_rows,
         scope_rows,
         repro_rows,
-        tol_key="official_instance_agree_01",
+        # P0-1: 0.01 curve point (``_010``), not the 0.1 point (``_01``).
+        tol_key="official_instance_agree_010",
     )
     scope_to_analyzed_tol050_rows = _build_scope_to_analyzed_rows(
         filter_inventory_rows,

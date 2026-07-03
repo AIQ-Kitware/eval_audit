@@ -12,12 +12,21 @@ def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n")
 
 
+_DEFAULT_OFFICIAL_CURVE = [
+    {"abs_tol": 0.0, "agree_ratio": 0.4},
+    {"abs_tol": 0.001, "agree_ratio": 0.4},
+    {"abs_tol": 0.05, "agree_ratio": 0.8},
+    {"abs_tol": 0.1, "agree_ratio": 0.9},
+]
+
+
 def _write_core_report_packet(
     report_dir: Path,
     *,
     experiment_name: str,
     run_entry: str,
     single_run: bool,
+    official_curve: list[dict] | None = None,
 ) -> None:
     local_a = report_dir / "runs" / "local_a"
     official = report_dir / "runs" / "official"
@@ -129,12 +138,7 @@ def _write_core_report_packet(
                 "diagnosis": {"label": "core_metric_drift", "primary_reason_names": ["core_metric_drift"]},
                 "run_level": {"overall_quantiles": {"abs_delta": {"p90": 0.2, "max": 0.3}}},
                 "instance_level": {
-                    "agreement_vs_abs_tol": [
-                        {"abs_tol": 0.0, "agree_ratio": 0.4},
-                        {"abs_tol": 0.001, "agree_ratio": 0.4},
-                        {"abs_tol": 0.05, "agree_ratio": 0.8},
-                        {"abs_tol": 0.1, "agree_ratio": 0.9},
-                    ],
+                    "agreement_vs_abs_tol": official_curve or _DEFAULT_OFFICIAL_CURVE,
                     "per_metric_agreement": {},
                 },
             },
@@ -232,6 +236,54 @@ def test_build_reports_summary_loads_rows_from_packet_manifests_without_selectio
     assert row["repeat_diagnosis"] == "stable"
     assert row["components_manifest"].endswith("components_manifest.json")
     assert row["comparisons_manifest"].endswith("comparisons_manifest.json")
+
+
+def test_tol010_sankey_buckets_on_the_0p01_curve_point_not_0p1(tmp_path, monkeypatch):
+    """P0-1 regression: the tol010 variant is titled abs_tol=0.010 and must
+    bucket on the 0.01 curve point, not the 0.1 point. A steep curve where the
+    0.01 point is 'low agreement' but the 0.1 point is 'near-exact' would have
+    been mislabelled a 10x-looser 'high agreement' by the old wiring."""
+    canonical_root = tmp_path / "audit_store" / "analysis" / "experiments"
+    report_dir = canonical_root / "exp-a" / "core-reports" / "core-metrics-bench-model-a"
+    # 0.01 -> 0.30 (low), 0.1 -> 0.99 (near exact): distinct buckets.
+    steep_curve = [
+        {"abs_tol": 0.0, "agree_ratio": 0.20},
+        {"abs_tol": 0.001, "agree_ratio": 0.25},
+        {"abs_tol": 0.01, "agree_ratio": 0.30},
+        {"abs_tol": 0.05, "agree_ratio": 0.60},
+        {"abs_tol": 0.1, "agree_ratio": 0.99},
+    ]
+    _write_core_report_packet(
+        report_dir,
+        experiment_name="exp-a",
+        run_entry="bench:model=a",
+        single_run=False,
+        official_curve=steep_curve,
+    )
+
+    from eval_audit.reports.summary import loading as summary_loading
+
+    monkeypatch.setattr(summary_loading, "experiments_analysis_root", lambda: canonical_root)
+    monkeypatch.setattr(summary_loading, "publication_experiments_root", lambda: tmp_path / "pub")
+    monkeypatch.setattr(summary_loading, "legacy_repo_publication_root", lambda: tmp_path / "legacy")
+
+    rows = build_reports_summary._load_all_repro_rows()
+    assert len(rows) == 1
+    row = rows[0]
+    # The loading row carries a dedicated 0.01 key, distinct from the 0.1 key.
+    assert row["official_instance_agree_010"] == 0.30
+    assert row["official_instance_agree_01"] == 0.99
+
+    from eval_audit.reports.summary.classification import _bucket_agreement
+
+    # The tol010 sankey (as wired in build_reports_summary) buckets on the
+    # 0.01 point; the OLD wiring (agree_01 = 0.99) would land a different,
+    # looser bucket.
+    tol010_rows = build_reports_summary._build_repro_sankey_rows_at_tol(
+        rows, rows, "official_instance_agree_010"
+    )
+    assert tol010_rows[0]["agreement"] == _bucket_agreement(0.30)
+    assert _bucket_agreement(0.30) != _bucket_agreement(0.99)
 
 
 def test_sample_artifact_lookup_is_derived_from_packet_comparison_ids(tmp_path):
