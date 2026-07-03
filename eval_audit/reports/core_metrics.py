@@ -749,12 +749,7 @@ def main(argv: list[str] | None = None) -> None:
         # Stale-alias cleanup is for the canonical (full) write path. In
         # plots_only mode the other artifacts (JSON/text/runlevel/...) are
         # deliberately not in latest_map, so blanket cleanup would erase them.
-        known_latest_names = {
-            'core_metric_report.json',
-            'core_metric_report.txt',
-            'core_metric_management_summary.txt',
-            'warnings.json',
-            'warnings.txt',
+        _plot_alias_names = {
             'core_metric_report.png',
             'core_metric_distributions.png',
             'core_metric_three_run_distributions.png',
@@ -765,10 +760,26 @@ def main(argv: list[str] | None = None) -> None:
             'core_metric_ecdfs_label_legend.png',
             'core_metric_ecdfs_label_legend.txt',
             'core_metric_per_metric_agreement.png',
+        }
+        known_latest_names = {
+            'core_metric_report.json',
+            'core_metric_report.txt',
+            'core_metric_management_summary.txt',
+            'warnings.json',
+            'warnings.txt',
             'core_runlevel_table.csv',
             'core_runlevel_table.md',
+            *_plot_alias_names,
         }
-        for latest_name in known_latest_names - set(latest_map.values()):
+        cleanup_names = known_latest_names - set(latest_map.values())
+        if args.no_plots:
+            # P1-16: --no-plots means "skip", not "delete". No figures were
+            # rendered this pass, so they're absent from latest_map — but
+            # unlinking them would erase previously rendered figures
+            # (contradicting the documented skip) and re-trigger the aggregate
+            # repair loop every build. Preserve them.
+            cleanup_names -= _plot_alias_names
+        for latest_name in cleanup_names:
             safe_unlink(report_dpath / latest_name)
 
     if not plots_only:

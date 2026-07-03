@@ -351,6 +351,14 @@ def test_core_metrics_single_run_uses_manifests_and_writes_comparability_block(t
 
     assert not (report_dpath / "core_metric_three_run_distributions.png").exists()
 
+    # P1-16: --no-plots must PRESERVE a previously-rendered figure, not delete
+    # it (the stale-alias cleanup used to unlink figure names absent from
+    # latest_map, contradicting the documented "skip").
+    png_before = (report_dpath / "core_metric_report.png")
+    assert png_before.exists()
+    core_metrics.main(base_argv + ["--no-plots"])
+    assert png_before.exists(), "--no-plots must not delete previously rendered figures"
+
     text = (report_dpath / "core_metric_management_summary.txt").read_text()
     assert f"report_dpath: {report_dpath}" in text
     assert f"components_manifest: {components_fpath}" in text
