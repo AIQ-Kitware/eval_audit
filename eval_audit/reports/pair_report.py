@@ -38,6 +38,22 @@ def default_tolerances() -> list[dict[str, Any]]:
     ]
 
 
+def abs_only_tolerances(tolerances: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Same abs_tol grid with rel_tol forced to 0 (P1-13).
+
+    The default sweep couples abs_tol with a rising rel_tol (up to 1.0 at
+    abs_tol=0.1). When the resulting agreement is plotted on a *pure*-abs_tol
+    axis (the cross-machine curve overlaid on the abs_tol agreement curves),
+    the line is systematically inflated: at abs_tol=0.1 the paired rel_tol=1.0
+    counts near-equal large values as agreeing. This yields a curve that is a
+    true function of abs_tol alone.
+    """
+    return [
+        {'name': cfg.get('name', 'unnamed'), 'abs_tol': cfg.get('abs_tol', 0.0), 'rel_tol': 0.0}
+        for cfg in tolerances
+    ]
+
+
 def validate_run_dir(run_dpath: Path) -> None:
     required_files = [
         'run_spec.json',
@@ -155,6 +171,14 @@ def build_pair_report(
         run_tolerances=run_tolerances,
         instance_tolerances=instance_tolerances,
     )
+    # P1-13: a second sweep at rel_tol=0 over the same abs_tol grid, so a curve
+    # plotted on pure-abs_tol axes (the cross-machine overlay) reflects abs_tol
+    # alone. The joint-tolerance `tolerance_highlights` above stays for the text
+    # report (which shows rel_tol explicitly).
+    tolerance_sweep_abs_only = diff.tolerance_sweep_summary(
+        run_tolerances=abs_only_tolerances(run_tolerances),
+        instance_tolerances=abs_only_tolerances(instance_tolerances),
+    )
     return {
         'generated_utc': datetime_mod.datetime.now(datetime_mod.UTC).strftime('%Y%m%dT%H%M%SZ'),
         'inputs': {
@@ -174,6 +198,8 @@ def build_pair_report(
         },
         'tolerance_sweep': tolerance_sweep,
         'tolerance_highlights': summarize_tolerance_hits(tolerance_sweep),
+        # P1-13: rel_tol=0 curve for plotting on pure-abs_tol axes.
+        'tolerance_highlights_abs_only': summarize_tolerance_hits(tolerance_sweep_abs_only),
     }
 
 

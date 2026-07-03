@@ -61,7 +61,11 @@ def _load_optional_cross_machine_pair(report_dpath: Path) -> dict[str, Any] | No
         or ((data.get('inputs') or {}).get('label_b'))
         or 'other-machine'
     )
-    highlights = data.get('tolerance_highlights', {}) or {}
+    # P1-13: prefer the rel_tol=0 highlights for the curve — this line is
+    # plotted on a pure-abs_tol x-axis, and the joint abs+rel highlights
+    # (rel_tol up to 1.0) inflate agreement at the same x. Fall back to the
+    # joint highlights only for legacy sidecars that predate the abs-only field.
+    highlights = data.get('tolerance_highlights_abs_only') or data.get('tolerance_highlights', {}) or {}
     distance = data.get('distance_summary', {}) or {}
     strict = data.get('strict_summary', {}) or {}
     diagnosis = (strict.get('diagnosis') or {})
