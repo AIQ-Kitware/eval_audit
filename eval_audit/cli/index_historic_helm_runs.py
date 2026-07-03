@@ -264,8 +264,6 @@ class CompileHelmReproListConfig(scfg.DataConfig):
             except (TypeError, ValueError) as ex:
                 logger.warning(f'missing: model_name = {ub.urepr(model_name, nl=1)} {ex}')
                 missing_model_metadata[model_name] = str(ex)
-        if 0:
-            ub.dict_hist([r.get('client') for r in model_rows])
 
         # Filter to text models that will fit in memory
         HF_CLIENT = 'helm.clients.huggingface_client.HuggingFaceClient'
@@ -401,17 +399,6 @@ class CompileHelmReproListConfig(scfg.DataConfig):
                 'has_hf_client': r.get('has_hf_client', False),
                 'size_threshold_params': MAX_PARAMS,
             })
-
-        if 1:
-            # Which open models are we missing due to providers
-            for r in model_filter_rows:
-                nonblocking_reasons =  {'no-local-helm-deployment'}
-                blocking_reasons = {'too-large', 'not-open-access', 'not-text-like'}
-                if len(set(r['failure_reasons']) - nonblocking_reasons) == 0:
-                    print(r)
-                if len(set(r['failure_reasons']) & blocking_reasons) == 0:
-                    break
-                    ...
 
         for model_name, error_text in missing_model_metadata.items():
             model_filter_rows.append({

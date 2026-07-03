@@ -25,6 +25,8 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
+from loguru import logger
+
 from eval_audit.normalized.model import (
     ArtifactFormat,
     InstanceRecord,
@@ -253,6 +255,10 @@ class EeeArtifactLoader(Loader):
             # were costing ~200ns/instance × 12.5M ≈ 2.5s of pure
             # kwargs-dict allocation. Field order matches the
             # @dataclass declaration in eval_audit.normalized.model.
+            # IM-3: count corrupted/unparseable lines instead of silently
+            # dropping them — a skipped line invisibly shrinks the agreement
+            # denominator downstream.
+            n_skipped_lines = 0
             if _trust:
                 with samples_path.open("rb") as samples_fh:
                     for raw in samples_fh:
@@ -277,6 +283,7 @@ class EeeArtifactLoader(Loader):
                             )
                             instances.append(rec)
                         except Exception:
+                            n_skipped_lines += 1
                             continue
             else:
                 instance_validate = InstanceLevelEvaluationLog.model_validate
@@ -291,8 +298,14 @@ class EeeArtifactLoader(Loader):
                             parsed = _loads(raw)
                             rec = instance_validate(parsed)
                         except Exception:
+                            n_skipped_lines += 1
                             continue
                         instances.append(_instance_record_from_eee(rec))
+            if n_skipped_lines:
+                logger.warning(
+                    f"{samples_path}: skipped {n_skipped_lines} unparseable "
+                    "samples.jsonl line(s); agreement denominators exclude them."
+                )
 
         # HELM-origin EEE artifacts use the EEE aggregate as the run-level
         # source, but report drilldown still needs stable HELM sample ids.
