@@ -14,9 +14,10 @@ Drift patterns (chosen so each cell exercises a different report path):
 
   cell                       local agree@0   notes
   -------------------------- --------------- ----------------------------------
-  toy/m1-small  × arc_easy        1.000   perfect baseline; also has a
-                                          duplicate "local-repeat" attempt so
-                                          the planner emits a local_repeat
+  toy/m1-small  × arc_easy        1.000   perfect baseline; also has a second
+                                          local attempt (another uuid in the
+                                          SAME experiment/model dir) so the
+                                          planner emits a local_repeat
                                           comparison alongside official_vs_local
   toy/m1-small  × truthful_qa     0.750   single-instance flip on quasi_em
   toy/m1-small  × imdb            0.000   complete divergence (sentiment flip)
@@ -291,12 +292,17 @@ def build(out_root: Path) -> dict[str, list[str]]:
             )
             manifest["local"].append(str(local_fpath.relative_to(out_root)))
 
-            # Multi-attempt: duplicate the m1×arc_easy local run to flex the
-            # planner's local_repeat path. The duplicate uses a different
-            # eval_uuid (so it lives at a distinct path) but the same data.
+            # Multi-attempt: a second local attempt of the m1×arc_easy run to
+            # flex the planner's local_repeat path. Per the documented EEE
+            # layout, repeat attempts are additional ``<uuid>`` pairs in the
+            # SAME ``<experiment>/<benchmark>/<dev>/<model>/`` directory (D-1) —
+            # not a separate ``repeat/`` experiment, which would split the pair
+            # across experiments (distinct experiment_names) and drop the
+            # cross-experiment packet from the aggregate roll-up. The duplicate
+            # uses a distinct eval_uuid (distinct filename) but the same data.
             if (model["id"], benchmark) == ("toy/m1-small", "arc_easy"):
                 repeat_fpath = _write_artifact(
-                    local_root / "repeat",
+                    local_root / "primary",
                     model=model,
                     benchmark=benchmark,
                     source_org="eee_only_demo_local",

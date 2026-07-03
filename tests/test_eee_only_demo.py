@@ -38,6 +38,27 @@ def _load_pairs(packet_dir: Path) -> list[dict]:
     return payload.get("pairs") or []
 
 
+def _all_packet_dirs(demo_output: Path) -> list[Path]:
+    """Every rendered per-packet dir, across whatever experiment subtree(s)
+    the derived experiment name lands them in (``local/<experiment>/...`` ->
+    ``<experiment>/core-reports/<packet>``). The demo fixture derives a single
+    experiment (``primary``) since D-1, but glob defensively across all."""
+    return sorted(
+        p
+        for p in demo_output.glob("*/core-reports/*")
+        if (p / "core_metric_report.json").is_file()
+    )
+
+
+def _packet_dir(demo_output: Path, benchmark: str, model: str) -> Path:
+    """Resolve one packet by its ``<benchmark>-model-toy_<model>`` suffix,
+    experiment-prefix-agnostic. Model slugs use underscores (canonical key)."""
+    suffix = f"{benchmark}-model-toy_{model}"
+    cands = [p for p in _all_packet_dirs(demo_output) if p.name.endswith(suffix)]
+    assert len(cands) == 1, (benchmark, model, [c.name for c in cands])
+    return cands[0]
+
+
 def _key_for_pair(pair: dict) -> tuple[str, str]:
     """Identify a pair by ``(comparison_kind, sorted-component-ids-joined)``.
 
@@ -77,8 +98,7 @@ def test_index_csvs_written(demo_output: Path) -> None:
 
 def test_planner_packet_and_pair_counts(demo_output: Path) -> None:
     """3 models × 3 benchmarks => 9 packets; one packet has +2 extra pairs."""
-    core_reports = demo_output / "eee_only_local" / "core-reports"
-    packet_dirs = sorted(p for p in core_reports.iterdir() if p.is_dir())
+    packet_dirs = _all_packet_dirs(demo_output)
     assert len(packet_dirs) == 9
 
     total_pairs = 0
@@ -92,8 +112,10 @@ def test_planner_packet_and_pair_counts(demo_output: Path) -> None:
 def test_arc_easy_m1_small_has_local_repeat(demo_output: Path) -> None:
     """The multi-attempt packet must contain both official_vs_local pairs and
     a local_repeat pair — that's the whole point of having two locals here.
+    Since D-1 the two attempts live under one experiment (same model dir),
+    so the pair lands in a normal packet, not a cross-experiment orphan.
     """
-    packet_dir = demo_output / "eee_only_local" / "core-reports" / "eee_only_local--arc_easy-model-toy-m1-small"
+    packet_dir = _packet_dir(demo_output, "arc_easy", "m1-small")
     pairs = _load_pairs(packet_dir)
     kinds = sorted(p.get("comparison_kind") for p in pairs)
     assert kinds == ["local_repeat", "official_vs_local", "official_vs_local"]
@@ -105,22 +127,18 @@ def test_arc_easy_perfect_agreement(demo_output: Path) -> None:
     All four arc_easy pairs (3 baseline + 1 repeat + 1 local_repeat) should
     show ``agree_ratio=1.0`` at ``abs_tol=0`` at both run-level and instance-level.
     """
-    for packet_name in [
-        "eee_only_local--arc_easy-model-toy-m1-small",
-        "eee_only_local--arc_easy-model-toy-m2-medium",
-        "eee_only_local--arc_easy-model-toy-m3-large",
-    ]:
-        packet_dir = demo_output / "eee_only_local" / "core-reports" / packet_name
+    for model in ["m1-small", "m2-medium", "m3-large"]:
+        packet_dir = _packet_dir(demo_output, "arc_easy", model)
         for pair in _load_pairs(packet_dir):
             run_curve = (pair.get("run_level") or {}).get("agreement_vs_abs_tol")
             inst_curve = (pair.get("instance_level") or {}).get("agreement_vs_abs_tol")
-            assert _agreement_at_zero(run_curve) == 1.0, packet_name
-            assert _agreement_at_zero(inst_curve) == 1.0, packet_name
+            assert _agreement_at_zero(run_curve) == 1.0, packet_dir.name
+            assert _agreement_at_zero(inst_curve) == 1.0, packet_dir.name
 
 
 def test_imdb_m1_full_divergence(demo_output: Path) -> None:
     """imdb m1-small is engineered for full divergence: every instance flips."""
-    packet_dir = demo_output / "eee_only_local" / "core-reports" / "eee_only_local--imdb-model-toy-m1-small"
+    packet_dir = _packet_dir(demo_output, "imdb", "m1-small")
     pairs = _load_pairs(packet_dir)
     assert len(pairs) == 1
     pair = pairs[0]
@@ -134,7 +152,7 @@ def test_imdb_m2_partial_divergence(demo_output: Path) -> None:
     """imdb m2-medium has 1-of-4 instances flipped: instance agreement = 0.75,
     run-level agreement = 0.0 because the per-metric means now differ.
     """
-    packet_dir = demo_output / "eee_only_local" / "core-reports" / "eee_only_local--imdb-model-toy-m2-medium"
+    packet_dir = _packet_dir(demo_output, "imdb", "m2-medium")
     pairs = _load_pairs(packet_dir)
     assert len(pairs) == 1
     pair = pairs[0]
@@ -146,7 +164,7 @@ def test_imdb_m2_partial_divergence(demo_output: Path) -> None:
 
 def test_truthful_qa_m1_partial_divergence(demo_output: Path) -> None:
     """truthful_qa m1-small mirrors the imdb m2 pattern."""
-    packet_dir = demo_output / "eee_only_local" / "core-reports" / "eee_only_local--truthful_qa-model-toy-m1-small"
+    packet_dir = _packet_dir(demo_output, "truthful_qa", "m1-small")
     pairs = _load_pairs(packet_dir)
     assert len(pairs) == 1
     pair = pairs[0]
@@ -161,7 +179,7 @@ def test_eee_only_components_are_eee(demo_output: Path) -> None:
     with an ``eee_artifact_path`` and no ``run_path`` — i.e., the EEE-only
     path is genuinely HELM-free, not silently falling back to the HELM seam.
     """
-    for packet_dir in (demo_output / "eee_only_local" / "core-reports").iterdir():
+    for packet_dir in _all_packet_dirs(demo_output):
         manifest = json.loads(
             (packet_dir / "components_manifest.json").read_text()
         )
@@ -226,7 +244,7 @@ def test_helm_facts_collapse_to_unknown(demo_output: Path) -> None:
         "same_instructions",
         "same_max_eval_instances",
     }
-    for packet_dir in (demo_output / "eee_only_local" / "core-reports").iterdir():
+    for packet_dir in _all_packet_dirs(demo_output):
         for pair in _load_pairs(packet_dir):
             facts = pair.get("comparability_facts") or {}
             for key in expected_unknown:

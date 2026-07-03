@@ -118,11 +118,15 @@ def extract_artifact_meta(row: dict[str, Any], *, root: Path) -> dict[str, Any]:
         benchmark = "unknown"
 
     # Experiment name = the path component just below "local/" (if present),
-    # so the user can group local attempts however they like
-    # (local/<experiment>/<benchmark>/<dev>/<model>/...).
+    # so the user can group local attempts however they like. The documented
+    # contract is ``local/<experiment>/<benchmark>/<dev>/<model>/<uuid>.json``,
+    # whose artifact_dir (the json's parent) is ``<experiment>/<benchmark>/
+    # <dev>/<model>`` — exactly 4 parts relative to ``local/``. The old ``> 4``
+    # guard never fired for this layout, silently collapsing every row to
+    # ``eee_only_local`` and discarding the user's chosen grouping (D-1).
     rel = artifact_dir.relative_to(root)
     experiment_name: str | None = None
-    if len(rel.parts) > 4:
+    if len(rel.parts) >= 4:
         experiment_name = rel.parts[0]
     sidecars = detect_helm_sidecars(artifact_dir)
     return {

@@ -1,7 +1,7 @@
 {
   "local": [
     "local/primary/arc_easy/toy/m1-small/b57fdeac-f70c-5a4d-bdfe-8bb5587da6cc.json",
-    "local/repeat/arc_easy/toy/m1-small/88c2b7b3-5cf2-51bf-8aab-82e9d5789601.json",
+    "local/primary/arc_easy/toy/m1-small/88c2b7b3-5cf2-51bf-8aab-82e9d5789601.json",
     "local/primary/truthful_qa/toy/m1-small/d6ad988a-0d6c-56eb-84ad-9975d8c5e177.json",
     "local/primary/imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356.json",
     "local/primary/arc_easy/toy/m2-medium/f432007e-7d28-50aa-8360-19cf41223636.json",

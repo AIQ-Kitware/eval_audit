@@ -168,7 +168,10 @@ def test_mismatched_logical_keys_fails_without_force(tmp_path: Path) -> None:
     """Mismatched model+benchmark must error unless --force-pair is set."""
     if not FIXTURE_ROOT.exists():
         pytest.skip("fixture missing")
-    other_local = FIXTURE_ROOT / "local" / "primary" / "arc_easy" / "toy" / "m1-small"
+    # m2-medium is a single-artifact arc_easy dir (m1-small now holds two
+    # attempts since D-1); a single artifact keeps this test about the
+    # mismatched-logical-key guard, not the multiple-aggregates guard.
+    other_local = FIXTURE_ROOT / "local" / "primary" / "arc_easy" / "toy" / "m2-medium"
     out_dir = tmp_path / "mismatch"
     cmd = [
         sys.executable, "-m", "eval_audit.cli.compare_pair_eee",
