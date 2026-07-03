@@ -359,6 +359,11 @@ def discover_benchmark_output_dirs(
         ):
             prunable = {".git", "__pycache__", ".venv", "venv", "node_modules"}
             dirnames[:] = [d for d in dirnames if d not in prunable]
+            # P1-17: os.walk yields directories in arbitrary filesystem order.
+            # Sort in place (topdown) so the discovered benchmark_output dirs
+            # come out in a stable, machine-independent order — determinism is a
+            # hard project requirement and dedupe_rows is first-wins downstream.
+            dirnames.sort()
             if "benchmark_output" in dirnames:
                 bo = Path(dirpath) / "benchmark_output"
                 if bo.is_dir():

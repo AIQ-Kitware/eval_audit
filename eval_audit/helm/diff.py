@@ -853,7 +853,10 @@ class HelmRunDiff(ub.NiceRepr):
                     }
                 )
 
-        mismatches.sort(key=lambda r: r['abs_delta'], reverse=True)
+        # P1-18: break abs_delta ties on the serialized key so the top-N is
+        # deterministic (abs_delta==1.0 is the common case for 0/1 metrics, and
+        # the source rows come from set iteration = PYTHONHASHSEED-dependent).
+        mismatches.sort(key=lambda r: (-float(r['abs_delta']), str(r.get('key'))))
         top = mismatches[:top_n]
 
         out = {
@@ -937,7 +940,8 @@ class HelmRunDiff(ub.NiceRepr):
                 }
             abs_vals = sorted(float(r['abs_delta']) for r in rows)
             rel_vals = sorted(float(r['rel_delta']) for r in rows)
-            top = sorted(rows, key=lambda r: r['abs_delta'], reverse=True)[:top_n]
+            # P1-18: deterministic tie-break on the serialized key.
+            top = sorted(rows, key=lambda r: (-float(r['abs_delta']), str(r.get('key'))))[:top_n]
             return {
                 'count': len(rows),
                 'abs_delta': {
@@ -1156,9 +1160,9 @@ class HelmRunDiff(ub.NiceRepr):
                 }
                 grouped.setdefault(gkey, []).append(item)
 
-        # Sort each group and cap
+        # Sort each group and cap. P1-18: deterministic tie-break on serialized key.
         for gk, items in grouped.items():
-            items.sort(key=lambda r: r['abs_delta'], reverse=True)
+            items.sort(key=lambda r: (-float(r['abs_delta']), str(r.get('key'))))
             grouped[gk] = items[:top_n]
 
         means = {
@@ -1175,9 +1179,13 @@ class HelmRunDiff(ub.NiceRepr):
             ),
         }
 
-        # convert to a JSON-friendly structure: list of group objects
+        # convert to a JSON-friendly structure: list of group objects.
+        # P1-18: iterate in sorted group order — grouped is built in set-
+        # iteration (PYTHONHASHSEED-dependent) insertion order.
         group_list: list[dict[str, Any]] = []
-        for (mclass, metric), items in grouped.items():
+        for (mclass, metric), items in sorted(
+            grouped.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1]))
+        ):
             group_list.append(
                 {
                     'metric_class': mclass,
@@ -1334,7 +1342,8 @@ class HelmRunDiff(ub.NiceRepr):
 
         grouped_rows = []
         for (metric_class, metric), items in sorted(by_group.items()):
-            items = sorted(items, key=lambda r: r['abs_delta'], reverse=True)
+            # P1-18: deterministic tie-break on serialized key.
+            items = sorted(items, key=lambda r: (-float(r['abs_delta']), str(r.get('key'))))
             grouped_rows.append(
                 {
                     'metric_class': metric_class,

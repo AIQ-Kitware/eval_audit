@@ -50,7 +50,13 @@ def gather_runs(
 
     # Discover all benchmark_output dirs under provided roots
     logger.info('Discover benchmarks')
-    bo_dirs = list(ub.ProgIter(discover_benchmark_output_dirs(roots), desc='discovering benchmarks', verbose=3, homogeneous=False))
+    # P1-17: sort the discovered dirs so the run order (and thus which suite's
+    # row `dedupe_rows` first-wins keeps) is machine-independent, not dependent
+    # on filesystem enumeration order.
+    bo_dirs = sorted(
+        ub.ProgIter(discover_benchmark_output_dirs(roots), desc='discovering benchmarks', verbose=3, homogeneous=False),
+        key=lambda p: str(p),
+    )
     logger.info('Finished Discover benchmarks')
     if not bo_dirs:
         logger.warning("No benchmark_output dirs found under roots={}", roots)
