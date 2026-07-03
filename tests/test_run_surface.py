@@ -47,7 +47,14 @@ def test_kwdagger_argv_differs_between_preview_and_execute(tmp_path: Path):
     execute_argv = kwdagger_schedule_argv(execute)
     assert "--run=0" in preview_argv
     assert "--run=1" in execute_argv
-    assert preview_argv[:-1] == execute_argv[:-1]
+    # Preview and execute must differ ONLY in the --run flag. The old
+    # assertion compared argv[:-1], assuming --run was the last element — but
+    # --log / --monitor / --virtualenv_cmd follow it, so drop the --run token
+    # from both sides and compare the remainder.
+    def _without_run(argv: list[str]) -> list[str]:
+        return [a for a in argv if not a.startswith("--run=")]
+
+    assert _without_run(preview_argv) == _without_run(execute_argv)
 
 
 def test_run_from_manifest_preview_does_not_execute(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -91,6 +91,10 @@ def main(argv: list[str] | None = None) -> None:
         ),
     )
     args = parser.parse_args(argv)
+    # P2: --dry-run is an alias for --run=0; passing it alongside an explicit
+    # --run 1 is contradictory. Error instead of silently overriding to preview.
+    if args.dry_run and args.run == 1:
+        parser.error("--dry-run contradicts --run 1 (dry-run means --run=0); pass only one.")
     info = run_from_manifest(
         args.manifest,
         run=bool(0 if args.dry_run else args.run),
