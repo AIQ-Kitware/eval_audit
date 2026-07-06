@@ -313,7 +313,11 @@ def write_combined_component_index(
     """
     from eval_audit.indexing.schema import COMMON_COMPONENT_COLUMNS
 
-    official_df = pd.read_csv(official_index_fpath, low_memory=False)
+    # dtype=str preserves the on-disk representation: pandas' default dtype
+    # inference would turn an integer-looking column like max_eval_instances
+    # into float64, round-tripping "1000" out as "1000.0" and desyncing the
+    # combined component index from the local rows (which stay strings).
+    official_df = pd.read_csv(official_index_fpath, low_memory=False, dtype=str)
     local_df = pd.DataFrame(local_rows)
 
     for col in COMMON_COMPONENT_COLUMNS:

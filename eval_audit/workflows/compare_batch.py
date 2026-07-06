@@ -10,6 +10,7 @@ from typing import Any
 
 import kwutil
 import ubelt as ub
+from loguru import logger
 
 from eval_audit.compat.helm_outputs import HelmOutputs
 from eval_audit.normalized import SourceKind
@@ -175,20 +176,40 @@ def choose_historic_candidate(
     return chosen, info
 
 
-def load_kwdg_rows(results_dpath: Path) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+def load_kwdg_rows(
+    results_dpath: Path,
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, int]]:
+    """Load finished kwdagger jobs, keyed by run_spec_name.
+
+    Returns ``(rows, lut, load_errors)`` where ``load_errors`` maps a
+    run_spec_name to the count of jobs for that name that failed to load
+    (so the caller can report them as ``load_error`` rather than silently
+    misattributing them to ``missing_kwdg_match``). When several jobs share a
+    run_spec_name (re-attempts), the newest attempt wins deterministically,
+    ranked by the DONE-file mtime (the moment the job completed) with the job
+    dir path as a stable tiebreaker.
+    """
     finished_jobs = sorted(
         fpath
         for fpath in results_dpath.rglob("DONE")
         if (fpath.parent / "job_config.json").exists()
     )
     rows = []
+    load_errors: dict[str, int] = {}
+    load_error_unknown = 0
     for fpath in ub.ProgIter(finished_jobs, desc="load kwdg runs"):
         dpath = fpath.parent
         try:
             config = kwutil.Json.load(dpath / "job_config.json")
-            run_spec_name = config.get("helm.run_entry", None)
-            if run_spec_name is None:
-                continue
+        except Exception:
+            # config unreadable — the run_spec_name is unknown so this can't be
+            # attributed to a target; count it globally.
+            load_error_unknown += 1
+            continue
+        run_spec_name = config.get("helm.run_entry", None)
+        if run_spec_name is None:
+            continue
+        try:
             suites = HelmOutputs.coerce(dpath / "benchmark_output").suites()
             runs = []
             for suite in suites:
@@ -196,11 +217,16 @@ def load_kwdg_rows(results_dpath: Path) -> tuple[list[dict[str, Any]], dict[str,
             if len(runs) != 1:
                 continue
             run_path = Path(runs[0].path)
+            try:
+                done_mtime = fpath.stat().st_mtime
+            except OSError:
+                done_mtime = 0.0
             rows.append(
                 {
                     "dpath": str(dpath),
                     "run_spec_name": run_spec_name,
                     "run_path": run_path,
+                    "done_mtime": done_mtime,
                     # Stage-3 seam: comparison loads the run through the
                     # normalized boundary on demand. The legacy HelmRun
                     # reader is no longer cached here.
@@ -208,12 +234,64 @@ def load_kwdg_rows(results_dpath: Path) -> tuple[list[dict[str, Any]], dict[str,
                 }
             )
         except Exception:
+            # Output present but unreadable/corrupt — the run_spec_name is known,
+            # so record it so the caller reports load_error, not missing match.
+            load_errors[run_spec_name] = load_errors.get(run_spec_name, 0) + 1
             continue
 
-    lut = {}
+    # Deduplicate re-attempts deterministically: newest DONE-file mtime wins,
+    # job dir path breaks ties. Count how many rows were shadowed by a newer one.
+    lut, duplicate_count, duplicate_key_count = _dedupe_kwdg_rows(rows)
+    if duplicate_count:
+        logger.warning(
+            "load_kwdg_rows: {} duplicate kwdagger job(s) collapsed to newest attempt "
+            "(by DONE-file mtime) across {} run_spec_name(s)",
+            duplicate_count,
+            duplicate_key_count,
+        )
+    if load_errors or load_error_unknown:
+        logger.warning(
+            "load_kwdg_rows: {} job(s) failed to load ({} with a known run_spec_name, "
+            "{} unattributable)",
+            sum(load_errors.values()) + load_error_unknown,
+            sum(load_errors.values()),
+            load_error_unknown,
+        )
+    return rows, lut, load_errors
+
+
+def _group_by_run_spec_name(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        lut[row["run_spec_name"]] = row
-    return rows, lut
+        grouped[row["run_spec_name"]].append(row)
+    return grouped
+
+
+def _dedupe_kwdg_rows(
+    rows: list[dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], int, int]:
+    """Collapse re-attempts to the newest per run_spec_name.
+
+    Recency signal is the DONE-file mtime (``done_mtime``); the job dir path
+    (``dpath``) is a stable tiebreaker so the selection is deterministic across
+    machines even when two attempts share an mtime. Returns
+    ``(lut, duplicate_count, duplicate_key_count)`` where ``duplicate_count`` is
+    the number of shadowed (older) attempts and ``duplicate_key_count`` the
+    number of run_spec_names that had more than one attempt.
+    """
+    lut: dict[str, dict[str, Any]] = {}
+    duplicate_count = 0
+    duplicate_key_count = 0
+    for run_spec_name, group in sorted(
+        _group_by_run_spec_name(rows).items(), key=lambda kv: kv[0]
+    ):
+        if len(group) > 1:
+            duplicate_count += len(group) - 1
+            duplicate_key_count += 1
+        lut[run_spec_name] = max(
+            group, key=lambda row: (row.get("done_mtime", 0.0), row["dpath"])
+        )
+    return lut, duplicate_count, duplicate_key_count
 
 
 def aggregate_report(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -347,6 +425,7 @@ def maybe_write_sankey_report(
         "status": [
             "compared: HELM and local reproduced run were compared.",
             "missing_kwdg_match: no matching local reproduced run was found.",
+            "load_error: a matching kwdagger job existed but its output failed to load.",
             "error: comparison failed.",
         ],
         "bench": [
@@ -572,7 +651,7 @@ def main(argv: list[str] | None = None) -> None:
     report_dpath.mkdir(parents=True, exist_ok=True)
 
     historic_rows = build_historic_rows(manifest, precomputed_root)
-    kwdg_rows, kwdg_lut = load_kwdg_rows(results_dpath)
+    kwdg_rows, kwdg_lut, kwdg_load_errors = load_kwdg_rows(results_dpath)
 
     stamp = datetime_mod.datetime.now(datetime_mod.UTC).strftime(
         "%Y%m%dT%H%M%SZ"
@@ -634,18 +713,29 @@ def main(argv: list[str] | None = None) -> None:
                     }
                 )
             elif kwrow is None:
+                # A kwdagger job existed for this run_spec_name but failed to
+                # load (corrupt/unreadable output): report load_error rather
+                # than misattributing it to "no reproduced run was found".
+                if run_spec_name in kwdg_load_errors:
+                    status_label = "load_error"
+                else:
+                    status_label = "missing_kwdg_match"
                 case_row.update(
                     {
-                        "status": "missing_kwdg_match",
+                        "status": status_label,
                         "diagnosis": {
-                            "label": "missing_kwdg_match",
+                            "label": status_label,
                             "primary_priority": 0,
-                            "primary_reason_names": ["missing_kwdg_match"],
+                            "primary_reason_names": [status_label],
                             "reasons": [
                                 {
-                                    "name": "missing_kwdg_match",
+                                    "name": status_label,
                                     "priority": 0,
-                                    "details": {},
+                                    "details": (
+                                        {"failed_load_count": kwdg_load_errors[run_spec_name]}
+                                        if status_label == "load_error"
+                                        else {}
+                                    ),
                                 }
                             ],
                         },
