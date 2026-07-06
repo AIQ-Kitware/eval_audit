@@ -59,15 +59,12 @@ def _locator_run_entry(run_entry: str) -> str:
     path (and ``08_check_discovery``) already resolve 1:1. The deployment itself is
     unaffected — it is baked into the materialized ``run_spec.json`` and recorded
     on the index row.
+
+    R-8: delegates to the shared unconditional strip.
     """
-    bench, sep, rest = run_entry.partition(":")
-    if not sep:
-        return run_entry
-    kept = [
-        kv for kv in rest.split(",")
-        if kv.split("=", 1)[0].strip() != "model_deployment"
-    ]
-    return f"{bench}:{','.join(kept)}" if kept else bench
+    from eval_audit.helm.run_entries import strip_model_deployment
+
+    return strip_model_deployment(run_entry)[0]
 
 
 def _detect_virtualenv_cmd() -> str | None:

@@ -114,17 +114,12 @@ def _coerce_map(value: Any) -> dict[str, str]:
 def _parse_model_deployment(run_entry: Any) -> str | None:
     """Extract the ``model_deployment=<name>`` token from a HELM run-entry.
 
-    HELM run-entries are ``scenario:key=value,key=value,...`` — the
-    ``model_deployment`` knob names the model_deployments.yaml entry (and, via
-    the preset profile, the catalog endpoint). Returns ``None`` if absent.
+    Thin wrapper over the shared ``helm.run_entries.parse_model_deployment``
+    (R-8); kept for the local call site + its direct test.
     """
-    if not run_entry:
-        return None
-    for token in str(run_entry).split(","):
-        token = token.strip()
-        if token.startswith("model_deployment="):
-            return token.split("=", 1)[1].strip()
-    return None
+    from eval_audit.helm.run_entries import parse_model_deployment
+
+    return parse_model_deployment(run_entry)
 
 
 def _resolve_lease_endpoint(cfg: dict[str, Any]) -> str | None:

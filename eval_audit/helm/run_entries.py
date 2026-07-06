@@ -7,6 +7,58 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 
+# --- model_deployment token helpers (R-8) ----------------------------------
+# One parse/strip/append implementation for the ``model_deployment=<name>``
+# token in a HELM run-entry (``scenario:key=value,...``). Previously
+# re-implemented four times (lease_bracket._parse_model_deployment,
+# kwdagger_bridge._locator_run_entry, adapter._strip_local_deployment /
+# _inline_local_deployment); those now delegate here.
+
+
+def parse_model_deployment(run_entry: Any) -> str | None:
+    """Extract the ``model_deployment=<name>`` token value, or ``None`` if absent."""
+    if not run_entry:
+        return None
+    for token in str(run_entry).split(","):
+        token = token.strip()
+        if token.startswith("model_deployment="):
+            return token.split("=", 1)[1].strip()
+    return None
+
+
+def strip_model_deployment(
+    run_entry: str, *, only_names: "frozenset[str] | set[str] | None" = None
+) -> tuple[str, str | None]:
+    """Drop a ``model_deployment=<name>`` token from a run-entry.
+
+    ``only_names=None`` strips any deployment token (the locator use); otherwise
+    the token is stripped only when ``<name>`` is in ``only_names`` (the
+    local-only rule — an official/private token is kept so it still
+    discriminates). Returns ``(query, stripped_name_or_None)``. A run-entry with
+    no ``:`` separator is returned unchanged.
+    """
+    bench, sep, rest = run_entry.partition(":")
+    if not sep:
+        return run_entry, None
+    kept: list[str] = []
+    token: str | None = None
+    for kv in rest.split(","):
+        key, _, value = kv.partition("=")
+        if key.strip() == "model_deployment" and (
+            only_names is None or value.strip() in only_names
+        ):
+            token = value.strip()
+        else:
+            kept.append(kv)
+    query = f"{bench}:{','.join(kept)}" if kept else bench
+    return query, token
+
+
+def append_model_deployment(run_entry: str, deployment: str) -> str:
+    """Suffix a run-entry with an inline ``model_deployment=<deployment>`` token."""
+    return f"{run_entry},model_deployment={deployment}"
+
+
 def parse_run_entry_description(desc: str) -> tuple[str, dict[str, object]]:
     if ":" not in desc:
         raise ValueError(

@@ -1069,9 +1069,12 @@ def _inline_local_deployment(run_entries: list[str], deployment: str) -> list[st
     (the run-entry multi-model convention). ``_freeze_run_spec_sources`` strips the
     token for discovery (``_strip_local_deployment`` — local-only) and reuses it as
     that source's per-run rewrite target and ``lease_endpoints`` key. See
-    docs/planning/olmo-multi-model-from-spec-plan.md §4.4.
+    docs/planning/olmo-multi-model-from-spec-plan.md §4.4. (R-8: delegates to the
+    shared append helper.)
     """
-    return [f"{entry},model_deployment={deployment}" for entry in run_entries]
+    from eval_audit.helm.run_entries import append_model_deployment
+
+    return [append_model_deployment(entry, deployment) for entry in run_entries]
 
 
 def _olmo_combined_run_entries(mode: str) -> list[str]:
@@ -1485,21 +1488,12 @@ def _strip_local_deployment(
     "local-only" rule). The official run dir never carries a local token, so it
     must be stripped to match; an official/private token (e.g. a stanfordhealthcare
     deployment) is kept so it still discriminates. Returns
-    ``(discovery_query, stripped_local_name_or_None)``.
+    ``(discovery_query, stripped_local_name_or_None)``. (R-8: delegates to the
+    shared conditional strip.)
     """
-    bench, sep, rest = run_entry.partition(":")
-    if not sep:
-        return run_entry, None
-    kept: list[str] = []
-    token: str | None = None
-    for kv in rest.split(","):
-        key, _, value = kv.partition("=")
-        if key.strip() == "model_deployment" and value.strip() in local_names:
-            token = value.strip()
-        else:
-            kept.append(kv)
-    query = f"{bench}:{','.join(kept)}" if kept else bench
-    return query, token
+    from eval_audit.helm.run_entries import strip_model_deployment
+
+    return strip_model_deployment(run_entry, only_names=local_names)
 
 
 def _freeze_run_spec_sources(
