@@ -86,9 +86,9 @@ flag set):
   per-pair text comparison. Falls through `helm_compat`'s empty
   defaults for EEE-only data, but the import is still in scope.
 - [`pair_report.py`](../eval_audit/reports/pair_report.py),
-  [`quantiles.py`](../eval_audit/reports/quantiles.py),
   [`workflows/compare_batch.py`](../eval_audit/workflows/compare_batch.py)
-  — all instantiate `HelmRunDiff`. Same pattern.
+  — all instantiate `HelmRunDiff`. Same pattern. (`reports/quantiles.py`
+  was retired 2026-07-06 per audit D-4.)
 - The `from_eee` CLI imports `rebuild_core_report` which imports
   `core_metrics` which imports `HelmRunDiff`. The import is unconditional.
 
@@ -127,7 +127,6 @@ Sites we already know about (call out as the migration starting list):
 - `eval_audit/reports/core_metrics.py:_build_pair` (lines 670-690 — only the `helm_view(...)` + `HelmRunDiff(...)` block when `skip_diagnosis=False`)
 - `eval_audit/reports/pair_samples.py:write_pair_samples`
 - `eval_audit/reports/pair_report.py`
-- `eval_audit/reports/quantiles.py`
 - `eval_audit/workflows/compare_batch.py`
 
 ### 2. Decide what comparability facts the EEE schema needs to carry natively

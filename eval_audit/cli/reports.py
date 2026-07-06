@@ -23,7 +23,6 @@ from eval_audit.reports.aggregate import main as aggregate_main
 from eval_audit.reports.core_metrics import main as core_main
 from eval_audit.reports.filter_analysis import main as filter_main
 from eval_audit.reports.pair_report import main as pair_main
-from eval_audit.reports.quantiles import main as quantiles_main
 from eval_audit.workflows.analyze_experiment import main as experiment_main
 
 
@@ -35,7 +34,6 @@ def main(argv: list[str] | None = None) -> None:
     subparsers.add_parser("core")
     subparsers.add_parser("aggregate")
     subparsers.add_parser("filter")
-    subparsers.add_parser("quantiles")
     subparsers.add_parser("experiment")
     args, remaining = parser.parse_known_args(argv)
     if args.command == "pair":
@@ -46,8 +44,6 @@ def main(argv: list[str] | None = None) -> None:
         aggregate_main(remaining)
     elif args.command == "filter":
         filter_main(remaining)
-    elif args.command == "quantiles":
-        quantiles_main(remaining)
     else:
         experiment_main(remaining)
 
