@@ -291,3 +291,37 @@ both run-level means (to expose case 1) and the recipe's
 `temperature` / sampling configuration (to expose case 2). The
 existing per-metric drill-down panels already cover (1) when paired
 with the run-level table; case (2) is currently implicit.
+
+## Two different "run-level agreement" numbers — do not compare them (IM-13)
+
+The repo produces a quantity labelled **"run-level agreement"** from two
+independent code paths, and they are **not the same measurement**. Never put
+them in the same table, chart axis, or sentence as if they were interchangeable.
+
+| | Legacy `pair_report` / `quantiles` | `NormalizedDiff` `core_metric_report` |
+|---|---|---|
+| Producer | `HelmRunDiff._value_agreement_summary` (`helm/diff.py`) | `NormalizedDiff` run-level rows (`normalized/diff.py`) |
+| Join granularity | **per stat key** — each `InstanceStatKey`/`StatKey`, so a metric split across perturbations, train-trial indices, and sub-splits contributes several separate rows | **per metric handle** — collapsed to one row per `metric_id or metric_name or evaluation_name`; perturbation/split variants of the same metric fold together |
+| Tolerance semantics | **combined abs + rel** — the default sweep couples `abs_tol` with a *rising* `rel_tol` (the `pair_report` grid runs `rel_tol` from 0 up to **1.0** at the `xxloose` step, and 10.0 at `extreme`), so two values within 100% of each other count as "agreeing" at the loose end | **abs-only** — `rel_tol` is fixed at 0; a pair agrees at tolerance `t` iff `abs(a - b) <= t` |
+| Denominator | number of intersecting **stat keys** | number of intersecting **metric handles** |
+
+Concrete consequences:
+
+- The **same run pair** yields a *different* "run-level agreement at tolerance t"
+  from each path. The legacy number is generally **higher** at the loose end of
+  the sweep because (a) `rel_tol` up to 1.0 admits large absolute gaps on
+  large-valued metrics, and (b) per-stat rows dilute a single divergent metric
+  across many agreeing perturbation rows.
+- A cross-tool trend line that mixes the two (e.g. legacy `quantiles` output on
+  one machine, `core_metric_report` on another) is **an artifact of the join
+  granularity and tolerance grid, not a reproducibility signal**. This is the
+  same coupling flagged as P1-13 for the cross-machine curve (abs+rel tolerance
+  plotted on a pure-`abs_tol` axis).
+- When you need a single canonical run-level agreement, use the `NormalizedDiff`
+  `core_metric_report` value (abs-only, metric-handle join): it is deterministic
+  by construction and its tolerance axis means exactly what the label says.
+
+The long-term fix is R-2 (retire the legacy instance/agreement surface of
+`helm/diff.py` onto `NormalizedDiff`), which removes the second definition
+entirely. Until then, treat the two numbers as different quantities with the
+same unfortunate name.
