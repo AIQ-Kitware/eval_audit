@@ -149,7 +149,10 @@ def test_materialize_threads_freeze_rel_paths_into_manifest(tmp_path, monkeypatc
     # Drive the public entrypoint and assert run_spec_sources actually lands.
     import yaml
 
-    from eval_audit.integrations.infer_stack import adapter as A
+    # R-3: materialize_benchmark_bundle + _assert_helm_aliases_exist live in
+    # bundle_export now; patch the alias assertion on its real home so the
+    # internal call sees the patch.
+    from eval_audit.integrations.infer_stack import bundle_export as BE
     from eval_audit.integrations.infer_stack.adapter import (
         ServingFacts,
         materialize_benchmark_bundle,
@@ -159,7 +162,7 @@ def test_materialize_threads_freeze_rel_paths_into_manifest(tmp_path, monkeypatc
     _patch_classify(monkeypatch, run)
     monkeypatch.setattr(dc, "_enumerate_runs", lambda root: [run])
     # Keep the test hermetic w.r.t. HELM's alias config.
-    monkeypatch.setattr(A, "_assert_helm_aliases_exist", lambda *a, **k: None)
+    monkeypatch.setattr(BE, "_assert_helm_aliases_exist", lambda *a, **k: None)
 
     result = materialize_benchmark_bundle(
         facts=[ServingFacts(
