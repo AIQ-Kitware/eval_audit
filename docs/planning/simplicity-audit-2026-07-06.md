@@ -1,7 +1,16 @@
 # Simplicity & Bloat Audit — 2026-07-06
 
-**Status: PLANNED.** Implementation on `impl/simplicity-audit` (branched from
-`impl/run-from-run-spec`). Stamp phases here as they land.
+**Status (2026-07-06): IMPLEMENTED — all seven phases.** Landed on
+`impl/simplicity-audit` (branched from `impl/run-from-run-spec`) as 15 commits,
+implemented by guided Opus agents with per-phase main-session review. Net:
+~10,600 lines deleted, `helm/diff.py` 1,844→844, `presets.py` 1,154→173 (+YAML),
+`docs/planning/` 22→11 docs, journals rotated. Phases 1–6 are behavior-neutral
+(Phase 6 characterization: eee_only_demo byte-identical modulo the plotly-UUID/
+timestamp noise floor established by HEAD-vs-HEAD reruns); Phase 7 (R-2) is the
+one intentional behavior change — deltas stamped below and in
+[`docs/eee-vs-helm-metadata.md`](../eee-vs-helm-metadata.md). Suite:
+443→442 passed / 71 skipped (+1 new preset-YAML regression test, −2 tests that
+pinned the deleted legacy surface); slow planner file 12/12.
 
 **Lens:** simplicity, bloat reduction, and ease of understanding — deliberately *not* a
 correctness re-audit. The [2026-07-02 codebase audit](../historical/planning/codebase-audit-2026-07-02.md) is
