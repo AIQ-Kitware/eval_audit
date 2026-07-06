@@ -459,43 +459,36 @@ class SankeyDiGraph(nx.DiGraph):
 
     @classmethod
     def demo(cls, n=200, seed=0) -> SankeyDiGraph:
-        """
-        Demodata for tests
+        """Small deterministic demo graph for doctests/tests.
+
+        Builds a 3-stage flow (All Runs -> dataset -> dataset:status) directly
+        via the ``add_edge`` API, with edge ``value`` = the number of synthetic
+        rows on that flow. (The previous implementation referenced a
+        ``Plan``/``Split``/``Bucket`` API that never existed.)
+
+        Example:
+            >>> from eval_audit.utils.sankey_builder import SankeyDiGraph
+            >>> g = SankeyDiGraph.demo(n=50)
+            >>> total = sum(v for _, _, v in g.edges(data='value')
+            ...             if _ == 'All Runs')  # doctest: +SKIP
         """
         import random
+        from collections import Counter
 
         r = random.Random(seed)
-
         rows = [
             dict(
                 dataset=r.choice(['coco', 'openimages', 'cityscapes']),
-                backend=r.choice(['cuda', 'cpu']),
                 status=('fail' if r.random() < 0.15 else 'ok'),
             )
             for _ in range(n)
         ]
-        for row in rows:
-            row['reason'] = (
-                r.choice(['oom', 'timeout'])
-                if row['status'] == 'fail'
-                else None
-            )
-
-        plan = Plan(
-            Root('All Runs'),
-            Group('dataset', 'dataset'),
-            Split(
-                'status',
-                'status',
-                branches={
-                    'ok': Plan(Group('backend', 'backend')),
-                    'fail': Plan(
-                        Bucket('reason', 'reason'), Group('backend', 'backend')
-                    ),
-                },
-            ),
-        )
-        self = plan.build_sankey(rows)
+        self = cls()
+        for dataset, count in sorted(Counter(row['dataset'] for row in rows).items()):
+            self.add_edge('All Runs', dataset, value=count)
+        stage2 = Counter((row['dataset'], row['status']) for row in rows)
+        for (dataset, status), count in sorted(stage2.items()):
+            self.add_edge(dataset, f'{dataset}:{status}', value=count)
         return self
 
     # ---- light reporting helpers (optional, but nice) ----
@@ -643,69 +636,3 @@ class SankeyDiGraph(nx.DiGraph):
         fig.update_layout(title_text=title, font_size=14)
         return fig
 
-
-def demo():
-    """
-    """
-    import kwutil
-    import ubelt as ub
-    rows = kwutil.Yaml.loads(ub.codeblock(
-        '''
-        - {run: run1, suite: suite1, retcode: 1, retmsg: 'unsupported', spec_diagnosis: null, metric_iou: null}
-        - {run: run2, suite: suite1, retcode: 1, retmsg: 'unsupported', spec_diagnosis: null, metric_iou: null}
-        - {run: run3, suite: suite1, retcode: 1, retmsg: 'unsupported', spec_diagnosis: null, metric_iou: null}
-        - {run: run4, suite: suite1, retcode: 1, retmsg: 'unsupported', spec_diagnosis: null, metric_iou: null}
-        - {run: run5, suite: suite1, retcode: 1, retmsg: 'unsupported', spec_diagnosis: null, metric_iou: null}
-
-        - {run: run1, suite: suite2, retcode: 0, retmsg: '', spec_diagnosis: 'agree', metric_iou: 1.0}
-        - {run: run2, suite: suite2, retcode: 0, retmsg: '', spec_diagnosis: 'agree', metric_iou: 1.0}
-        - {run: run3, suite: suite2, retcode: 0, retmsg: '', spec_diagnosis: 'agree', metric_iou: 1.0}
-        - {run: run4, suite: suite2, retcode: 0, retmsg: '', spec_diagnosis: 'agree', metric_iou: 1.0}
-        - {run: run5, suite: suite2, retcode: 0, retmsg: '', spec_diagnosis: 'agree', metric_iou: 1.0}
-
-        - {run: run1, suite: suite3, retcode: 0, retmsg: '', spec_diagnosis: 'agree', metric_iou: 0.9}
-        - {run: run2, suite: suite3, retcode: 0, retmsg: '', spec_diagnosis: 'agree', metric_iou: 0.7}
-        - {run: run3, suite: suite3, retcode: 0, retmsg: '', spec_diagnosis: 'agree', metric_iou: 0.9}
-        - {run: run4, suite: suite3, retcode: 0, retmsg: '', spec_diagnosis: 'agree', metric_iou: 1.0}
-        - {run: run5, suite: suite3, retcode: 1, retmsg: 'oom', spec_diagnosis: null, metric_iou: null}
-        - {run: run6, suite: suite3, retcode: 1, retmsg: 'oom', spec_diagnosis: null, metric_iou: null}
-
-        - {run: run1, suite: suite4, retcode: 0, retmsg: '', spec_diagnosis: 'disagree-deploy', metric_iou: 0.0}
-        - {run: run2, suite: suite4, retcode: 0, retmsg: '', spec_diagnosis: 'disagree-deploy', metric_iou: 0.0}
-        - {run: run3, suite: suite4, retcode: 0, retmsg: '', spec_diagnosis: 'disagree-input', metric_iou: 0.3}
-        - {run: run4, suite: suite4, retcode: 0, retmsg: '', spec_diagnosis: 'disagree-input', metric_iou: 0.1}
-        '''))
-
-    from eval_audit.utils import sankey_builder
-    root = sankey_builder.Root(label="All Attempts")
-    bench = root.group(by="suite", name="benchmark")
-
-    splits = bench.group(by="retcode", name="Ran")
-    splits[1].label = 'Failed'
-    splits[0].label = 'Ran'
-
-    # Do something unique on the fail branch
-    splits[1].group(by='retmsg')
-
-    def iou_grouper(row):
-        value = row['metric_iou']
-        if value == 1:
-            return '1'
-        elif value > 0.5:
-            return '0.5 - 1'
-        elif value > 0:
-            return '0 - 0.5'
-        else:
-            return '0'
-
-    diagnosis_buckets = splits[0].group(by="agreement")
-    iou_groups = diagnosis_buckets.group(by=iou_grouper)
-
-    # Connect only some of the underlying buckets
-    iou_groups['0.5 - 1'].connect('Priority Analysis')
-    iou_groups['0 - 0.5'].connect('Priority Analysis')
-
-    graph = root.build_sankey(rows)
-    print(root.to_text())
-    import networkx as nx
-    nx.write_network_text(graph)

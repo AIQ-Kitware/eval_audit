@@ -25,7 +25,14 @@ class _JsonRunView:
 
     def _load(self, name: str):
         fpath = self.run_dpath / f"{name}.json"
-        return json.loads(fpath.read_text())
+        text = fpath.read_text()
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as ex:
+            # Name the offending file (JSONDecodeError alone gives only an
+            # offset). JSONDecodeError is a ValueError subclass, so callers that
+            # already tolerate ValueError keep working.
+            raise ValueError(f"invalid JSON in {fpath}: {ex}") from ex
 
     def run_spec(self):
         return self._load("run_spec")
@@ -44,7 +51,20 @@ class _JsonRunView:
 
 
 class _MsgspecRunView(_JsonRunView):
-    pass
+    """Unimplemented msgspec-backed reader placeholder.
+
+    Previously this silently aliased the plain-JSON view, so ``.msgspec.X()``
+    returned dicts while promising msgspec objects. Raise instead of lying: a
+    caller that genuinely needs the msgspec path fails loudly rather than
+    getting JSON dicts. Construction stays cheap (HelmRun builds one eagerly);
+    only method access raises.
+    """
+
+    def _load(self, name: str):
+        raise NotImplementedError(
+            "eval_audit.compat.helm_outputs._MsgspecRunView is not implemented; "
+            "use the .json view (plain JSON) instead."
+        )
 
 
 class HelmRun:

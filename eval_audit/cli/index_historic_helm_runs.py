@@ -227,7 +227,6 @@ class CompileHelmReproListConfig(scfg.DataConfig):
             suite_pattern=suite_pattern,
             run_pattern=run_pattern,
             require_per_instance_stats=require_per_instance_stats,
-            include_max_eval_instances=include_max_eval_instances,
         )
         rows = build_run_table(
             runs,

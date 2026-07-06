@@ -599,9 +599,6 @@ def main(argv: list[str] | None = None) -> None:
         + ' '.join(shlex.quote(part) for part in cmd_parts)
         + ' "$@"',
     ])
-    # reproduce.sh is a navigation alias to the canonical reproduce.sh
-    # so the legacy path keeps working.
-    link_alias(reproduce_fpath, out_dpath, 'reproduce.sh')
 
     # Write provenance.json at the experiment root (overwritten each run).
     provenance: dict[str, Any] = {

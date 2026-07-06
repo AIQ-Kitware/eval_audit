@@ -256,7 +256,6 @@ def _render_breakdown_scopes(
             shutil.rmtree(child, ignore_errors=True)
     manifest_fpath = breakdowns_root / "manifest.json"
     _write_json(manifest_rows, manifest_fpath)
-    link_alias(manifest_fpath, breakdowns_root, "manifest.json")
 
 
 @profile
@@ -927,7 +926,7 @@ def _render_scope_summary(
     )
     cardinality_fpath = level_001_static / "cardinality_summary.txt"
     _write_text(cardinality_lines, cardinality_fpath)
-    link_alias(cardinality_fpath, level_001_static, "cardinality_summary.txt")
+    # (the level_001_static self-alias was a no-op; keep the cross-dir alias)
     link_alias(cardinality_fpath, level_001, "cardinality_summary.txt")
 
     level_002_lines = [
@@ -1053,7 +1052,6 @@ def _render_scope_summary(
     }
     manifest_fpath = level_001_machine / "summary_manifest.json"
     _write_json(manifest, manifest_fpath)
-    link_alias(manifest_fpath, level_001_machine, "summary_manifest.json")
 
     if top_level_summary_root is None:
         # Top-level scope: emit real scripts that invoke the build CLI
@@ -1161,7 +1159,6 @@ def _render_scope_summary(
     ]
     story_index_fpath = level_001 / "story_index.txt"
     _write_text(story_index_lines, story_index_fpath)
-    link_alias(story_index_fpath, level_001, "story_index.txt")
 
     _write_scope_level_aliases(level_001, level_002, summary_root)
 

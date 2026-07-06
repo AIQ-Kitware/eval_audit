@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import csv
 import dataclasses
+import functools
 import json
 import re
 from pathlib import Path
@@ -87,11 +88,21 @@ def _row_attrs(row: dict[str, Any], *, source_kind: str) -> tuple[str | None, st
     return model, benchmark
 
 
-def _coerce_pattern(values: list[str]):
-    """Build a kwutil MultiPattern, or None if no patterns declared."""
+@functools.lru_cache(maxsize=None)
+def _coerce_pattern_cached(values: tuple[str, ...]):
     if not values:
         return None
-    return kwutil.MultiPattern.coerce(values)
+    return kwutil.MultiPattern.coerce(list(values))
+
+
+def _coerce_pattern(values: list[str]):
+    """Build a kwutil MultiPattern, or None if no patterns declared.
+
+    Cached on the (hashable) pattern tuple so ``_scope_match`` — called once per
+    inventory row — does not recompile the same manifest-scope MultiPattern for
+    every row (the coercion was previously hoisted nowhere).
+    """
+    return _coerce_pattern_cached(tuple(values or ()))
 
 
 def _scope_match(row: dict[str, Any], scope: ScopeFilter, *, source_kind: str) -> bool:
@@ -132,8 +143,6 @@ class ComposeResult:
 
 def _eee_rows_from_root(
     src: EeeRootSource,
-    *,
-    virtual_name: str,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
     """Walk an EEE tree and synthesize official + local index rows.
 
@@ -330,9 +339,7 @@ def compose_virtual_experiment(manifest: VirtualExperimentManifest) -> ComposeRe
     # eee_root sources: walk an EEE tree and synthesize official + local rows.
     per_source_eee_root: list[dict[str, Any]] = []
     for src in manifest.eee_root_sources:
-        raw_official, raw_local, counts = _eee_rows_from_root(
-            src, virtual_name=manifest.name
-        )
+        raw_official, raw_local, counts = _eee_rows_from_root(src)
         official_retained = 0
         for row in raw_official:
             if not _scope_match(row, manifest.scope, source_kind="official"):
@@ -463,9 +470,7 @@ def build_scoped_filter_inventory(
     out: list[dict[str, Any]] = []
     for row in pre_filter_inventory:
         new_row = dict(row)
-        original_status = new_row.get("selection_status")
-        in_scope = _scope_match(new_row, manifest.scope, source_kind="pre_filter")
-        if not in_scope:
+        if not _scope_match(new_row, manifest.scope, source_kind="pre_filter"):
             # Augment failure_reasons rather than replace them — preserve
             # the upstream gate signal so the sankey still shows "structural"
             # / "deployment" / etc. exclusions for rows excluded earlier.
@@ -474,12 +479,8 @@ def build_scoped_filter_inventory(
                 reasons.append("excluded-by-manifest-scope")
             new_row["failure_reasons"] = reasons
             new_row["selection_status"] = "excluded"
-        else:
-            # In scope. ``selected`` only if the upstream filter also passed.
-            if original_status != "selected":
-                pass  # leave the upstream excluded status intact
-            else:
-                new_row["selection_status"] = "selected"
+        # In scope: the upstream selection_status is already the correct value
+        # (a copy of the row), so no rewrite is needed.
         out.append(new_row)
     return out
 

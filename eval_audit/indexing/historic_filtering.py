@@ -40,7 +40,6 @@ def gather_runs(
     suite_pattern: str = "*",
     run_pattern: str = "*:*",
     require_per_instance_stats: bool = False,
-    include_max_eval_instances: bool = True,
 ) -> tuple[list[Any], list[dict[str, Any]]]:
     from magnet.backends.helm.helm_outputs import HelmOutputs, HelmRun
     from magnet.backends.helm.cli.materialize_helm_run import (
@@ -103,18 +102,10 @@ def build_run_table(
         if include_max_eval_instances:
             max_eval_instances = infer_num_instances(run.path)
 
-        # Not sure if there is an advantage to msgspec or json here
-        # ZFS is likely messing up my timings.
-        if 1:
-            run_spec = run.json.run_spec()
-            scenario_class = run_spec['scenario_spec']['class_name']
-            model = run_spec['adapter_spec']['model']
-            display_name = run_spec['name']
-        else:
-            run_spec = run.msgspec.run_spec()
-            scenario_class = run_spec.scenario_spec.class_name
-            model = run_spec.adapter_spec.model
-            display_name = run_spec.name
+        run_spec = run.json.run_spec()
+        scenario_class = run_spec['scenario_spec']['class_name']
+        model = run_spec['adapter_spec']['model']
+        display_name = run_spec['name']
 
         if run.path.name != display_name.replace('/', '_'):
             mismatches.append({

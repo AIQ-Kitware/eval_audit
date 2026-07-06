@@ -70,7 +70,7 @@ def _parse_model(text: str | None) -> str | None:
     return m.group(1).replace("_", "/", 1)
 
 
-def _row_dim(row: dict[str, Any], dim: str, *, source_kind: str) -> str:
+def _row_dim(row: dict[str, Any], dim: str) -> str:
     """Return a stringified dimension value for a row, with run_name fallback."""
     direct = (row.get(dim) or "").strip()
     if direct:
@@ -375,8 +375,8 @@ def compute_coverage(
             TargetCoverageRow(
                 logical_run_key=logical,
                 run_name=run_name,
-                model=_row_dim(row, "model", source_kind="official"),
-                benchmark=_row_dim(row, "benchmark", source_kind="official"),
+                model=_row_dim(row, "model"),
+                benchmark=_row_dim(row, "benchmark"),
                 suite_version=version,
                 public_track=(row.get("public_track") or "main").strip() or "main",
                 target_run_path=(row.get("run_path") or row.get("public_run_dir") or None),
