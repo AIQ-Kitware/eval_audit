@@ -42,7 +42,7 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
-from eval_audit.cli.from_eee import _packets_with_manifests
+from eval_audit.cli.from_eee import _packets_with_manifests, _validate_core_metrics_passthrough
 from eval_audit.normalized.eee_sources import (
     build_local_index_row as _build_local_index_row,
     build_logical_run_key as _build_logical_run_key,
@@ -299,6 +299,7 @@ def main(argv: list[str] | None = None) -> None:
         ),
     )
     args, plot_layout_args = parser.parse_known_args(argv)
+    _validate_core_metrics_passthrough(plot_layout_args, parser)
 
     out_dir = Path(args.out_dpath).expanduser().resolve()
     if args.clean and out_dir.exists():

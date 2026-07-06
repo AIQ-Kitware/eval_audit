@@ -332,6 +332,17 @@ def _write_management_summary(report: dict[str, Any], out_fpath: Path) -> None:
     else:
         lines.append('local_repeat: not_computed')
         lines.append('')
+    # IM-6: the management summary shows a single official_vs_local pair. When a
+    # packet carries more than one (e.g. split-by-track), disclose the count and
+    # which one is being shown so the reader knows the summary is "1 of N".
+    n_official_vs_local_pairs = sum(
+        1 for pair in pairs if pair.get('comparison_kind') == 'official_vs_local'
+    )
+    if n_official_vs_local_pairs > 1:
+        lines.append(
+            f"n_official_vs_local_pairs: {n_official_vs_local_pairs}; "
+            f"showing {official_vs_local.get('comparison_id')}"
+        )
     lines.append(f"{official_vs_local['comparison_id']}:")
     lines.append(f"  diagnosis: {official_vs_local['diagnosis'].get('label')}")
     lines.append(f"  run-level N: {official_vs_local['run_level']['n_rows']}")

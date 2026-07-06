@@ -152,6 +152,31 @@ def is_judge_dependent(metric_name: Optional[str]) -> bool:
     return classify_judge_dependence(metric_name)[0] == 'judge_dependent'
 
 
+# Metrics whose *per-instance* value is genuinely binary (0.0 or 1.0), so a
+# ``is_correct = score >= 0.5`` derivation is meaningful. Everything else
+# (f1/rouge/bleu/iou/perplexity/…) is continuous, where thresholding at 0.5
+# fabricates a correctness signal that does not exist — for those we record
+# ``is_correct = None``. Kept deliberately conservative (exact-match family).
+BINARY_INSTANCE_PREFIXES: tuple[str, ...] = (
+    'exact_match',
+    'quasi_exact_match',
+    'prefix_exact_match',
+    'quasi_prefix_exact_match',
+    'exact_set_match',
+)
+
+
+def is_binary_instance_metric(metric_name: Optional[str]) -> bool:
+    """True when the metric's per-instance value is genuinely 0/1.
+
+    Used to scope ``is_correct`` derivation: only exact-match-family metrics
+    have a well-defined per-instance correctness; continuous metrics get None.
+    """
+    if not metric_name:
+        return False
+    return any(metric_name.startswith(p) for p in BINARY_INSTANCE_PREFIXES)
+
+
 def metric_family(metric_name: Optional[str]) -> str:
     """A lightweight family heuristic used for summaries."""
     if not metric_name:

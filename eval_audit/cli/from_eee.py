@@ -72,6 +72,57 @@ from eval_audit.normalized.eee_sources import (  # noqa: F401
 )
 
 
+# IM-8: both EEE-only CLIs forward the ``parse_known_args`` remainder verbatim
+# to ``python -m eval_audit.reports.core_metrics``. Keep this set in sync with
+# core_metrics.main()'s parser (the ``--plot-*`` layout knobs plus the render/
+# diagnosis toggles). Anything not in it is a typo and must fail fast at the CLI
+# rather than being silently swallowed by the subprocess.
+CORE_METRICS_PASSTHROUGH_FLAGS = frozenset({
+    "--report-dpath",
+    "--components-manifest",
+    "--comparisons-manifest",
+    "--instance-source",
+    "--no-plots",
+    "--plots-only",
+    "--plot-target",
+    "--render-heavy-pairwise-plots",
+    "--skip-diagnosis",
+    "--plot-figure-scale",
+    "--plot-constrained-h-pad",
+    "--plot-constrained-w-pad",
+    "--plot-constrained-hspace",
+    "--plot-constrained-wspace",
+    "--plot-subplot-left",
+    "--plot-subplot-right",
+    "--plot-subplot-top",
+    "--plot-subplot-bottom",
+    "--plot-suptitle-y",
+})
+
+
+def _validate_core_metrics_passthrough(remainder: list[str], parser) -> list[str]:
+    """Reject unknown pass-through tokens so a typo fails fast at the CLI.
+
+    Each ``--flag`` (or ``--flag=value``) must name a real core_metrics option;
+    short options are not forwardable; bare tokens are treated as values for the
+    preceding flag and pass through.
+    """
+    for token in remainder:
+        if token.startswith("--"):
+            name = token.split("=", 1)[0]
+            if name not in CORE_METRICS_PASSTHROUGH_FLAGS:
+                parser.error(
+                    f"unknown pass-through argument {token!r}; forwardable "
+                    "core_metrics flags are: "
+                    f"{', '.join(sorted(CORE_METRICS_PASSTHROUGH_FLAGS))}"
+                )
+        elif token.startswith("-") and token != "-":
+            parser.error(
+                f"unexpected short option {token!r}; only core_metrics long-form "
+                "pass-through flags are supported"
+            )
+    return remainder
+
 
 # ---------------------------------------------------------------------------
 # Per-packet rebuild via the analyze_experiment workflow
@@ -295,6 +346,7 @@ def main(argv: list[str] | None = None) -> None:
         ),
     )
     args, plot_layout_args = parser.parse_known_args(argv)
+    _validate_core_metrics_passthrough(plot_layout_args, parser)
 
     eee_root = Path(args.eee_root).expanduser().resolve()
     out_dir = Path(args.out_dpath).expanduser().resolve()

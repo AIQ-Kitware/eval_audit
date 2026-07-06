@@ -42,6 +42,8 @@ from eval_audit.normalized.model import (
 from every_eval_ever.eval_types import EvaluationLog
 from every_eval_ever.instance_level_types import InstanceLevelEvaluationLog
 
+from eval_audit.metrics_taxonomy import is_binary_instance_metric
+
 # orjson is ~3x faster than stdlib json on EEE samples.jsonl; we do
 # millions of line-parses per heatmap run. Bind once at module load
 # with a stdlib fallback so individual loaders can just call
@@ -611,6 +613,14 @@ def _instances_from_raw_helm(run_path: Path, evaluation_log) -> list[InstanceRec
                 score = float(mean)
             except (TypeError, ValueError):
                 continue
+            # IM-5: only derive a correctness bool for genuinely-binary (0/1)
+            # metrics; thresholding a continuous metric (f1/rouge/bleu/…) at 0.5
+            # fabricates a signal that does not exist. None means "not
+            # applicable" and no in-repo consumer reads InstanceRecord.is_correct
+            # (audit 2026-05-01), so None is safe.
+            is_correct_value: bool | None = (
+                (score >= 0.5) if is_binary_instance_metric(metric_name) else None
+            )
             try:
                 rec = InstanceLevelEvaluationLog(
                     schema_version="0.2.2",
@@ -632,7 +642,14 @@ def _instances_from_raw_helm(run_path: Path, evaluation_log) -> list[InstanceRec
                             is_terminal=True,
                         )
                     ],
-                    evaluation=Evaluation(score=score, is_correct=score > 0.5),
+                    # The EEE Evaluation schema requires a bool; this synthesized
+                    # record is never read for scoring (audit 2026-05-01), so a
+                    # non-binary metric falls back to False here while the
+                    # authoritative InstanceRecord.is_correct below stays None.
+                    evaluation=Evaluation(
+                        score=score,
+                        is_correct=bool(is_correct_value) if is_correct_value is not None else False,
+                    ),
                 )
             except Exception:
                 # If the EEE schema rejects this record (e.g. empty refs +
@@ -646,7 +663,7 @@ def _instances_from_raw_helm(run_path: Path, evaluation_log) -> list[InstanceRec
                     metric_id=metric_name,
                     metric_kind=None,
                     score=score,
-                    is_correct=score > 0.5,
+                    is_correct=is_correct_value,
                     record=rec,
                 )
             )
