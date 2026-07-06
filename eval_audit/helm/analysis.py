@@ -41,7 +41,7 @@ from typing import Any, Mapping
 
 import ubelt as ub
 
-from eval_audit.helm import hashers as helm_hashers
+from eval_audit.utils import hashers as helm_hashers
 from eval_audit.helm import metrics as helm_metrics
 from eval_audit.utils.numeric import safe_float as _safe_float
 

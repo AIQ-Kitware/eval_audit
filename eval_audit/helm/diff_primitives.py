@@ -11,7 +11,7 @@ import math
 import ubelt as ub
 from collections import Counter
 from dataclasses import dataclass
-from eval_audit.helm import hashers as helm_hashers
+from eval_audit.utils import hashers as helm_hashers
 from typing import Any, Callable, Iterable
 
 

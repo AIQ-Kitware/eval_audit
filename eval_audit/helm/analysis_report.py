@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 import ubelt as ub
-from eval_audit.helm import hashers as helm_hashers
+from eval_audit.utils import hashers as helm_hashers
 from eval_audit.helm import metrics as helm_metrics
 
 

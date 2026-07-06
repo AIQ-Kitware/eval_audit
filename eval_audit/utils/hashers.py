@@ -24,7 +24,7 @@ sorting) because list ordering can be semantic. If you later decide to add
 "deep canonicalization" rules, add them here so all callers stay consistent.
 
 Example:
-     >>> from eval_audit.helm import hashers as helm_hashers
+     >>> from eval_audit.utils import hashers as helm_hashers
      >>> name_obj = {'name': 'num_bytes', 'split': 'valid', 'perturbation': {'name': 'dialect', 'prob': 1.0}}
      >>> key = helm_hashers.stat_key(name_obj)
      >>> assert key.startswith('num_bytes,split=valid,pert=dialect')
