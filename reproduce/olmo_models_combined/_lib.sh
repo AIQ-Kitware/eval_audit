@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Shared definitions for the COMBINED multi-model OLMo fan-out runbook.
-# Source this from the numbered scripts: `source "$(dirname "$0")/_lib.sh"`.
 #
 # This runbook is the sibling of ../olmo_models. The single-model runbook runs the
 # seven OLMo presets one at a time (a serial bash loop over OLMO_TARGETS, each its
@@ -13,21 +12,21 @@
 # See docs/historical/planning/olmo-multi-model-from-spec-plan.md §4.4/§4.7.
 #
 # The serving / leasing / container / HuggingFace-auth / infer-stack-config setup
-# is IDENTICAL to the single-model runbook, so we inherit it verbatim by sourcing
-# the sibling `_lib.sh` (one source of truth — no drift), then override only the
-# combined-specific bits below. In particular this reuses the sibling's
-# INFER_STACK_CONFIG_DIR (the shipped OLMo catalog with the <preset>-single
-# endpoints), OLMO_CONTAINER_IMAGE, HF token resolution, INFER_STACK_ALLOWED_GPUS,
-# INFER_STACK_DATA_DIR resolution, and the EVAL_AUDIT_* group-strip conventions.
-
-_combined_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../olmo_models/_lib.sh
-source "$_combined_here/../olmo_models/_lib.sh"
+# is IDENTICAL to the single-model runbook. It now lives in the shared
+# reproduce/_lib.sh as `olmo_setup` (one source of truth — no drift); we source
+# that shared lib and run `olmo_setup`, then override only the combined-specific
+# bits below. In particular olmo_setup provides INFER_STACK_CONFIG_DIR (the shipped
+# OLMo catalog with the <preset>-single endpoints), OLMO_CONTAINER_IMAGE, HF token
+# resolution, INFER_STACK_ALLOWED_GPUS handling, INFER_STACK_DATA_DIR resolution,
+# and the EVAL_AUDIT_* group-strip conventions; olmo_run_extra_preset is defined in
+# the shared lib as well.
+source "$(dirname "${BASH_SOURCE[0]}")/../_lib.sh"
+olmo_setup
 
 # --- combined-specific overrides ------------------------------------------------
 
 # Group the single combined full experiment (not the sibling's seven). Override
-# with OLMO_COMBINED_VEXP_MANIFEST; VEXP_MANIFEST (set by the sibling _lib to the
+# with OLMO_COMBINED_VEXP_MANIFEST; VEXP_MANIFEST (set by olmo_setup to the
 # seven-experiment olmo-models.yaml) is repointed here.
 VEXP_MANIFEST="${OLMO_COMBINED_VEXP_MANIFEST:-$ROOT/configs/virtual-experiments/olmo-models-combined.yaml}"
 
@@ -73,33 +72,3 @@ OLMO_COMBINED_EXTRA_PRESETS=(
   allenai-olmo-7b-lite
 )
 OLMO_COMBINED_EXTRA_ENDPOINT="allenai-olmo-7b-single"
-
-# Export one extra single-model preset's exact-path bundle and schedule its <mode>
-# manifest (smoke|full) with per-run leasing + fan-out. Single-deployment freeze
-# against the preset's OWN narrow precomputed_root (baked into its manifest block);
-# no inline model_deployment token, so the locator run-entry is a bare discovery
-# key. Expects the gateway already bootstrapped by 10/15: LEASE_MASTER_KEY,
-# LITELLM_BASE_URL, OLMO_CONTAINER_IMAGE, OLMO_TMUX_WORKERS in the environment.
-# Honors FORCE_RERUN (the caller's OLMO_FORCE_RERUN).
-olmo_run_extra_preset() {
-  local preset="$1" mode="$2"   # mode = smoke | full
-  local bundle_root="$STORE_ROOT/local-bundles/$preset"
-  local experiment="audit-${preset}-${mode}"
-  echo
-  echo "==================================================================="
-  echo "== extra single-model suite: ${preset} (${mode})"
-  echo "==================================================================="
-  "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
-    --preset "$preset" \
-    --bundle-root "$bundle_root" \
-    --access-kind openai-compatible \
-    --base-url "${LITELLM_BASE_URL}/v1" \
-    --api-key-value "$LEASE_MASTER_KEY" \
-    --from-spec --freeze-rel-paths
-  if [[ "${FORCE_RERUN:-0}" == "1" && -d "$RESULTS_ROOT/$experiment" ]]; then
-    echo "OLMO_FORCE_RERUN=1: clearing prior results at $RESULTS_ROOT/$experiment"
-    rm -rf "$RESULTS_ROOT/$experiment"
-  fi
-  eval-audit-run --run=1 "$bundle_root/${mode}_manifest.yaml" \
-    --container-image "$OLMO_CONTAINER_IMAGE" --lease --tmux-workers "$OLMO_TMUX_WORKERS"
-}
