@@ -1,7 +1,7 @@
 """WikiFact two-run agreement audit (sample-derived, not logits-derived).
 
 This script consumes the raw per-token logprob JSONL files emitted by
-[docs/paper/measure_wikifact_logits.py](docs/paper/measure_wikifact_logits.py)
+[dev/paper-analysis/neurips-2026/measure_wikifact_logits.py](dev/paper-analysis/neurips-2026/measure_wikifact_logits.py)
 under `<out-dir>/raw/{local,official}__<model>__<subject>.jsonl` and the
 HELM source artifacts under `/data/crfm-helm-public/...` and
 `/data/crfm-helm-audit/...`, and produces a careful audit:
@@ -66,7 +66,7 @@ wider than sqrt(Σ r_i (1-r_i)).
 
 Usage:
 
-    python docs/paper/wikifact_two_run_prediction.py \
+    python dev/paper-analysis/neurips-2026/wikifact_two_run_prediction.py \
         [--canonical-subject-only]    # restrict to place_of_birth (default: all)
         [--bootstrap-B 2000]
         [--seed 0]
@@ -976,11 +976,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--raw-dir", type=Path,
-        default=Path("docs/paper/wikifact_logits_out/raw"),
+        default=Path("docs/papers/neurips-2026/wikifact_logits_out/raw"),
     )
     ap.add_argument(
         "--out-dir", type=Path,
-        default=Path("docs/paper/wikifact_logits_out"),
+        default=Path("docs/papers/neurips-2026/wikifact_logits_out"),
     )
     ap.add_argument(
         "--canonical-subject-only", action="store_true",

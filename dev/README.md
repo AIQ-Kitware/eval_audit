@@ -7,6 +7,7 @@ installed `eval_audit` package:
 - `e2e-tests/` — numbered end-to-end shell checks (env, smoke grid, index, compose)
 - `journals/` — append-only agent/human session journals
 - `lessons/` — accumulated lessons learned
+- `paper-analysis/` — one-shot, machine-specific analysis scripts backing paper claims (moved from `docs/papers/`)
 - `scripts/` — submodule helpers and ad hoc catalog scripts
 - `tools/` — standalone dev tools (e.g. `deployment_match`)
 

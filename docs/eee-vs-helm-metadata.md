@@ -243,7 +243,7 @@ Concretely, given only EEE artifacts (and `recipe_facts` / sidecar
 | Why do two runs of the same recipe diverge? | ❌ — typically requires upstream framework artifacts + source |
 
 Surfaced by the slim-heatmap case studies (see
-[`paper_draft/2026-05-01_session_log.md`](../paper_draft/2026-05-01_session_log.md)
+[`docs/historical/neurips-2026-05-01_session_log.md`](historical/neurips-2026-05-01_session_log.md)
 for the full investigation):
 
 - **`entity_matching` zero hash overlap**: detected from EEE
