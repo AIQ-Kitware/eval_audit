@@ -351,9 +351,17 @@ def test_latest_suite_version_per_official_track_is_default_selection_policy(tmp
     )
 
     packet = artifact["packets"][0]
-    retained = packet["official_selection"]["retained_component_ids"]
-    assert retained == ["official::main::v2::boolq:model=meta/llama-3-8b"]
-    assert "official::main::v1::boolq:model=meta/llama-3-8b" in packet["official_selection"]["discarded_component_ids"]
+    # The internal `official_selection` diagnostics block was removed from
+    # packets; latest-per-track selection now shows up structurally as the
+    # only official component retained in the packet. component_ids carry the
+    # raw run_spec_name (canonicalization touches only `logical_run_key`).
+    official_ids = [
+        component["component_id"]
+        for component in packet["components"]
+        if component["source_kind"] == "official"
+    ]
+    assert official_ids == ["official::main::v2::boolq:model=meta/llama-3-8b"]
+    assert "official::main::v1::boolq:model=meta/llama-3-8b" not in official_ids
 
 
 def test_multi_track_official_ambiguity_does_not_silently_auto_pick_reference(tmp_path):
@@ -379,8 +387,7 @@ def test_multi_track_official_ambiguity_does_not_silently_auto_pick_reference(tm
         ]
         assert official_vs_local
         assert all(comparison["enabled"] is True for comparison in official_vs_local)
-        assert "multiple_official_tracks_after_latest_per_track" in packet["warnings"]
-        assert f"render_split_by_public_track:{packet['selected_public_track']}" in packet["official_selection"]["warnings"]
+        assert "split_by_public_track" in packet["warnings"]
 
 
 def test_official_fallback_identity_is_stable_and_not_row_index_based(tmp_path):
@@ -422,11 +429,10 @@ def test_warnings_emitted_for_suspicious_conditions_and_written_as_artifacts(tmp
     warnings_text = (out_dpath / "warnings.txt").read_text()
 
     warning_values = [row["warning"] for row in warnings_payload["warnings"]]
-    assert any("multiple_official_tracks_after_latest_per_track" in item for item in warning_values)
-    assert any("render_split_by_public_track:" in item for item in warning_values)
+    assert any("split_by_public_track" in item for item in warning_values)
     assert any("fallback_local_identity:" in item for item in warning_values)
     assert "packet_warnings:" in warnings_text
-    assert "render_split_by_public_track:" in warnings_text
+    assert "split_by_public_track" in warnings_text
 
 
 def test_planner_outputs_are_human_inspectable_and_declared(tmp_path):
@@ -487,4 +493,4 @@ def test_experiment_scoped_planning_does_not_emit_unrelated_official_only_packet
     )
 
     assert artifact["packet_count"] == 1
-    assert artifact["packets"][0]["logical_run_key"] == "boolq:model=meta/llama-3-8b"
+    assert artifact["packets"][0]["logical_run_key"] == "boolq:model=meta_llama-3-8b"
