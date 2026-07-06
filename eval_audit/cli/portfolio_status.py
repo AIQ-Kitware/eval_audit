@@ -9,11 +9,20 @@ from pathlib import Path
 from typing import Any
 
 from eval_audit.infra.logging import setup_cli_logging
+from eval_audit.infra.report_layout import aggregate_summary_reports_root
 from eval_audit.workflows.compare_batch import collect_historic_candidates
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_SUMMARY_HISTORY_ROOT = REPO_ROOT / "reports" / "aggregate-summary" / "all-results" / ".history"
+def _default_summary_history_root() -> Path:
+    """The aggregate-summary run-inventory history root.
+
+    Derived from the report-layout helper (which honours
+    ``HELM_AUDIT_PUBLICATION_ROOT``) rather than ``Path(__file__).parents[2]``,
+    so a non-editable install does not point this into site-packages.
+    """
+    return aggregate_summary_reports_root() / "all-results" / ".history"
+
+
 DEFAULT_HISTORIC_ROOT = Path("/data/crfm-helm-public")
 
 
@@ -331,7 +340,7 @@ def main(argv: list[str] | None = None) -> None:
     setup_cli_logging()
     parser = argparse.ArgumentParser(description="Summarize the current HELM reproduction portfolio.")
     parser.add_argument("--run-inventory-csv", default=None)
-    parser.add_argument("--summary-history-root", default=str(DEFAULT_SUMMARY_HISTORY_ROOT))
+    parser.add_argument("--summary-history-root", default=None)
     parser.add_argument("--experiment-name", default=None)
     parser.add_argument("--top-experiments", type=int, default=12)
     parser.add_argument("--top-low-agreement", type=int, default=12)
@@ -340,10 +349,19 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--output-json", default=None)
     args = parser.parse_args(argv)
 
+    if args.classify_backlog and args.experiment_name is None:
+        parser.error("--classify-backlog requires --experiment-name (backlog "
+                     "classification is only defined within a single experiment scope)")
+
+    summary_history_root = (
+        Path(args.summary_history_root).expanduser().resolve()
+        if args.summary_history_root
+        else _default_summary_history_root()
+    )
     run_inventory_csv = (
         Path(args.run_inventory_csv).expanduser().resolve()
         if args.run_inventory_csv
-        else _latest_run_inventory_csv(Path(args.summary_history_root).expanduser().resolve())
+        else _latest_run_inventory_csv(summary_history_root)
     )
     rows = _load_rows(run_inventory_csv)
     summary = summarize_rows(

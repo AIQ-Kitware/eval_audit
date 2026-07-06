@@ -16,6 +16,7 @@ from pathlib import Path
 
 from eval_audit.infra.logging import setup_cli_logging
 from eval_audit.infra.paths import experiment_analysis_dpath
+from eval_audit.infra.report_layout import aggregate_summary_reports_root
 from eval_audit.workflows.rebuild_core_report import (
     main as rebuild_core_report_main,
     slugify_identifier,
@@ -23,8 +24,14 @@ from eval_audit.workflows.rebuild_core_report import (
 from eval_audit.workflows import build_reports_summary
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_ALL_RESULTS_HISTORY_ROOT = REPO_ROOT / "reports" / "aggregate-summary" / "all-results" / ".history"
+def _default_all_results_history_root() -> Path:
+    """The aggregate-summary run-inventory history root.
+
+    Derived from the report-layout helper (honours
+    ``HELM_AUDIT_PUBLICATION_ROOT``) rather than ``Path(__file__).parents[2]``,
+    so a non-editable install does not point this into site-packages.
+    """
+    return aggregate_summary_reports_root() / "all-results" / ".history"
 
 
 def _latest_run_inventory_csv(history_root: Path) -> Path:
@@ -71,8 +78,9 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--all-results-history-root",
-        default=str(DEFAULT_ALL_RESULTS_HISTORY_ROOT),
-        help="Used only when --run-inventory-csv is omitted.",
+        default=None,
+        help="Used only when --run-inventory-csv is omitted. Defaults to the "
+             "aggregate-summary all-results history under the publication root.",
     )
     parser.add_argument(
         "--experiment-name",
@@ -85,10 +93,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--filter-inventory-json", default=None)
     args = parser.parse_args(argv)
 
+    history_root = (
+        Path(args.all_results_history_root).expanduser().resolve()
+        if args.all_results_history_root
+        else _default_all_results_history_root()
+    )
     run_inventory_csv = (
         Path(args.run_inventory_csv).expanduser().resolve()
         if args.run_inventory_csv
-        else _latest_run_inventory_csv(Path(args.all_results_history_root).expanduser().resolve())
+        else _latest_run_inventory_csv(history_root)
     )
     rows = _load_csv_rows(run_inventory_csv)
     by_experiment: dict[str, list[dict[str, str]]] = defaultdict(list)

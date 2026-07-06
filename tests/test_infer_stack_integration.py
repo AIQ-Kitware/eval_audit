@@ -151,6 +151,9 @@ def test_olmo_base_preset_defaults_to_direct_vllm(tmp_path: Path) -> None:
         preset="allenai-olmo-7b-mmlu",
         bundle_root=tmp_path / "olmo-direct",
         config_dir=config_dir,
+        # vllm-direct requires an explicit vLLM server base_url (it must not
+        # fall back to the auth-protected gateway).
+        base_url="http://localhost:8000/v1",
     )
     dep = _deployment(result)
     assert dep["name"] == "vllm/allenai-olmo-7b"
@@ -193,6 +196,7 @@ def test_olmo_instruct_reuses_sibling_tokenizer_alias(tmp_path: Path) -> None:
         preset="allenai-olmo-2-1124-13b-instruct",
         bundle_root=tmp_path / "olmo-13b",
         config_dir=config_dir,
+        base_url="http://localhost:8000/v1",
     )
     dep = _deployment(result)
     assert dep["client_spec"]["class_name"].endswith("VLLMChatClient")
@@ -303,6 +307,7 @@ def test_protocol_mode_override_satisfies_bare_profile(tmp_path: Path) -> None:
         bundle_root=tmp_path / "olmo-override-chat",
         config_dir=config_dir,
         protocol_mode="chat",
+        base_url="http://localhost:8000/v1",
     )
     assert _deployment(result_chat)["client_spec"]["class_name"].endswith("VLLMChatClient")
 

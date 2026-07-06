@@ -1313,6 +1313,21 @@ def _model_deployment_entry(
         )
     max_model_len = int(facts.max_model_len)
     client_class = _benchmark_client_class(protocol_mode, kind)
+    if kind == "vllm-direct":
+        # vllm-direct talks to the vLLM server directly and sends api_key="EMPTY";
+        # it MUST NOT fall back to the auth-protected LiteLLM gateway base_url
+        # (the client cannot authenticate there — requests would 401). Require an
+        # explicit --base-url pointing at the vLLM server.
+        if not base_url:
+            raise ValueError(
+                f"access kind 'vllm-direct' for deployment "
+                f"{model_deployment_name or _default_deployment_name(served_name, kind)!r} "
+                "requires an explicit --base-url (the vLLM server address); it must not "
+                "default to the LiteLLM gateway, which the vllm-direct client cannot reach."
+            )
+        resolved_base_url = base_url
+    else:
+        resolved_base_url = base_url or _default_gateway_base_url()
     entry = {
         "name": model_deployment_name or _default_deployment_name(served_name, kind),
         # HELM-domain aliases are preset-authoritative; the catalog hf_model_id is
@@ -1328,7 +1343,7 @@ def _model_deployment_entry(
         "client_spec": {
             "class_name": client_class,
             "args": {
-                "base_url": base_url or _default_gateway_base_url(),
+                "base_url": resolved_base_url,
             },
         },
     }
@@ -1625,6 +1640,25 @@ def _write_alias(src: Path, dst: Path) -> None:
     shutil.copy2(src, dst)
 
 
+def _resolve_preset_cfg(preset: str | None) -> dict[str, Any]:
+    """Look up a preset's config block, failing fast on an unknown key.
+
+    A ``None`` preset means "no preset" (transport/profile come from explicit
+    args) and resolves to an empty block. A *non-empty* preset that is not a
+    registered key is a caller typo — raise with the known-presets list rather
+    than silently proceeding with an empty config (which would drop the
+    preset's access_kind / protocol_mode / manifest and produce a subtly wrong
+    bundle). Mirrors cli/check_precomputed_discovery's message style.
+    """
+    if not preset:
+        return {}
+    if preset not in PRESET_CONFIGS:
+        raise ValueError(
+            f"unknown preset {preset!r}; known: {', '.join(sorted(PRESET_CONFIGS))}"
+        )
+    return PRESET_CONFIGS[preset]
+
+
 def materialize_benchmark_bundle(
     *,
     facts: list[ServingFacts],
@@ -1641,7 +1675,7 @@ def materialize_benchmark_bundle(
     freeze_rel_paths: bool = False,
 ) -> dict[str, Any]:
     output_dir = output_dir.resolve()
-    preset_cfg = PRESET_CONFIGS.get(preset or "", {})
+    preset_cfg = _resolve_preset_cfg(preset)
     specs = profile_specs or _profile_specs("", preset_cfg)
     model_entries = []
     selected_accesses = []
@@ -1898,7 +1932,7 @@ def export_benchmark_bundle(
     # Exact-path replay is a from-spec variant: freezing rel-paths implies it.
     if freeze_rel_paths:
         from_run_spec = True
-    preset_cfg = PRESET_CONFIGS.get(preset or "", {})
+    preset_cfg = _resolve_preset_cfg(preset)
     specs = _profile_specs(profile, preset_cfg)
     resolved_config_dir = config_dir or vllm_root
     facts = [

@@ -176,6 +176,7 @@ def test_materialize_threads_freeze_rel_paths_into_manifest(tmp_path, monkeypatc
         from_run_spec=True,
         precomputed_root=str(tmp_path),
         freeze_rel_paths=True,  # <-- the parameter that used to NameError
+        base_url="http://localhost:8000/v1",  # vllm-direct now requires an explicit base_url
     )
     smoke = yaml.safe_load(result["benchmark_smoke_manifest_path"].read_text())
     assert smoke["from_run_spec"] is True
