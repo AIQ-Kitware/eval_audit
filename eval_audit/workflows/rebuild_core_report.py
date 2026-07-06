@@ -66,13 +66,7 @@ def _maybe_latest_official_index_csv(index_dpath: Path) -> str | None:
         return None
 
 
-def _clean_optional_text(value: Any) -> str | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.lower() in {"none", "nan"}:
-        return None
-    return text
+from eval_audit.utils.coercion import clean_optional_text as _clean_optional_text  # R-6
 
 
 def _existing_run_path(value: Any) -> str | None:
