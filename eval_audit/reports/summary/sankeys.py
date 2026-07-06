@@ -47,7 +47,11 @@ def _build_universe_to_scope_root() -> tuple[sankey_builder.Root, list[str], dic
     deployment["excluded: no runnable local deployment"].connect(None)
     size = deployment["kept: runnable local deployment"].group(by="size_gate", name="Size Gate")
     size["excluded: exceeds size budget"].connect(None)
-    selection = size["kept: within size budget"].connect(
+    # R-4c: judge gate between Size and Selection, mirroring the hierarchical
+    # funnel so closed-judge exclusions are attributed consistently.
+    judge = size["kept: within size budget"].group(by="judge_gate", name="Judge Gate")
+    judge["excluded: requires closed-source judge"].connect(None)
+    selection = judge["kept: no closed-source judge dependency"].connect(
         sankey_builder.Group(name="Selection", by="selection_gate")
     )
     assert isinstance(selection, sankey_builder.Group)
@@ -63,6 +67,7 @@ def _build_universe_to_scope_root() -> tuple[sankey_builder.Root, list[str], dic
         "Tag Gate",
         "Deployment Gate",
         "Size Gate",
+        "Judge Gate",
         "Selection",
     ]
     stage_defs = {
@@ -89,6 +94,10 @@ def _build_universe_to_scope_root() -> tuple[sankey_builder.Root, list[str], dic
         "Size Gate": [
             "excluded: exceeds size budget",
             "kept: within size budget",
+        ],
+        "Judge Gate": [
+            "excluded: requires closed-source judge",
+            "kept: no closed-source judge dependency",
         ],
         "Selection": [
             FILTER_SELECTION_SELECTED_LABEL,

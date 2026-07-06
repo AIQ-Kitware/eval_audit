@@ -299,6 +299,7 @@ def classify_hierarchical_filter_stages(row: dict[str, Any]) -> dict[str, str]:
     if row.get('is_structurally_incomplete'):
         return {
             'structural_stage': 'excluded: structurally incomplete',
+            'metadata_stage': 'stopped before metadata check',
             'access_stage': 'stopped before access check',
             'tag_stage': 'stopped before tag check',
             'deployment_stage': 'stopped before deployment check',
@@ -308,6 +309,11 @@ def classify_hierarchical_filter_stages(row: dict[str, Any]) -> dict[str, str]:
         }
 
     reasons = set(row.get('failure_reasons', []) or [])
+    # R-4c: the hierarchical funnel previously had no metadata gate, so
+    # missing-model-metadata rows fell through every explicit gate and landed
+    # 'unclassified'. Attribute them to a dedicated metadata gate so this funnel
+    # family lines up with the Stage-A funnel (which already has one).
+    metadata_ok = 'missing-model-metadata' not in reasons
     access_ok = 'not-open-access' not in reasons
     tag_ok = ('excluded-tags' not in reasons) and ('not-text-like' not in reasons)
     deployment_ok = 'no-local-helm-deployment' not in reasons
@@ -315,9 +321,21 @@ def classify_hierarchical_filter_stages(row: dict[str, Any]) -> dict[str, str]:
     judge_ok = CLOSED_JUDGE_REQUIRED_REASON not in reasons
     selected = row.get('selection_status') == 'selected'
 
+    if not metadata_ok:
+        return {
+            'structural_stage': 'passed structural completeness',
+            'metadata_stage': 'excluded: missing model metadata',
+            'access_stage': 'stopped after metadata exclusion',
+            'tag_stage': 'stopped after metadata exclusion',
+            'deployment_stage': 'stopped after metadata exclusion',
+            'size_stage': 'stopped after metadata exclusion',
+            'judge_stage': 'stopped after metadata exclusion',
+            'outcome_stage': 'excluded at metadata gate',
+        }
     if not access_ok:
         return {
             'structural_stage': 'passed structural completeness',
+            'metadata_stage': 'kept: model metadata resolved',
             'access_stage': 'excluded: not open weight',
             'tag_stage': 'stopped after access exclusion',
             'deployment_stage': 'stopped after access exclusion',
@@ -328,6 +346,7 @@ def classify_hierarchical_filter_stages(row: dict[str, Any]) -> dict[str, str]:
     if not tag_ok:
         return {
             'structural_stage': 'passed structural completeness',
+            'metadata_stage': 'kept: model metadata resolved',
             'access_stage': 'kept: open weight',
             'tag_stage': 'excluded: unsuitable text/modality tags',
             'deployment_stage': 'stopped after tag exclusion',
@@ -338,6 +357,7 @@ def classify_hierarchical_filter_stages(row: dict[str, Any]) -> dict[str, str]:
     if not deployment_ok:
         return {
             'structural_stage': 'passed structural completeness',
+            'metadata_stage': 'kept: model metadata resolved',
             'access_stage': 'kept: open weight',
             'tag_stage': 'kept: suitable text tags',
             'deployment_stage': 'excluded: no runnable local deployment',
@@ -354,6 +374,7 @@ def classify_hierarchical_filter_stages(row: dict[str, Any]) -> dict[str, str]:
             )
         return {
             'structural_stage': 'passed structural completeness',
+            'metadata_stage': 'kept: model metadata resolved',
             'access_stage': 'kept: open weight',
             'tag_stage': 'kept: suitable text tags',
             'deployment_stage': 'kept: runnable local deployment',
@@ -364,6 +385,7 @@ def classify_hierarchical_filter_stages(row: dict[str, Any]) -> dict[str, str]:
     if not judge_ok:
         return {
             'structural_stage': 'passed structural completeness',
+            'metadata_stage': 'kept: model metadata resolved',
             'access_stage': 'kept: open weight',
             'tag_stage': 'kept: suitable text tags',
             'deployment_stage': 'kept: runnable local deployment',
@@ -374,6 +396,7 @@ def classify_hierarchical_filter_stages(row: dict[str, Any]) -> dict[str, str]:
     if not selected:
         return {
             'structural_stage': 'passed structural completeness',
+            'metadata_stage': 'kept: model metadata resolved',
             'access_stage': 'kept: open weight',
             'tag_stage': 'kept: suitable text tags',
             'deployment_stage': 'kept: runnable local deployment',
@@ -383,6 +406,7 @@ def classify_hierarchical_filter_stages(row: dict[str, Any]) -> dict[str, str]:
         }
     return {
         'structural_stage': 'passed structural completeness',
+        'metadata_stage': 'kept: model metadata resolved',
         'access_stage': 'kept: open weight',
         'tag_stage': 'kept: suitable text tags',
         'deployment_stage': 'kept: runnable local deployment',
@@ -414,6 +438,11 @@ def build_hierarchical_sankey_key(summary: dict[str, Any]) -> dict[str, list[str
         'Structural Gate': [
             f"excluded: structurally incomplete ({summary['structurally_incomplete_runs']} runs)",
             'passed structural completeness: run had enough HELM files to enter model filtering',
+        ],
+        'Metadata Gate': [
+            'excluded: missing model metadata: HELM could not resolve model metadata for this model name',
+            'kept: model metadata resolved: model metadata resolved via the deployment registry',
+            'stopped before metadata check / stopped after metadata exclusion: eliminated at an earlier gate',
         ],
         'Open-Weight Gate': [
             'excluded: not open weight: HELM access is not "open"',

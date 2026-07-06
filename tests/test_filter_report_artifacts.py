@@ -134,6 +134,43 @@ def test_build_filter_inventory_rows_marks_missing_model_metadata_explicitly():
     assert "HELM could not resolve model metadata" in row["selection_explanation"]
 
 
+def test_hierarchical_funnel_attributes_missing_metadata_to_metadata_gate():
+    """R-4c: the hierarchical funnel had no metadata gate, so
+    missing-model-metadata rows landed 'unclassified'. They must now be
+    attributed to the metadata gate (aligning with the Stage-A funnel)."""
+    from eval_audit.reports.filter_analysis_tables import (
+        classify_hierarchical_filter_stages,
+    )
+
+    stages = classify_hierarchical_filter_stages(
+        {
+            "selection_status": "excluded",
+            "failure_reasons": ["missing-model-metadata"],
+            "is_structurally_incomplete": False,
+        }
+    )
+    assert stages["metadata_stage"] == "excluded: missing model metadata"
+    assert stages["outcome_stage"] == "excluded at metadata gate"
+
+
+def test_stage_a_funnel_attributes_closed_judge_to_judge_gate():
+    """R-4c: the Stage-A funnel had no judge gate, so closed-judge exclusions
+    reached the selection waist unattributed. They must now stop at a judge
+    gate (aligning with the hierarchical funnel)."""
+    from eval_audit.reports.summary.classification import _classify_filter_gates
+
+    flow = _classify_filter_gates(
+        {
+            "run_spec_name": "wildbench:model=x",
+            "selection_status": "excluded",
+            "failure_reasons": ["requires-closed-judge"],
+            "is_structurally_incomplete": False,
+        }
+    )
+    assert flow["judge_gate"] == "excluded: requires closed-source judge"
+    assert "selection_gate" not in flow
+
+
 def test_build_filter_inventory_rows_excludes_closed_judge_benchmarks_even_with_eligible_model():
     complete_rows = [
         {

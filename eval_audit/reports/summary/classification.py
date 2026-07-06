@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from eval_audit.infra.api import default_store_root
 from eval_audit.infra.logging import rich_link
+from eval_audit.indexing.historic_filtering import CLOSED_JUDGE_REQUIRED_REASON
 from loguru import logger
 
 from eval_audit.reports.summary.common import (
@@ -226,6 +227,13 @@ def _classify_filter_gates(row: dict[str, Any]) -> dict[str, str]:
         flow["size_gate"] = "excluded: exceeds size budget"
         return flow
     flow["size_gate"] = "kept: within size budget"
+    # R-4c: attribute closed-judge exclusions to a dedicated judge gate so the
+    # Stage-A funnel lines up with the hierarchical funnel (which already has
+    # one); previously these rows fell through to the selection waist unattributed.
+    if CLOSED_JUDGE_REQUIRED_REASON in reasons:
+        flow["judge_gate"] = "excluded: requires closed-source judge"
+        return flow
+    flow["judge_gate"] = "kept: no closed-source judge dependency"
     if row.get("selection_status") != "selected":
         flow["selection_gate"] = FILTER_SELECTION_EXCLUDED_LABEL
     else:

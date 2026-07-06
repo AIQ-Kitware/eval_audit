@@ -563,6 +563,7 @@ def emit_filter_analysis_artifacts(
         stage_defs=build_hierarchical_sankey_key(summary),
         stage_order=[
             ('structural_stage', 'Structural Gate'),
+            ('metadata_stage', 'Metadata Gate'),
             ('access_stage', 'Open-Weight Gate'),
             ('tag_stage', 'Tag Gate'),
             ('deployment_stage', 'Deployment Gate'),
