@@ -87,6 +87,8 @@ from eval_audit.indexing.historic_filtering import (  # noqa: F401
     GATED_DATASET_REASON,
     CLOSED_JUDGE_BENCHMARKS,
     GATED_DATASET_BENCHMARKS,
+    MAX_PARAMS,
+    classify_model_eligibility,
     gather_runs,
     build_run_table,
     dedupe_rows,
@@ -265,55 +267,14 @@ class CompileHelmReproListConfig(scfg.DataConfig):
                 logger.warning(f'missing: model_name = {ub.urepr(model_name, nl=1)} {ex}')
                 missing_model_metadata[model_name] = str(ex)
 
-        # Filter to text models that will fit in memory
-        HF_CLIENT = 'helm.clients.huggingface_client.HuggingFaceClient'
-
-        SOFT_TEXT_TAGS = {
-            'TEXT_MODEL_TAG',
-            'FULL_FUNCTIONALITY_TEXT_MODEL_TAG',
-            'INSTRUCTION_FOLLOWING_MODEL_TAG',
-        }
-
-        EXCLUDE_TAGS = {
-            'VISION_LANGUAGE_MODEL_TAG',
-            'AUDIO_LANGUAGE_MODEL_TAG',
-            'IMAGE_MODEL_TAG',
-            'TEXT_TO_IMAGE_MODEL_TAG',
-            'CODE_MODEL_TAG',
-        }
-
-        # Keep this conservative if you want, but allow unknown sizes through.
-        MAX_PARAMS = 10e9
-        # MAX_PARAMS = 200e9
-
-        # Optional manual escape hatch for models that are probably HF-runnable
-        # even if HELM currently resolves them to a non-HF deployment.
-        KNOWN_HF_OVERRIDES = {
-            'qwen/qwen2.5-7b-instruct-turbo',
-            'qwen/qwen2-72b-instruct',
-            'qwen/qwen2.5-72b-instruct-turbo',
-        }
-
+        # Filter to text models that will fit in memory. The eligibility
+        # predicate (SOFT_TEXT_TAGS / EXCLUDE_TAGS / MAX_PARAMS / KNOWN_HF_OVERRIDES)
+        # lives in indexing.historic_filtering.classify_model_eligibility so the
+        # selection loop here and the filter-report loop below share one policy.
         chosen_model_rows = []
         for r in model_rows:
-            tags = set(r.get('tags', []))
-
-            is_text_like = bool(tags & SOFT_TEXT_TAGS)
-            has_excluded_tags = bool(tags & EXCLUDE_TAGS)
-            size_ok = (r.get('num_parameters') is None or r['num_parameters'] <= MAX_PARAMS)
-            access_ok = (r.get('access') == 'open')
-            has_local_hf_path = (
-                r.get('has_hf_client', False) or
-                r['name'] in KNOWN_HF_OVERRIDES
-            )
-
-            if (
-                is_text_like and
-                not has_excluded_tags and
-                size_ok and
-                access_ok and
-                has_local_hf_path
-            ):
+            eligible, _reasons, _details = classify_model_eligibility(r)
+            if eligible:
                 chosen_model_rows.append(r)
 
         chosen_model_names = {r['name'] for r in chosen_model_rows}
@@ -339,63 +300,23 @@ class CompileHelmReproListConfig(scfg.DataConfig):
             chosen_rows.append(row)
         logger.info('Filter to {} / {} runs', len(chosen_rows), len(rows))
 
-        # Prepare filter-step analysis data (for report generation)
+        # Prepare filter-step analysis data (for report generation). Uses the
+        # SAME classify_model_eligibility policy as the selection loop above, so
+        # the report can never disagree with what was actually selected.
         model_filter_rows = []  # one dict per model with all failure reasons
         for r in model_rows:
-            tags = set(r.get('tags', []))
-            is_text_like = bool(tags & SOFT_TEXT_TAGS)
-            has_excluded_tags = bool(tags & EXCLUDE_TAGS)
-            size_ok = (r.get('num_parameters') is None or r['num_parameters'] <= MAX_PARAMS)
-            access_ok = (r.get('access') == 'open')
-            has_local_hf_path = (
-                r.get('has_hf_client', False) or
-                r['name'] in KNOWN_HF_OVERRIDES
+            eligible, failure_reasons, failure_reason_details = (
+                classify_model_eligibility(r)
             )
-
-            # Collect ALL failing reasons (not just the first)
-            failure_reasons = []
-            if not is_text_like:
-                failure_reasons.append('not-text-like')
-            if has_excluded_tags:
-                failure_reasons.append('excluded-tags')
-            if not size_ok:
-                failure_reasons.append('too-large')
-            if not access_ok:
-                failure_reasons.append('not-open-access')
-            if not has_local_hf_path:
-                failure_reasons.append('no-local-helm-deployment')
-
-            eligible = (
-                is_text_like and
-                not has_excluded_tags and
-                size_ok and
-                access_ok and
-                has_local_hf_path
-            )
-
             model_filter_rows.append({
                 'model': r['name'],
                 'n_runs': model_histo.get(r['name'], 0),
                 'failure_reasons': failure_reasons,
-                'failure_reason_details': build_failure_reason_details(
-                    tags=tags,
-                    is_text_like=is_text_like,
-                    has_excluded_tags=has_excluded_tags,
-                    size_ok=size_ok,
-                    access_ok=access_ok,
-                    has_local_hf_path=has_local_hf_path,
-                    num_parameters=r.get('num_parameters'),
-                    access=r.get('access'),
-                    has_hf_client=r.get('has_hf_client', False),
-                    model_name=r['name'],
-                    known_hf_overrides=KNOWN_HF_OVERRIDES,
-                    max_params=MAX_PARAMS,
-                    exclude_tags=EXCLUDE_TAGS,
-                ),
+                'failure_reason_details': failure_reason_details,
                 'eligible': eligible,
                 'num_parameters': r.get('num_parameters'),
                 'access': r.get('access'),
-                'tags': sorted(tags),
+                'tags': sorted(set(r.get('tags', []))),
                 'has_hf_client': r.get('has_hf_client', False),
                 'size_threshold_params': MAX_PARAMS,
             })

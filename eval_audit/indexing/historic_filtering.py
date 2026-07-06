@@ -228,6 +228,101 @@ def build_failure_reason_details(
     return details
 
 
+# --- Model-eligibility policy (R-7) ----------------------------------------
+# Extracted from cli/index_historic_helm_runs.py, where the same predicate was
+# computed twice (once for selection, once for the filter report) — a silent
+# divergence hazard for the research-critical selection. Both call sites now
+# route through classify_model_eligibility so their outcomes cannot drift.
+
+# HELM tags that mark a model as text-compatible for local reproduction.
+SOFT_TEXT_TAGS = {
+    'TEXT_MODEL_TAG',
+    'FULL_FUNCTIONALITY_TEXT_MODEL_TAG',
+    'INSTRUCTION_FOLLOWING_MODEL_TAG',
+}
+
+# Modalities the local text-only recipe cannot serve.
+EXCLUDE_TAGS = {
+    'VISION_LANGUAGE_MODEL_TAG',
+    'AUDIO_LANGUAGE_MODEL_TAG',
+    'IMAGE_MODEL_TAG',
+    'TEXT_TO_IMAGE_MODEL_TAG',
+    'CODE_MODEL_TAG',
+}
+
+# Conservative local-reproduction size budget; models with unknown size pass.
+MAX_PARAMS = 10e9
+
+# Manual escape hatch for models that are probably HF-runnable even if HELM
+# currently resolves them to a non-HF deployment.
+KNOWN_HF_OVERRIDES = {
+    'qwen/qwen2.5-7b-instruct-turbo',
+    'qwen/qwen2-72b-instruct',
+    'qwen/qwen2.5-72b-instruct-turbo',
+}
+
+
+def classify_model_eligibility(
+    model_row: dict[str, Any],
+) -> tuple[bool, list[str], dict[str, str]]:
+    """Single source of truth for Stage-1 model eligibility.
+
+    Given one model-metadata row (``tags``, ``num_parameters``, ``access``,
+    ``has_hf_client``, ``name``), return
+    ``(eligible, failure_reasons, failure_reason_details)``. The selection loop
+    consumes ``eligible``; the filter-report loop consumes all three. Computing
+    them here once removes the previous duplicate-predicate divergence hazard.
+    """
+    tags = set(model_row.get('tags', []))
+    num_parameters = model_row.get('num_parameters')
+    access = model_row.get('access')
+    has_hf_client = model_row.get('has_hf_client', False)
+    model_name = model_row['name']
+
+    is_text_like = bool(tags & SOFT_TEXT_TAGS)
+    has_excluded_tags = bool(tags & EXCLUDE_TAGS)
+    size_ok = (num_parameters is None or num_parameters <= MAX_PARAMS)
+    access_ok = (access == 'open')
+    has_local_hf_path = (has_hf_client or model_name in KNOWN_HF_OVERRIDES)
+
+    failure_reasons: list[str] = []
+    if not is_text_like:
+        failure_reasons.append('not-text-like')
+    if has_excluded_tags:
+        failure_reasons.append('excluded-tags')
+    if not size_ok:
+        failure_reasons.append('too-large')
+    if not access_ok:
+        failure_reasons.append('not-open-access')
+    if not has_local_hf_path:
+        failure_reasons.append('no-local-helm-deployment')
+
+    eligible = (
+        is_text_like
+        and not has_excluded_tags
+        and size_ok
+        and access_ok
+        and has_local_hf_path
+    )
+
+    details = build_failure_reason_details(
+        tags=tags,
+        is_text_like=is_text_like,
+        has_excluded_tags=has_excluded_tags,
+        size_ok=size_ok,
+        access_ok=access_ok,
+        has_local_hf_path=has_local_hf_path,
+        num_parameters=num_parameters,
+        access=access,
+        has_hf_client=has_hf_client,
+        model_name=model_name,
+        known_hf_overrides=KNOWN_HF_OVERRIDES,
+        max_params=MAX_PARAMS,
+        exclude_tags=EXCLUDE_TAGS,
+    )
+    return eligible, failure_reasons, details
+
+
 def build_run_failure_reason_details(
     *, benchmark: str, allow_closed_judge: bool = False
 ) -> dict[str, str]:
