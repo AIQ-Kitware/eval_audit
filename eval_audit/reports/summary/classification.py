@@ -190,27 +190,47 @@ ATTEMPTED_LABEL = "attempted run"
 NOT_ATTEMPTED_LABEL = "selected but not attempted"
 
 
-def _primary_filter_reason(row: dict[str, Any]) -> str:
-    reasons = [str(r) for r in (row.get("failure_reasons") or []) if str(r)]
-    if row.get("selection_status") == "selected":
-        return "selected"
+def _classify_filter_gates(row: dict[str, Any]) -> dict[str, str]:
+    """Compute the Stage-A filter-ladder flow for one filter-inventory row.
+
+    Single source of truth for the six-gate ladder (structural → metadata →
+    open-weight → tag → deployment → size → selection) that was previously
+    triplicated across the sankey row-builders. Returns a flow dict carrying one
+    label per gate the row reached, terminating at the first gate that excludes
+    it (so an excluded row omits later-gate keys). The terminal key is
+    ``selection_gate`` (selected vs excluded).
+    """
+    reasons = {str(r) for r in (row.get("failure_reasons") or []) if str(r)}
+    flow: dict[str, str] = {}
     if row.get("is_structurally_incomplete"):
-        return "structurally_incomplete"
-    if reasons:
-        return reasons[0]
-    return "excluded_unknown"
-
-
-def _classify_filter_pool(row: dict[str, Any]) -> str:
-    if row.get("is_structurally_incomplete"):
-        return "structurally_incomplete"
-    return str(row.get("candidate_pool") or "unknown_pool")
-
-
-def _classify_filter_outcome(row: dict[str, Any]) -> str:
-    if row.get("selection_status") == "selected":
-        return "selected_for_attempt"
-    return f"excluded::{_primary_filter_reason(row)}"
+        flow["structural_gate"] = "excluded: structurally incomplete"
+        return flow
+    flow["structural_gate"] = "kept: structurally complete"
+    if "missing-model-metadata" in reasons:
+        flow["metadata_gate"] = "excluded: missing model metadata"
+        return flow
+    flow["metadata_gate"] = "kept: model metadata resolved"
+    if "not-open-access" in reasons:
+        flow["open_weight_gate"] = "excluded: not open weight"
+        return flow
+    flow["open_weight_gate"] = "kept: open weight"
+    if ("excluded-tags" in reasons) or ("not-text-like" in reasons):
+        flow["tag_gate"] = "excluded: unsuitable text/modality tags"
+        return flow
+    flow["tag_gate"] = "kept: suitable text tags"
+    if "no-local-helm-deployment" in reasons:
+        flow["deployment_gate"] = "excluded: no runnable local deployment"
+        return flow
+    flow["deployment_gate"] = "kept: runnable local deployment"
+    if "too-large" in reasons:
+        flow["size_gate"] = "excluded: exceeds size budget"
+        return flow
+    flow["size_gate"] = "kept: within size budget"
+    if row.get("selection_status") != "selected":
+        flow["selection_gate"] = FILTER_SELECTION_EXCLUDED_LABEL
+    else:
+        flow["selection_gate"] = FILTER_SELECTION_SELECTED_LABEL
+    return flow
 
 
 def _group_scope_rows_by_run_entry(scope_rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -242,21 +262,6 @@ def _classify_execution_stage(scope_rows_for_entry: list[dict[str, Any]]) -> str
     return "attempted_failed_or_incomplete"
 
 
-def _classify_analysis_stage(
-    row: dict[str, Any],
-    scope_rows_for_entry: list[dict[str, Any]],
-    repro_rows_for_entry: list[dict[str, Any]],
-) -> str:
-    if row.get("selection_status") != "selected":
-        return "stopped_after_filter"
-    execution_stage = _classify_execution_stage(scope_rows_for_entry)
-    if execution_stage != "completed_with_run_artifacts":
-        return execution_stage
-    if repro_rows_for_entry:
-        return "analyzed"
-    return "completed_not_yet_analyzed"
-
-
 def _choose_repro_row_for_run_entry(
     repro_rows_for_entry: list[dict[str, Any]],
     scope_rows_by_key: dict[tuple[str, str], list[dict[str, Any]]],
@@ -280,22 +285,3 @@ def _choose_repro_row_for_run_entry(
         )
 
     return max(repro_rows_for_entry, key=_repro_row_rank)
-
-
-def _classify_reproduction_stage(
-    row: dict[str, Any],
-    scope_rows_for_entry: list[dict[str, Any]],
-    repro_rows_for_entry: list[dict[str, Any]],
-    *,
-    tol_key: str,
-    scope_rows_by_key: dict[tuple[str, str], list[dict[str, Any]]],
-) -> str:
-    if row.get("selection_status") != "selected":
-        return "stopped_after_filter"
-    execution_stage = _classify_execution_stage(scope_rows_for_entry)
-    if execution_stage != "completed_with_run_artifacts":
-        return execution_stage
-    repro_row = _choose_repro_row_for_run_entry(repro_rows_for_entry, scope_rows_by_key)
-    if repro_row is None:
-        return "not_analyzed_yet"
-    return _bucket_agreement(repro_row.get(tol_key))

@@ -3,14 +3,12 @@ from __future__ import annotations
 from eval_audit.reports.core_packet import comparison_sample_latest_name
 from eval_audit.workflows.build_reports_summary import (
     ATTEMPTED_LABEL,
-    FILTER_SELECTION_EXCLUDED_LABEL,
     FILTER_SELECTION_SELECTED_LABEL,
     NOT_ATTEMPTED_LABEL,
     _build_off_story_summary,
     _build_prioritized_breakdown_summary,
-    _build_attempted_to_repro_rows,
-    _build_end_to_end_funnel_rows,
-    _build_filter_to_attempt_rows,
+    _build_scope_to_analyzed_rows,
+    _build_universe_to_scope_rows,
     _build_filter_selection_by_model_rows,
     _build_run_multiplicity_summary,
     _choose_repro_row_for_run_entry,
@@ -19,7 +17,11 @@ from eval_audit.workflows.build_reports_summary import (
 )
 
 
-def test_end_to_end_funnel_rows_cover_excluded_unrun_and_analyzed_cases():
+def test_universe_to_scope_rows_terminate_at_selection_gate():
+    """Stage A: gate-ladder flow, terminating at the Selection waist. Replaces
+    the deleted _build_end_to_end_funnel_rows/_build_filter_to_attempt_rows
+    tests (R-4); those legacy builders were consolidated onto
+    _classify_filter_gates."""
     filter_inventory_rows = [
         {
             "run_spec_name": "bench:model=a",
@@ -35,57 +37,19 @@ def test_end_to_end_funnel_rows_cover_excluded_unrun_and_analyzed_cases():
             "failure_reasons": [],
             "is_structurally_incomplete": False,
         },
-        {
-            "run_spec_name": "bench:model=c",
-            "selection_status": "selected",
-            "candidate_pool": "complete-run",
-            "failure_reasons": [],
-            "is_structurally_incomplete": False,
-        },
     ]
-    scope_rows = [
-        {
-            "experiment_name": "demo-exp",
-            "run_entry": "bench:model=c",
-            "has_run_spec": "True",
-            "status": "computed",
-            "manifest_timestamp": "10",
-        }
-    ]
-    repro_rows = [
-        {
-            "experiment_name": "demo-exp",
-            "run_entry": "bench:model=c",
-            "official_instance_agree_0": 1.0,
-            "official_instance_agree_001": 1.0,
-            "official_instance_agree_01": 1.0,
-            "official_instance_agree_005": 1.0,
-        }
-    ]
-
-    rows = _build_end_to_end_funnel_rows(
-        filter_inventory_rows,
-        scope_rows,
-        repro_rows,
-        tol_key="official_instance_agree_0",
-    )
+    rows = _build_universe_to_scope_rows(filter_inventory_rows)
     excluded = next(row for row in rows if row.get("size_gate") == "excluded: exceeds size budget")
-    assert "execution_stage" not in excluded
-    assert "analysis_stage" not in excluded
-    assert "reproduction_stage" not in excluded
-
-    selected_rows = [row for row in rows if row.get("selection_gate") == FILTER_SELECTION_SELECTED_LABEL]
-    unrun = next(row for row in selected_rows if row["execution_stage"] == "not_run_in_scope")
-    analyzed = next(row for row in selected_rows if row["execution_stage"] == "completed_with_run_artifacts")
-
-    assert "analysis_stage" not in unrun
-    assert "reproduction_stage" not in unrun
-
-    assert analyzed["analysis_stage"] == "analyzed"
-    assert analyzed["reproduction_stage"] == "exact_or_near_exact"
+    # An excluded row terminates at its gate; no selection or post-selection keys.
+    assert "selection_gate" not in excluded
+    selected = next(row for row in rows if row.get("selection_gate") == FILTER_SELECTION_SELECTED_LABEL)
+    assert selected["size_gate"] == "kept: within size budget"
 
 
-def test_filter_to_attempt_rows_split_selected_and_attempted_states():
+def test_scope_to_analyzed_rows_split_attempt_execution_analysis_reproduction():
+    """Stage B: selected -> attempt -> execution -> analysis -> reproduction.
+    Replaces the deleted _build_attempted_to_repro_rows /
+    _build_filter_to_attempt_rows attempt-split tests (R-4)."""
     filter_inventory_rows = [
         {
             "run_spec_name": "bench:model=a",
@@ -118,16 +82,31 @@ def test_filter_to_attempt_rows_split_selected_and_attempted_states():
             "manifest_timestamp": "10",
         }
     ]
+    repro_rows = [
+        {
+            "experiment_name": "demo-exp",
+            "run_entry": "bench:model=c",
+            "official_instance_agree_0": 1.0,
+        }
+    ]
 
-    rows = _build_filter_to_attempt_rows(filter_inventory_rows, scope_rows)
-    excluded = next(row for row in rows if row.get("selection_gate") == FILTER_SELECTION_EXCLUDED_LABEL)
-    assert "attempt_stage" not in excluded
+    rows = _build_scope_to_analyzed_rows(
+        filter_inventory_rows,
+        scope_rows,
+        repro_rows,
+        tol_key="official_instance_agree_0",
+    )
+    # Only the two selected rows enter Stage B; the excluded row is dropped.
+    assert len(rows) == 2
+    attempt_states = {row["attempt_stage"] for row in rows}
+    assert attempt_states == {ATTEMPTED_LABEL, NOT_ATTEMPTED_LABEL}
+    analyzed = next(row for row in rows if row["attempt_stage"] == ATTEMPTED_LABEL)
+    assert analyzed["execution_stage"] == "completed_with_run_artifacts"
+    assert analyzed["analysis_stage"] == "analyzed"
+    assert analyzed["reproduction_stage"] == "exact_or_near_exact"
 
-    selected_rows = [row for row in rows if row.get("selection_gate") == FILTER_SELECTION_SELECTED_LABEL]
-    assert {row["attempt_stage"] for row in selected_rows} == {ATTEMPTED_LABEL, NOT_ATTEMPTED_LABEL}
 
-
-def test_filter_to_attempt_rows_surface_missing_model_metadata_explicitly():
+def test_universe_to_scope_rows_surface_missing_model_metadata_explicitly():
     filter_inventory_rows = [
         {
             "run_spec_name": "cub200:model=openai/dalle-2",
@@ -137,62 +116,13 @@ def test_filter_to_attempt_rows_surface_missing_model_metadata_explicitly():
             "is_structurally_incomplete": False,
         },
     ]
-    rows = _build_filter_to_attempt_rows(filter_inventory_rows, [])
+    rows = _build_universe_to_scope_rows(filter_inventory_rows)
     assert rows == [
         {
             "structural_gate": "kept: structurally complete",
             "metadata_gate": "excluded: missing model metadata",
         }
     ]
-
-
-def test_attempted_to_repro_rows_start_from_attempted_runs_only():
-    filter_inventory_rows = [
-        {
-            "run_spec_name": "bench:model=b",
-            "selection_status": "selected",
-            "candidate_pool": "eligible-model",
-            "failure_reasons": [],
-            "is_structurally_incomplete": False,
-        },
-        {
-            "run_spec_name": "bench:model=c",
-            "selection_status": "selected",
-            "candidate_pool": "eligible-model",
-            "failure_reasons": [],
-            "is_structurally_incomplete": False,
-        },
-    ]
-    scope_rows = [
-        {
-            "experiment_name": "demo-exp",
-            "run_entry": "bench:model=c",
-            "has_run_spec": "True",
-            "status": "computed",
-            "manifest_timestamp": "10",
-        }
-    ]
-    repro_rows = [
-        {
-            "experiment_name": "demo-exp",
-            "run_entry": "bench:model=c",
-            "official_instance_agree_0": 1.0,
-            "official_instance_agree_001": 1.0,
-            "official_instance_agree_01": 1.0,
-            "official_instance_agree_005": 1.0,
-        }
-    ]
-
-    rows = _build_attempted_to_repro_rows(
-        filter_inventory_rows,
-        scope_rows,
-        repro_rows,
-        tol_key="official_instance_agree_0",
-    )
-    assert len(rows) == 1
-    assert rows[0]["execution_stage"] == "completed_with_run_artifacts"
-    assert rows[0]["analysis_stage"] == "analyzed"
-    assert rows[0]["reproduction_stage"] == "exact_or_near_exact"
 
 
 def test_choose_repro_row_for_run_entry_prefers_latest_manifest_then_stable_tiebreakers():

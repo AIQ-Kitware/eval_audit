@@ -21,172 +21,10 @@ from eval_audit.reports.summary.classification import (
     _bucket_agreement,
     _choose_repro_row_for_run_entry,
     _classify_execution_stage,
+    _classify_filter_gates,
     _group_repro_rows_by_run_entry,
     _group_scope_rows_by_run_entry,
 )
-
-
-def _build_end_to_end_funnel_rows(
-    filter_inventory_rows: list[dict[str, Any]],
-    scope_rows: list[dict[str, Any]],
-    repro_rows: list[dict[str, Any]],
-    *,
-    tol_key: str,
-) -> list[dict[str, str]]:
-    scope_rows_by_run_entry = _group_scope_rows_by_run_entry(scope_rows)
-    repro_rows_by_run_entry = _group_repro_rows_by_run_entry(repro_rows)
-    scope_rows_by_key: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for row in scope_rows:
-        key = (str(row.get("experiment_name") or ""), str(row.get("run_entry") or ""))
-        scope_rows_by_key[key].append(row)
-
-    sankey_rows = []
-    for row in filter_inventory_rows:
-        run_entry = str(row.get("run_spec_name") or "")
-        scope_rows_for_entry = scope_rows_by_run_entry.get(run_entry, [])
-        repro_rows_for_entry = repro_rows_by_run_entry.get(run_entry, [])
-        reasons = {str(r) for r in (row.get("failure_reasons") or []) if str(r)}
-        flow: dict[str, str] = {}
-        if row.get("is_structurally_incomplete"):
-            flow["structural_gate"] = "excluded: structurally incomplete"
-            sankey_rows.append(flow)
-            continue
-        flow["structural_gate"] = "kept: structurally complete"
-        if "missing-model-metadata" in reasons:
-            flow["metadata_gate"] = "excluded: missing model metadata"
-            sankey_rows.append(flow)
-            continue
-        flow["metadata_gate"] = "kept: model metadata resolved"
-        if "not-open-access" in reasons:
-            flow["open_weight_gate"] = "excluded: not open weight"
-            sankey_rows.append(flow)
-            continue
-        flow["open_weight_gate"] = "kept: open weight"
-        if ("excluded-tags" in reasons) or ("not-text-like" in reasons):
-            flow["tag_gate"] = "excluded: unsuitable text/modality tags"
-            sankey_rows.append(flow)
-            continue
-        flow["tag_gate"] = "kept: suitable text tags"
-        if "no-local-helm-deployment" in reasons:
-            flow["deployment_gate"] = "excluded: no runnable local deployment"
-            sankey_rows.append(flow)
-            continue
-        flow["deployment_gate"] = "kept: runnable local deployment"
-        if "too-large" in reasons:
-            flow["size_gate"] = "excluded: exceeds size budget"
-            sankey_rows.append(flow)
-            continue
-        flow["size_gate"] = "kept: within size budget"
-        if row.get("selection_status") != "selected":
-            flow["selection_gate"] = FILTER_SELECTION_EXCLUDED_LABEL
-            sankey_rows.append(flow)
-            continue
-        flow["selection_gate"] = FILTER_SELECTION_SELECTED_LABEL
-        execution_stage = _classify_execution_stage(scope_rows_for_entry)
-        flow["execution_stage"] = execution_stage
-        if execution_stage != "completed_with_run_artifacts":
-            sankey_rows.append(flow)
-            continue
-        repro_row = _choose_repro_row_for_run_entry(repro_rows_for_entry, scope_rows_by_key)
-        if repro_row is None:
-            flow["analysis_stage"] = "completed_not_yet_analyzed"
-            sankey_rows.append(flow)
-            continue
-        flow["analysis_stage"] = "analyzed"
-        flow["reproduction_stage"] = _bucket_agreement(repro_row.get(tol_key))
-        sankey_rows.append(flow)
-    return sankey_rows
-
-
-def _build_filter_to_attempt_rows(
-    filter_inventory_rows: list[dict[str, Any]],
-    scope_rows: list[dict[str, Any]],
-) -> list[dict[str, str]]:
-    scope_rows_by_run_entry = _group_scope_rows_by_run_entry(scope_rows)
-    sankey_rows = []
-    for row in filter_inventory_rows:
-        run_entry = str(row.get("run_spec_name") or "")
-        scope_rows_for_entry = scope_rows_by_run_entry.get(run_entry, [])
-        reasons = {str(r) for r in (row.get("failure_reasons") or []) if str(r)}
-        flow: dict[str, str] = {}
-        if row.get("is_structurally_incomplete"):
-            flow["structural_gate"] = "excluded: structurally incomplete"
-            sankey_rows.append(flow)
-            continue
-        flow["structural_gate"] = "kept: structurally complete"
-        if "missing-model-metadata" in reasons:
-            flow["metadata_gate"] = "excluded: missing model metadata"
-            sankey_rows.append(flow)
-            continue
-        flow["metadata_gate"] = "kept: model metadata resolved"
-        if "not-open-access" in reasons:
-            flow["open_weight_gate"] = "excluded: not open weight"
-            sankey_rows.append(flow)
-            continue
-        flow["open_weight_gate"] = "kept: open weight"
-        if ("excluded-tags" in reasons) or ("not-text-like" in reasons):
-            flow["tag_gate"] = "excluded: unsuitable text/modality tags"
-            sankey_rows.append(flow)
-            continue
-        flow["tag_gate"] = "kept: suitable text tags"
-        if "no-local-helm-deployment" in reasons:
-            flow["deployment_gate"] = "excluded: no runnable local deployment"
-            sankey_rows.append(flow)
-            continue
-        flow["deployment_gate"] = "kept: runnable local deployment"
-        if "too-large" in reasons:
-            flow["size_gate"] = "excluded: exceeds size budget"
-            sankey_rows.append(flow)
-            continue
-        flow["size_gate"] = "kept: within size budget"
-        if row.get("selection_status") != "selected":
-            flow["selection_gate"] = FILTER_SELECTION_EXCLUDED_LABEL
-            sankey_rows.append(flow)
-            continue
-        flow["selection_gate"] = FILTER_SELECTION_SELECTED_LABEL
-        execution_stage = _classify_execution_stage(scope_rows_for_entry)
-        flow["attempt_stage"] = ATTEMPTED_LABEL if execution_stage != "not_run_in_scope" else NOT_ATTEMPTED_LABEL
-        sankey_rows.append(flow)
-    return sankey_rows
-
-
-def _build_attempted_to_repro_rows(
-    filter_inventory_rows: list[dict[str, Any]],
-    scope_rows: list[dict[str, Any]],
-    repro_rows: list[dict[str, Any]],
-    *,
-    tol_key: str,
-) -> list[dict[str, str]]:
-    scope_rows_by_run_entry = _group_scope_rows_by_run_entry(scope_rows)
-    repro_rows_by_run_entry = _group_repro_rows_by_run_entry(repro_rows)
-    scope_rows_by_key: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for row in scope_rows:
-        key = (str(row.get("experiment_name") or ""), str(row.get("run_entry") or ""))
-        scope_rows_by_key[key].append(row)
-
-    sankey_rows = []
-    for row in filter_inventory_rows:
-        if row.get("selection_status") != "selected":
-            continue
-        run_entry = str(row.get("run_spec_name") or "")
-        scope_rows_for_entry = scope_rows_by_run_entry.get(run_entry, [])
-        execution_stage = _classify_execution_stage(scope_rows_for_entry)
-        if execution_stage == "not_run_in_scope":
-            continue
-        repro_rows_for_entry = repro_rows_by_run_entry.get(run_entry, [])
-        flow: dict[str, str] = {"execution_stage": execution_stage}
-        if execution_stage != "completed_with_run_artifacts":
-            sankey_rows.append(flow)
-            continue
-        repro_row = _choose_repro_row_for_run_entry(repro_rows_for_entry, scope_rows_by_key)
-        if repro_row is None:
-            flow["analysis_stage"] = "completed_not_yet_analyzed"
-            sankey_rows.append(flow)
-            continue
-        flow["analysis_stage"] = "analyzed"
-        flow["reproduction_stage"] = _bucket_agreement(repro_row.get(tol_key))
-        sankey_rows.append(flow)
-    return sankey_rows
 
 
 def _build_universe_to_scope_root() -> tuple[sankey_builder.Root, list[str], dict[str, list[str]]]:
@@ -260,12 +98,6 @@ def _build_universe_to_scope_root() -> tuple[sankey_builder.Root, list[str], dic
     return root, stage_names, stage_defs
 
 
-def _build_filter_to_attempt_root() -> tuple[sankey_builder.Root, list[str], dict[str, list[str]]]:
-    # Backwards-compatible alias for callers that still import the old name.
-    # The new ``_build_universe_to_scope_root`` is the canonical Stage-A.
-    return _build_universe_to_scope_root()
-
-
 def _build_scope_to_analyzed_root() -> tuple[sankey_builder.Root, list[str], dict[str, list[str]]]:
     """Stage B: Scope -> Attempt -> Execution -> Analysis -> Reproduction.
 
@@ -307,12 +139,6 @@ def _build_scope_to_analyzed_root() -> tuple[sankey_builder.Root, list[str], dic
         ],
     }
     return root, stage_names, stage_defs
-
-
-def _build_attempted_to_repro_root() -> tuple[sankey_builder.Root, list[str], dict[str, list[str]]]:
-    # Deprecated alias for callers that still import the old name. The
-    # canonical Stage B builder is ``_build_scope_to_analyzed_root``.
-    return _build_scope_to_analyzed_root()
 
 
 def _build_scope_to_analyzed_rows(
@@ -370,50 +196,12 @@ def _build_universe_to_scope_rows(
 ) -> list[dict[str, str]]:
     """Stage A rows: pure filter-gate flow ending at the Selection waist.
 
-    Same gate logic as the legacy ``_build_filter_to_attempt_rows`` but
-    the row dicts intentionally do *not* carry post-selection keys; the
-    Stage A sankey terminates at Selection.
+    Delegates the six-gate ladder to the shared
+    ``_classify_filter_gates`` classifier; the row dicts intentionally do
+    *not* carry post-selection keys, so the Stage A sankey terminates at
+    Selection.
     """
-    rows: list[dict[str, str]] = []
-    for row in filter_inventory_rows:
-        reasons = {str(r) for r in (row.get("failure_reasons") or []) if str(r)}
-        flow: dict[str, str] = {}
-        if row.get("is_structurally_incomplete"):
-            flow["structural_gate"] = "excluded: structurally incomplete"
-            rows.append(flow)
-            continue
-        flow["structural_gate"] = "kept: structurally complete"
-        if "missing-model-metadata" in reasons:
-            flow["metadata_gate"] = "excluded: missing model metadata"
-            rows.append(flow)
-            continue
-        flow["metadata_gate"] = "kept: model metadata resolved"
-        if "not-open-access" in reasons:
-            flow["open_weight_gate"] = "excluded: not open weight"
-            rows.append(flow)
-            continue
-        flow["open_weight_gate"] = "kept: open weight"
-        if ("excluded-tags" in reasons) or ("not-text-like" in reasons):
-            flow["tag_gate"] = "excluded: unsuitable text/modality tags"
-            rows.append(flow)
-            continue
-        flow["tag_gate"] = "kept: suitable text tags"
-        if "no-local-helm-deployment" in reasons:
-            flow["deployment_gate"] = "excluded: no runnable local deployment"
-            rows.append(flow)
-            continue
-        flow["deployment_gate"] = "kept: runnable local deployment"
-        if "too-large" in reasons:
-            flow["size_gate"] = "excluded: exceeds size budget"
-            rows.append(flow)
-            continue
-        flow["size_gate"] = "kept: within size budget"
-        if row.get("selection_status") != "selected":
-            flow["selection_gate"] = FILTER_SELECTION_EXCLUDED_LABEL
-        else:
-            flow["selection_gate"] = FILTER_SELECTION_SELECTED_LABEL
-        rows.append(flow)
-    return rows
+    return [_classify_filter_gates(row) for row in filter_inventory_rows]
 
 
 def _build_end_to_end_funnel_root() -> tuple[sankey_builder.Root, list[str], dict[str, list[str]]]:

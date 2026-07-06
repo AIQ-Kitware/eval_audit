@@ -73,15 +73,10 @@ from eval_audit.reports.summary.classification import (  # noqa: F401
     FILTER_SELECTION_SELECTED_LABEL,
     ATTEMPTED_LABEL,
     NOT_ATTEMPTED_LABEL,
-    _primary_filter_reason,
-    _classify_filter_pool,
-    _classify_filter_outcome,
     _group_scope_rows_by_run_entry,
     _group_repro_rows_by_run_entry,
     _classify_execution_stage,
-    _classify_analysis_stage,
     _choose_repro_row_for_run_entry,
-    _classify_reproduction_stage,
 )
 from eval_audit.reports.summary.failure_triage import (  # noqa: F401
     _read_log_tail,
@@ -94,16 +89,10 @@ from eval_audit.reports.summary.loading import (  # noqa: F401
     _load_all_repro_rows,
 )
 from eval_audit.reports.summary.sankeys import (  # noqa: F401
-    _build_end_to_end_funnel_rows,
-    _build_filter_to_attempt_rows,
-    _build_attempted_to_repro_rows,
     _build_universe_to_scope_root,
-    _build_filter_to_attempt_root,
     _build_scope_to_analyzed_root,
-    _build_attempted_to_repro_root,
     _build_scope_to_analyzed_rows,
     _build_universe_to_scope_rows,
-    _build_end_to_end_funnel_root,
     _bucket_metric_delta,
     _expand_repro_rows_by_metric,
     _build_repro_sankey_rows_at_tol,
