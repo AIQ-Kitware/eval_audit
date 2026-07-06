@@ -294,7 +294,32 @@ with the run-level table; case (2) is currently implicit.
 
 ## Two different "run-level agreement" numbers — do not compare them (IM-13)
 
-The repo produces a quantity labelled **"run-level agreement"** from two
+> **Status (2026-07-06): RESOLVED by R-2.** The legacy agreement/tolerance
+> half of `helm/diff.py` (`_value_agreement_summary` as a *reported* surface,
+> `value_distance_profile`, `instance_summary_dict`, `instance_distance_profile`,
+> `tolerance_sweep_summary`, `summarize_instances`) has been retired.
+> `reports/pair_report.py` and `reports/pair_samples.py` now source every
+> run-level / instance-level / distance / tolerance number from `NormalizedDiff`,
+> so **only the right-hand column below is produced**. Two behavior deltas ship
+> with the migration and are intentional:
+> * **Join granularity** — `pair_report` agreement/distance are now per-metric-handle
+>   over the normalized join and **core-metric only** (was per-stat over all metric
+>   classes). These are the same numbers the production `core_metric_report`
+>   publishes.
+> * **Tolerance semantics** — the sweep is pure `abs_tol`; `rel_tol` is dropped,
+>   so `tolerance_highlights` and `tolerance_highlights_abs_only` are identical.
+>   The `pair_report.json` shape (`strict_summary.value_agreement.overall.agree_ratio`,
+>   `strict_summary.instance_value_agreement.means.agree_ratio`, `distance_summary.*`,
+>   `tolerance_highlights*`) is preserved for downstream consumers
+>   (`analyze_experiment`, the cross-machine curve loader). `HelmRunDiff` is kept
+>   only for the run_spec/scenario **semantic diagnosis**; its `_value_agreement_summary`
+>   survives solely as the value-drift input to that diagnosis and is no longer
+>   exposed on `summary_dict`.
+>
+> The historical description below is retained for context on *why* the two
+> numbers differed.
+
+The repo produced a quantity labelled **"run-level agreement"** from two
 independent code paths, and they are **not the same measurement**. Never put
 them in the same table, chart axis, or sentence as if they were interchangeable.
 
@@ -321,7 +346,8 @@ Concrete consequences:
   `core_metric_report` value (abs-only, metric-handle join): it is deterministic
   by construction and its tolerance axis means exactly what the label says.
 
-The long-term fix is R-2 (retire the legacy instance/agreement surface of
-`helm/diff.py` onto `NormalizedDiff`), which removes the second definition
-entirely. Until then, treat the two numbers as different quantities with the
-same unfortunate name.
+R-2 (retire the legacy instance/agreement surface of `helm/diff.py` onto
+`NormalizedDiff`) has now landed and removed the second definition entirely, so
+new output carries only the `NormalizedDiff` number. When reading **pre-R-2**
+report stores, still treat any legacy `pair_report`/`quantiles` agreement as a
+different quantity with the same unfortunate name.
