@@ -35,15 +35,15 @@ def discover_eee_artifacts(root: Path) -> list[dict[str, Any]]:
     sibling ``<uuid>_samples.jsonl``. Multiple artifacts in the same dir are
     returned as separate rows.
     """
+    from eval_audit.normalized.recipe_facts import is_aggregate_json_name
+
     rows: list[dict[str, Any]] = []
     if not root.exists():
         return rows
     for json_path in sorted(root.rglob("*.json")):
-        if json_path.name in {
-            "fixture_manifest.json",
-            "provenance.json",
-            "status.json",
-        }:
+        # R-5: single shared aggregate-name predicate (also excludes run_spec.json
+        # and *_samples.json, which the structural check below would drop anyway).
+        if not is_aggregate_json_name(json_path.name):
             continue
         try:
             data = json.loads(json_path.read_text())

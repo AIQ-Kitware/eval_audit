@@ -44,13 +44,35 @@ from eval_audit.indexing.schema import extract_judge_models, extract_run_spec_fi
 NATIVE_RECIPE_FACTS_KEY = "recipe_facts"
 
 #: Filenames next to an EEE aggregate that are never the aggregate
-#: itself. Mirrors the conventions in cli/from_eee and the EEE loader.
+#: itself. Single source of truth for the aggregate-detection sites
+#: across the normalized package (R-5).
 _NON_AGGREGATE_NAMES = {
     "provenance.json",
     "status.json",
     "run_spec.json",
     "fixture_manifest.json",
 }
+
+
+def is_aggregate_json_name(name: str) -> bool:
+    """True if a ``*.json`` filename could be an EEE aggregate.
+
+    Excludes the fixed sidecars that are never the aggregate
+    (:data:`_NON_AGGREGATE_NAMES`: provenance/status/run_spec/fixture_manifest)
+    and per-instance ``*_samples.json`` dumps. Using the *complete* name set is
+    what closes the sidecar-only-dir bug (R-5): a directory containing only
+    ``run_spec.json`` no longer counts as having an aggregate.
+    """
+    return name not in _NON_AGGREGATE_NAMES and not name.endswith("_samples.json")
+
+
+def artifact_has_aggregate(artifact_path: Path) -> bool:
+    """True if ``artifact_path`` is a dir holding at least one candidate aggregate JSON."""
+    if not artifact_path.is_dir():
+        return False
+    return any(
+        is_aggregate_json_name(path.name) for path in artifact_path.rglob("*.json")
+    )
 
 #: Scalar fact fields a native block may carry. Anything else in the
 #: block is preserved in ``extra`` for forward compatibility.
@@ -146,14 +168,11 @@ def _facts_from_run_spec(run_spec_fpath: Path) -> RecipeFacts:
 
 
 def _iter_aggregate_jsons(artifact_dir: Path) -> list[Path]:
-    out = []
-    for fpath in sorted(artifact_dir.rglob("*.json")):
-        if fpath.name in _NON_AGGREGATE_NAMES:
-            continue
-        if fpath.name.endswith("_samples.json"):
-            continue
-        out.append(fpath)
-    return out
+    return [
+        fpath
+        for fpath in sorted(artifact_dir.rglob("*.json"))
+        if is_aggregate_json_name(fpath.name)
+    ]
 
 
 def _native_block_from_aggregate(fpath: Path) -> dict[str, Any] | None:

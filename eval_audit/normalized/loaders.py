@@ -160,15 +160,13 @@ class EeeArtifactLoader(Loader):
         if not artifact_path.exists():
             raise LoaderError(f"EEE artifact path does not exist: {artifact_path}")
 
+        # R-5: single shared aggregate-name predicate (excludes provenance/
+        # status/run_spec/fixture_manifest sidecars and *_samples.json dumps).
+        from eval_audit.normalized.recipe_facts import is_aggregate_json_name
+
         aggregate_paths = sorted(
-            p for p in artifact_path.rglob("*.json") if not p.name.endswith("_samples.json")
+            p for p in artifact_path.rglob("*.json") if is_aggregate_json_name(p.name)
         )
-        # Filter out the *_samples.jsonl we may have caught and any
-        # non-EvaluationLog files (provenance.json, status.json, etc.).
-        aggregate_paths = [
-            p for p in aggregate_paths
-            if p.name not in {"provenance.json", "status.json"}
-        ]
         if not aggregate_paths:
             raise LoaderError(
                 f"No EEE aggregate JSON files found under {artifact_path}"

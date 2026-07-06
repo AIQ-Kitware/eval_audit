@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import safer
 
@@ -103,6 +103,107 @@ def _register_run_local_helm_configs(run_path: Path) -> str | None:
 
 
 @profile
+def _run_eee_conversion(
+    *,
+    run_path: Path,
+    parent: Path,
+    source: str,
+    metadata_args: dict[str, Any],
+    status: dict[str, Any],
+    provenance_extra: Callable[[], dict[str, Any]] | None = None,
+) -> EeeArtifactResolution:
+    """Shared HELM->EEE convert-write-verify core (R-5).
+
+    ``convert_helm_run_to_cached_eee`` and ``convert_local_helm_run_to_eee``
+    differ only in their cache parent, metadata constants, status extras,
+    provenance extras, and (cached-only) up-front cache-hit check; that setup
+    stays in the wrappers. The identical run-the-converter, write aggregates,
+    write provenance/status, verify-aggregate-present sequence lives here.
+
+    ``provenance_extra`` is a callable evaluated only on the success path (so
+    e.g. the local converter's reproduce-script is written only when the
+    conversion succeeded, matching the pre-refactor behavior).
+    """
+    artifact_path = parent / "eee_output"
+    status_path = parent / "status.json"
+    provenance_path = parent / "provenance.json"
+    parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.mkdir(parents=True, exist_ok=True)
+    eval_uuid = metadata_args["file_uuid"]
+
+    try:
+        from every_eval_ever.converters.helm.adapter import HELMAdapter
+
+        # Replay the run's local deployment/tokenizer overrides (prod_env) so the
+        # converter resolves names like ``huggingface/phi-2-local`` the same way
+        # ``helm-run`` did, instead of HELM's eager ``huggingface/<id>`` generator.
+        status["registered_prod_env"] = _register_run_local_helm_configs(run_path)
+        adapter = HELMAdapter()
+        logs = adapter.transform_from_directory(
+            str(run_path),
+            output_path=str(artifact_path / "helm_output"),
+            metadata_args=metadata_args,
+        )
+        aggregate_paths: list[str] = []
+        for log in logs:
+            aggregate_path = _aggregate_path_for_log(log, artifact_path, eval_uuid)
+            _atomic_write_text(
+                aggregate_path,
+                log.model_dump_json(exclude_none=True, indent=2) + "\n",
+            )
+            aggregate_paths.append(str(aggregate_path))
+        status.update(
+            {
+                "status": "ok",
+                "returncode": 0,
+                "n_evaluation_logs": len(logs),
+                "aggregate_paths": aggregate_paths,
+            }
+        )
+        provenance = {**status}
+        if provenance_extra is not None:
+            provenance.update(provenance_extra())
+        _atomic_write_text(provenance_path, json.dumps(provenance, indent=2, default=str) + "\n")
+        _atomic_write_text(status_path, json.dumps(status, indent=2, default=str) + "\n")
+        if not _artifact_has_aggregate(artifact_path):
+            return EeeArtifactResolution(
+                artifact_path=None,
+                status="conversion_empty",
+                source=source,
+                status_path=status_path.resolve(),
+                provenance_path=provenance_path.resolve(),
+                message="converter completed but wrote no aggregate JSON",
+                generated=True,
+            )
+        return EeeArtifactResolution(
+            artifact_path=artifact_path.resolve(),
+            status="generated",
+            source=source,
+            status_path=status_path.resolve(),
+            provenance_path=provenance_path.resolve(),
+            generated=True,
+        )
+    except Exception as exc:
+        status.update(
+            {
+                "status": "fail",
+                "exception_class": type(exc).__name__,
+                "failure_snippet": traceback.format_exc()[-4000:],
+                "returncode": -1,
+            }
+        )
+        _atomic_write_text(status_path, json.dumps(status, indent=2, default=str) + "\n")
+        return EeeArtifactResolution(
+            artifact_path=None,
+            status="conversion_failed",
+            source=source,
+            status_path=status_path.resolve(),
+            provenance_path=provenance_path.resolve() if provenance_path.exists() else None,
+            message=f"{type(exc).__name__}: {exc}",
+            generated=True,
+        )
+
+
 def convert_helm_run_to_cached_eee(
     run_path: str | Path,
     *,
@@ -139,10 +240,7 @@ def convert_helm_run_to_cached_eee(
             status_path=status_path.resolve() if status_path.exists() else None,
             provenance_path=provenance_path.resolve() if provenance_path.exists() else None,
         )
-    parent.mkdir(parents=True, exist_ok=True)
-    artifact_path.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now(timezone.utc).isoformat()
     eval_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, str(run_path)))
     metadata_args = {
         "source_organization_name": source_organization_name,
@@ -155,82 +253,20 @@ def convert_helm_run_to_cached_eee(
     status: dict[str, Any] = {
         "source_kind": source_kind,
         "status": "started",
-        "timestamp": timestamp,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "run_path": str(run_path),
         "out_dir": str(parent),
         "eee_artifact_path": str(artifact_path),
         "converter_name": _eee_converter_name(),
         "converter_version": _eee_converter_version(),
     }
-
-    try:
-        from every_eval_ever.converters.helm.adapter import HELMAdapter
-
-        # Replay the run's local deployment/tokenizer overrides (prod_env) so the
-        # converter resolves names like ``huggingface/phi-2-local`` the same way
-        # ``helm-run`` did, instead of HELM's eager ``huggingface/<id>`` generator.
-        status["registered_prod_env"] = _register_run_local_helm_configs(run_path)
-        adapter = HELMAdapter()
-        logs = adapter.transform_from_directory(
-            str(run_path),
-            output_path=str(artifact_path / "helm_output"),
-            metadata_args=metadata_args,
-        )
-        aggregate_paths: list[str] = []
-        for log in logs:
-            aggregate_path = _aggregate_path_for_log(log, artifact_path, eval_uuid)
-            _atomic_write_text(
-                aggregate_path,
-                log.model_dump_json(exclude_none=True, indent=2) + "\n",
-            )
-            aggregate_paths.append(str(aggregate_path))
-        status.update(
-            {
-                "status": "ok",
-                "returncode": 0,
-                "n_evaluation_logs": len(logs),
-                "aggregate_paths": aggregate_paths,
-            }
-        )
-        _atomic_write_text(provenance_path, json.dumps({**status}, indent=2, default=str) + "\n")
-        _atomic_write_text(status_path, json.dumps(status, indent=2, default=str) + "\n")
-        if not _artifact_has_aggregate(artifact_path):
-            return EeeArtifactResolution(
-                artifact_path=None,
-                status="conversion_empty",
-                source="helm_raw_cached_conversion",
-                status_path=status_path.resolve(),
-                provenance_path=provenance_path.resolve(),
-                message="converter completed but wrote no aggregate JSON",
-                generated=True,
-            )
-        return EeeArtifactResolution(
-            artifact_path=artifact_path.resolve(),
-            status="generated",
-            source="helm_raw_cached_conversion",
-            status_path=status_path.resolve(),
-            provenance_path=provenance_path.resolve(),
-            generated=True,
-        )
-    except Exception as exc:
-        status.update(
-            {
-                "status": "fail",
-                "exception_class": type(exc).__name__,
-                "failure_snippet": traceback.format_exc()[-4000:],
-                "returncode": -1,
-            }
-        )
-        _atomic_write_text(status_path, json.dumps(status, indent=2, default=str) + "\n")
-        return EeeArtifactResolution(
-            artifact_path=None,
-            status="conversion_failed",
-            source="helm_raw_cached_conversion",
-            status_path=status_path.resolve(),
-            provenance_path=provenance_path.resolve() if provenance_path.exists() else None,
-            message=f"{type(exc).__name__}: {exc}",
-            generated=True,
-        )
+    return _run_eee_conversion(
+        run_path=run_path,
+        parent=parent,
+        source="helm_raw_cached_conversion",
+        metadata_args=metadata_args,
+        status=status,
+    )
 
 
 def _clean_optional_text(value: Any) -> str | None:
@@ -254,15 +290,12 @@ def _resolve_existing_dir(value: str | Path | None) -> Path | None:
 
 
 def _artifact_has_aggregate(artifact_path: Path) -> bool:
-    if not artifact_path.is_dir():
-        return False
-    for path in artifact_path.rglob("*.json"):
-        if path.name in {"status.json", "provenance.json"}:
-            continue
-        if path.name.endswith("_samples.json"):
-            continue
-        return True
-    return False
+    # R-5: delegate to the single shared predicate. This tightened the exclusion
+    # set to _NON_AGGREGATE_NAMES (adds run_spec.json / fixture_manifest.json), so
+    # a sidecar-only dir with just run_spec.json no longer counts as an aggregate.
+    from eval_audit.normalized.recipe_facts import artifact_has_aggregate
+
+    return artifact_has_aggregate(artifact_path)
 
 
 def _status_permits_use(status_path: Path) -> bool:
@@ -616,12 +649,6 @@ def convert_local_helm_run_to_eee(
 
     parent = local_eee_parent_for_row(row, local_eee_root=local_eee_root)
     artifact_path = parent / "eee_output"
-    status_path = parent / "status.json"
-    provenance_path = parent / "provenance.json"
-    parent.mkdir(parents=True, exist_ok=True)
-    artifact_path.mkdir(parents=True, exist_ok=True)
-
-    timestamp = datetime.now(timezone.utc).isoformat()
     eval_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, str(run_path)))
     metadata_args = {
         "source_organization_name": "eval_audit_local",
@@ -634,7 +661,7 @@ def convert_local_helm_run_to_eee(
     status: dict[str, Any] = {
         "source_kind": "local",
         "status": "started",
-        "timestamp": timestamp,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "run_path": str(run_path),
         "out_dir": str(parent),
         "eee_artifact_path": str(artifact_path),
@@ -645,80 +672,21 @@ def convert_local_helm_run_to_eee(
         "converter_name": _eee_converter_name(),
         "converter_version": _eee_converter_version(),
     }
-
-    try:
-        from every_eval_ever.converters.helm.adapter import HELMAdapter
-
-        # Replay the run's local deployment/tokenizer overrides (prod_env) so the
-        # converter resolves names like ``huggingface/phi-2-local`` the same way
-        # ``helm-run`` did, instead of HELM's eager ``huggingface/<id>`` generator.
-        status["registered_prod_env"] = _register_run_local_helm_configs(run_path)
-        adapter = HELMAdapter()
-        logs = adapter.transform_from_directory(
-            str(run_path),
-            output_path=str(artifact_path / "helm_output"),
-            metadata_args=metadata_args,
-        )
-        aggregate_paths: list[str] = []
-        for log in logs:
-            aggregate_path = _aggregate_path_for_log(log, artifact_path, eval_uuid)
-            _atomic_write_text(
-                aggregate_path,
-                log.model_dump_json(exclude_none=True, indent=2) + "\n",
-            )
-            aggregate_paths.append(str(aggregate_path))
-        status.update(
-            {
-                "status": "ok",
-                "returncode": 0,
-                "n_evaluation_logs": len(logs),
-                "aggregate_paths": aggregate_paths,
-            }
-        )
-        provenance = {
-            **status,
+    # The reproduce-script is written only on the success path (inside the core),
+    # matching the pre-refactor behavior.
+    return _run_eee_conversion(
+        run_path=run_path,
+        parent=parent,
+        source="local_conversion",
+        metadata_args=metadata_args,
+        status=status,
+        provenance_extra=lambda: {
             "index_row": dict(row),
-            "reproduce_script": str(_write_local_reproduce_script(parent, run_path, artifact_path)),
-        }
-        _atomic_write_text(provenance_path, json.dumps(provenance, indent=2, default=str) + "\n")
-        _atomic_write_text(status_path, json.dumps(status, indent=2, default=str) + "\n")
-        if not _artifact_has_aggregate(artifact_path):
-            return EeeArtifactResolution(
-                artifact_path=None,
-                status="conversion_empty",
-                source="local_conversion",
-                status_path=status_path.resolve(),
-                provenance_path=provenance_path.resolve(),
-                message="converter completed but wrote no aggregate JSON",
-                generated=True,
-            )
-        return EeeArtifactResolution(
-            artifact_path=artifact_path.resolve(),
-            status="generated",
-            source="local_conversion",
-            status_path=status_path.resolve(),
-            provenance_path=provenance_path.resolve(),
-            generated=True,
-        )
-    except Exception as exc:
-        status.update(
-            {
-                "status": "fail",
-                "exception_class": type(exc).__name__,
-                "failure_snippet": traceback.format_exc()[-4000:],
-                "returncode": -1,
-            }
-        )
-        _atomic_write_text(status_path, json.dumps(status, indent=2, default=str) + "\n")
-        return EeeArtifactResolution(
-            artifact_path=None,
-            status="conversion_failed",
-            source="local_conversion",
-            status_path=status_path.resolve(),
-            provenance_path=provenance_path.resolve() if provenance_path.exists() else None,
-            message=f"{type(exc).__name__}: {exc}",
-            generated=True,
-        )
+            "reproduce_script": str(
+                _write_local_reproduce_script(parent, run_path, artifact_path)
+            ),
+        },
+    )
 
 
 __all__ = [
