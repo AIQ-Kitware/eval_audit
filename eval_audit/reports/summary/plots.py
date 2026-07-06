@@ -10,6 +10,7 @@ import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+from loguru import logger
 from eval_audit.infra.plotly_env import configure_plotly_chrome
 from eval_audit.infra.profiling import profile
 
@@ -110,6 +111,7 @@ def _write_plotly_bar(
     jpg_out = None
     png_out = None
     plotly_error = None
+    mpl_error = None
     unique_x = _ordered_unique_values(rows, x)
     color_values = _ordered_unique_values(rows, color)
     count_label = _bar_count_label(xaxis_count_key or x, len(unique_x), axis_title=xaxis_title)
@@ -188,14 +190,16 @@ def _write_plotly_bar(
                     fig.savefig(jpg_fpath, dpi=dpi)
                     jpg_out = str(jpg_fpath)
                 plt.close(fig)
-        except Exception:
-            pass
+        except Exception as ex:
+            mpl_error = f"unable to write bar PNG/JPG via matplotlib: {ex!r}"
+            logger.warning("{} ({})", mpl_error, title)
     return {
         "json": str(json_fpath),
         "html": html_out,
         "jpg": jpg_out,
         "png": png_out,
         "plotly_error": plotly_error,
+        "mpl_error": mpl_error,
     }
 
 

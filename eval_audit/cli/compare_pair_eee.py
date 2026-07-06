@@ -151,19 +151,30 @@ def _write_caveats_file(
         f"  {side:<8} run_spec.json: {status}"
         for side, status in sidecar_status.items()
     )
-    fpath.write_text(textwrap.dedent(f"""\
+    sidecar_phrase = (
+        "was found alongside one or both EEE artifacts"
+        if "present" in str(sidecar_status.values())
+        else "was not present alongside the EEE artifacts"
+    )
+    # Dedent the template *before* interpolation: a multi-line value like
+    # ``sidecar_block`` whose continuation lines carry a different indent than
+    # the template would poison ``textwrap.dedent``'s common-prefix computation
+    # (it would under-strip, leaving ragged margins in the rendered file). With
+    # ``.format`` the dedent runs on the raw template and each substitution lands
+    # at a stable, already-dedented margin.
+    template = textwrap.dedent("""\
     EEE-only pairwise comparison
     ============================
 
     This report was produced by ``eval-audit-compare-pair-eee`` against
     two ``every_eval_ever`` (EEE) artifacts. The HELM ``run_spec.json``
     that the HELM-driven path uses for several comparability checks
-    {"was found alongside one or both EEE artifacts" if "present" in str(sidecar_status.values()) else "was not present alongside the EEE artifacts"}.
+    {sidecar_phrase}.
 
     Inputs
     ------
-      official:           {official_meta['json_path']}
-      local:              {local_meta['json_path']}
+      official:           {official_path}
+      local:              {local_path}
     {sidecar_block}
 
     Comparability facts that depend on HELM metadata
@@ -198,7 +209,15 @@ def _write_caveats_file(
     See ``docs/eee-vs-helm-metadata.md`` for the full HELM↔EEE field
     mapping and recommendations on shipping ``run_spec.json`` alongside
     your EEE artifacts when you have it.
-    """))
+    """)
+    fpath.write_text(
+        template.format(
+            sidecar_phrase=sidecar_phrase,
+            official_path=official_meta['json_path'],
+            local_path=local_meta['json_path'],
+            sidecar_block=sidecar_block,
+        )
+    )
     return fpath
 
 

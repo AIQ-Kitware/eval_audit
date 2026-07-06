@@ -147,6 +147,24 @@ def test_caveats_file_describes_sidecar_status(pair_no_sidecar: Path, pair_with_
     assert "local    run_spec.json: absent" in no_caveats, no_caveats
     assert "official run_spec.json: present" in with_caveats, with_caveats
     assert "local    run_spec.json: present" in with_caveats, with_caveats
+    # Regression: the template is dedented before interpolation, so top-level
+    # header/prose lines must sit flush at column 0 (a prior version let the
+    # multi-line sidecar block poison textwrap.dedent, leaving every line
+    # indented by 2 stray spaces).
+    for caveats in (no_caveats, with_caveats):
+        lines = caveats.splitlines()
+        assert "EEE-only pairwise comparison" in lines, caveats
+        for header in (
+            "EEE-only pairwise comparison",
+            "============================",
+            "Inputs",
+            "Recommendations",
+        ):
+            matching = [ln for ln in lines if ln.strip() == header]
+            assert matching, f"missing header {header!r} in:\n{caveats}"
+            assert all(
+                not ln.startswith((" ", "\t")) for ln in matching
+            ), f"header {header!r} has stray leading whitespace in:\n{caveats}"
 
 
 def test_agreement_curve_is_invariant_to_sidecar(
