@@ -5,7 +5,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
 
 VENV_DIR="${VENV_DIR:-.venv}"
-PYTHON_BIN="${PYTHON_BIN:-python3.11}"
+PYTHON_BIN="${PYTHON_BIN:-python3.12}"
 VENV_PYTHON="$VENV_DIR/bin/python"
 
 echo "[eval_audit] repo root: $REPO_ROOT"

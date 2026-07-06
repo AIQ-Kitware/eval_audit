@@ -25,7 +25,7 @@ the Falcon-7B / Qwen-2.5 / gpt-oss / LLaMA-2-70B grid extensions
 and the cross-harness comparability stress in
 [`inspectai_helm_eee_compare/`](reproduce/inspectai_helm_eee_compare/).
 The paper sources moved from `dev/paper/` to
-[`docs/paper/`](docs/paper/) on 2026-05-02.
+[`docs/papers/`](docs/papers/) on 2026-05-02.
 
 > If you only want the active path, jump to [Analysis runbooks](#analysis-runbooks-actively-maintained).
 
@@ -61,9 +61,12 @@ External directories the workflow depends on:
   outside the repo.
 - `docs/` — supporting docs. Several are **STALE** and need triage; see
   [Documentation status](#documentation-status) below.
-- `reports/` — small generated artifacts that are still useful in-repo
-  (`reports/filtering/`, `reports/core-run-analysis/`,
-  `reports/aggregate-summary/`).
+- The **publication surface** — a single folder named `reports/` with
+  `filtering/`, `core-run-analysis/`, and `aggregate-summary/` subdirs
+  (ADR 3). It is *not* checked into the repo: `publication_root()`
+  defaults to `$AUDIT_STORE_ROOT/reports/`, so these artifacts land under
+  the audit store at runtime. Override `HELM_AUDIT_PUBLICATION_ROOT` to
+  relocate it (e.g. to `<repo>/reports` for the legacy in-repo layout).
 
 The big mutable working tree is on the data store, not in the repo:
 
@@ -171,6 +174,7 @@ dormant breakdown:
 - `eval-audit-report-core` / `eval-audit-report-aggregate` — single-packet and aggregate reporting
 - `eval-audit-compare-pair` / `eval-audit-compare-batch` — pair-level comparison
 - `eval-audit-index` — build the audit-results index
+- `eval-audit-index-historic` — Stage 1: discover historic public-HELM runs, apply the eligibility filters, and emit the filter report + sankey (what was kept/dropped and why)
 - `eval-audit-portfolio-status` — multi-experiment status snapshot
 - `eval-audit-prepare-eee` — prepare EEE artifacts for downstream analysis
 - `eval-audit-from-eee` — **EEE-only tutorial path.** Walks an
@@ -232,7 +236,7 @@ straightforward apt invocation).
 | [`docs/helm-gotchas.md`](docs/helm-gotchas.md) | **CURRENT** | running ledger of HELM-specific behaviors hit during analysis |
 | [`docs/helm-reproduction-research-journal.md`](docs/helm-reproduction-research-journal.md) | **CURRENT** | research context, failure taxonomies |
 | [`docs/eee-vs-helm-metadata.md`](docs/eee-vs-helm-metadata.md) | **CURRENT** | what HELM has that EEE doesn't, what `unknown` comparability facts mean, how to ship sidecar metadata so they evaluate normally |
-| [`docs/paper/`](docs/paper/) | **ACTIVE** | paper drafts (`main.tex`, `technical_report.tex`, `case_study_3*.tex`) and per-session writing logs; renamed from `dev/paper/` on 2026-05-02 |
+| [`docs/papers/`](docs/papers/) | **ACTIVE** | paper drafts: `neurips-2026/` (`technical_report.tex`, `case_study_3*.tex`) and `tmlr-2026/` (`main.tex`); renamed from `dev/paper/` on 2026-05-02 |
 | [`docs/kwdagger-notes.md`](docs/kwdagger-notes.md) | **UNSURE** | small file, may still be accurate |
 | [`docs/helm-null-completion-text-patch-proposal.md`](docs/helm-null-completion-text-patch-proposal.md) | **UNSURE** | pre-EEE patch proposal; outcome unclear |
 | [`docs/architecture.md`](docs/architecture.md) | **PARTIALLY STALE** | core ADRs (raw vs derived, reports/, filesystem-as-interface) still hold; specific module/CLI lists drifted with the rename and recent refactors; moved from repo-root `ARCHITECTURE.md` on 2026-06-11 |
