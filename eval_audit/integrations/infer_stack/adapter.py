@@ -1718,6 +1718,19 @@ def materialize_benchmark_bundle(
     model_deployments_path = output_dir / f"model_deployments.{_md_hash}.yaml"
     model_deployments_path.parent.mkdir(parents=True, exist_ok=True)
     model_deployments_path.write_text(_md_text, encoding="utf-8")
+    # The YAML embeds the resolved LITELLM_MASTER_KEY in plaintext under
+    # client_spec.args.api_key: HELM's OpenAIClient reads that arg literally
+    # (helm.clients.openai_client.OpenAIClient.__init__ forwards it straight to
+    # OpenAI(api_key=...)); this vendoring has no ${ENV} indirection, so the
+    # live key must sit on disk for the runner container to consume. Tighten
+    # perms to owner-only immediately after writing so a default umask does not
+    # leave the key world/group-readable. See README note on bundle secrets.
+    try:
+        os.chmod(model_deployments_path, 0o600)
+    except OSError:
+        # chmod can legitimately fail on some filesystems (e.g. certain mounts);
+        # do not abort bundle materialization over a best-effort perms tighten.
+        pass
 
     model_deployments_fpath = _maybe_repo_relative(model_deployments_path)
     smoke_spec = preset_cfg.get(

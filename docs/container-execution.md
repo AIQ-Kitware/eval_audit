@@ -109,6 +109,17 @@ docker run --rm \
   image. If you'd rather not depend on the env, drop the token in the cache dir
   yourself (`HF_HOME=<hf_cache_dir> huggingface-cli login`).
 
+## Bundle secrets: the model_deployments YAML holds a live key
+
+The generated `model_deployments.<hash>.yaml` in an inference bundle embeds the
+resolved `LITELLM_MASTER_KEY` **in plaintext** under
+`client_spec.args.api_key`. HELM's `OpenAIClient` reads that arg literally
+(`OpenAI(api_key=...)`); this HELM vendoring has no `${ENV}` indirection, so the
+live gateway key must sit on disk for the runner container to consume it. The
+adapter tightens the file to `0o600` (owner-only) immediately after writing, but
+treat the whole bundle as secret-bearing: do not commit it, do not copy it to a
+world-readable share, and rotate the master key if a bundle leaks.
+
 ## Permissions
 
 The container runs as root so `/hf-cache` and HELM's `prod_env/cache` writes
