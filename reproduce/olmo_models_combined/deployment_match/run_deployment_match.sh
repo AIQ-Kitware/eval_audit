@@ -4,8 +4,8 @@
 # `ifeval` on `allenai/olmoe-1b-7b-0125-instruct` — via the deployment-match tool
 # at dev/tools/deployment_match/.
 #
-# This is an OPTIONAL diagnostic living in a SUBFOLDER of the olmo runbook, NOT
-# part of the seven-model grid (../10_run_smoke_grid.sh / ../15_run_full_grid.sh).
+# This is an OPTIONAL diagnostic living in a SUBFOLDER of the combined olmo
+# runbook, NOT part of the fan-out grid (../10_run_smoke.sh / ../15_run_full.sh).
 # The grids replay each preset's official run_spec.json verbatim and serve through
 # the hand-authored `<preset>-single` endpoints in ../config/infer_stack/catalog.yaml
 # — they assume the serving recipe is already right. THIS script is the tool that
@@ -18,18 +18,18 @@
 # docs/planning/deployment-match-search-plan.md.
 #
 # Reuses the parent runbook's _lib.sh. It computes ROOT from its own location
-# (olmo_models/_lib.sh -> ../.. = repo root), so sourcing it one level down from
-# this subfolder still resolves ROOT / STORE_ROOT / PYTHON_BIN correctly. Two
-# things it sets DO carry into the tool's subprocesses:
+# (olmo_models_combined/_lib.sh -> ../.. = repo root), so sourcing it one level
+# down from this subfolder still resolves ROOT / STORE_ROOT / PYTHON_BIN
+# correctly. Two things it sets DO carry into the tool's subprocesses:
 #   * INFER_STACK_DATA_DIR — resolved once to a docker-mountable big disk; the
 #     tool's generated settings.yaml inherits it (`data_dir: env > default`), so
 #     the vLLM HF-weight-cache bind-mount lands on a real disk (never NFS $HOME),
 #     and re-uses the production HF cache to avoid re-downloads.
 #   * HF_TOKEN / HUGGING_FACE_HUB_TOKEN — so pulling the OLMoE weights/tokenizer
 #     works if the Hub rate-limits or the repo needs auth.
-# (The olmo-specific env _lib.sh also sets — OLMO_CONTAINER_IMAGE, the olmo
-# INFER_STACK_CONFIG_DIR, OLMO_TARGETS — is inert here: the deployment-match tool
-# writes its OWN infer-stack catalog.yaml + settings.yaml into $DM_OUT and points
+# (The olmo-specific env _lib.sh also sets — OLMO_CONTAINER_IMAGE, the combined
+# INFER_STACK_CONFIG_DIR — is inert here: the deployment-match tool writes its OWN
+# infer-stack catalog.yaml + settings.yaml into $DM_OUT and points
 # INFER_STACK_CONFIG_DIR there for the serve phase, so it never touches the olmo
 # `<preset>-single` endpoints.)
 # GPU placement is infer-stack's job (`acquire --queue`): unset means every

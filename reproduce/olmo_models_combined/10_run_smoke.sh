@@ -3,9 +3,9 @@
 # export (--from-spec --freeze-rel-paths) -> run the smoke_manifest with
 # `--lease --tmux-workers N`. One schedule; the five models fan out across GPUs.
 #
-# This is the multi-model analogue of ../olmo_models/10_run_smoke_grid.sh. Where
-# the sibling loops over seven presets serially, this exports ONE multi-deployment
-# bundle and lets cmd_queue drive N concurrent leased runs (OLMO_TMUX_WORKERS).
+# Rather than looping over per-model presets serially, this exports ONE
+# multi-deployment bundle and lets cmd_queue drive N concurrent leased runs
+# (OLMO_TMUX_WORKERS).
 # Each scheduled HELM run self-acquires its model's GPU lease (`acquire --queue`,
 # queue-and-wait when busy); infer-stack co-hosts what fits on
 # INFER_STACK_ALLOWED_GPUS and serializes the rest (the 32B tp=2 can't co-host).

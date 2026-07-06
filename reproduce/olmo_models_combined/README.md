@@ -1,30 +1,31 @@
 # OLMo models — combined multi-model fan-out
 
-Sibling of [`../olmo_models`](../olmo_models). Same research goal (faithful
-from-spec reproduction of the AllenAI OLMo HELM runs), same serving / leasing /
-containerization, **different scheduling**: instead of running the presets one at
-a time in a serial bash loop, this runbook runs a **single multi-deployment
-preset** — `allenai-olmo-combined` — exported with `--freeze-rel-paths` and
-scheduled with `eval-audit-run --tmux-workers N`, so **five OLMo models fan out
-across GPUs under one schedule**. The sixth model, the base `olmo-7b`, can't join
-that bundle (see below), so it runs as two extra single-model suites folded into
-the **same virtual experiment** — the grouped report covers all six OLMo models.
+Faithful from-spec reproduction of the AllenAI OLMo HELM runs, scheduled as a
+**single multi-model fan-out**: instead of running the presets one at a time in a
+serial loop, this runbook runs a **single multi-deployment preset** —
+`allenai-olmo-combined` — exported with `--freeze-rel-paths` and scheduled with
+`eval-audit-run --tmux-workers N`, so **five OLMo models fan out across GPUs under
+one schedule**. The sixth model, the base `olmo-7b`, can't join that bundle (see
+below), so it runs as two extra single-model suites folded into the **same virtual
+experiment** — the grouped report covers all six OLMo models.
 
 See [`docs/planning/olmo-multi-model-from-spec-plan.md`](../../docs/planning/olmo-multi-model-from-spec-plan.md)
 §4.4/§4.7 for the design.
 
-## What's different from `../olmo_models`
+## Design at a glance
 
-| | `../olmo_models` (single-model) | `olmo_models_combined` (this) |
-|---|---|---|
-| Presets | seven single-model (`OLMO_TARGETS` loop) | one multi-deployment (`allenai-olmo-combined`) |
-| Models | six (olmo-7b split into `-mmlu`/`-lite`) | **all six** — five in the fan-out bundle + olmo-7b as two extra suites (see below) |
-| Scheduling | serial: one `eval-audit-run` per preset | **one** `eval-audit-run` over the combined manifest |
-| Concurrency | one model served at a time | `--tmux-workers N` → N concurrent leased runs |
-| Export | `--from-spec` (discovery replay) | `--from-spec --freeze-rel-paths` (exact-path replay) |
-| Deployment target | one manifest-level rewrite target | **per-run** inline `model_deployment=<local>` |
-| Experiments | seven (`audit-<preset>-full`) | three (`audit-allenai-olmo-combined-full` + olmo-7b `-mmlu`/`-lite`), one vexp |
-| Grouping manifest | [`olmo-models.yaml`](../../configs/virtual-experiments/olmo-models.yaml) | [`olmo-models-combined.yaml`](../../configs/virtual-experiments/olmo-models-combined.yaml) |
+- **Presets** — one multi-deployment preset (`allenai-olmo-combined`) covering the
+  five models that resolve 1:1 under the shared corpus root, plus olmo-7b as two
+  extra single-model suites.
+- **Scheduling** — a single `eval-audit-run` over the combined manifest, with
+  `--tmux-workers N` driving N concurrent leased runs (vs. one `eval-audit-run`
+  per model).
+- **Export** — `--from-spec --freeze-rel-paths` (exact-path replay), with a
+  **per-run** inline `model_deployment=<local>` rewrite target (vs. a single
+  manifest-level target).
+- **Experiments** — three (`audit-allenai-olmo-combined-full` + olmo-7b
+  `-mmlu`/`-lite`), folded into one virtual experiment via
+  [`olmo-models-combined.yaml`](../../configs/virtual-experiments/olmo-models-combined.yaml).
 
 **Why olmo-7b rides separately.** `allenai/olmo-7b` was run by HELM under two suites
 (`/mmlu` and `/lite`) whose per-subject MMLU dirs are token-subsets of each other,
@@ -44,25 +45,28 @@ each run_entry carries). The plain `--from-spec` *discovery* path can't express
 that, so it is not used here. The materializer applies the substitutions host-side
 before kwdagger; no in-container token-subset discovery runs.
 
-## Shared setup (inherited, not duplicated)
+## Setup (self-contained)
 
-`_lib.sh` **sources `../olmo_models/_lib.sh`** and overrides only the
-combined-specific bits (the grouping manifest, the preset name, the five
-endpoints, the fan-out width). Everything else — `INFER_STACK_CONFIG_DIR` (the
-shipped OLMo catalog with the `<model>-single` endpoints), `INFER_STACK_DATA_DIR`
-resolution, `INFER_STACK_ALLOWED_GPUS`, `OLMO_CONTAINER_IMAGE`, HuggingFace token
-resolution, and the `EVAL_AUDIT_*` group-strip conventions — is inherited verbatim
-(one source of truth, no drift). The serving endpoints and container image are the
-**same** ones the single-model runbook uses, so no separate `config/` or `docker/`
-is shipped here.
+This runbook ships everything it needs — no dependency on a sibling runbook:
 
-`06_check_hf_auth.sh` and `07_check_container_image.sh` are target-independent and
-**delegate** to the sibling's implementations.
+- [`config/infer_stack/`](config/infer_stack/) — the shipped OLMo catalog with the
+  `<model>-single` endpoints (`catalog.yaml`) + durable leasing settings
+  (`settings.yaml`). `_lib.sh` points `INFER_STACK_CONFIG_DIR` here.
+- `_lib.sh` — resolves the repo root, the store/results roots, the
+  docker-mountable `INFER_STACK_DATA_DIR` (env > `settings.yaml` pin > big-disk
+  default), `OLMO_CONTAINER_IMAGE`, HuggingFace-token resolution, and the
+  `EVAL_AUDIT_*` group-strip conventions, then defines the combined-specific bits
+  (grouping manifest, preset name, the five endpoints, fan-out width).
+- `06_check_hf_auth.sh` / `07_check_container_image.sh` — self-contained
+  preflights (the container image is built at the repo root via `./docker/build.sh`).
+- [`deployment_match/`](deployment_match/) — optional diagnostic that searches the
+  best local serving recipe (dtype/tokenizer/…) reproducing one public HELM run;
+  see [`deployment_match/run_deployment_match.sh`](deployment_match/run_deployment_match.sh).
 
 ## Steps
 
 ```bash
-../olmo_models/docker/build.sh   # build eval-audit-helm-runner:dev (shared image; containerization is ON)
+../../docker/build.sh            # build eval-audit-helm-runner:dev (containerization is ON)
 ./00_check_env.sh                # eval-audit-check-env
 ./05_check_profiles.sh           # verify the six <model>-single endpoints are defined
 ./06_check_hf_auth.sh            # verify a HuggingFace token (gated gpqa dataset needs it)
@@ -80,9 +84,9 @@ that feeds `20`/`30`/`40`.
 
 ## Knobs (env vars)
 
-Everything the single-model runbook documents applies (inherited from its
-`_lib.sh`: `OLMO_CONTAINER_IMAGE`, `AUDIT_STORE_ROOT`, `AUDIT_RESULTS_ROOT`,
-`INFER_STACK_*`, `LITELLM_PORT`, `OLMO_FORCE_RERUN`, …). Combined-specific:
+Base setup (from `_lib.sh`): `OLMO_CONTAINER_IMAGE`, `AUDIT_STORE_ROOT`,
+`AUDIT_RESULTS_ROOT`, `INFER_STACK_*`, `LITELLM_PORT`, `OLMO_FORCE_RERUN`, ….
+Combined-specific:
 
 - `OLMO_TMUX_WORKERS` (default `4`) — fan-out width: the max concurrent HELM
   client runs cmd_queue drives. Each run self-leases its model's GPU; infer-stack
@@ -109,8 +113,8 @@ Everything the single-model runbook documents applies (inherited from its
   the `--preset` mode the same local-strip (plan §4.3) would let `08` skip the
   scratch export; until then the freeze-then-existence-check is the faithful gate.
 - **Compared against public HELM.** The grouping manifest's `official_public_index`
-  source pairs each local run with its official counterpart by logical run key
-  (mirroring `olmo-models.yaml`). Comment that source out in
+  source pairs each local run with its official counterpart by logical run key.
+  Comment that source out in
   [`olmo-models-combined.yaml`](../../configs/virtual-experiments/olmo-models-combined.yaml)
   to make the report local-only.
 

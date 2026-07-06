@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Run the FULL combined manifest via a single fan-out schedule.
 #
-# Heavy counterpart to 10_run_smoke.sh and the multi-model analogue of
-# ../olmo_models/15_run_full_grid.sh: one export of the combined multi-deployment
+# Heavy counterpart to 10_run_smoke.sh: one export of the combined multi-deployment
 # bundle (--from-spec --freeze-rel-paths), then `eval-audit-run --lease
 # --tmux-workers N` over the full_manifest — the union of the five models' full
 # run_entries (olmo-1.7-7b MMLU x 57 + the four instruct models'
