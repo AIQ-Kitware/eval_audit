@@ -388,7 +388,7 @@ def _freeze_run_spec_sources(
     rewrite target — lifting the single-deployment restriction the discovery path
     imposes (``export_benchmark_bundle`` ``rewrite_deployment``).
     """
-    from eval_audit.cli import check_precomputed_discovery as dc
+    from eval_audit.integrations.infer_stack import discovery as dc
 
     root = Path(precomputed_root)
     local_names = frozenset(entry["name"] for entry in model_entries)
@@ -691,7 +691,7 @@ def materialize_benchmark_bundle(
     # corpus is enumerated once per distinct root and shared across smoke/full.
     smoke_sources = full_sources = None
     if freeze_rel_paths:
-        from eval_audit.cli import check_precomputed_discovery as dc
+        from eval_audit.integrations.infer_stack import discovery as dc
 
         runs_cache: dict[str, list[Any]] = {}
 

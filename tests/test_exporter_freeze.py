@@ -14,7 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from eval_audit.cli import check_precomputed_discovery as dc
+# R-3: the discovery core moved to infer_stack.discovery; adapter reads
+# _classify/_enumerate_runs from there, so patch the new home.
+from eval_audit.integrations.infer_stack import discovery as dc
 from eval_audit.integrations.infer_stack.adapter import (
     _freeze_run_spec_sources,
     _strip_local_deployment,
