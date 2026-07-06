@@ -15,7 +15,7 @@
 # agreement with the official outputs. The winner lands in
 # `$DM_OUT/results/best_deployment.yaml`. See the tool's README at
 # dev/tools/deployment_match/README.md and the design plan at
-# docs/planning/deployment-match-search-plan.md.
+# docs/historical/planning/deployment-match-search-plan.md.
 #
 # Reuses the parent runbook's _lib.sh. It computes ROOT from its own location
 # (olmo_models/_lib.sh -> ../.. = repo root), so sourcing it one level down from

@@ -26,7 +26,7 @@ unchanged. The run-entry-vs-from-spec parity diff is now a **manual** step
 `run_spec.json`. The `incomparable` negative control **stays on the run-entry
 path** (§7) — the sole, structural carve-out (from-spec would erase its
 `temperature=1` deviation).
-**Depends on:** [`run-from-run-spec-json-plan.md`](run-from-run-spec-json-plan.md)
+**Depends on:** [`run-from-run-spec-json-plan.md`](../../planning/run-from-run-spec-json-plan.md)
 (the replay pipeline, now implemented on `impl/run-from-run-spec`).
 **Method:** read the e2e harness under `dev/e2e-tests/`, the infer-stack bundle
 exporter, the per-scenario virtual-experiment configs, and the real public phi-2
@@ -39,7 +39,7 @@ artifacts under `/data/crfm-helm-public`. 2026-06-25.
 The phi-2 e2e already compares each local scenario against **the public
 `microsoft/phi-2` `mmlu:philosophy` run** by canonical logical key — see the
 `official_public_index` source in
-[`configs/virtual-experiments/e2e-phi2-hf.yaml`](../../configs/virtual-experiments/e2e-phi2-hf.yaml).
+[`configs/virtual-experiments/e2e-phi2-hf.yaml`](../../../configs/virtual-experiments/e2e-phi2-hf.yaml).
 That public run is on disk with a fully-resolved recipe:
 
 ```
@@ -59,14 +59,14 @@ strict upgrade; for the negative control it is the wrong tool (§7).
 ## 2. What the e2e looks like today (constraints that shape the change)
 
 1. **Three scenarios** in `E2E_TARGETS`
-   ([`dev/e2e-tests/_lib.sh`](../../dev/e2e-tests/_lib.sh)):
+   ([`dev/e2e-tests/_lib.sh`](../../../dev/e2e-tests/_lib.sh)):
    - `e2e-phi_2-huggingface-philosophy` (`hf`) — phi-2 loaded **in-process** from
      HuggingFace. Uses a **checked-in** manifest
-     ([`manifests/e2e-phi_2-huggingface-philosophy-{smoke,full}.yaml`](../../dev/e2e-tests/manifests/)).
+     ([`manifests/e2e-phi_2-huggingface-philosophy-{smoke,full}.yaml`](../../../dev/e2e-tests/manifests/)).
    - `e2e-phi_2-vllm-philosophy` (`vllm`) — phi-2 **served** on vLLM behind
      LiteLLM. Manifest is **generated** by `export-benchmark-bundle` from the
      preset `e2e-phi_2-vllm-philosophy`
-     ([`eval_audit/integrations/infer_stack/adapter.py:361`](../../eval_audit/integrations/infer_stack/adapter.py)),
+     ([`eval_audit/integrations/infer_stack/adapter.py:361`](../../../eval_audit/integrations/infer_stack/adapter.py)),
      `model_deployment_name: vllm/phi-2-local`.
    - `e2e-phi_2-vllm-philosophy-incomparable` — same as `vllm` but `temperature=1`,
      a **deliberate recipe deviation** the planner must flag.
@@ -84,14 +84,14 @@ strict upgrade; for the negative control it is the wrong tool (§7).
    `--lease`. **Unlike every other preset, the phi-2 run_entries are *bare*
    `…model=microsoft/phi-2,eval_split=test` — they do NOT carry a
    `model_deployment=` token** (`_manifest_doc` writes them verbatim,
-   [`adapter.py:1242`](../../eval_audit/integrations/infer_stack/adapter.py); HELM
+   [`adapter.py:1242`](../../../eval_audit/integrations/infer_stack/adapter.py); HELM
    resolves the deployment from the registered `model_deployments.yaml`). This
    *helps* the migration: the bare run-entry is a clean token-subset of the
    official dir name (which only adds `groups=mmlu_philosophy`), so discovery
    (`find_best_precomputed_run`) matches it with no stray `model_deployment=` token
    to reconcile (§5, Change 6).
 5. **Downstream is canonical-key based.** The per-scenario virtual experiments
-   ([`configs/virtual-experiments/e2e-phi2-{hf,vllm,incomparable}.yaml`](../../configs/virtual-experiments/))
+   ([`configs/virtual-experiments/e2e-phi2-{hf,vllm,incomparable}.yaml`](../../../configs/virtual-experiments/))
    pair the local row against `official_public_index` by canonical logical key,
    so the local run dir *name* need not byte-match the official — and HELM does
    not encode `temperature` in the run name, which is why the `incomparable`
@@ -160,7 +160,7 @@ no eval_audit-core change.
 `from_run_spec: true` + `precomputed_root: /data/crfm-helm-public/mmlu` to the
 preset's `smoke_manifest` / `full_manifest` blocks is **not sufficient on its
 own**. `_manifest_doc`
-([`adapter.py:1232`](../../eval_audit/integrations/infer_stack/adapter.py)) builds
+([`adapter.py:1232`](../../../eval_audit/integrations/infer_stack/adapter.py)) builds
 a *fixed* manifest dict: it **hardcodes `precomputed_root: None`** (`:1251`), has
 **no `from_run_spec` key**, and only passes through `_CONTAINER_SPEC_KEYS`
 (`:1175`, which contains neither field). So an exporter run would silently drop
@@ -172,7 +172,7 @@ preset-block fields take effect.
 
 **(b) Rekey the deployment to `together/phi-2`.** Change the **profile spec's
 `model_deployment_name`** from `vllm/phi-2-local` → `together/phi-2`
-([`adapter.py:369`](../../eval_audit/integrations/infer_stack/adapter.py); it flows
+([`adapter.py:369`](../../../eval_audit/integrations/infer_stack/adapter.py); it flows
 to `_model_deployment_entry`'s `name` field, `:1084`). The generated
 `model_deployments.yaml` then binds **`together/phi-2`** (the name the official
 `run_spec.json` carries) → the LiteLLM endpoint. Registering it locally **shadows

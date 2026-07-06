@@ -34,7 +34,7 @@ from eval_audit.infra.profiling import profile
 
 # --- compat re-exports -------------------------------------------------
 # The implementation moved to eval_audit.reports.summary.* on 2026-06-11
-# (Phase 2 of docs/planning/repo-refactor-plan.md). Tests and operational
+# (Phase 2 of docs/historical/planning/repo-refactor-plan.md). Tests and operational
 # scripts import these names from this module; keep re-exporting them.
 from eval_audit.reports.summary.common import (  # noqa: F401
     DEFAULT_BREAKDOWN_DIMS,

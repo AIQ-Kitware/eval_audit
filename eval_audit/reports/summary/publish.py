@@ -1,7 +1,7 @@
 """Artifact publishing: tables, READMEs, aliases, reproduce/redraw scripts.
 
 Split out of ``eval_audit.workflows.build_reports_summary`` on
-2026-06-11 (Phase 2 of docs/planning/repo-refactor-plan.md). Pure
+2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md). Pure
 relocation: function bodies are unchanged.
 """
 from __future__ import annotations

@@ -10,7 +10,7 @@ token **only when it names a local deployment**.
 preset; the grid. No change to leasing.
 **Depends on / sequencing:** lands *after* the single-model from-spec migration is
 GPU-verified (the migration plan's Change 5). See
-[`olmo-from-run-spec-migration-plan.md`](olmo-from-run-spec-migration-plan.md) and
+[`olmo-from-run-spec-migration-plan.md`](../../planning/olmo-from-run-spec-migration-plan.md) and
 [`from-spec-deployment-rewrite-plan.md`](from-spec-deployment-rewrite-plan.md).
 **Supersedes:** the two earlier multi-model options explored in session
 (matrix-`include:` pairing; node-side rewrite map). This is the cleaner third

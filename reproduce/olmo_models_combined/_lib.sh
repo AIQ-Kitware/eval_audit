@@ -10,7 +10,7 @@
 # `eval-audit-run --tmux-workers N`, so cmd_queue issues N concurrent per-run
 # leases and infer-stack co-hosts what fits on INFER_STACK_ALLOWED_GPUS /
 # serializes the rest. Five OLMo models fan out across GPUs under ONE schedule.
-# See docs/planning/olmo-multi-model-from-spec-plan.md §4.4/§4.7.
+# See docs/historical/planning/olmo-multi-model-from-spec-plan.md §4.4/§4.7.
 #
 # The serving / leasing / container / HuggingFace-auth / infer-stack-config setup
 # is IDENTICAL to the single-model runbook, so we inherit it verbatim by sourcing

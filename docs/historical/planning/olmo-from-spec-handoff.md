@@ -7,7 +7,7 @@ re-deriving the recipe). This is the project's methodological core: reconstructi
 the recipe lets recipe drift confound the reproducibility comparison, so the local
 run must differ from the official only by *model execution*.
 
-**Read first:** [`docs/planning/olmo-from-run-spec-migration-plan.md`](olmo-from-run-spec-migration-plan.md)
+**Read first:** [`docs/planning/olmo-from-run-spec-migration-plan.md`](../../planning/olmo-from-run-spec-migration-plan.md)
 — the full plan with the per-model feasibility matrix (§4), the **measured**
 discovery baseline (§4.1), the change list (§6), risks (§7), and sequencing (§8).
 The template it mirrors is [`docs/planning/e2e-from-run-spec-migration-plan.md`](e2e-from-run-spec-migration-plan.md)
@@ -27,11 +27,11 @@ and [`docs/planning/from-spec-deployment-rewrite-plan.md`](from-spec-deployment-
 
 ## What is DONE (do not redo)
 
-- **Change 4** — [`eval_audit/cli/check_precomputed_discovery.py`](../../eval_audit/cli/check_precomputed_discovery.py)
+- **Change 4** — [`eval_audit/cli/check_precomputed_discovery.py`](../../../eval_audit/cli/check_precomputed_discovery.py)
   (CPU-only; resolves each preset's run-entries against the corpus with the SAME
   matcher the replay uses; `--entry` overrides for ad-hoc keys; `--precomputed-root`
   defaults to the preset's own manifest root) and
-  [`reproduce/olmo_models/08_check_discovery.sh`](../../reproduce/olmo_models/08_check_discovery.sh).
+  [`reproduce/olmo_models/08_check_discovery.sh`](../../../reproduce/olmo_models/08_check_discovery.sh).
 - **Change 1** — all 7 presets carry `precomputed_root`; the `bbq`
   `output_format_instructions=mcqa` token was dropped; **olmo-7b was SPLIT** into
   `allenai-olmo-7b-mmlu` (57 `eval_split=test` → `/data/crfm-helm-public/mmlu`) and
@@ -104,7 +104,7 @@ below). **Only Change 5 remains, and it needs a GPU + the user's own shell.**
   **user's own shell** (`edward.wang`), the venv works normally and
   `bash reproduce/olmo_models/08_check_discovery.sh` just runs.
 - **venv dependency pin:** `transformers>=4.53,<5` + `huggingface_hub==0.36.2` — see
-  [`dev/e2e-tests/NOTES.md`](../../dev/e2e-tests/NOTES.md). transformers 5.x imports
+  [`dev/e2e-tests/NOTES.md`](../../../dev/e2e-tests/NOTES.md). transformers 5.x imports
   `is_offline_mode` from huggingface_hub (absent in 0.36.2) and breaks the HELM→EEE
   rebuild. Do NOT "fix" by upgrading hub.
 - **The deployment-rewrite is AUTOMATIC** once `--from-spec` is wired: the exporter

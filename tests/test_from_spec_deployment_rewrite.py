@@ -1,6 +1,6 @@
 """Tests for the from-spec deployment rewrite.
 
-Covers ``docs/planning/from-spec-deployment-rewrite-plan.md``: the comparability
+Covers ``docs/historical/planning/from-spec-deployment-rewrite-plan.md``: the comparability
 PROOF (rewriting adapter_spec.model_deployment to the local name un-masks the
 engine substitution), the manifest -> bridge -> node plumbing that threads the
 rewrite target, and the §3 invariant (each from-spec manifest's

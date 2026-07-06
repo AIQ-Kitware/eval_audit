@@ -5,7 +5,7 @@
 > `switch --profile X --apply` + `wait-ready` → `acquire X --yes` + `wait`,
 > `down` → `release --all --evict`, `list-profiles` → `catalog endpoint list`,
 > and the `<preset>-single` profiles are now catalog **endpoints**. The runnable
-> scripts under [`reproduce/olmo_models/`](../../reproduce/olmo_models/) and their
+> scripts under [`reproduce/olmo_models/`](../../../reproduce/olmo_models/) and their
 > README are the current source of truth; see
 > [`infer-stack-cli-api-migration.md`](infer-stack-cli-api-migration.md). The
 > text below is kept as the original design narrative.
@@ -14,7 +14,7 @@
 model presets and produces a **single grouped report** spanning all six, without
 collapsing their per-model identities. Deliverable is a runnable script (plus one
 virtual-experiment config), modeled on the single-experiment runners in
-[`dev/e2e-tests/`](../../dev/e2e-tests/).
+[`dev/e2e-tests/`](../../../dev/e2e-tests/).
 
 **Why grouped, not shared `experiment_name`:** the six presets keep their own
 `experiment_name`/`suite` (they run as six isolated jobs); grouping happens one
@@ -31,7 +31,7 @@ path is additive and reversible.
 
 All six use `access_kind: vllm-direct` and a `*-single` infer-stack profile.
 From `PRESET_CONFIGS` in
-[`eval_audit/integrations/infer_stack/adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py):
+[`eval_audit/integrations/infer_stack/adapter.py`](../../../eval_audit/integrations/infer_stack/adapter.py):
 
 | Preset | infer-stack profile | smoke `experiment_name` (== `suite`) | smoke entries |
 |---|---|---|---|
@@ -68,7 +68,7 @@ is the template. Its shape, per experiment:
 - **`vllm-direct`, not litellm/openai-compatible.** The phi2 vLLM script routes
   through the LiteLLM gateway and passes `--base-url`/`--api-key-value`. The OLMo
   presets are `vllm-direct`: `_select_access`/`_resolve_api_key` in
-  [`adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py#L754) take the
+  [`adapter.py`](../../../eval_audit/integrations/infer_stack/adapter.py#L754) take the
   base URL from the **profile contract**, so `--base-url`/`--api-key-value` are
   *not* required on `export-benchmark-bundle`. The runner should rely on the
   profile contract; pass `--api-key-value` only if a deployment needs it.
@@ -146,7 +146,7 @@ Notes / decisions for the implementer:
 ### 2. `configs/virtual-experiments/olmo-models-smoke.yaml` (new)
 
 Models the grouping. Mirrors
-[`open-helm-models-reproducibility.yaml`](../../configs/virtual-experiments/open-helm-models-reproducibility.yaml).
+[`open-helm-models-reproducibility.yaml`](../../../configs/virtual-experiments/open-helm-models-reproducibility.yaml).
 
 ```yaml
 schema_version: 1
@@ -187,8 +187,8 @@ output:
 `name: olmo-models-smoke` and runs the existing analyze→summarize pipeline over
 the synthesized index — one combined report under `output.root`, with per-model
 provenance preserved in the underlying index. (See
-[`eval_audit/cli/build_virtual_experiment.py`](../../eval_audit/cli/build_virtual_experiment.py)
-and [`eval_audit/virtual/compose.py`](../../eval_audit/virtual/compose.py).)
+[`eval_audit/cli/build_virtual_experiment.py`](../../../eval_audit/cli/build_virtual_experiment.py)
+and [`eval_audit/virtual/compose.py`](../../../eval_audit/virtual/compose.py).)
 
 ---
 

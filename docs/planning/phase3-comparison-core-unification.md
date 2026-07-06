@@ -2,7 +2,7 @@
 
 **Status:** DESIGN — no code yet. Requires owner sign-off (see §9) before implementation.
 **Author:** drafted 2026-06-11; **revised 2026-06-11** for the new research program (see §0).
-**Supersedes the Phase 3 sketch in** [`repo-refactor-plan.md`](repo-refactor-plan.md) **§Phase 3.**
+**Supersedes the Phase 3 sketch in** [`repo-refactor-plan.md`](../historical/planning/repo-refactor-plan.md) **§Phase 3.**
 
 Companion: [`phase3-behavior-equivalence-matrix.md`](phase3-behavior-equivalence-matrix.md) — the test
 matrix that gates every sub-stage.

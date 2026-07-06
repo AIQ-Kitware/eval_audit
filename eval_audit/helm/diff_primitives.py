@@ -3,7 +3,7 @@ canonicalization, Coverage, and dataset-overlap computation. The
 report-shaping consumer is :class:`eval_audit.helm.diff.HelmRunDiff`.
 
 Split out of ``eval_audit.helm.diff`` on 2026-06-11
-(Phase 2 of docs/planning/repo-refactor-plan.md). Pure relocation:
+(Phase 2 of docs/historical/planning/repo-refactor-plan.md). Pure relocation:
 function bodies are unchanged.
 """
 from __future__ import annotations

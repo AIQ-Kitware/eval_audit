@@ -2,7 +2,7 @@
 tables, the full text report, and the management summary.
 
 Split out of ``eval_audit.reports.core_metrics`` on 2026-06-11
-(Phase 2 of docs/planning/repo-refactor-plan.md). Pure relocation:
+(Phase 2 of docs/historical/planning/repo-refactor-plan.md). Pure relocation:
 function bodies are unchanged.
 """
 from __future__ import annotations

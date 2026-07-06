@@ -80,7 +80,7 @@ from eval_audit.infra.profiling import profile
 
 # --- compat re-exports -------------------------------------------------
 # Module-level diff primitives moved to eval_audit.helm.diff_primitives
-# on 2026-06-11 (Phase 2 of docs/planning/repo-refactor-plan.md). Tests
+# on 2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md). Tests
 # import dataset_overlap_from_request_states from this module; keep
 # re-exporting the moved names.
 from eval_audit.helm.diff_primitives import (  # noqa: F401

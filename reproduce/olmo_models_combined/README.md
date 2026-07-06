@@ -10,7 +10,7 @@ across GPUs under one schedule**. The sixth model, the base `olmo-7b`, can't joi
 that bundle (see below), so it runs as two extra single-model suites folded into
 the **same virtual experiment** — the grouped report covers all six OLMo models.
 
-See [`docs/planning/olmo-multi-model-from-spec-plan.md`](../../docs/planning/olmo-multi-model-from-spec-plan.md)
+See [`docs/historical/planning/olmo-multi-model-from-spec-plan.md`](../../docs/historical/planning/olmo-multi-model-from-spec-plan.md)
 §4.4/§4.7 for the design.
 
 ## What's different from `../olmo_models`

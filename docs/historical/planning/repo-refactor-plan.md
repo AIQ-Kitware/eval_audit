@@ -246,8 +246,8 @@ non-extension outputs verified byte-identical.
 
 The design pass this phase required is written:
 
-- [`phase3-comparison-core-unification.md`](phase3-comparison-core-unification.md) — the design.
-- [`phase3-behavior-equivalence-matrix.md`](phase3-behavior-equivalence-matrix.md) — the test matrix
+- [`phase3-comparison-core-unification.md`](../../planning/phase3-comparison-core-unification.md) — the design.
+- [`phase3-behavior-equivalence-matrix.md`](../../planning/phase3-behavior-equivalence-matrix.md) — the test matrix
   that gates every sub-stage.
 
 **Research context (drives the revision — design doc §0):** the EEE reproducibility case study is
@@ -262,7 +262,7 @@ guardrails (paper-claim driven) are demoted to optional hygiene; both modes stay
 `normalized.compare`) that produce overlapping agreement numbers, plus thrice-implemented EEE
 index-row synthesis. The planner, renderer, and aggregate are already shared — only the loader→diff
 segment is forked. Phase 3 ≡ the unstarted **Stage 4** of the in-flight normalized refactor
-([`dev/analysis/eee_refactor_stage1_map.md`](../../dev/analysis/eee_refactor_stage1_map.md)),
+([`dev/analysis/eee_refactor_stage1_map.md`](../../../dev/analysis/eee_refactor_stage1_map.md)),
 executed under the revised priorities above.
 
 ### Target architecture (revised)
@@ -276,7 +276,7 @@ inputs ─────┼─ eee_adapter  (every_eval_ever artifacts)  ───
                                                                            HELM-driven path only
 ```
 
-- **`NormalizedRun` is already the currency** ([`normalized/model.py`](../../eval_audit/normalized/model.py));
+- **`NormalizedRun` is already the currency** ([`normalized/model.py`](../../../eval_audit/normalized/model.py));
   this phase promotes the Stage-3 `helm_compat` shim into a real `NormalizedDiff`. `HelmRunDiff`
   keeps the run_spec semantic diff — under R1 that is *promoted* (it's how "same recipe" is proven),
   not legacy.

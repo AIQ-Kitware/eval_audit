@@ -45,7 +45,7 @@ from eval_audit.infra.profiling import profile
 
 # --- compat re-exports -------------------------------------------------
 # Implementation moved to reports.core_metric_{curves,plots,tables} on
-# 2026-06-11 (Phase 2 of docs/planning/repo-refactor-plan.md). Tests
+# 2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md). Tests
 # access these names via this module; keep re-exporting them.
 from eval_audit.reports.core_metric_curves import (  # noqa: F401
     MetricDomain,

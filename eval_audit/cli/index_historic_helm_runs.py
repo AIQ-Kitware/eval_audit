@@ -78,7 +78,7 @@ from eval_audit.model_registry import local_model_registry_by_name
 
 # --- compat re-exports -------------------------------------------------
 # Stage 1 library logic moved to eval_audit.indexing.* on 2026-06-11
-# (Phase 2 of docs/planning/repo-refactor-plan.md). filter_analysis and
+# (Phase 2 of docs/historical/planning/repo-refactor-plan.md). filter_analysis and
 # the index/filter tests import these names from this module; keep
 # re-exporting them.
 from eval_audit.indexing.historic_filtering import (  # noqa: F401

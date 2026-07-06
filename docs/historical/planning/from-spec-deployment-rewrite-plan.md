@@ -17,7 +17,7 @@ actually ran), so the produced run records the local name and the existing
 comparability logic flags `same_deployment=no` again — with no downstream
 plumbing.
 **Depends on / supersedes:** the by-name decision in
-[`run-from-run-spec-json-plan.md`](run-from-run-spec-json-plan.md) §5 and the
+[`run-from-run-spec-json-plan.md`](../../planning/run-from-run-spec-json-plan.md) §5 and the
 `together/phi-2` rekey in
 [`e2e-from-run-spec-migration-plan.md`](e2e-from-run-spec-migration-plan.md)
 Change 2b. The window-metadata fix (override `max_sequence_length: 2047`) already
@@ -31,7 +31,7 @@ the planner, the magnet from-spec CLI, and real artifacts under
 ## 1. The bug (why `same_deployment` is masked)
 
 The comparison's deployment fact is a plain string compare in
-[`normalized/diff.py:209`](../../eval_audit/normalized/diff.py):
+[`normalized/diff.py:209`](../../../eval_audit/normalized/diff.py):
 
 ```python
 if _both(facts_a.model_deployment, facts_b.model_deployment) and (
@@ -42,7 +42,7 @@ if _both(facts_a.model_deployment, facts_b.model_deployment) and (
 
 `facts_*.model_deployment` is resolved **only** from the run spec's
 `adapter_spec.model_deployment`
-([`recipe_facts.py:138`](../../eval_audit/normalized/recipe_facts.py) →
+([`recipe_facts.py:138`](../../../eval_audit/normalized/recipe_facts.py) →
 `extract_run_spec_fields`). The client override that swaps the engine lives in
 `model_deployments.yaml`, which is **never written into `run_spec.json`**. So:
 
@@ -59,7 +59,7 @@ if _both(facts_a.model_deployment, facts_b.model_deployment) and (
 
 There is **no compensating signal**: the planner declares *judge* substitutions
 via a `judge_substitution_planned` flag
-([`core_report_planner.py:422`](../../eval_audit/planning/core_report_planner.py)),
+([`core_report_planner.py:422`](../../../eval_audit/planning/core_report_planner.py)),
 but nothing analogous exists for the model deployment. Net effect: a faithful
 replay that matches the official metrics reads as "perfect reproduction, identical
 deployment," over-claiming; a replay that drifts has no fact explaining why.

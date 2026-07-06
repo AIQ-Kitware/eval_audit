@@ -372,7 +372,7 @@ PRESET_CONFIGS: dict[str, dict[str, Any]] = {
                 # the LOCAL endpoint and the audit reports same_deployment=no.
                 # Rewrite target == registered name by construction (no drift).
                 # Supersedes the by-name `from_spec_model_deployment_name` rekey;
-                # see docs/planning/from-spec-deployment-rewrite-plan.md Change 5.
+                # see docs/historical/planning/from-spec-deployment-rewrite-plan.md Change 5.
                 "model_deployment_name": "vllm/phi-2-local",
                 "helm_model_name": "microsoft/phi-2",
                 "helm_tokenizer_name": "microsoft/phi-2",
@@ -1064,7 +1064,7 @@ def _inline_local_deployment(run_entries: list[str], deployment: str) -> list[st
     (the run-entry multi-model convention). ``_freeze_run_spec_sources`` strips the
     token for discovery (``_strip_local_deployment`` — local-only) and reuses it as
     that source's per-run rewrite target and ``lease_endpoints`` key. See
-    docs/planning/olmo-multi-model-from-spec-plan.md §4.4. (R-8: delegates to the
+    docs/historical/planning/olmo-multi-model-from-spec-plan.md §4.4. (R-8: delegates to the
     shared append helper.)
     """
     from eval_audit.helm.run_entries import append_model_deployment

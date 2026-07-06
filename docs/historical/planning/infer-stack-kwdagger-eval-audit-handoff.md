@@ -9,7 +9,7 @@ client jobs, each job acquires its model's GPU lease (queueing if the fleet is
 busy) and releases it after, and the LiteLLM gateway never blips.
 
 Read the design of record first:
-[`infer-stack-kwdagger-integration.md`](infer-stack-kwdagger-integration.md)
+[`infer-stack-kwdagger-integration.md`](../../planning/infer-stack-kwdagger-integration.md)
 (esp. §2 job lifecycle, §4 queue-and-wait, §5 GPU ownership, §6 no-blip, §7
 determinism recording, §9 tmux design, §13 eval_audit responsibilities). The
 session narrative is the latest entry in `dev/journals/claude.md`.

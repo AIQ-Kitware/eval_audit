@@ -4,7 +4,7 @@
 `impl/run-from-run-spec`). Stamp phases here as they land.
 
 **Lens:** simplicity, bloat reduction, and ease of understanding — deliberately *not* a
-correctness re-audit. The [2026-07-02 codebase audit](codebase-audit-2026-07-02.md) is
+correctness re-audit. The [2026-07-02 codebase audit](../historical/planning/codebase-audit-2026-07-02.md) is
 fully implemented except R-2; this plan picks up what those passes left: the deferred R-2,
 dead dev/POC trees, doc accumulation, and the onboarding surface.
 

@@ -23,14 +23,14 @@ bracket, kwdagger's grid expander (`util_param_grid.extended_github_action_matri
 and the live corpus layout under `/data/crfm-helm-public`. 2026-06-30.
 
 **Builds on / relates to:**
-- [`run-from-run-spec-json-plan.md`](run-from-run-spec-json-plan.md) — the
+- [`run-from-run-spec-json-plan.md`](../../planning/run-from-run-spec-json-plan.md) — the
   from-spec replay path. Its explicit `--run-spec-json <path>` mode is **already
   in the pinned runner image**; this plan drives that mode from the host, so **no
   magnet change and no image rebuild are required**.
 - [`from-spec-deployment-rewrite-plan.md`](from-spec-deployment-rewrite-plan.md)
   — the in-container `--model-deployment` rewrite is reused **unchanged** (now
   passed per-run via a submatrix instead of a single manifest value).
-- [`olmo-from-run-spec-migration-plan.md`](olmo-from-run-spec-migration-plan.md)
+- [`olmo-from-run-spec-migration-plan.md`](../../planning/olmo-from-run-spec-migration-plan.md)
   — the single-model from-spec migration; relative-path addressing is the next
   evolution of its discovery step.
 - **Supersedes (for the fan-out case)**
@@ -101,7 +101,7 @@ lease roles are both retired (§4).
    N complete per-run dicts over a singleton base ⇒ **exactly N jobs**, each =
    broadcast singletons + that run's fields. This is the carriage (§4.2).
    **Verified** against the vendored kwdagger by a contract test
-   ([`tests/test_kwdagger_submatrix_contract.py`](../../tests/test_kwdagger_submatrix_contract.py)):
+   ([`tests/test_kwdagger_submatrix_contract.py`](../../../tests/test_kwdagger_submatrix_contract.py)):
    it exercises the exact `schedule.py` path (`expand_param_grid` over the
    `params` dict with `pipeline` popped, `submatrices` read from inside `matrix`)
    and proves N records → N jobs with tuples intact, while the same data as

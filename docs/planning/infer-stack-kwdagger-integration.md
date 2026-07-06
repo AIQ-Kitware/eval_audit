@@ -1,12 +1,41 @@
 # infer-stack ↔ kwdagger integration plan (high-throughput HELM reproduction)
 
-**Status:** in progress (C1+K1 landed) · **Date:** 2026-06-23 · **Branch:** `infer-stack-cli-api-migration`
+**Status (2026-07-06): IMPLEMENTED (host/CPU side) — GPU-box gate-checks are the
+only open work.** Originally `in progress (C1+K1 landed)`, 2026-06-23, branch
+`infer-stack-cli-api-migration`. This is the single live doc for the infer-stack
+leasing + kwdagger integration effort; it folds in and supersedes two now-archived
+siblings:
+
+- [`infer-stack-cli-api-migration.md`](../historical/planning/infer-stack-cli-api-migration.md)
+  — the profile→catalog/leasing CLI migration that made the leasing CLI usable.
+  **DONE:** `settings.yaml` + `catalog.yaml` shipped for both in-scope config dirs
+  (`dev/e2e-tests/config/infer_stack/`, `reproduce/olmo_models/config/infer_stack/`);
+  `resolve_serving_facts` (`eval_audit/integrations/infer_stack/serving_facts.py`)
+  replaced `load_profile_contract`; `protocol_mode` moved into `PRESET_CONFIGS`; the
+  old `list-profiles`/`switch`/`wait-ready` verbs are gone from the in-scope grids.
+  Frozen archival dirs (gpt-oss/qwen/kubeai) were left broken by design.
+- [`infer-stack-kwdagger-eval-audit-handoff.md`](../historical/planning/infer-stack-kwdagger-eval-audit-handoff.md)
+  — the eval_audit wiring phase. **DONE:** the per-run lease bracket lives in
+  `eval_audit/pipelines/lease_bracket.py` + `helm_docker_pipeline.py` (setup =
+  `acquire --queue --env-file`, teardown = `release`), wired through
+  `eval_audit/integrations/kwdagger_bridge.py`; `reproduce/olmo_models_combined/`
+  drives the `--tmux-workers N` fan-out with a final `infer-stack gc`.
+
+**Infra (this doc, §12/§15): all landed** — C1 (cmd_queue setup/teardown), K1
+(kwdagger `ProcessNode.setup/.teardown`), I1 (queue-and-wait acquire), I2 (static
+superset LiteLLM no-blip), I3 (`infer-stack gc`). Submodule gitlinks now point at
+merged commits.
+
+**Open (need a docker/GPU box):** the no-blip behavioral gate (no container recreate
++ cooldown recovery), the end-to-end tmux fan-out (no oversubscription failures / no
+leaked GPUs after induced crashes), the serial-vs-concurrent logprob fidelity check
+(§7), and the slurm path (§10, stretch).
 
 ## Implementation status
 
 All submodule infra is **landed on feature branches** (tested to the limit of a
 no-GPU/no-docker env; nothing pushed). The next phase is wiring eval_audit to use
-them — see [`infer-stack-kwdagger-eval-audit-handoff.md`](infer-stack-kwdagger-eval-audit-handoff.md).
+them — see [`infer-stack-kwdagger-eval-audit-handoff.md`](../historical/planning/infer-stack-kwdagger-eval-audit-handoff.md).
 
 | Item | Branch | State | Notes |
 |---|---|---|---|
@@ -30,7 +59,7 @@ document fixes the *shape* of the three infrastructure components
 a later pass.
 
 This is a companion to
-[`infer-stack-cli-api-migration.md`](infer-stack-cli-api-migration.md) (the
+[`infer-stack-cli-api-migration.md`](../historical/planning/infer-stack-cli-api-migration.md) (the
 profile→catalog/leasing CLI migration). That plan made the leasing CLI usable;
 this one makes it *schedulable*.
 
@@ -499,7 +528,7 @@ Deferred to the next pass, recorded so it isn't lost:
    2-model, >4-job tmux fan-out (no oversubscription failures, no leaked GPUs
    after induced crashes) once on a GPU box.
 4. **`eval_audit` wiring (§13)** — the next phase. See
-   [`infer-stack-kwdagger-eval-audit-handoff.md`](infer-stack-kwdagger-eval-audit-handoff.md).
+   [`infer-stack-kwdagger-eval-audit-handoff.md`](../historical/planning/infer-stack-kwdagger-eval-audit-handoff.md).
    Includes setting `reclaim: stop` on pipeline endpoints (former I4) and the §7
    determinism recording.
 5. **slurm (I6 + ledger decision; C2 `afterany` if wanted)** — only after the
