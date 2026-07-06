@@ -260,6 +260,4 @@ approached at the time):
   see [`docs/helm-gotchas.md`](docs/helm-gotchas.md).
 - The `eval_audit_local` source-organization tag is the rename of
   `helm_audit_local`. Existing on-disk EEE artifacts that pre-date the rename
-  still carry the old tag; see
-  [`dev/oneoff/migrate_eee_source_org_tag.py`](dev/oneoff/migrate_eee_source_org_tag.py)
-  to port them.
+  still carry the old tag.

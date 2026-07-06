@@ -1,11 +1,14 @@
-# Historical development artifacts
+# Development artifacts
 
-This directory contains exploratory one-off and POC scripts copied from the
-original `aiq-magnet` development tree during the split into this repository.
+This directory holds development-support material that is not part of the
+installed `eval_audit` package:
 
-These files are kept primarily for historical context and ad hoc investigation.
-The operational workflow lives in:
-- `README.md`
-- `scripts/`
-- `configs/`
-- `helm_reproducibility/`
+- `analysis/` — refactor maps and validation write-ups
+- `e2e-tests/` — numbered end-to-end shell checks (env, smoke grid, index, compose)
+- `journals/` — append-only agent/human session journals
+- `lessons/` — accumulated lessons learned
+- `scripts/` — submodule helpers and ad hoc catalog scripts
+- `tools/` — standalone dev tools (e.g. `deployment_match`)
+
+The operational pipeline itself lives in the top-level `README.md`,
+`eval_audit/`, and `configs/`.
