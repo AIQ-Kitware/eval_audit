@@ -147,6 +147,23 @@ def test_no_op_substitution_records_nothing(tmp_path: Path) -> None:
     assert materialized["adapter_spec"] == _OFFICIAL_SPEC["adapter_spec"]
 
 
+def test_official_cap_preserved_when_default_is_none(tmp_path: Path) -> None:
+    """D-5 verbatim replay: the 'official' sentinel translates to
+    default_max_eval_instances=None at the bridge; the materializer must then
+    leave adapter_spec.max_eval_instances at the official value with no
+    substitution recorded."""
+    _write_official(tmp_path, _REL_DIR)
+    staging = tmp_path / "staging"
+    source = RunSpecSource(run_entry="x", rel_path=_REL_DIR)
+    result = materialize_run_spec(
+        source, precomputed_root=tmp_path, staging_dir=staging,
+        default_max_eval_instances=None,
+    )
+    assert "max_eval_instances" not in result.substitutions
+    materialized = json.loads(Path(result.run_spec_json).read_text())
+    assert materialized["adapter_spec"]["max_eval_instances"] == 1000
+
+
 def test_default_max_eval_instances_applies_when_source_unset(tmp_path: Path) -> None:
     _write_official(tmp_path, _REL_DIR)
     staging = tmp_path / "staging"

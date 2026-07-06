@@ -26,6 +26,31 @@ MODELS_REQUIRING_LOCAL_OVERRIDE = {
     "qwen/qwen2.5-72b-instruct-turbo",
 }
 
+# Verbatim-replay sentinel for --max-eval-instances (D-5). When set, the
+# exact-path replay materializer leaves the official run_spec.json cap
+# untouched (default_max_eval_instances=None) instead of rewriting it to a
+# numeric value — the only way to express "keep the official cap" under the
+# replay-verbatim rule. A distinguishable non-null marker (not None) is used so
+# it cannot be confused with "cap unset, fall through to the 1000 default".
+OFFICIAL_CAP_SENTINEL = "official"
+
+
+def _max_eval_instances_arg(value: str) -> int | str:
+    """Parse ``--max-eval-instances``: an integer cap, or the literal ``official``.
+
+    ``official`` is the verbatim-replay sentinel (keep the official run_spec.json
+    cap). Only meaningful on the exact-path replay path (``--run-spec-sources-fpath``).
+    """
+    if value == OFFICIAL_CAP_SENTINEL:
+        return OFFICIAL_CAP_SENTINEL
+    try:
+        return int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"--max-eval-instances must be an integer or '{OFFICIAL_CAP_SENTINEL}', "
+            f"got {value!r}"
+        )
+
 
 def _load_run_specs(fpath: str | None) -> list[str]:
     path = Path(fpath) if fpath else repo_run_specs_fpath()
@@ -151,7 +176,7 @@ def _build_manifest(
     description: str,
     suite: str,
     run_entries: list[str],
-    max_eval_instances: int,
+    max_eval_instances: int | str,
     tmux_workers: int,
     devices: str,
     model_deployments_fpath: str | None,
@@ -188,7 +213,17 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--description", default=None)
     parser.add_argument("--devices", default=None)
     parser.add_argument("--tmux-workers", type=int, default=None)
-    parser.add_argument("--max-eval-instances", type=int, default=None)
+    parser.add_argument(
+        "--max-eval-instances",
+        type=_max_eval_instances_arg,
+        default=None,
+        help=(
+            "Instance cap applied to every replayed run. An integer rewrites "
+            "adapter_spec.max_eval_instances; the literal 'official' keeps the "
+            "official run_spec.json cap unchanged (verbatim replay, only valid "
+            "with --run-spec-sources-fpath). Defaults to 1000 when omitted."
+        ),
+    )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--num-shards", type=int, default=None)
     parser.add_argument("--shard-index", type=int, default=None)
@@ -267,6 +302,16 @@ def main(argv: list[str] | None = None) -> None:
             "--model-deployment is only meaningful with --from-run-spec (it "
             "rewrites the replayed run_spec.json's adapter_spec.model_deployment); "
             "the run-entry path carries the deployment in the run-entry string."
+        )
+    if args.max_eval_instances == OFFICIAL_CAP_SENTINEL and not run_spec_sources:
+        # The 'official' sentinel means "leave the official cap untouched", which
+        # is only realizable on the exact-path replay path where the materializer
+        # edits the run_spec.json. The run-entry / from-spec-discovery paths pass
+        # the cap to helm-run as an integer, so they cannot honor the sentinel.
+        raise SystemExit(
+            "--max-eval-instances official is only supported with "
+            "--run-spec-sources-fpath (exact-path verbatim replay); the run-entry "
+            "and from-spec-discovery paths require a numeric cap."
         )
 
     defaults = env_defaults()

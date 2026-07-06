@@ -10,7 +10,9 @@ class ManifestSpec:
     description: str
     run_entries: list[str]
     suite: str
-    max_eval_instances: int
+    # Integer instance cap, or the literal string "official" (D-5 verbatim-replay
+    # sentinel: keep the official run_spec.json cap; exact-path replay only).
+    max_eval_instances: int | str
     backend: str = "tmux"
     mode: str = "compute_if_missing"
     materialize: str = "symlink"

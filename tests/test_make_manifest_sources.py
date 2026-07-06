@@ -91,6 +91,59 @@ def test_sources_missing_required_key_is_rejected(tmp_path: Path) -> None:
         _run(tmp_path, bad, "--precomputed-root", "/data/crfm-helm-public")
 
 
+def test_official_cap_sentinel_flows_into_manifest(tmp_path: Path) -> None:
+    """D-5: --max-eval-instances official carries the marker verbatim so the
+    materializer can be told to keep the official cap."""
+    src = tmp_path / "sources.yaml"
+    src.write_text(dump_yaml(_SOURCES))
+    out = tmp_path / "manifest.yaml"
+    builders.main(
+        [
+            "--output", str(out),
+            "--experiment-name", "olmo",
+            "--suite", "olmo",
+            "--run-spec-sources-fpath", str(src),
+            "--precomputed-root", "/data/crfm-helm-public",
+            "--max-eval-instances", "official",
+        ]
+    )
+    m = yaml.safe_load(out.read_text())
+    assert m["max_eval_instances"] == "official"
+
+
+def test_official_cap_sentinel_requires_exact_path_sources(tmp_path: Path) -> None:
+    """The sentinel is unrealizable on the run-entry path; reject it there."""
+    run_specs = tmp_path / "run_specs.yaml"
+    run_specs.write_text(dump_yaml(["mmlu:subject=anatomy,model=allenai/olmo-7b"]))
+    out = tmp_path / "manifest.yaml"
+    with pytest.raises(SystemExit, match="official"):
+        builders.main(
+            [
+                "--output", str(out),
+                "--experiment-name", "olmo",
+                "--suite", "olmo",
+                "--run-specs-fpath", str(run_specs),
+                "--max-eval-instances", "official",
+            ]
+        )
+
+
+def test_max_eval_instances_rejects_non_int_non_sentinel(tmp_path: Path) -> None:
+    run_specs = tmp_path / "run_specs.yaml"
+    run_specs.write_text(dump_yaml(["mmlu:subject=anatomy,model=allenai/olmo-7b"]))
+    out = tmp_path / "manifest.yaml"
+    with pytest.raises(SystemExit):
+        builders.main(
+            [
+                "--output", str(out),
+                "--experiment-name", "olmo",
+                "--suite", "olmo",
+                "--run-specs-fpath", str(run_specs),
+                "--max-eval-instances", "banana",
+            ]
+        )
+
+
 def test_duplicate_run_entry_labels_are_rejected(tmp_path: Path) -> None:
     """P1-23: duplicate labels used to collapse silently (setdefault),
     scheduling fewer runs than declared. Must raise."""

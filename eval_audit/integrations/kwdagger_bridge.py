@@ -320,6 +320,16 @@ def build_schedule_params(
         return {"pipeline": _DOCKER_FROM_SPEC_PIPELINE, "matrix": matrix}
 
     # --- Run-entry axis (run-entry reconstruction OR from-spec discovery) ------
+    # D-5: the "official" verbatim-replay sentinel is only realizable on the
+    # exact-path replay branch (which returned above); these paths pass the cap to
+    # helm-run as an integer and cannot honor it. builders.main already blocks this
+    # combination, so reaching here is a contract violation.
+    if manifest.get("max_eval_instances") == "official":
+        raise ValueError(
+            "max_eval_instances='official' is only supported on the exact-path "
+            "replay path (run_spec_sources); the run-entry / from-spec-discovery "
+            "paths require a numeric cap."
+        )
     matrix["helm.run_entry"] = list(manifest["run_entries"])
     matrix["helm.max_eval_instances"] = [manifest["max_eval_instances"]]
     matrix["helm.precomputed_root"] = manifest.get("precomputed_root", None)
@@ -407,11 +417,16 @@ def prepare_schedule_request(
                 "(the host root the rel_paths resolve against)."
             )
         staging_root = str((resolved_root / "materialized_run_specs").resolve())
+        # D-5: the "official" sentinel means "keep the official run_spec.json cap".
+        # Translate it to default_max_eval_instances=None so the materializer leaves
+        # adapter_spec.max_eval_instances untouched (records no substitution).
+        manifest_cap = manifest.get("max_eval_instances")
+        default_cap = None if manifest_cap == "official" else manifest_cap
         materialized_runs = materialize_run_specs(
             coerce_sources(manifest["run_spec_sources"]),
             precomputed_root=precomputed_root,
             staging_dir=staging_root,
-            default_max_eval_instances=manifest.get("max_eval_instances"),
+            default_max_eval_instances=default_cap,
         )
 
     # Per-run GPU leasing (opt-in, §5/§13). infer-stack owns every GPU, so the
