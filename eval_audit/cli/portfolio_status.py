@@ -42,9 +42,20 @@ def _is_analyzed(row: dict[str, str]) -> bool:
     return bool((row.get("repro_report_dir") or "").strip())
 
 
+def _read_agree_tol0(row: dict[str, str]) -> str:
+    """Read the exact-tolerance (abs_tol=0) agreement column from a run_inventory
+    CSV row, tolerating the pre-R-4d key name.
+
+    R-4d renamed the ambiguous ``official_instance_agree_0`` family to unambiguous
+    ``..._tol0`` forms. portfolio_status reads historical ``run_inventory_*.csv``
+    files that may predate the rename, so fall back to the old column name.
+    """
+    return row.get("official_instance_agree_tol0") or row.get("official_instance_agree_0") or ""
+
+
 def _has_scalar_agreement(row: dict[str, str]) -> bool:
     return bool(
-        (row.get("official_instance_agree_0") or "").strip()
+        _read_agree_tol0(row).strip()
         or (row.get("mean_rel_metric_mean_agreement") or "").strip()
     )
 
@@ -144,7 +155,7 @@ def summarize_rows(
             "model": row.get("model"),
             "benchmark": row.get("benchmark"),
             "run_entry": row.get("run_entry"),
-            "official_instance_agree_0": _coerce_float(row.get("official_instance_agree_0"), -1.0),
+            "official_instance_agree_tol0": _coerce_float(_read_agree_tol0(row), -1.0),
             "official_instance_agree_bucket": row.get("official_instance_agree_bucket"),
             "official_diagnosis": row.get("official_diagnosis"),
         }
@@ -153,7 +164,7 @@ def summarize_rows(
     ]
     low_agreement_rows.sort(
         key=lambda row: (
-            row["official_instance_agree_0"],
+            row["official_instance_agree_tol0"],
             row["model"] or "",
             row["run_entry"] or "",
         )
@@ -300,7 +311,7 @@ def _format_report(summary: dict[str, Any], *, top_experiments: int) -> str:
         for row in summary["low_agreement_rows"]:
             lines.append(
                 "  - "
-                f"{row['official_instance_agree_0']:.4f} | "
+                f"{row['official_instance_agree_tol0']:.4f} | "
                 f"{row['model']} | {row['benchmark']} | {row['run_entry']}"
             )
 

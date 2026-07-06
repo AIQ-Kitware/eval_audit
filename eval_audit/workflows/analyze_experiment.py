@@ -217,10 +217,10 @@ def _summarize_core_report(report_json: Path, *, experiment_name: str) -> dict[s
         "official_empty_completion_rate": official_diag.get("empty_completion_rate"),
         "official_mean_output_tokens": nested_get(official_diag, "output_token_count", "mean"),
         "repeat_instance_agree_0": _find_curve_value(repeat_pair.get("instance_level", {}).get("agreement_vs_abs_tol", []), 0.0),
-        "official_instance_agree_0": _find_curve_value(official_pair.get("instance_level", {}).get("agreement_vs_abs_tol", []), 0.0),
-        "official_instance_agree_01": _find_curve_value(official_pair.get("instance_level", {}).get("agreement_vs_abs_tol", []), 0.1),
-        "official_instance_agree_025": _find_curve_value(official_pair.get("instance_level", {}).get("agreement_vs_abs_tol", []), 0.25),
-        "official_instance_agree_05": _find_curve_value(official_pair.get("instance_level", {}).get("agreement_vs_abs_tol", []), 0.5),
+        "official_instance_agree_tol0": _find_curve_value(official_pair.get("instance_level", {}).get("agreement_vs_abs_tol", []), 0.0),
+        "official_instance_agree_tol0p1": _find_curve_value(official_pair.get("instance_level", {}).get("agreement_vs_abs_tol", []), 0.1),
+        "official_instance_agree_tol0p25": _find_curve_value(official_pair.get("instance_level", {}).get("agreement_vs_abs_tol", []), 0.25),
+        "official_instance_agree_tol0p5": _find_curve_value(official_pair.get("instance_level", {}).get("agreement_vs_abs_tol", []), 0.5),
         "official_runlevel_p90": nested_get(official_pair, "run_level", "overall_quantiles", "abs_delta", "p90"),
         "official_runlevel_max": nested_get(official_pair, "run_level", "overall_quantiles", "abs_delta", "max"),
         "analysis_single_run": not bool(repeat_pair),
@@ -569,10 +569,10 @@ def main(argv: list[str] | None = None) -> None:
         lines.append(f"    official_empty_completion_rate: {row['official_empty_completion_rate']}")
         lines.append(f"    official_mean_output_tokens: {row['official_mean_output_tokens']}")
         lines.append(f"    repeat_instance_agree_0: {row['repeat_instance_agree_0']}")
-        lines.append(f"    official_instance_agree_0: {row['official_instance_agree_0']}")
-        lines.append(f"    official_instance_agree_01: {row['official_instance_agree_01']}")
-        lines.append(f"    official_instance_agree_025: {row['official_instance_agree_025']}")
-        lines.append(f"    official_instance_agree_05: {row['official_instance_agree_05']}")
+        lines.append(f"    official_instance_agree_tol0: {row['official_instance_agree_tol0']}")
+        lines.append(f"    official_instance_agree_tol0p1: {row['official_instance_agree_tol0p1']}")
+        lines.append(f"    official_instance_agree_tol0p25: {row['official_instance_agree_tol0p25']}")
+        lines.append(f"    official_instance_agree_tol0p5: {row['official_instance_agree_tol0p5']}")
         lines.append(f"    official_runlevel_p90: {row['official_runlevel_p90']}")
         lines.append(f"    official_runlevel_max: {row['official_runlevel_max']}")
     write_text_atomic(txt_fpath, '\n'.join(lines) + '\n')

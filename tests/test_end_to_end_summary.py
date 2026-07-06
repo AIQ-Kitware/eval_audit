@@ -86,7 +86,7 @@ def test_scope_to_analyzed_rows_split_attempt_execution_analysis_reproduction():
         {
             "experiment_name": "demo-exp",
             "run_entry": "bench:model=c",
-            "official_instance_agree_0": 1.0,
+            "official_instance_agree_tol0": 1.0,
         }
     ]
 
@@ -94,7 +94,7 @@ def test_scope_to_analyzed_rows_split_attempt_execution_analysis_reproduction():
         filter_inventory_rows,
         scope_rows,
         repro_rows,
-        tol_key="official_instance_agree_0",
+        tol_key="official_instance_agree_tol0",
     )
     # Only the two selected rows enter Stage B; the excluded row is dropped.
     assert len(rows) == 2
@@ -476,21 +476,21 @@ def test_prioritized_breakdown_summary_ranks_and_points_to_actionable_paths(tmp_
             "run_entry": "bench_good:model=model-a",
             "report_dir": "/reports/good",
             "official_instance_agree_bucket": "exact_or_near_exact",
-            "official_instance_agree_005": 0.99,
+            "official_instance_agree_tol0p05": 0.99,
         },
         {
             "experiment_name": "exp-mid",
             "run_entry": "bench_mid:model=model-a",
             "report_dir": "/reports/mid",
             "official_instance_agree_bucket": "moderate_agreement_0.80+",
-            "official_instance_agree_005": 0.84,
+            "official_instance_agree_tol0p05": 0.84,
         },
         {
             "experiment_name": "exp-bad",
             "run_entry": "bench_bad:model=model-b",
             "report_dir": "/reports/bad",
             "official_instance_agree_bucket": "low_agreement_0.00+",
-            "official_instance_agree_005": 0.22,
+            "official_instance_agree_tol0p05": 0.22,
         },
     ]
     run_multiplicity_summary = {
@@ -610,7 +610,7 @@ def test_prioritized_breakdown_summary_uses_selected_attempt_machine_host_for_an
             "run_entry": "bench_multi:model=model-x",
             "report_dir": "/reports/multi",
             "official_instance_agree_bucket": "high_agreement_0.95+",
-            "official_instance_agree_005": 0.97,
+            "official_instance_agree_tol0p05": 0.97,
             "analysis_selected_attempt_refs": [
                 {
                     "run_dir": "/runs/selected",

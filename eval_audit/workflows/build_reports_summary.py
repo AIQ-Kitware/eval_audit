@@ -360,7 +360,7 @@ def _render_scope_summary(
             enriched.update(
                 {
                     "repro_report_dir": repro.get("report_dir"),
-                    "official_instance_agree_0": repro.get("official_instance_agree_0"),
+                    "official_instance_agree_tol0": repro.get("official_instance_agree_tol0"),
                     "official_instance_agree_bucket": repro.get("official_instance_agree_bucket"),
                     "official_diagnosis": repro.get("official_diagnosis"),
                     "repeat_diagnosis": repro.get("repeat_diagnosis"),
@@ -465,11 +465,11 @@ def _render_scope_summary(
             }
         )
 
-    repro_tol001_rows = _build_repro_sankey_rows_at_tol(repro_rows, enriched_rows, "official_instance_agree_001")
+    repro_tol001_rows = _build_repro_sankey_rows_at_tol(repro_rows, enriched_rows, "official_instance_agree_tol0p001")
     # P0-1: the tol010 variant is titled abs_tol=0.010 and must bucket on the
     # 0.01 curve point (``_010``), not the 0.1 point (``_01``).
-    repro_tol010_rows = _build_repro_sankey_rows_at_tol(repro_rows, enriched_rows, "official_instance_agree_010")
-    repro_tol050_rows = _build_repro_sankey_rows_at_tol(repro_rows, enriched_rows, "official_instance_agree_005")
+    repro_tol010_rows = _build_repro_sankey_rows_at_tol(repro_rows, enriched_rows, "official_instance_agree_tol0p01")
+    repro_tol050_rows = _build_repro_sankey_rows_at_tol(repro_rows, enriched_rows, "official_instance_agree_tol0p05")
     metric_sankey_rows = _expand_repro_rows_by_metric(repro_rows, enriched_rows)
     # Stage A — Universe -> Scope: pure filter-funnel ending at the
     # selection waist. No tolerance variant (Stage A is independent of
@@ -485,26 +485,26 @@ def _render_scope_summary(
         filter_inventory_rows,
         scope_rows,
         repro_rows,
-        tol_key="official_instance_agree_0",
+        tol_key="official_instance_agree_tol0",
     )
     scope_to_analyzed_tol001_rows = _build_scope_to_analyzed_rows(
         filter_inventory_rows,
         scope_rows,
         repro_rows,
-        tol_key="official_instance_agree_001",
+        tol_key="official_instance_agree_tol0p001",
     )
     scope_to_analyzed_tol010_rows = _build_scope_to_analyzed_rows(
         filter_inventory_rows,
         scope_rows,
         repro_rows,
         # P0-1: 0.01 curve point (``_010``), not the 0.1 point (``_01``).
-        tol_key="official_instance_agree_010",
+        tol_key="official_instance_agree_tol0p01",
     )
     scope_to_analyzed_tol050_rows = _build_scope_to_analyzed_rows(
         filter_inventory_rows,
         scope_rows,
         repro_rows,
-        tol_key="official_instance_agree_005",
+        tol_key="official_instance_agree_tol0p05",
     )
     # The legacy combined Universe->Reproducible sankey (s04) is intentionally
     # dropped: Stage A and Stage B together carry the same information without

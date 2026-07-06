@@ -271,8 +271,8 @@ def test_tol010_sankey_buckets_on_the_0p01_curve_point_not_0p1(tmp_path, monkeyp
     assert len(rows) == 1
     row = rows[0]
     # The loading row carries a dedicated 0.01 key, distinct from the 0.1 key.
-    assert row["official_instance_agree_010"] == 0.30
-    assert row["official_instance_agree_01"] == 0.99
+    assert row["official_instance_agree_tol0p01"] == 0.30
+    assert row["official_instance_agree_tol0p1"] == 0.99
 
     from eval_audit.reports.summary.classification import _bucket_agreement
 
@@ -280,7 +280,7 @@ def test_tol010_sankey_buckets_on_the_0p01_curve_point_not_0p1(tmp_path, monkeyp
     # 0.01 point; the OLD wiring (agree_01 = 0.99) would land a different,
     # looser bucket.
     tol010_rows = build_reports_summary._build_repro_sankey_rows_at_tol(
-        rows, rows, "official_instance_agree_010"
+        rows, rows, "official_instance_agree_tol0p01"
     )
     assert tol010_rows[0]["agreement"] == _bucket_agreement(0.30)
     assert _bucket_agreement(0.30) != _bucket_agreement(0.99)

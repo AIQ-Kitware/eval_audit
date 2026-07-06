@@ -136,18 +136,18 @@ def _load_all_repro_rows(
             "repeat_primary_reasons": repeat_diag.get("primary_reason_names") or [],
             "official_diagnosis": official_diag.get("label"),
             "official_primary_reasons": official_diag.get("primary_reason_names") or [],
-            "official_instance_agree_0": agree_0,
-            "official_instance_agree_005": agree_005,
+            "official_instance_agree_tol0": agree_0,
+            "official_instance_agree_tol0p05": agree_005,
             "official_instance_agree_bucket": _bucket_agreement(agree_005),
-            "official_instance_agree_01": _find_curve_value(official_agree_curve, 0.1),
-            # Dedicated abs_tol=0.01 point (curve grid contains 1e-2). The
-            # ``_01`` key above is the abs_tol=0.1 point despite the terse
-            # name; the tol010 sankeys (titled abs_tol=0.010) must bucket on
-            # THIS key, not ``_01`` — see P0-1.
-            "official_instance_agree_010": _find_curve_value(official_agree_curve, 0.01),
+            "official_instance_agree_tol0p1": _find_curve_value(official_agree_curve, 0.1),
+            # Dedicated abs_tol=0.01 point (curve grid contains 1e-2). R-4d
+            # renamed the old ambiguous key family (``_01``=0.1, ``_010``=0.01,
+            # ``_005``=0.05) to unambiguous ``_tol0pN`` forms so the tol010
+            # sankeys bucket on the right point — see P0-1 / R-4d.
+            "official_instance_agree_tol0p01": _find_curve_value(official_agree_curve, 0.01),
             "official_runlevel_abs_max": nested_get(official, "run_level", "overall_quantiles", "abs_delta", "max"),
             "official_runlevel_abs_p90": nested_get(official, "run_level", "overall_quantiles", "abs_delta", "p90"),
-            "official_instance_agree_001": _find_curve_value(official_agree_curve, 0.001),
+            "official_instance_agree_tol0p001": _find_curve_value(official_agree_curve, 0.001),
             "core_metrics": official.get("core_metrics") or [],
             "artifact_formats": artifact_formats,
             "artifact_format": ",".join(artifact_formats) if artifact_formats else "helm",

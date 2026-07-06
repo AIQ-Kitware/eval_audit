@@ -111,10 +111,10 @@ def main(argv: list[str] | None = None) -> None:
             'official_empty_completion_rate': nested_get(report, 'run_diagnostics', official_component.get('component_id'), 'empty_completion_rate'),
             'official_mean_output_tokens': nested_get(report, 'run_diagnostics', official_component.get('component_id'), 'output_token_count', 'mean'),
             'repeat_instance_agree_0': repeat_agree_0,
-            'official_instance_agree_0': official_agree_0,
-            'official_instance_agree_01': official_agree_01,
-            'official_instance_agree_025': official_agree_025,
-            'official_instance_agree_05': official_agree_05,
+            'official_instance_agree_tol0': official_agree_0,
+            'official_instance_agree_tol0p1': official_agree_01,
+            'official_instance_agree_tol0p25': official_agree_025,
+            'official_instance_agree_tol0p5': official_agree_05,
             'official_runlevel_p90': nested_get(official, 'run_level', 'overall_quantiles', 'abs_delta', 'p90'),
             'official_runlevel_max': nested_get(official, 'run_level', 'overall_quantiles', 'abs_delta', 'max'),
             'assessment_label': _assessment_label(repeat_agree_0, official_agree_01),
@@ -166,10 +166,10 @@ def main(argv: list[str] | None = None) -> None:
         lines.append(f"    official_empty_completion_rate: {row['official_empty_completion_rate']}")
         lines.append(f"    official_mean_output_tokens: {row['official_mean_output_tokens']}")
         lines.append(f"    repeat_instance_agree_0: {row['repeat_instance_agree_0']}")
-        lines.append(f"    official_instance_agree_0: {row['official_instance_agree_0']}")
-        lines.append(f"    official_instance_agree_01: {row['official_instance_agree_01']}")
-        lines.append(f"    official_instance_agree_025: {row['official_instance_agree_025']}")
-        lines.append(f"    official_instance_agree_05: {row['official_instance_agree_05']}")
+        lines.append(f"    official_instance_agree_tol0: {row['official_instance_agree_tol0']}")
+        lines.append(f"    official_instance_agree_tol0p1: {row['official_instance_agree_tol0p1']}")
+        lines.append(f"    official_instance_agree_tol0p25: {row['official_instance_agree_tol0p25']}")
+        lines.append(f"    official_instance_agree_tol0p5: {row['official_instance_agree_tol0p5']}")
         lines.append(f"    official_runlevel_p90: {row['official_runlevel_p90']}")
         lines.append(f"    official_runlevel_max: {row['official_runlevel_max']}")
     write_text_atomic(txt_fpath, '\n'.join(lines) + '\n')

@@ -143,7 +143,7 @@ def _flagged_bucket_score(
 
 
 def _example_case_sort_key(row: dict[str, Any], bucket_class: str) -> tuple[float, str]:
-    score = _safe_float(row.get("official_instance_agree_005"))
+    score = _safe_float(row.get("official_instance_agree_tol0p05"))
     if score is None:
         score = -1.0
     if bucket_class == "score_ge_95":
@@ -350,7 +350,7 @@ def _build_prioritized_breakdown_summary(
                 for row in analyzed_group_rows
             )
             scores = [
-                score for score in (_safe_float(row.get("official_instance_agree_005")) for row in analyzed_group_rows)
+                score for score in (_safe_float(row.get("official_instance_agree_tol0p05")) for row in analyzed_group_rows)
                 if score is not None
             ]
             mean_score = (sum(scores) / len(scores)) if scores else None
@@ -383,7 +383,7 @@ def _build_prioritized_breakdown_summary(
                     "bucket_class_counts": dict(bucket_class_counts),
                     "dominant_bucket": dominant_bucket,
                     "dominant_bucket_class": dominant_bucket_class,
-                    "mean_official_instance_agree_005": mean_score,
+                    "mean_official_instance_agree_tol0p05": mean_score,
                     "has_multiplicity_signal": flags["multiplicity_signal"],
                     "has_machine_spread": flags["machine_spread"],
                     "has_ambiguous_analyzed_matching": flags["ambiguous_analyzed_matching"],
@@ -427,7 +427,7 @@ def _build_prioritized_breakdown_summary(
                         n_analyzed=n_analyzed,
                         target_count=target_count,
                         target_share=target_share,
-                        mean_score=_safe_float(row.get("mean_official_instance_agree_005")),
+                        mean_score=_safe_float(row.get("mean_official_instance_agree_tol0p05")),
                     ),
                     "example_rows": example_rows,
                     "selection_reason": _triage_selection_reason(
@@ -538,7 +538,7 @@ def _build_prioritized_breakdown_summary(
         target_quantile = _QUANTILE_BUCKET_TARGETS[section_name]
         scored: list[tuple[dict[str, Any], float]] = []
         for case in analyzed_case_rows:
-            score = _safe_float(case.get("official_instance_agree_005"))
+            score = _safe_float(case.get("official_instance_agree_tol0p05"))
             if score is None:
                 continue
             scored.append((case, score))
@@ -579,7 +579,7 @@ def _build_prioritized_breakdown_summary(
             "dimension_priority": _TRIAGE_BUCKET_CLASS_ORDER[section_name],
             "dimension_value": section_name,
             "rank_population": (
-                "rows ranked across the analyzed-row population by official_instance_agree_005; "
+                "rows ranked across the analyzed-row population by official_instance_agree_tol0p05; "
                 "examples picked at the section's target quantile (best=1.0, mid=0.5, worst=0.0)"
             ),
             "n_attempted": n,
@@ -592,7 +592,7 @@ def _build_prioritized_breakdown_summary(
             "bucket_counts": {},
             "bucket_class_counts": {},
             "machine_host_membership_source": None,
-            "mean_official_instance_agree_005": (sum(scores) / n) if scores else None,
+            "mean_official_instance_agree_tol0p05": (sum(scores) / n) if scores else None,
             "has_multiplicity_signal": False,
             "has_machine_spread": False,
             "has_ambiguous_analyzed_matching": False,
@@ -649,7 +649,7 @@ def _build_prioritized_breakdown_summary(
                     "bucket_counts": row["bucket_counts"],
                     "bucket_class_counts": row["bucket_class_counts"],
                     "machine_host_membership_source": row.get("machine_host_membership_source"),
-                    "mean_official_instance_agree_005": row["mean_official_instance_agree_005"],
+                    "mean_official_instance_agree_tol0p05": row["mean_official_instance_agree_tol0p05"],
                     "has_multiplicity_signal": row["has_multiplicity_signal"],
                     "has_machine_spread": row["has_machine_spread"],
                     "has_ambiguous_analyzed_matching": row["has_ambiguous_analyzed_matching"],
@@ -685,7 +685,7 @@ def _build_prioritized_breakdown_summary(
             "warnings_manifest",
             "has_report_warnings",
             "official_instance_agree_bucket",
-            "official_instance_agree_005",
+            "official_instance_agree_tol0p05",
             "analysis_single_run",
         ]
         return {key: row.get(key) for key in keep if key in row}
@@ -702,17 +702,17 @@ def _build_prioritized_breakdown_summary(
                 "best": {
                     "kind": "quantile",
                     "target_quantile": _QUANTILE_BUCKET_TARGETS["best"],
-                    "purpose": "top of the analyzed-row population by official_instance_agree_005, regardless of absolute bucket",
+                    "purpose": "top of the analyzed-row population by official_instance_agree_tol0p05, regardless of absolute bucket",
                 },
                 "mid": {
                     "kind": "quantile",
                     "target_quantile": _QUANTILE_BUCKET_TARGETS["mid"],
-                    "purpose": "median of the analyzed-row population by official_instance_agree_005, regardless of absolute bucket",
+                    "purpose": "median of the analyzed-row population by official_instance_agree_tol0p05, regardless of absolute bucket",
                 },
                 "worst": {
                     "kind": "quantile",
                     "target_quantile": _QUANTILE_BUCKET_TARGETS["worst"],
-                    "purpose": "bottom of the analyzed-row population by official_instance_agree_005, regardless of absolute bucket",
+                    "purpose": "bottom of the analyzed-row population by official_instance_agree_tol0p05, regardless of absolute bucket",
                 },
                 "score_lt_80": {
                     "kind": "absolute",
