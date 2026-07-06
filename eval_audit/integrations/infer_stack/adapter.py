@@ -1765,6 +1765,15 @@ def materialize_benchmark_bundle(
         # chmod can legitimately fail on some filesystems (e.g. certain mounts);
         # do not abort bundle materialization over a best-effort perms tighten.
         pass
+    # Never fail silently when the live key remains readable to others: an
+    # operator on a chmod-rejecting mount must see it to relocate the bundle.
+    if model_deployments_path.stat().st_mode & 0o077:
+        sys.stderr.write(
+            f"WARNING: could not restrict permissions on {model_deployments_path} "
+            "(filesystem rejected chmod 0600); it embeds the live "
+            "LITELLM_MASTER_KEY — move the bundle to a private filesystem or "
+            "rotate the key.\n"
+        )
 
     model_deployments_fpath = _maybe_repo_relative(model_deployments_path)
     smoke_spec = preset_cfg.get(
