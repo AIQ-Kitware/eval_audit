@@ -11,7 +11,7 @@ description: >
   per-recipe packets fall out of the core-report planner's pairing by logical run
   key, so the report reads like the single-model grouping — just produced by the
   fan-out runbook. Comparison against public HELM is ON (the official_public_index source
-  below, mirroring olmo-models.yaml): each local run is paired with its official
+  below): each local run is paired with its official
   counterpart by logical run key. Comment that source out to make the report
   local-only (comparisons then disable with missing_official_component).
 

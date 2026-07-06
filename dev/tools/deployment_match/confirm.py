@@ -71,7 +71,7 @@ def _plan_markdown(best: dict[str, Any], official_run: str, out_dir: Path) -> st
         "",
         "## 2. Produce a full local from-spec run against it",
         "Replay the official run_spec verbatim through the served endpoint using the",
-        "existing pipeline (see reproduce/olmo_models for the exact runbook):",
+        "existing pipeline (see reproduce/olmo_models_combined for the exact runbook):",
         "```bash",
         "eval-audit-make-manifest ...            # from the official run_spec (from-spec)",
         f"eval-audit-run <manifest> --lease --lease-catalog {out_dir}/serve/catalog.yaml \\",

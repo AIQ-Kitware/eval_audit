@@ -8,8 +8,8 @@ Covers ``docs/planning/olmo-from-run-spec-migration-plan.md`` Change 6:
   hard discovery failure: the from-spec replay would have nothing to replay) and 0
   AMBIGUOUS (the olmo-7b suite split exists precisely so the per-subject MMLU runs
   that live in BOTH the full-MMLU and HELM-Lite suites resolve unambiguously). This
-  wraps the SAME matcher the runbook preflight
-  (``reproduce/olmo_models/08_check_discovery.sh``) and the replay use, so a drift
+  wraps the SAME matcher the discovery preflight CLI
+  (``eval-audit-check-precomputed-discovery``) and the replay use, so a drift
   in the presets or the corpus that would break a real replay fails CI here first.
   Skipped without the public corpus at ``/data/crfm-helm-public``.
 

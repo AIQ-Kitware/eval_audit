@@ -2,11 +2,12 @@
 # Shared definitions for the phi-2 e2e smoke + full grid and grouping runbook.
 # Source this from the numbered scripts: `source "$(dirname "$0")/_lib.sh"`.
 #
-# This is the original dev/e2e-tests suite restructured into the same shape as
-# reproduce/olmo_models/ — which was itself derived from these scripts: a
-# TARGETS array + helpers in _lib.sh, numbered stage scripts, and an olmo-style
-# virtual-experiment grouping (index -> compose -> summary). The three monolithic
-# e2e-phi_2-*.sh scripts this replaces are folded into the grid below.
+# This is the original dev/e2e-tests suite restructured into the same runbook
+# shape the OLMo reproduction uses (reproduce/olmo_models_combined/, whose
+# lineage traces back to these scripts): a TARGETS array + helpers in _lib.sh,
+# numbered stage scripts, and an olmo-style virtual-experiment grouping
+# (index -> compose -> summary). The three monolithic e2e-phi_2-*.sh scripts
+# this replaces are folded into the grid below.
 
 # Repo root (two levels up from dev/e2e-tests/).
 e2e_root() {

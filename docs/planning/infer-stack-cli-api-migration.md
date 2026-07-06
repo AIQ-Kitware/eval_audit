@@ -281,10 +281,10 @@ contract; (b) repoint `LITELLM_ENV_FPATH` to the new managed env-file
   `reproduce/*/README.md`, `reproduce/README.md` — update all
   `switch/wait-ready/env --key/list-profiles/-single profile` references
   to the new verbs + catalog/endpoint vocabulary.
-- `docs/planning/olmo-smoke-grouped-runner.md` (esp. the documented
-  `switch --profile … --apply` + `wait-ready` recipe and `-single`
-  profile naming). Other planning docs reference the old INFER_STACK env
-  contract.
+- `docs/planning/olmo-smoke-grouped-runner.md` (since removed with the
+  single-model OLMo runbook; the `switch --profile … --apply` +
+  `wait-ready` recipe it documented is retired). Other planning docs
+  reference the old INFER_STACK env contract.
 - `_lib.sh` files (`reproduce/olmo_models/_lib.sh`,
   `dev/e2e-tests/_lib.sh`): comments referencing "profile to switch
   into", `phi2-single`, and `INFER_STACK_ALLOWED_GPUS` —

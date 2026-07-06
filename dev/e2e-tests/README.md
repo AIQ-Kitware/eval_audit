@@ -1,8 +1,9 @@
 # phi-2 e2e — smoke + full grids + per-scenario reports
 
 End-to-end exercises of the audit pipeline on Microsoft **phi-2**, restructured
-into the same shape as [`reproduce/olmo_models/`](../../reproduce/olmo_models/)
-(which was itself derived from these scripts). Runs the three phi-2 scenarios in
+into the same runbook shape as
+[`reproduce/olmo_models_combined/`](../../reproduce/olmo_models_combined/)
+(whose lineage traces back to these scripts). Runs the three phi-2 scenarios in
 two passes — a cheap **smoke** preflight and the **full** batch — then composes
 and reports the **full** results as **one virtual experiment per scenario**. The
 smoke grid is a fast end-to-end exercise of the run path; the full grid is the
@@ -84,7 +85,7 @@ The grid branches per scenario on its `transport` (the second field of each
   materializes the bundle from the preset. The phi-2 presets already declare
   `access_kind: openai-compatible`, so the export passes only the LiteLLM
   base-url + master key — **no** `--access-kind`
-  override (unlike `reproduce/olmo_models`, whose presets declare `vllm-direct`).
+  override (unlike `reproduce/olmo_models_combined`, whose presets declare `vllm-direct`).
 - **`hf`** — no infer-stack: HELM loads `microsoft/phi-2` IN-PROCESS, and the run
   is the checked-in `manifests/<experiment>.yaml`. The manifest is from-spec (see
   above), so the in-process client is registered by the `model_deployments_fpath`
@@ -226,7 +227,7 @@ would transfer **and** delete). Shares `17`'s host knobs (`AIQ_GPU_HOST`, …) v
   phi-2's vLLM backend.
 - **No HuggingFace token required.** `microsoft/phi-2` and the MMLU dataset are
   public, so no scenario needs a token — there is no HF-auth preflight, unlike
-  `reproduce/olmo_models`, whose gated `gpqa` runs do. (The `06` slot here is
+  `reproduce/olmo_models_combined`, whose gated `gpqa` runs do. (The `06` slot here is
   instead the container-image preflight.)
 
 ## Output layout

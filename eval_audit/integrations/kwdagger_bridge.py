@@ -508,7 +508,7 @@ def _prepare_container_execution(
         # that does NOT inherit this scheduling shell's ad-hoc exports
         # (cmd_queue's tmux backend ships an empty worker environ by design, to
         # avoid logging secrets to plaintext). So a token exported by e.g.
-        # reproduce/olmo_models/_lib.sh never reaches the container that way.
+        # reproduce/olmo_models_combined/_lib.sh never reaches the container that way.
         # This process *did* inherit it (eval-audit-run runs in the user's
         # shell), so write it to ``<hf_cache_dir>/token`` — which the container
         # reads at ``$HF_HOME/token`` (HF_HOME=/hf-cache) — restoring the on-disk

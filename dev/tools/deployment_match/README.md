@@ -7,11 +7,11 @@ official completions (the oracle), sweeps a grid of local serving recipes for
 that model, runs each on the sample, and ranks them by **agreement with the
 official outputs** — surfacing both the winner and *why* the losers diverge.
 
-It generalizes the OLMo-7B MWE at
-[`reproduce/olmo_models/debug/olmo7b_deploy_matrix/`](../../../reproduce/olmo_models/debug/olmo7b_deploy_matrix/):
-same catalog + acquire/query/release shape, but parameterized by an arbitrary
-HELM run and scored against the official completions instead of a
-self-consistency heuristic. Design: [`docs/planning/deployment-match-search-plan.md`](../../../docs/planning/deployment-match-search-plan.md).
+It generalizes the OLMo-7B deploy-matrix MWE (the since-retired
+`olmo7b_deploy_matrix` debug harness): same catalog + acquire/query/release
+shape, but parameterized by an arbitrary HELM run and scored against the
+official completions instead of a self-consistency heuristic.
+Design: [`docs/planning/deployment-match-search-plan.md`](../../../docs/planning/deployment-match-search-plan.md).
 
 ## Why
 

@@ -1,9 +1,9 @@
 """Deployment-match search — find the local serving recipe that best reproduces
 a public HELM run.
 
-General, model-agnostic tool that generalizes the OLMo-7B MWE at
-``reproduce/olmo_models/debug/olmo7b_deploy_matrix/``. Given one public HELM run
-it (1) extracts a small instance sample + the official completions as the oracle,
+General, model-agnostic tool that generalizes the OLMo-7B deploy-matrix MWE
+(the since-retired ``olmo7b_deploy_matrix`` debug harness). Given one public HELM
+run it (1) extracts a small instance sample + the official completions as the oracle,
 (2) generates a grid of local serving recipes for that model, (3) runs each on
 the sample, and (4) ranks them by agreement with the official outputs.
 
