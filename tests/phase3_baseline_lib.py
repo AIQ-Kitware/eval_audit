@@ -37,11 +37,15 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "eee_only_demo" / "eee_artifacts"
+# Shared EEE-demo fixture path + guard (IM-11). ``conftest`` is importable
+# whenever tests/ is on sys.path — the same condition under which this library
+# module is imported (bare ``from phase3_baseline_lib import ...``).
+from conftest import (  # noqa: E402
+    EEE_DEMO_ROOT as FIXTURE_ROOT,
+    EEE_DEMO_OFFICIAL_DIR as OFFICIAL_DIR,
+    EEE_DEMO_LOCAL_DIR as LOCAL_DIR,
+)
 BASELINE_DIR = REPO_ROOT / "tests" / "fixtures" / "phase3_baseline"
-
-OFFICIAL_DIR = FIXTURE_ROOT / "official" / "imdb" / "toy" / "m1-small"
-LOCAL_DIR = FIXTURE_ROOT / "local" / "primary" / "imdb" / "toy" / "m1-small"
 
 CASES = ("f3_no_sidecar", "f4_with_sidecar")
 

@@ -25,10 +25,12 @@ import pytest
 pytestmark = pytest.mark.slow
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "eee_only_demo" / "eee_artifacts"
-
-OFFICIAL_DIR = FIXTURE_ROOT / "official" / "imdb" / "toy" / "m1-small"
-LOCAL_DIR = FIXTURE_ROOT / "local" / "primary" / "imdb" / "toy" / "m1-small"
+from conftest import (  # noqa: E402  (shared EEE-demo fixture path + guard)
+    EEE_DEMO_ROOT as FIXTURE_ROOT,
+    EEE_DEMO_OFFICIAL_DIR as OFFICIAL_DIR,
+    EEE_DEMO_LOCAL_DIR as LOCAL_DIR,
+    require_eee_demo,
+)
 
 
 _EXPECTED_HELM_FACTS = (
@@ -72,8 +74,7 @@ def _agreement_at_zero(out_dir: Path) -> tuple[float | None, float | None]:
 @pytest.fixture
 def pair_no_sidecar(tmp_path: Path) -> Path:
     """Run compare-pair-eee against the demo fixture (no sidecar)."""
-    if not (OFFICIAL_DIR.exists() and LOCAL_DIR.exists()):
-        pytest.skip(f"EEE demo fixture missing: {FIXTURE_ROOT}")
+    require_eee_demo()
     out_dir = tmp_path / "no_sidecar"
     _run_pair(official=OFFICIAL_DIR, local=LOCAL_DIR, out_dir=out_dir)
     return out_dir
@@ -82,8 +83,7 @@ def pair_no_sidecar(tmp_path: Path) -> Path:
 @pytest.fixture
 def pair_with_sidecar(tmp_path: Path) -> Path:
     """Stage the demo artifacts with a synthesized run_spec.json next to each."""
-    if not (OFFICIAL_DIR.exists() and LOCAL_DIR.exists()):
-        pytest.skip(f"EEE demo fixture missing: {FIXTURE_ROOT}")
+    require_eee_demo()
     staging = tmp_path / "staging"
     official_dst = staging / "official"
     local_dst = staging / "local"

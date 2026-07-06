@@ -35,9 +35,12 @@ from eval_audit.planning.core_report_planner import build_planning_artifact
 pytestmark = pytest.mark.slow
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "eee_only_demo" / "eee_artifacts"
-OFFICIAL_DIR = FIXTURE_ROOT / "official" / "imdb" / "toy" / "m1-small"
-LOCAL_DIR = FIXTURE_ROOT / "local" / "primary" / "imdb" / "toy" / "m1-small"
+from conftest import (  # noqa: E402  (shared EEE-demo fixture path + guard)
+    EEE_DEMO_ROOT as FIXTURE_ROOT,
+    EEE_DEMO_OFFICIAL_DIR as OFFICIAL_DIR,
+    EEE_DEMO_LOCAL_DIR as LOCAL_DIR,
+    require_eee_demo,
+)
 
 
 def _sidecar(annotators) -> dict:
@@ -75,8 +78,7 @@ def _meta(artifact_dir: Path) -> dict:
 @pytest.fixture
 def staged(tmp_path: Path) -> dict:
     """Stage the demo pair with judge-bearing sidecars on both sides."""
-    if not (OFFICIAL_DIR.exists() and LOCAL_DIR.exists()):
-        pytest.skip(f"EEE demo fixture missing: {FIXTURE_ROOT}")
+    require_eee_demo()
     official_dst = tmp_path / "official"
     local_dst = tmp_path / "local"
     shutil.copytree(OFFICIAL_DIR, official_dst)

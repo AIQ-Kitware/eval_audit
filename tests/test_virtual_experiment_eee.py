@@ -24,7 +24,10 @@ import pytest
 pytestmark = pytest.mark.slow
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "eee_only_demo" / "eee_artifacts"
+from conftest import (  # noqa: E402  (shared EEE-demo fixture path + guard)
+    EEE_DEMO_ROOT as FIXTURE_ROOT,
+    require_eee_demo,
+)
 
 
 def _write_manifest(tmp_path: Path, *, output_root: Path) -> Path:
@@ -61,8 +64,7 @@ def _write_manifest(tmp_path: Path, *, output_root: Path) -> Path:
 @pytest.fixture(scope="module")
 def virtual_experiment_output(tmp_path_factory) -> Path:
     """Build the virtual experiment once per session; reuse across tests."""
-    if not FIXTURE_ROOT.exists():
-        pytest.skip(f"EEE demo fixture missing: {FIXTURE_ROOT}")
+    require_eee_demo()
     tmp_path = tmp_path_factory.mktemp("virtual_eee_only")
     output_root = tmp_path / "output"
     manifest_fpath = _write_manifest(tmp_path, output_root=output_root)
@@ -166,8 +168,7 @@ def test_external_eee_component_is_consumed(tmp_path_factory) -> None:
     component pointing at a fixture artifact and asserts the synthesized
     audit index contains a row for it on the local side.
     """
-    if not FIXTURE_ROOT.exists():
-        pytest.skip("fixture missing")
+    require_eee_demo()
     tmp_path = tmp_path_factory.mktemp("external_eee_consumed")
     output_root = tmp_path / "output"
     artifact_dir = FIXTURE_ROOT / "official" / "imdb" / "toy" / "m1-small"

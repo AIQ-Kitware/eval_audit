@@ -22,7 +22,10 @@ import pytest
 pytestmark = pytest.mark.slow
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "eee_only_demo" / "eee_artifacts"
+from conftest import (  # noqa: E402  (shared EEE-demo fixture path + guard)
+    EEE_DEMO_ROOT as FIXTURE_ROOT,
+    require_eee_demo,
+)
 
 
 def _agreement_at_zero(curve: list[dict]) -> float | None:
@@ -76,8 +79,7 @@ def demo_output(tmp_path_factory) -> Path:
     """Run ``eval-audit-from-eee --build-aggregate-summary`` once per session
     and return the output dir.
     """
-    if not FIXTURE_ROOT.exists():
-        pytest.skip(f"EEE demo fixture missing: {FIXTURE_ROOT}")
+    require_eee_demo()
     out_dir = tmp_path_factory.mktemp("eee_only_demo_out")
     cmd = [
         sys.executable, "-m", "eval_audit.cli.from_eee",

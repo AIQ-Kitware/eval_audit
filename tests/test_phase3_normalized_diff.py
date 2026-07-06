@@ -27,15 +27,17 @@ from eval_audit.normalized.model import NormalizedRunRef, SourceKind
 from eval_audit.normalized.recipe_facts import RecipeFacts
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "eee_only_demo" / "eee_artifacts"
-OFFICIAL_DIR = FIXTURE_ROOT / "official" / "imdb" / "toy" / "m1-small"
-LOCAL_DIR = FIXTURE_ROOT / "local" / "primary" / "imdb" / "toy" / "m1-small"
+from conftest import (  # noqa: E402  (shared EEE-demo fixture path + guard)
+    EEE_DEMO_ROOT as FIXTURE_ROOT,
+    EEE_DEMO_OFFICIAL_DIR as OFFICIAL_DIR,
+    EEE_DEMO_LOCAL_DIR as LOCAL_DIR,
+    require_eee_demo,
+)
 BASELINE_FPATH = REPO_ROOT / "tests" / "fixtures" / "phase3_baseline" / "f3_no_sidecar.json"
 
 
 def _load_fixture_diff() -> NormalizedDiff:
-    if not (OFFICIAL_DIR.exists() and LOCAL_DIR.exists()):
-        pytest.skip(f"EEE demo fixture missing: {FIXTURE_ROOT}")
+    require_eee_demo()
     run_a = load_run(
         NormalizedRunRef.from_eee_artifact(OFFICIAL_DIR, source_kind=SourceKind.OFFICIAL)
     )
