@@ -117,9 +117,8 @@ from eval_audit.reports.core_metric_tables import (  # noqa: F401
 )
 
 
-@profile
-def main(argv: list[str] | None = None) -> None:
-    setup_cli_logging()
+
+def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('--report-dpath', required=True)
     parser.add_argument('--components-manifest', default=None)
@@ -363,52 +362,17 @@ def main(argv: list[str] | None = None) -> None:
             'Also reads EVAL_AUDIT_NO_PLOTS={1,true,yes} as the default.'
         ),
     )
-    args = parser.parse_args(argv)
-    plot_layout = _plot_layout_from_cli(args)
-    plot_target = args.plot_target
+    return parser
 
-    # R-10: the abs_tol sweep grid is owned by normalized/diff.py; derive it
-    # from the shared constant so the curve producer and the specific-tolerance
-    # consumers (_write_management_summary, aggregate.py) cannot silently drift.
-    thresholds = list(DEFAULT_ABS_TOL_THRESHOLDS)
-    report_dpath = Path(args.report_dpath).expanduser().resolve()
-    report_dpath.mkdir(parents=True, exist_ok=True)
-    stamp = datetime_mod.datetime.now(datetime_mod.UTC).strftime('%Y%m%dT%H%M%SZ')
-    # History layer retired 2026-04-28: write stamped intermediates next to
-    # the visible *.* targets and let write_latest_alias rename them
-    # in place. No .history/ subdir is created.
-    history_dpath = report_dpath
-    (
-        components_manifest_fpath,
-        components_manifest,
-        comparisons_manifest_fpath,
-        comparisons_manifest,
-    ) = load_packet_manifests(
-        report_dpath=report_dpath,
-        components_manifest=args.components_manifest,
-        comparisons_manifest=args.comparisons_manifest,
-    )
-    components = components_manifest.get('components') or []
-    all_comparisons = comparisons_manifest.get('comparisons') or []
-    comparisons = [comparison for comparison in all_comparisons if comparison.get('enabled', True)]
-    component_lookup = {component['component_id']: component for component in components}
-    # Stamp the declared instance-source policy onto every component so
-    # each _load_component_run call site (pairs, run-level tables, plot
-    # writers) honors it without per-site threading (Phase 3 / 4.5).
-    for component in components:
-        component.setdefault('instance_source_policy', args.instance_source)
-    run_spec_name = _infer_run_spec_name(*(component['run_path'] for component in components))
 
-    # Memoize NormalizedRun loads across the per-pair loop. A typical
-    # packet has one official component reused across N official_vs_local
-    # pairs and ~N local components each appearing twice (once in
-    # official_vs_local, once as the reference or repeat in
-    # local_repeat). Without caching the official artifact gets parsed
-    # ~N times. The cache is intentionally local to this packet
-    # invocation so memory doesn't accumulate when from_eee renders
-    # many packets in sequence (or in parallel via subprocess.run).
-    component_cache: dict[str, NormalizedRun] = {}
-
+def _build_pairs(
+    *,
+    args,
+    comparisons: list[dict[str, Any]],
+    component_lookup: dict[str, Any],
+    thresholds: list,
+    component_cache: dict[str, NormalizedRun],
+) -> list[dict[str, Any]]:
     pairs = []
     for comparison in comparisons:
         component_ids = comparison.get('component_ids') or []
@@ -472,7 +436,23 @@ def main(argv: list[str] | None = None) -> None:
         pair['caveats'] = comparison.get('caveats') or []
         pair['label'] = comparison['comparison_id']
         pairs.append(pair)
+    return pairs
 
+
+def _assemble_report(
+    *,
+    components: list[dict[str, Any]],
+    comparisons: list[dict[str, Any]],
+    all_comparisons: list[dict[str, Any]],
+    components_manifest: dict[str, Any],
+    components_manifest_fpath: Path,
+    comparisons_manifest_fpath: Path,
+    pairs: list[dict[str, Any]],
+    thresholds: list,
+    stamp: str,
+    run_spec_name: str,
+    report_dpath: Path,
+) -> dict[str, Any]:
     run_diagnostics = {
         component['component_id']: _run_diagnostics(component['run_path'])
         for component in components
@@ -509,18 +489,22 @@ def main(argv: list[str] | None = None) -> None:
         'packet_caveats': components_manifest.get('caveats') or [],
         'official_selection': components_manifest.get('official_selection') or {},
     }
+    return report
 
-    json_fpath = history_dpath / f'core_metric_report.json'
-    txt_fpath = history_dpath / f'core_metric_report.txt'
-    mgmt_fpath = history_dpath / f'core_metric_management_summary.txt'
-    warnings_json_fpath = history_dpath / f'warnings.json'
-    warnings_txt_fpath = history_dpath / f'warnings.txt'
-    official_vs_local = _find_pair(report, 'official_vs_local') or (pairs[-1] if pairs else None)
-    local_repeat = _find_pair(report, 'local_repeat')
 
-    if official_vs_local is None:
-        raise SystemExit('No enabled comparisons were available to render a core metric report')
-
+def _render_summary_figure(
+    *,
+    args,
+    plot_target: str,
+    pairs: list[dict[str, Any]],
+    official_vs_local: dict[str, Any],
+    local_repeat: dict[str, Any] | None,
+    history_dpath: Path,
+    stamp: str,
+    run_spec_name: str,
+    plot_layout,
+    report_dpath: Path,
+) -> Path | None:
     # --no-plots is the master kill-switch: when set, no matplotlib
     # block runs regardless of plots_only / render_heavy_pairwise_plots
     # / plot_target.
@@ -605,7 +589,21 @@ def main(argv: list[str] | None = None) -> None:
         )
     else:
         fig_fpath = None
+    return fig_fpath
 
+
+def _render_pairwise_plots(
+    *,
+    args,
+    plot_target: str,
+    history_dpath: Path,
+    stamp: str,
+    pairs: list[dict[str, Any]],
+    run_spec_name: str,
+    plot_layout,
+    components: list[dict[str, Any]],
+    thresholds: list,
+) -> dict[str, Any]:
     render_pairwise = args.render_heavy_pairwise_plots and not args.no_plots
     if render_pairwise and _wants_plot(plot_target, 'core_metric_distributions'):
         dist_fig_fpath = _plot_pair_metric_distributions(
@@ -671,6 +669,133 @@ def main(argv: list[str] | None = None) -> None:
     ecdf_fig_fpath = (ecdf_artifacts or {}).get('plot') if ecdf_artifacts else None
     ecdf_legend_png = (ecdf_artifacts or {}).get('legend_png') if ecdf_artifacts else None
     ecdf_legend_txt = (ecdf_artifacts or {}).get('legend_txt') if ecdf_artifacts else None
+    return {
+        "dist_fig_fpath": dist_fig_fpath,
+        "overlay_dist_fpath": overlay_dist_fpath,
+        "overlay_dist_legend_png": overlay_dist_legend_png,
+        "overlay_dist_legend_txt": overlay_dist_legend_txt,
+        "ecdf_fig_fpath": ecdf_fig_fpath,
+        "ecdf_legend_png": ecdf_legend_png,
+        "ecdf_legend_txt": ecdf_legend_txt,
+        "per_metric_agree_fpath": per_metric_agree_fpath,
+    }
+
+
+@profile
+def main(argv: list[str] | None = None) -> None:
+    setup_cli_logging()
+    parser = _build_arg_parser()
+    args = parser.parse_args(argv)
+    plot_layout = _plot_layout_from_cli(args)
+    plot_target = args.plot_target
+
+    # R-10: the abs_tol sweep grid is owned by normalized/diff.py; derive it
+    # from the shared constant so the curve producer and the specific-tolerance
+    # consumers (_write_management_summary, aggregate.py) cannot silently drift.
+    thresholds = list(DEFAULT_ABS_TOL_THRESHOLDS)
+    report_dpath = Path(args.report_dpath).expanduser().resolve()
+    report_dpath.mkdir(parents=True, exist_ok=True)
+    stamp = datetime_mod.datetime.now(datetime_mod.UTC).strftime('%Y%m%dT%H%M%SZ')
+    # History layer retired 2026-04-28: write stamped intermediates next to
+    # the visible *.* targets and let write_latest_alias rename them
+    # in place. No .history/ subdir is created.
+    history_dpath = report_dpath
+    (
+        components_manifest_fpath,
+        components_manifest,
+        comparisons_manifest_fpath,
+        comparisons_manifest,
+    ) = load_packet_manifests(
+        report_dpath=report_dpath,
+        components_manifest=args.components_manifest,
+        comparisons_manifest=args.comparisons_manifest,
+    )
+    components = components_manifest.get('components') or []
+    all_comparisons = comparisons_manifest.get('comparisons') or []
+    comparisons = [comparison for comparison in all_comparisons if comparison.get('enabled', True)]
+    component_lookup = {component['component_id']: component for component in components}
+    # Stamp the declared instance-source policy onto every component so
+    # each _load_component_run call site (pairs, run-level tables, plot
+    # writers) honors it without per-site threading (Phase 3 / 4.5).
+    for component in components:
+        component.setdefault('instance_source_policy', args.instance_source)
+    run_spec_name = _infer_run_spec_name(*(component['run_path'] for component in components))
+
+    # Memoize NormalizedRun loads across the per-pair loop. A typical
+    # packet has one official component reused across N official_vs_local
+    # pairs and ~N local components each appearing twice (once in
+    # official_vs_local, once as the reference or repeat in
+    # local_repeat). Without caching the official artifact gets parsed
+    # ~N times. The cache is intentionally local to this packet
+    # invocation so memory doesn't accumulate when from_eee renders
+    # many packets in sequence (or in parallel via subprocess.run).
+    component_cache: dict[str, NormalizedRun] = {}
+
+    pairs = _build_pairs(
+        args=args,
+        comparisons=comparisons,
+        component_lookup=component_lookup,
+        thresholds=thresholds,
+        component_cache=component_cache,
+    )
+
+    report = _assemble_report(
+        components=components,
+        comparisons=comparisons,
+        all_comparisons=all_comparisons,
+        components_manifest=components_manifest,
+        components_manifest_fpath=components_manifest_fpath,
+        comparisons_manifest_fpath=comparisons_manifest_fpath,
+        pairs=pairs,
+        thresholds=thresholds,
+        stamp=stamp,
+        run_spec_name=run_spec_name,
+        report_dpath=report_dpath,
+    )
+
+    json_fpath = history_dpath / f'core_metric_report.json'
+    txt_fpath = history_dpath / f'core_metric_report.txt'
+    mgmt_fpath = history_dpath / f'core_metric_management_summary.txt'
+    warnings_json_fpath = history_dpath / f'warnings.json'
+    warnings_txt_fpath = history_dpath / f'warnings.txt'
+    official_vs_local = _find_pair(report, 'official_vs_local') or (pairs[-1] if pairs else None)
+    local_repeat = _find_pair(report, 'local_repeat')
+
+    if official_vs_local is None:
+        raise SystemExit('No enabled comparisons were available to render a core metric report')
+
+    fig_fpath = _render_summary_figure(
+        args=args,
+        plot_target=plot_target,
+        pairs=pairs,
+        official_vs_local=official_vs_local,
+        local_repeat=local_repeat,
+        history_dpath=history_dpath,
+        stamp=stamp,
+        run_spec_name=run_spec_name,
+        plot_layout=plot_layout,
+        report_dpath=report_dpath,
+    )
+
+    _pairwise = _render_pairwise_plots(
+        args=args,
+        plot_target=plot_target,
+        history_dpath=history_dpath,
+        stamp=stamp,
+        pairs=pairs,
+        run_spec_name=run_spec_name,
+        plot_layout=plot_layout,
+        components=components,
+        thresholds=thresholds,
+    )
+    dist_fig_fpath = _pairwise["dist_fig_fpath"]
+    overlay_dist_fpath = _pairwise["overlay_dist_fpath"]
+    overlay_dist_legend_png = _pairwise["overlay_dist_legend_png"]
+    overlay_dist_legend_txt = _pairwise["overlay_dist_legend_txt"]
+    ecdf_fig_fpath = _pairwise["ecdf_fig_fpath"]
+    ecdf_legend_png = _pairwise["ecdf_legend_png"]
+    ecdf_legend_txt = _pairwise["ecdf_legend_txt"]
+    per_metric_agree_fpath = _pairwise["per_metric_agree_fpath"]
     plots_only = args.plots_only
     if not plots_only:
         runlevel_csv_fpath, runlevel_md_fpath = _write_comparison_runlevel_table(
