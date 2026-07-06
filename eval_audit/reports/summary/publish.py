@@ -7,12 +7,13 @@ relocation: function bodies are unchanged.
 from __future__ import annotations
 
 import csv
+import io
 import os
 import shlex
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
-from eval_audit.infra.fs_publish import link_alias, safe_unlink
+from eval_audit.infra.fs_publish import link_alias, safe_unlink, write_text_atomic
 from eval_audit.infra.logging import rich_link
 from eval_audit.infra.report_layout import portable_repo_root_lines
 from loguru import logger
@@ -40,20 +41,21 @@ def _write_table_artifacts(
         txt_fpath = stem.with_suffix(".txt")
     _write_json(rows, json_fpath)
     fieldnames = sorted({key for row in rows for key in row.keys()})
-    with csv_fpath.open("w", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
+    csv_buf = io.StringIO()
+    writer = csv.DictWriter(csv_buf, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+    write_text_atomic(csv_fpath, csv_buf.getvalue())
     if not rows:
-        txt_fpath.write_text("(no rows)\n")
+        write_text_atomic(txt_fpath, "(no rows)\n")
     else:
         lines = [", ".join(fieldnames)]
         for row in rows[:200]:
             lines.append(", ".join(str(row.get(key, "")) for key in fieldnames))
         if len(rows) > 200:
             lines.append(f"... ({len(rows) - 200} more rows)")
-        txt_fpath.write_text("\n".join(lines) + "\n")
+        write_text_atomic(txt_fpath, "\n".join(lines) + "\n")
     return {"json": str(json_fpath), "csv": str(csv_fpath), "txt": str(txt_fpath)}
 
 

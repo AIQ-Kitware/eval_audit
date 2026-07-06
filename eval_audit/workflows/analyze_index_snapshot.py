@@ -24,6 +24,7 @@ import pandas as pd
 import scriptconfig as scfg
 from loguru import logger
 
+from eval_audit.infra.fs_publish import write_text_atomic
 from eval_audit.infra.logging import setup_cli_logging
 from eval_audit.infra.paths import index_snapshot_analysis_dpath
 from eval_audit.infra.plotly_env import configure_plotly_chrome
@@ -204,22 +205,22 @@ def analyze_index_snapshot(index_fpath: Path, out_dpath: Path) -> dict:
     # ------------------------------------------------------------------
     def _write_txt(text: str, name: str) -> Path:
         p = out_dpath / name
-        p.write_text(text, encoding='utf-8')
+        write_text_atomic(p, text)
         logger.success('Wrote {}', p)
         return p
 
     def _write_json(obj: dict, name: str) -> Path:
         p = out_dpath / name
-        p.write_text(
+        write_text_atomic(
+            p,
             json.dumps(obj, indent=2, default=str, ensure_ascii=False) + '\n',
-            encoding='utf-8',
         )
         logger.success('Wrote {}', p)
         return p
 
     def _write_csv(df_out: pd.DataFrame, name: str) -> Path:
         p = out_dpath / name
-        df_out.to_csv(p, index=False)
+        write_text_atomic(p, df_out.to_csv(index=False))
         logger.success('Wrote {}', p)
         return p
 

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 import kwutil
 from eval_audit.reports.core_packet_summary import find_report_pair
+from eval_audit.infra.fs_publish import write_text_atomic
 
 
 DEFAULT_BREAKDOWN_DIMS = [
@@ -48,11 +49,11 @@ def _load_json(fpath: Path) -> dict[str, Any]:
 
 
 def _write_json(payload: Any, fpath: Path) -> None:
-    fpath.write_text(json.dumps(kwutil.Json.ensure_serializable(payload), indent=2))
+    write_text_atomic(fpath, json.dumps(kwutil.Json.ensure_serializable(payload), indent=2))
 
 
 def _write_text(lines: list[str], fpath: Path) -> None:
-    fpath.write_text("\n".join(lines).rstrip() + "\n")
+    write_text_atomic(fpath, "\n".join(lines).rstrip() + "\n")
 
 
 def _find_pair(report: dict[str, Any], label: str) -> dict[str, Any]:
