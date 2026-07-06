@@ -631,14 +631,15 @@ def _single_run_core_stat_index(
         if component is not None
         else _load_normalized(run_path)
     )
+    # IM-7: build the run-level means once (was rebuilt per key -> O(K*E)), and
+    # reuse ncompare.joined_metric_means so the key derivation AND the
+    # float-coercion behavior (skip non-numeric scores instead of crashing on
+    # float()) match the docstring's claim.
+    means = ncompare.joined_metric_means(nrun)
     out: dict[str, _SimpleStatRow] = {}
     for key in ncompare.core_metric_keys(nrun):
-        means = {
-            (er.metric_config.metric_id or er.metric_config.metric_name or er.evaluation_name): er.score_details.score
-            for er in nrun.evaluation_log.evaluation_results or []
-        }
         if key in means:
-            out[key] = _SimpleStatRow(metric=key, mean=float(means[key]))
+            out[key] = _SimpleStatRow(metric=key, mean=means[key])
     return out
 
 

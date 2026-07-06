@@ -454,15 +454,18 @@ def _render_scope_summary(
             }
         )
 
+    # IM-2: index enriched rows by (experiment_name, run_entry) once instead of
+    # a per-repro-row linear scan (was O(n_repro x n_scope) per render). First
+    # enriched row wins on a duplicate key, matching the previous ``next(...)``
+    # first-match semantics.
+    enriched_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in enriched_rows:
+        key = (str(item.get("experiment_name")), str(item.get("run_entry")))
+        enriched_by_key.setdefault(key, item)
     repro_sankey_rows = []
     for row in repro_rows:
-        parent = next(
-            (
-                item for item in enriched_rows
-                if str(item.get("experiment_name")) == str(row.get("experiment_name"))
-                and str(item.get("run_entry")) == str(row.get("run_entry"))
-            ),
-            None,
+        parent = enriched_by_key.get(
+            (str(row.get("experiment_name")), str(row.get("run_entry")))
         )
         repro_sankey_rows.append(
             {

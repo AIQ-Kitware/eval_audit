@@ -515,26 +515,18 @@ class HelmRawLoader(Loader):
             # loads mislabelled their source as "helm".
             extra={**(ref.extra or {}), **(run.ref.extra or {})},
         )
-        raw_helm = _read_raw_helm_jsons(run_path)
+        # IM-4: do NOT eager-load the raw HELM JSONs here. scenario_state.json is
+        # the largest file in a run dir and was parsed on every load even under
+        # --skip-diagnosis. Leave raw_helm=None; the only consumer
+        # (_NormalizedJsonView in helm_compat) reads each JSON lazily from
+        # Origin.helm_run_path (= run_path, set on new_ref above) on demand, so
+        # this is behavior-preserving.
         return NormalizedRun(
             ref=new_ref,
             evaluation_log=run.evaluation_log,
             instances=run.instances,
-            raw_helm=raw_helm,
+            raw_helm=None,
         )
-
-
-@profile
-def _read_raw_helm_jsons(run_path: Path) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for stem in ("run_spec", "scenario_state", "stats", "per_instance_stats", "scenario"):
-        fpath = run_path / f"{stem}.json"
-        if fpath.exists():
-            try:
-                out[stem] = json.loads(fpath.read_text())
-            except Exception:
-                out[stem] = None
-    return out
 
 
 @profile

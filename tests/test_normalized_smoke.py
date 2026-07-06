@@ -91,7 +91,16 @@ def test_helm_raw_loader_produces_normalized_run() -> None:
     assert bounded, "expected at least one bounded core metric"
     assert all(0.0 <= rec.score <= 1.0 for rec in bounded)
 
-    assert run.raw_helm and "stats" in run.raw_helm and "per_instance_stats" in run.raw_helm
+    # IM-4: raw HELM JSONs are no longer eager-loaded onto ``raw_helm`` (it is
+    # None to avoid parsing scenario_state.json on every load). The data is
+    # still reachable lazily through the HELM-shape view, which reads from
+    # Origin.helm_run_path on demand.
+    assert run.raw_helm is None
+    from eval_audit.normalized.helm_compat import helm_view
+
+    view = helm_view(run)
+    assert view.json.stats()
+    assert view.json.per_instance_stats()
 
 
 def test_run_level_join_self_match() -> None:
