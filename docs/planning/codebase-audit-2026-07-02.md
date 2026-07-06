@@ -1,5 +1,22 @@
 # Codebase Audit — 2026-07-02
 
+> **Status (2026-07-06): IMPLEMENTED except R-2.** Three implementation passes landed on
+> `impl/run-from-run-spec`, each independently reviewed (diff inspection + suite re-runs +
+> AST-identity checks on relocations):
+> - **Phases A–F** (`63cac3f..10c8f32`, 32 commits): all P0s, all P1s, most P2s.
+> - **Tier 1–2 backlog** (`0608b29..8a9933c` + `ef6903f`, 13 commits): remaining P2s/IMs,
+>   python floor →3.12 + relock, secrets hardening.
+> - **Tier 3 + D-4/D-5** (`bab7df2..79bc030`, 17 commits): refactors R-3..R-11 done
+>   (R-11c's shared-tables sub-part deferred as not worth the coupling); `quantiles.py`
+>   retired (D-4); `--max-eval-instances official` sentinel added (D-5); `adapter.py`
+>   1979→50-line facade over presets/serving_facts/freeze/bundle_export/discovery.
+> - Decision outcomes: D-1 code fixed to match docs; D-2 comments reworded, sweep expansion
+>   left as operator GPU call; D-3 flag deleted.
+> - **Still open:** R-2 (retire legacy half of `helm/diff.py` onto NormalizedDiff —
+>   deliberately post-paper); regenerating pre-fix `/data` report stores before citing;
+>   upstream aiq-magnet PR for the unsorted `os.walk` twin; D-2 sweep expansion.
+> - Suite: 400 → 443 passed (71 skipped) across the three passes; slow planner file 12/12.
+
 **Scope:** all of `eval_audit/` (~38k lines, 131 files), plus tests, packaging, and
 cross-cutting consistency. Nine parallel deep reviews (one per subsystem: normalized core,
 legacy HELM diff, core-metrics reports, summary/filter reports, CLI, workflows,
