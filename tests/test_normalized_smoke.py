@@ -22,7 +22,7 @@ from eval_audit.normalized import (
     ArtifactFormat,
     NormalizedRunRef,
     SourceKind,
-    join_run_level,
+    joined_metric_means,
     load_run,
 )
 from eval_audit.normalized.loaders import LoaderError
@@ -75,9 +75,9 @@ def test_helm_raw_loader_produces_normalized_run() -> None:
     assert run.ref.origin.helm_run_path == HELM_FIXTURE_RUN
     assert run.ref.origin.converter_name and "every_eval_ever" in run.ref.origin.converter_name
 
-    means = run.metrics_by_id()
+    means = joined_metric_means(run)
     assert means, "EvaluationLog should expose at least one metric"
-    sample_score = next(iter(means.values()))["score"]
+    sample_score = next(iter(means.values()))
     assert isinstance(sample_score, float)
 
     assert run.instances, "per-instance records should be populated"
@@ -101,14 +101,6 @@ def test_helm_raw_loader_produces_normalized_run() -> None:
     view = helm_view(run)
     assert view.json.stats()
     assert view.json.per_instance_stats()
-
-
-def test_run_level_join_self_match() -> None:
-    run = _load_helm_fixture()
-    matches = list(join_run_level(run, run))
-    assert matches, "self-join must produce matches"
-    for _key, a, b in matches:
-        assert a == b
 
 
 def test_loader_rejects_missing_required_files(tmp_path: Path) -> None:
@@ -168,7 +160,7 @@ def test_eee_artifact_loader_round_trip(tmp_path: Path) -> None:
     assert run.source_kind is SourceKind.OFFICIAL
     assert run.ref.origin.helm_run_path == HELM_FIXTURE_RUN
     assert run.ref.origin.eee_artifact_path is not None
-    assert run.metrics_by_id()
+    assert joined_metric_means(run)
     # HELM-origin EEE uses the aggregate from EEE, but per-instance drilldown
     # is normalized from raw HELM so separately converted artifacts keep
     # stable sample ids for official/local joins.

@@ -18,6 +18,18 @@ if TYPE_CHECKING:  # heavy schema import only when type-checking
     from every_eval_ever.instance_level_types import InstanceLevelEvaluationLog
 
 
+def metric_handle(er: Any) -> str:
+    """Stable addressable handle for one evaluation result (R-9).
+
+    Prefers ``metric_config.metric_id``, falls back to ``metric_config.metric_name``,
+    then ``evaluation_name`` so every result lands somewhere addressable. Single
+    source of the handle derivation shared by joins.joined_metric_means and
+    compare.core_metric_keys.
+    """
+    cfg = er.metric_config
+    return cfg.metric_id or cfg.metric_name or er.evaluation_name
+
+
 class SourceKind(str, enum.Enum):
     """Whether a run is the published reference or a local reproduction."""
 
@@ -232,22 +244,3 @@ class NormalizedRun:
         results = self.evaluation_log.evaluation_results or []
         return results[0].evaluation_name if results else None
 
-    def metrics_by_id(self) -> dict[str, dict[str, Any]]:
-        """Map ``metric_id`` (or ``metric_name`` fallback) → run-level score view."""
-        out: dict[str, dict[str, Any]] = {}
-        for er in self.evaluation_log.evaluation_results or []:
-            cfg = er.metric_config
-            mid = cfg.metric_id or cfg.metric_name or er.evaluation_name
-            out[mid] = {
-                "metric_id": cfg.metric_id,
-                "metric_name": cfg.metric_name,
-                "metric_kind": cfg.metric_kind,
-                "evaluation_name": er.evaluation_name,
-                "score": er.score_details.score,
-                "uncertainty": (
-                    er.score_details.uncertainty.model_dump()
-                    if er.score_details.uncertainty is not None
-                    else None
-                ),
-            }
-        return out

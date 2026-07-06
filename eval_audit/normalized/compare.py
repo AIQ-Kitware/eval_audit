@@ -28,11 +28,10 @@ from loguru import logger
 
 from eval_audit import metrics_taxonomy as helm_metrics
 from eval_audit.normalized.joins import (
-    index_instances,
     join_instances,
     joined_metric_means,
 )
-from eval_audit.normalized.model import InstanceRecord, NormalizedRun
+from eval_audit.normalized.model import InstanceRecord, NormalizedRun, metric_handle
 
 from eval_audit.infra.profiling import profile
 
@@ -210,8 +209,7 @@ def core_metric_keys(
 ) -> set[str]:
     keys: set[str] = set()
     for er in run.evaluation_log.evaluation_results or []:
-        cfg = er.metric_config
-        key = cfg.metric_id or cfg.metric_name or er.evaluation_name
+        key = metric_handle(er)
         cls, _ = helm_metrics.classify_metric(key)
         if cls == metric_class:
             keys.add(key)

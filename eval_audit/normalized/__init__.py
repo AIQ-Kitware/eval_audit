@@ -47,7 +47,6 @@ from eval_audit.normalized.loaders import (
 from eval_audit.normalized.joins import (
     index_instances,
     join_instances,
-    join_run_level,
     joined_metric_means,
 )
 
@@ -63,7 +62,6 @@ __all__ = [
     "get_loader",
     "index_instances",
     "join_instances",
-    "join_run_level",
     "joined_metric_means",
     "load_run",
     "register_loader",
