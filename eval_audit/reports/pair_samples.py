@@ -12,19 +12,11 @@ from eval_audit.infra.fs_publish import write_text_atomic
 from eval_audit.normalized import SourceKind
 from eval_audit.normalized.helm_compat import helm_view_from_path
 from eval_audit.reports.core_packet import comparison_sample_latest_name
+# R-10: single _infer_run_spec_name (was duplicated verbatim here + in
+# core_metric_curves). Keep the core_metric_curves copy as canonical.
+from eval_audit.reports.core_metric_curves import _infer_run_spec_name
 
 from eval_audit.infra.profiling import profile
-
-
-def _infer_run_spec_name(*run_paths: str) -> str:
-    names = [Path(p).name for p in run_paths if p]
-    names = [n for n in names if n]
-    if not names:
-        return 'unknown_run_spec'
-    unique = sorted(set(names))
-    if len(unique) == 1:
-        return unique[0]
-    return unique[0]
 
 
 @profile

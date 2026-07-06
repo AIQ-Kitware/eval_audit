@@ -15,7 +15,6 @@ Role among the ``core_*`` modules:
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 
 from loguru import logger
 
@@ -23,8 +22,6 @@ from eval_audit.infra.logging import rich_link, setup_cli_logging
 import datetime as datetime_mod
 import json
 import os
-import shutil
-import statistics
 import warnings
 from pathlib import Path
 from typing import Any
@@ -32,29 +29,17 @@ from typing import Any
 import kwutil
 import eval_audit.infra.mpl_backend  # noqa: F401  (force headless Agg before pyplot)
 import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import seaborn as sns
 
 from eval_audit.helm.diff import HelmRunDiff
-from eval_audit.helm import metrics as helm_metrics
-from eval_audit.helm.hashers import stable_hash36
-from eval_audit.indexing.schema import extract_run_spec_fields
-import safer
 
-from eval_audit.infra.fs_publish import link_alias, safe_unlink, write_text_atomic
+from eval_audit.infra.fs_publish import safe_unlink, write_text_atomic
 from eval_audit.normalized import (
     NormalizedRun,
-    NormalizedRunRef,
-    SourceKind,
-    load_run,
 )
-from eval_audit.normalized import compare as ncompare
-from eval_audit.normalized.helm_compat import helm_view
+from eval_audit.normalized.diff import DEFAULT_ABS_TOL_THRESHOLDS
 from eval_audit.reports.paper_labels import load_paper_label_manager
 from eval_audit.utils.labels import emit_label_legend_artifacts, short_alias_map
 from eval_audit.reports.core_packet import load_packet_manifests
-from eval_audit.utils.numeric import quantile as _quantile
 
 from eval_audit.infra.profiling import profile
 
@@ -118,19 +103,13 @@ from eval_audit.reports.core_metric_plots import (  # noqa: F401
     _plot_distribution,
     _plot_per_metric_agreement,
     _plot_quantiles,
-    _plot_metric_distributions,
     _plot_pair_metric_distributions,
     _plot_run_metric_distributions,
     _normalize_plot_run_specs,
-    _plot_three_run_metric_distributions,
-    _plot_overlay_metric_distributions,
-    _plot_overlay_metric_ecdfs,
     _plot_single_pair_summary,
     _atomic_savefig,
 )
 from eval_audit.reports.core_metric_tables import (  # noqa: F401
-    _write_three_run_runlevel_table,
-    _write_two_run_runlevel_table,
     _write_comparison_runlevel_table,
     _write_text,
     _write_management_summary,
@@ -388,7 +367,10 @@ def main(argv: list[str] | None = None) -> None:
     plot_layout = _plot_layout_from_cli(args)
     plot_target = args.plot_target
 
-    thresholds = [0.0, 1e-12, 1e-9, 1e-6, 1e-4, 1e-3, 1e-2, 2e-2, 5e-2, 1e-1, 2.5e-1, 5e-1, 1.0]
+    # R-10: the abs_tol sweep grid is owned by normalized/diff.py; derive it
+    # from the shared constant so the curve producer and the specific-tolerance
+    # consumers (_write_management_summary, aggregate.py) cannot silently drift.
+    thresholds = list(DEFAULT_ABS_TOL_THRESHOLDS)
     report_dpath = Path(args.report_dpath).expanduser().resolve()
     report_dpath.mkdir(parents=True, exist_ok=True)
     stamp = datetime_mod.datetime.now(datetime_mod.UTC).strftime('%Y%m%dT%H%M%SZ')

@@ -17,6 +17,7 @@ import pandas as pd
 
 from eval_audit.infra.api import default_report_root
 from eval_audit.infra.fs_publish import write_text_atomic
+from eval_audit.normalized.diff import assert_swept_tol
 from eval_audit.reports.core_packet_summary import (
     find_report_pair,
     load_core_report_packet,
@@ -88,11 +89,11 @@ def main(argv: list[str] | None = None) -> None:
         packet = load_core_report_packet(fpath.parent)
         repeat = _find_pair(report, 'local_repeat')
         official = _find_pair(report, 'official_vs_local')
-        repeat_agree_0 = _find_curve_value(repeat.get('instance_level', {}).get('agreement_vs_abs_tol', []), 0.0)
-        official_agree_0 = _find_curve_value(official.get('instance_level', {}).get('agreement_vs_abs_tol', []), 0.0)
-        official_agree_01 = _find_curve_value(official.get('instance_level', {}).get('agreement_vs_abs_tol', []), 0.1)
-        official_agree_025 = _find_curve_value(official.get('instance_level', {}).get('agreement_vs_abs_tol', []), 0.25)
-        official_agree_05 = _find_curve_value(official.get('instance_level', {}).get('agreement_vs_abs_tol', []), 0.5)
+        repeat_agree_0 = _find_curve_value(repeat.get('instance_level', {}).get('agreement_vs_abs_tol', []), assert_swept_tol(0.0))
+        official_agree_0 = _find_curve_value(official.get('instance_level', {}).get('agreement_vs_abs_tol', []), assert_swept_tol(0.0))
+        official_agree_01 = _find_curve_value(official.get('instance_level', {}).get('agreement_vs_abs_tol', []), assert_swept_tol(0.1))
+        official_agree_025 = _find_curve_value(official.get('instance_level', {}).get('agreement_vs_abs_tol', []), assert_swept_tol(0.25))
+        official_agree_05 = _find_curve_value(official.get('instance_level', {}).get('agreement_vs_abs_tol', []), assert_swept_tol(0.5))
         local_component = packet_local_reference_component(packet)
         official_component = packet_component_by_source_kind(packet, 'official_vs_local', 'official')
         rows.append({

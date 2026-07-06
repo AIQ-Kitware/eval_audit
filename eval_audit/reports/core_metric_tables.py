@@ -12,6 +12,7 @@ from typing import Any
 import pandas as pd
 from eval_audit.infra.fs_publish import link_alias, write_text_atomic
 from eval_audit.normalized import NormalizedRun
+from eval_audit.normalized.diff import assert_swept_tol
 from eval_audit.infra.profiling import profile
 from eval_audit.reports.core_metric_curves import (
     _find_curve_value,
@@ -19,87 +20,6 @@ from eval_audit.reports.core_metric_curves import (
     _metric_descriptor,
     _single_run_core_stat_index,
 )
-
-
-@profile
-def _write_three_run_runlevel_table(
-    out_dpath: Path,
-    stamp: str,
-    kwdagger_a_run: str,
-    kwdagger_b_run: str,
-    official_run: str,
-) -> tuple[Path, Path | None]:
-    idx_a = _single_run_core_stat_index(kwdagger_a_run)
-    idx_b = _single_run_core_stat_index(kwdagger_b_run)
-    idx_o = _single_run_core_stat_index(official_run)
-    keys = sorted(set(idx_a) & set(idx_b) & set(idx_o))
-    rows = []
-    for key in keys:
-        a = idx_a[key]
-        b = idx_b[key]
-        o = idx_o[key]
-        rows.append({
-            'stat_key': key,
-            'metric': a.metric,
-            'kwdagger_a': a.mean,
-            'kwdagger_b': b.mean,
-            'official': o.mean,
-            'delta_official_vs_kwdagger_a': None if a.mean is None or o.mean is None else abs(o.mean - a.mean),
-            'delta_kwdagger_a_vs_kwdagger_b': None if a.mean is None or b.mean is None else abs(a.mean - b.mean),
-        })
-    table = pd.DataFrame(rows)
-    csv_fpath = out_dpath / f'core_runlevel_table.csv'
-    md_fpath = out_dpath / f'core_runlevel_table.md'
-    table.to_csv(csv_fpath, index=False)
-    try:
-        # Split for line-profiler attribution: the markdown render is
-        # the dominant cost (it walks every cell to compute column
-        # widths), and we want it visible separately from the
-        # subsequent atomic write.
-        md_text = table.to_markdown(index=False)
-        md_payload = md_text + '\n'
-        write_text_atomic(md_fpath, md_payload)
-    except ImportError:
-        md_fpath = None
-    return csv_fpath, md_fpath
-
-
-@profile
-def _write_two_run_runlevel_table(
-    out_dpath: Path,
-    stamp: str,
-    kwdagger_run: str,
-    official_run: str,
-) -> tuple[Path, Path | None]:
-    idx_kw = _single_run_core_stat_index(kwdagger_run)
-    idx_off = _single_run_core_stat_index(official_run)
-    keys = sorted(set(idx_kw) & set(idx_off))
-    rows = []
-    for key in keys:
-        kw = idx_kw[key]
-        off = idx_off[key]
-        rows.append({
-            'stat_key': key,
-            'metric': kw.metric,
-            'kwdagger': kw.mean,
-            'official': off.mean,
-            'delta_official_vs_kwdagger': None if kw.mean is None or off.mean is None else abs(off.mean - kw.mean),
-        })
-    table = pd.DataFrame(rows)
-    csv_fpath = out_dpath / f'core_runlevel_table.csv'
-    md_fpath = out_dpath / f'core_runlevel_table.md'
-    table.to_csv(csv_fpath, index=False)
-    try:
-        # Split for line-profiler attribution: the markdown render is
-        # the dominant cost (it walks every cell to compute column
-        # widths), and we want it visible separately from the
-        # subsequent atomic write.
-        md_text = table.to_markdown(index=False)
-        md_payload = md_text + '\n'
-        write_text_atomic(md_fpath, md_payload)
-    except ImportError:
-        md_fpath = None
-    return csv_fpath, md_fpath
 
 
 @profile
@@ -320,7 +240,7 @@ def _write_management_summary(report: dict[str, Any], out_fpath: Path) -> None:
         lines.append(f"  run-level N: {local_repeat['run_level']['n_rows']}")
         lines.append(f"  instance-level N: {local_repeat['instance_level']['n_rows']}")
         lines.append(
-            f"  instance agreement at abs_tol=0.0: {_find_curve_value(local_repeat['instance_level']['agreement_vs_abs_tol'], 0.0)}"
+            f"  instance agreement at abs_tol=0.0: {_find_curve_value(local_repeat['instance_level']['agreement_vs_abs_tol'], assert_swept_tol(0.0))}"
         )
         lines.append(
             f"  run-level abs delta max: {local_repeat['run_level']['overall_quantiles']['abs_delta']['max']}"
@@ -350,7 +270,7 @@ def _write_management_summary(report: dict[str, Any], out_fpath: Path) -> None:
     for tol in [0.0, 1e-3, 1e-2, 1e-1, 2.5e-1, 5e-1, 1.0]:
         lines.append(
             f"  instance agreement at abs_tol={tol}: "
-            f"{_find_curve_value(official_vs_local['instance_level']['agreement_vs_abs_tol'], tol)}"
+            f"{_find_curve_value(official_vs_local['instance_level']['agreement_vs_abs_tol'], assert_swept_tol(tol))}"
         )
     lines.append(
         f"  run-level abs delta p90/max: "

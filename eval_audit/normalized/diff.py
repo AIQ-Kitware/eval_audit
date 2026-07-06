@@ -51,6 +51,24 @@ DEFAULT_ABS_TOL_THRESHOLDS = [
 ]
 
 
+def assert_swept_tol(abs_tol: float) -> float:
+    """Return ``abs_tol`` if it is a point in the default sweep grid, else raise.
+
+    R-10: the specific-tolerance headline lookups (``_write_management_summary``,
+    ``aggregate.py``) read the agreement curve by *exact* abs_tol match, so a
+    tolerance the curve never sampled silently blanks a headline column. This
+    guard makes that a loud failure instead — the paper's headline agreement
+    numbers must never quietly go blank.
+    """
+    if abs_tol not in DEFAULT_ABS_TOL_THRESHOLDS:
+        raise ValueError(
+            f"abs_tol={abs_tol!r} is not in the default sweep grid "
+            f"{DEFAULT_ABS_TOL_THRESHOLDS}; the agreement curve never sampled it, "
+            "so a headline agreement column would silently blank."
+        )
+    return abs_tol
+
+
 # ---------------------------------------------------------------------------
 # Row math (relocated verbatim from reports.core_metric_curves, which now
 # re-imports these — Phase 2's curves module keeps its public surface).
@@ -451,6 +469,7 @@ __all__ = [
     "DEFAULT_ABS_TOL_THRESHOLDS",
     "NormalizedDiff",
     "agreement_curve",
+    "assert_swept_tol",
     "facts_semantic_inputs",
     "group_quantiles",
     "judge_fact_status",

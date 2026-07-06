@@ -315,10 +315,10 @@ def _infer_run_spec_name(*run_paths: str) -> str:
     names = [n for n in names if n]
     if not names:
         return 'unknown_run_spec'
-    unique = sorted(set(names))
-    if len(unique) == 1:
-        return unique[0]
-    return unique[0]
+    # Deterministic pick across whatever run-dir basenames were passed. (The
+    # former ``if len(unique) == 1`` branch was dead: both arms returned the
+    # first sorted name.)
+    return sorted(set(names))[0]
 
 
 @profile
