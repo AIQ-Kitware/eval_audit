@@ -40,8 +40,9 @@ def test_helm_run_diff_heavy_demo_workflow():
     info = rd.summary_dict(level=20)
     assert info['run_spec_dict_ok'] is True
     assert info['scenario_ok'] in {True, None}
-    assert info['value_agreement']['overall']['mismatched'] == 0
-    assert info['value_agreement']['overall']['agree_ratio'] == 1.0
+    # R-2 (2026-07-06): value/instance agreement are no longer exposed on the
+    # summary dict; identical runs surface as a clean diagnosis (value drift is
+    # still consumed internally by the diagnosis).
     assert info['dataset_overlap']['base_iou'] == 1.0
     assert info['diagnosis']['label'] in {'reproduced', 'core_match_bookkeeping_drift'}
     json.dumps(info, allow_nan=False)
@@ -57,7 +58,8 @@ def test_helm_run_diff_heavy_demo_workflow():
 
     rd2 = HelmRunDiff(run_a, HelmRun(stats_path), a_name='orig', b_name='stats+1.23')
     info2 = rd2.summary_dict(level=20)
-    assert info2['value_agreement']['overall']['mismatched'] >= 1
+    # Run-level value drift is reflected in the diagnosis (the value agreement
+    # dict block was retired in R-2; the diagnosis still consumes it internally).
     assert info2['diagnosis']['label'] in {
         'core_metric_drift',
         'core_match_bookkeeping_drift',
@@ -65,26 +67,9 @@ def test_helm_run_diff_heavy_demo_workflow():
     }
     json.dumps(info2, allow_nan=False)
 
-    # Case 3: perturb one per-instance stat mean (if file exists)
-    inst_path = dpath / (run_a.path.name + '_perinstmod')
-    run_a.path.copy(inst_path)
-    pi_fpath = inst_path / 'per_instance_stats.json'
-    if pi_fpath.exists():
-        perinst = kwutil.Json.loads(pi_fpath.read_text())
-        ei, sj = 0, None
-        for j, stat in enumerate(perinst[ei]['stats']):
-            if int(stat.get('count', 0) or 0) and ('mean' in stat):
-                sj = j
-                break
-        assert sj is not None
-        old = float(perinst[ei]['stats'][sj]['mean'])
-        perinst[ei]['stats'][sj]['mean'] = old + 9.0
-        pi_fpath.write_text(kwutil.Json.dumps(perinst))
-
-        rd_i = HelmRunDiff(run_a, HelmRun(inst_path), a_name='orig', b_name='perinst+9')
-        inst_info = rd_i.instance_summary_dict(top_n=5)
-        assert inst_info['means']['mismatched'] >= 1
-        json.dumps(inst_info, allow_nan=False)
+    # R-2 (2026-07-06): the former Case 3 exercised the retired
+    # HelmRunDiff.instance_summary_dict; per-instance agreement now lives in
+    # NormalizedDiff (tests/test_phase3_normalized_diff.py).
 
     # Case 4: run-spec deployment change
     spec_path = dpath / (run_a.path.name + '_runspec_mod')

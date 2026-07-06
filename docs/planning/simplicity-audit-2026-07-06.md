@@ -121,6 +121,22 @@ Gate: `tests/test_end_to_end_summary.py` + `tests/test_eee_only_demo.py` artifac
 byte-identical before/after.
 
 ### Phase 7 — R-2: retire the legacy half of `helm/diff.py` (behavior-changing, last)
+
+**Status (2026-07-06): IMPLEMENTED.** `pair_report.py` + `pair_samples.py`
+migrated onto `NormalizedDiff`; the legacy agreement/tolerance methods
+(`value_distance_profile`, `instance_summary_dict`, `instance_distance_profile`,
+`tolerance_sweep_summary`, `summarize_instances`) deleted; `summary_dict`/`summary`
+slimmed to stop reporting value/instance agreement (`_value_agreement_summary`
+kept solely as the diagnosis's value-drift input). `helm/diff.py` 1701→839 lines.
+Diagnosis path byte-identical (eee_only_demo characterization: 0 content diffs
+beyond the run-to-run noise floor). Intentional deltas (core-only per-metric-handle
+join; abs-only tolerance) documented in `docs/eee-vs-helm-metadata.md` (IM-13).
+`helm_compat.py` unchanged — all three exports retain live consumers
+(`compare_batch` uses `helm_view_from_path`; `core_metric_curves`/`pair_report`
+use `helm_view`). Tests: removed `test_instance_summary_serializable` +
+`test_perturbed_and_unperturbed_rows_bucket_separately` (pinned deleted methods),
+updated `test_helm_run_diff_heavy` + the module doctest.
+
 1. Migrate `pair_report.py` + `pair_samples.py` onto `NormalizedDiff` (`value_summary`,
    `run_level_summary`, `instance_level_summary`, `per_metric_curves`, `diagnosis`),
    validated against the phase3 behavior-equivalence matrix and
