@@ -122,11 +122,23 @@ class ServeRecipe:
             args += ["--no-enable-prefix-caching"]
         return args
 
+    @property
+    def effective_max_num_batched_tokens(self) -> int:
+        """vLLM requires ``max_num_batched_tokens >= max_model_len`` when chunked
+        prefill is OFF (hf-match disables it) — else it refuses to start with
+        "max_num_batched_tokens (N) is smaller than max_model_len (M)". Raise it
+        to the context window in that case; with chunked prefill on, vLLM allows
+        the smaller value, so leave it untouched (default grid unchanged)."""
+        mnbt = int(self.runtime["max_num_batched_tokens"])
+        if not self.runtime.get("enable_chunked_prefill", True):
+            return max(mnbt, int(self.max_model_len))
+        return mnbt
+
     def endpoint_dict(self, protocol: str) -> dict[str, Any]:
         rt = {
             "max_model_len": self.max_model_len,
             "gpu_memory_utilization": self.runtime["gpu_memory_utilization"],
-            "max_num_batched_tokens": self.runtime["max_num_batched_tokens"],
+            "max_num_batched_tokens": self.effective_max_num_batched_tokens,
             "max_num_seqs": self.runtime["max_num_seqs"],
             "extra_args": self.extra_args(),
         }
@@ -258,6 +270,15 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
     attn_values = [None if a in (None, "auto", "default", "none", "") else str(a)
                    for a in axes["attention_backend"]]
 
+    # vLLM needs max_num_batched_tokens >= max_model_len when chunked prefill is
+    # off (hf-match); ServeRecipe raises it per-recipe — note when that happens.
+    base_mnbt = int(runtime["max_num_batched_tokens"])
+    if not runtime.get("enable_chunked_prefill", True) and base_mnbt < max(mml_values):
+        notes.append(
+            f"max_num_batched_tokens raised {base_mnbt} -> max_model_len "
+            f"(up to {max(mml_values)}): vLLM requires it >= max_model_len when "
+            "chunked prefill is disabled")
+
     # ---- Tier A: serve recipes (dtype x tokenizer x max_model_len x trc x attn) ----
     serve: list[ServeRecipe] = []
     seen: set[str] = set()
@@ -306,7 +327,7 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
                        # reproduce (esp. max_num_seqs — batch invariance).
                        "max_num_seqs": sr.runtime["max_num_seqs"],
                        "gpu_memory_utilization": sr.runtime["gpu_memory_utilization"],
-                       "max_num_batched_tokens": sr.runtime["max_num_batched_tokens"],
+                       "max_num_batched_tokens": sr.effective_max_num_batched_tokens,
                        "extra_args": sr.extra_args()},
                 request={"add_special_tokens": rv.add_special_tokens,
                          "protocol": rv.protocol},

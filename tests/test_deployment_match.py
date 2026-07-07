@@ -205,6 +205,29 @@ def test_attention_backend_axis_widens_and_names_endpoints():
     assert {s.attention_backend for s in g.serve_recipes} == {"TORCH_SDPA", "FLASH_ATTN"}
 
 
+def test_hf_match_raises_max_num_batched_tokens_to_model_len():
+    """Regression: hf-match disables chunked prefill, so vLLM refuses to start
+    unless max_num_batched_tokens >= max_model_len ('... is smaller than
+    max_model_len'). The grid must raise it (OLMoE: mml 4096 vs default 2048)."""
+    res = _resolution(official_max_sequence_length=4096, hf_max_position_embeddings=4096,
+                      tokenizer_appends_special=False, tokenizer_sibling=None)
+    g = grid_mod.build_grid(res, spec=grid_mod.BUILTIN_PROFILES["hf-match"])
+    for sr in g.serve_recipes:
+        assert sr.max_model_len == 4096
+        ep_rt = sr.endpoint_dict("completions")["runtime"]
+        assert ep_rt["max_num_batched_tokens"] >= ep_rt["max_model_len"]   # 4096, not 2048
+    assert any("max_num_batched_tokens raised" in n for n in g.notes)
+
+
+def test_default_grid_keeps_small_max_num_batched_tokens():
+    """With chunked prefill ON (default grid) vLLM allows the smaller value, so
+    don't raise it — the default grid stays byte-for-byte unchanged."""
+    res = _resolution(official_max_sequence_length=4096, hf_max_position_embeddings=4096)
+    g = grid_mod.build_grid(res)
+    for sr in g.serve_recipes:
+        assert sr.endpoint_dict("completions")["runtime"]["max_num_batched_tokens"] == 2048
+
+
 def _best_from_cell(cell, resolution):
     scored = [{"cell_id": cell.cell_id, "composite": 1.0, "verdict": "MATCH",
                "request": cell.request, "quasi_match_rate": 1.0,
