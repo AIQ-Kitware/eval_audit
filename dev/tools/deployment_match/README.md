@@ -33,6 +33,7 @@ outputs.** This tool is that sweep, made general.
 | `report.py`   | ranking table, per-instance snippet matrix, `best_deployment.yaml` |
 | `serve.py`    | Phase 2 driver: two-tier acquire→probe→release over the grid (infer-stack + `probe`) |
 | `confirm.py`  | Phase 3: winning single-cell catalog + plan + `build_pair_report(official, local)` |
+| `compare_prompt.py` | diagnostic: reconstruct HELM's `get_prompt` (chat template + tokenization) for one grid cell and diff vs a live vLLM `/tokenize` — localizes a prompt/template/BOS mismatch |
 | `cli.py`      | `auto` (one-shot) · `sample` / `grid` / `dry-run` / `run` / `score` / `confirm` / `selftest` |
 
 Stdlib-only core; `eval_audit` (request_state_diff, presets) and `infer_stack`

@@ -21,6 +21,7 @@ if str(TOOL) not in sys.path:
     sys.path.insert(0, str(TOOL))
 
 import cli as cli_mod            # noqa: E402
+import compare_prompt as cmp_mod  # noqa: E402
 import confirm as confirm_mod    # noqa: E402
 import grid as grid_mod          # noqa: E402
 import oracle as oracle_mod      # noqa: E402
@@ -387,6 +388,18 @@ def test_score_ranks_match_over_collapse():
 
 def test_score_selftest_passes():
     assert score_mod.selftest() == 0
+
+
+# --------------------------------------------------------------------------- #
+# compare_prompt: token-sequence divergence helper
+# --------------------------------------------------------------------------- #
+def test_first_divergence():
+    fd = cmp_mod.first_divergence
+    assert fd([1, 2, 3], [1, 2, 3]) is None          # identical
+    assert fd([1, 2, 3], [9, 2, 3]) == 0             # differ at 0 (e.g. leading BOS)
+    assert fd([1, 2, 3], [1, 2, 9]) == 2
+    assert fd([1, 2], [1, 2, 3]) == 2                # prefix -> shorter length
+    assert fd([1, 2, 3], [1, 2]) == 2
 
 
 # --------------------------------------------------------------------------- #

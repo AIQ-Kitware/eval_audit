@@ -271,16 +271,28 @@ template), two options:
   View with the infer-stack TUI logs pane or `docker compose logs <vllm-service>`.
   (`--extra-serve-args '<flags>'` passes arbitrary `vllm serve` args if your vLLM
   spells the flag differently.)
-- **`/tokenize` endpoint (surgical — no generation, no truncation).** POST the
-  messages and read back exactly what vLLM renders, then diff against HELM's
-  `apply_chat_template`:
+- **`compare_prompt.py` (does the diff for you).** Reconstructs HELM's `get_prompt`
+  (chat template + `add_special_tokens=True` tokenization) for one grid cell and,
+  with a live vLLM `/tokenize` URL, diffs the exact token-id sequences — printing
+  the first divergence:
   ```bash
-  curl -s localhost:<port>/tokenize -H 'Content-Type: application/json' -d '{
+  # local reconstruction only (no GPU): shows the render + BOS/add_special_tokens effect
+  .venv/bin/python dev/tools/deployment_match/compare_prompt.py \
+      --grid-dir /tmp/dm-olmoe --cell '<cell_id>'
+  # authoritative: diff against what a served endpoint tokenizes
+  ... --tokenize-url http://<vllm-host>:<port>/tokenize --served-model <name>
+  ```
+  For OLMoE-instruct this shows the chat template already embeds the BOS
+  (`bos_token = |||IP_ADDRESS|||`), so `add_special_tokens` is a **no-op** under
+  chat — i.e. BOS is not the confound, consistent with the chaotic-tail
+  explanation above.
+- **`/tokenize` by hand** — the same query, if you prefer curl:
+  ```bash
+  curl -s http://<vllm-host>:<port>/tokenize -H 'Content-Type: application/json' -d '{
     "model": "<served-name>",
     "messages": [{"role":"user","content":"<request.prompt from oracle.json>"}],
     "add_generation_prompt": true
   }' | jq
-  # compare with: tokenizer.apply_chat_template([{...}], add_generation_prompt=True)
   ```
 
 ## Still open (not in the minimal example)
