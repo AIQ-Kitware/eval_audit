@@ -157,9 +157,15 @@ overrides it per key.
   out because vLLM selects it via the `VLLM_ATTENTION_BACKEND` **env var**, not a
   `vllm serve` flag — sweeping it needs per-endpoint env plumbing in infer-stack,
   which is more than a minimal fold-in. This is the highest-value remaining knob.
-- Extend [`probe.py` `_recipe_body`](../dev/tools/deployment_match/probe.py) to
-  replay the full official `SamplingParameters` (top_k, penalties, seed, n) so
-  request-time faithfulness matches serve-time faithfulness.
+- **Full sampling replay — deliberately NOT done.** Replaying the entire official
+  `SamplingParameters` in [`probe.py` `_recipe_body`](../dev/tools/deployment_match/probe.py)
+  would mean honoring `n`/`best_of` > 1, which multiplies every cell's generation
+  cost across the whole grid — too slow for a *cheap ranking* pass. The probe
+  stays single-completion greedy (`max_tokens`/`temperature`/`stop`/`top_p`),
+  which already reproduces the common HELM case (`temperature=0`, `n=1`); the
+  winner is confirmed authoritatively by the full `compare-pair` regardless. (The
+  zero-runtime-cost params — `top_k`/penalties/`seed` — could still be forwarded
+  if a non-greedy scenario ever needs them, but that is not on by default.)
 - Propagate the winning runtime + determinism constants through
   [`confirm.py` `_winner_catalog`](../dev/tools/deployment_match/confirm.py) (it
   still re-hardcodes `max_num_seqs=16` etc.), so the *confirm* catalog is a
