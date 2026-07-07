@@ -57,14 +57,16 @@ on theory.
 To search for the vLLM recipe that best matches a HELM **`HuggingFaceClient`**
 run (official = local `transformers.generate()`), pass `--profile hf-match`. It
 pins the vLLM engine's determinism knobs — `--enforce-eager
---no-enable-chunked-prefill --no-enable-prefix-caching --max-num-seqs=1` plus
-`VLLM_ATTENTION_BACKEND=TORCH_SDPA` (HF's default `attn_implementation`) — so the
-sweep varies only the recipe HELM itself could (dtype / tokenizer /
-add_special_tokens), not vLLM's scheduler. The attention backend is a first-class
-infer-stack endpoint option (`runtime.attention_backend`); widen it to an axis
-with `--grid {axes: {attention_backend: [TORCH_SDPA, FLASH_ATTN]}}` to search it.
-The profile merges *under* any `--grid` YAML, and warns if the official
-`client_class` isn't HuggingFace. Full rationale + still-open knobs:
+--no-enable-chunked-prefill --no-enable-prefix-caching --max-num-seqs=1`
+(confounder-removal HF has no equivalent of) — while **sweeping** the attention
+backend `VLLM_ATTENTION_BACKEND` over `{default, FLASH_ATTN, XFORMERS,
+TORCH_SDPA}`, since which one reproduces HF is empirical. So the search varies
+dtype / tokenizer / add_special_tokens / attention_backend, not vLLM's scheduler.
+The attention backend is a first-class infer-stack endpoint option
+(`runtime.attention_backend`); narrow the set with
+`--grid {axes: {attention_backend: [...]}}`. The profile merges *under* any
+`--grid` YAML, and warns if the official `client_class` isn't HuggingFace. Full
+rationale + still-open knobs:
 [`docs/vllm-vs-huggingface-deployment-match.md`](../../../docs/vllm-vs-huggingface-deployment-match.md).
 
 ## Usage

@@ -62,12 +62,19 @@ BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
             "enable_prefix_caching": False,   # no cross-request KV reuse
             "max_num_seqs": 1,                # serialize: vLLM kernels aren't batch-invariant
         },
-        # Pin the attention backend to torch SDPA — HF transformers' default
-        # attn_implementation for most models — rather than vLLM's FlashAttention
-        # kernels. A single value (not a swept axis), so the cell count is
-        # unchanged; widen it via --grid {axes: {attention_backend: [...]}} to
-        # search backends empirically.
-        "axes": {"attention_backend": ["TORCH_SDPA"]},
+        # The determinism knobs above are confounder-removal (HF has no
+        # CUDA-graphs / chunked-prefill / prefix-cache / batching), so they are
+        # pinned. The attention backend, by contrast, is NOT known on theory —
+        # matching HF's numerics is empirical (a backend NAME match doesn't imply
+        # a kernel-numeric match, and HF's own default is version/model-dependent)
+        # — so SWEEP it and let the scorer decide. None = vLLM's own default
+        # (usually FlashAttention) as the baseline. A backend that can't serve on
+        # this GPU just scores NO_DATA and drops out. Each value is a separate
+        # `vllm serve`, so this multiplies the (expensive) endpoint count.
+        "axes": {"attention_backend": [None, "FLASH_ATTN", "XFORMERS", "TORCH_SDPA"]},
+        # 4 backends x 4 dtype (x tokenizer variants) can exceed the default 64
+        # cap; raise it so no backend is silently truncated.
+        "cap": 128,
     },
 }
 

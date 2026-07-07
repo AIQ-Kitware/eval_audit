@@ -58,7 +58,7 @@ decoding diverges from HF.
 
 | Knob | Why it matters | Current state |
 |---|---|---|
-| **Attention backend** (`VLLM_ATTENTION_BACKEND`: FLASH_ATTN / FLASHINFER / XFORMERS / TORCH_SDPA) | The single largest numeric divergence. HF's `attn_implementation` (eager/sdpa/flash_attention_2) computes attention differently than vLLM's PagedAttention kernels. TORCH_SDPA/XFORMERS is closer to HF-eager than FLASH_ATTN. | **Implemented** — infer-stack `runtime.attention_backend` endpoint option; `hf-match` pins `TORCH_SDPA` (widen the axis to sweep) |
+| **Attention backend** (`VLLM_ATTENTION_BACKEND`: FLASH_ATTN / FLASHINFER / XFORMERS / TORCH_SDPA) | The single largest numeric divergence. HF's `attn_implementation` (eager/sdpa/flash_attention_2) computes attention differently than vLLM's PagedAttention kernels. Which one reproduces HF is **empirical** — a backend *name* match doesn't imply a kernel-numeric match, and HF's own default is version/model-dependent. | **Implemented** — infer-stack `runtime.attention_backend` endpoint option; `hf-match` **sweeps** `{None (vLLM default), FLASH_ATTN, XFORMERS, TORCH_SDPA}` and lets the scorer decide |
 | **Chunked prefill** (`enable_chunked_prefill`) | vLLM V1 defaults it ON; it splits prefill across steps → different logits than HF's single-pass prefill. | **Not controlled** — force **off** to match HF |
 | **Prefix caching** (`enable_prefix_caching`) | vLLM V1 defaults ON; reused KV blocks perturb numerics and make output order-dependent. HF has none. | **Not controlled** — force **off** |
 | **`tensor_parallel_size`** | TP>1 changes all-reduce order → differs from single-GPU HF. | infer-stack picks GPUs; **pin TP=1** if official was single-GPU HF |
@@ -136,19 +136,24 @@ DM_PROFILE=hf-match \
 
 What it does ([`grid.py` `BUILTIN_PROFILES["hf-match"]`](../dev/tools/deployment_match/grid.py)):
 
-- Pins the determinism knobs as **fixed constants** (known-correct → not swept):
-  `enforce_eager=True`, `enable_chunked_prefill=False`,
-  `enable_prefix_caching=False`, `max_num_seqs=1`, and
-  `attention_backend=TORCH_SDPA` (HF transformers' default `attn_implementation`
-  for most models). The first four render as `--enforce-eager
-  --no-enable-chunked-prefill --no-enable-prefix-caching --max-num-seqs=1` on each
-  `vllm serve` line; the backend is forwarded as the `VLLM_ATTENTION_BACKEND` env
-  var (see below), not a flag. infer-stack already emits `--tensor-parallel-size=1`
-  for a single GPU, and `kv_cache_dtype` stays `auto`.
-- Leaves `dtype`, `tokenizer`, and `add_special_tokens` as the search axes — the
-  recipe knobs HELM itself could vary. The attention backend is *pinned* (single
-  value, no cell increase); widen it to a real axis with
-  `--grid` `{axes: {attention_backend: [TORCH_SDPA, FLASH_ATTN]}}` to search it.
+- Pins the **determinism knobs** as fixed constants — `enforce_eager=True`,
+  `enable_chunked_prefill=False`, `enable_prefix_caching=False`, `max_num_seqs=1`.
+  These are *confounder-removal*, not value-matching: HF has no CUDA-graphs,
+  chunked prefill, prefix cache, or in-flight batching, so disabling them moves
+  vLLM toward HF regardless of model — high-confidence, so not swept. They render
+  as `--enforce-eager --no-enable-chunked-prefill --no-enable-prefix-caching
+  --max-num-seqs=1`. infer-stack already emits `--tensor-parallel-size=1` for a
+  single GPU, and `kv_cache_dtype` stays `auto`.
+- **Sweeps** `attention_backend` over `{None (vLLM default), FLASH_ATTN, XFORMERS,
+  TORCH_SDPA}`. Unlike the determinism knobs, the HF-matching backend is *not*
+  known on theory (a backend name-match doesn't imply kernel-numeric equality, and
+  vLLM's `TORCH_SDPA` may be a poor GPU path on some versions), so the scorer
+  decides empirically — consistent with the tool's "sweep, don't prune on theory"
+  design. A backend that can't serve just scores `NO_DATA` and drops out. Each
+  value is a separate `vllm serve`, so the profile raises the cell `cap` to 128.
+- Leaves `dtype`, `tokenizer`, and `add_special_tokens` as the other search axes —
+  the recipe knobs HELM itself could vary. Narrow the backend set (or any axis)
+  with `--grid {axes: {attention_backend: [...]}}`.
 - [`cli.py` `_warn_if_not_hf_client`](../dev/tools/deployment_match/cli.py) warns
   when the resolved `official_client_class` is not a `HuggingFaceClient` (or is
   unknown), so the profile isn't silently used against a hosted-API official.

@@ -162,23 +162,26 @@ def test_default_grid_keeps_vllm_defaults():
         assert "--no-enable-prefix-caching" not in ea
 
 
-def test_hf_match_profile_pins_determinism_knobs():
+def test_hf_match_profile_pins_determinism_and_sweeps_attention():
     spec = grid_mod.BUILTIN_PROFILES["hf-match"]
     g = grid_mod.build_grid(_resolution(), spec=spec)
     for sr in g.serve_recipes:
         ea = sr.extra_args()
+        # determinism knobs are pinned on every recipe (confounder-removal)
         assert "--enforce-eager" in ea
         assert "--no-enable-chunked-prefill" in ea
         assert "--no-enable-prefix-caching" in ea
         assert sr.runtime["max_num_seqs"] == 1
-        # HF-eager's default attention backend, pinned (single value, not swept)
-        assert sr.attention_backend == "TORCH_SDPA"
+    # the attention backend is SWEPT, not pinned: vLLM default (None) + 3 backends
+    assert {sr.attention_backend for sr in g.serve_recipes} == {
+        None, "FLASH_ATTN", "XFORMERS", "TORCH_SDPA"}
     # the determinism activation is surfaced as a grid note
     assert any("hf-match" in n for n in g.notes)
-    # and it reaches the infer-stack catalog endpoint (serialized batching + backend)
-    ep = g.serve_recipes[0].endpoint_dict("completions")
+    # a backend-bearing recipe carries it through to the catalog endpoint runtime
+    sr_attn = next(sr for sr in g.serve_recipes if sr.attention_backend)
+    ep = sr_attn.endpoint_dict("completions")
     assert ep["runtime"]["max_num_seqs"] == 1
-    assert ep["runtime"]["attention_backend"] == "TORCH_SDPA"
+    assert ep["runtime"]["attention_backend"] == sr_attn.attention_backend
 
 
 def test_default_grid_omits_attention_backend():
@@ -217,14 +220,16 @@ def test_confirm_catalog_reproduces_winning_max_num_seqs():
     grid defaults."""
     res = _resolution()
     g = grid_mod.build_grid(res, spec=grid_mod.BUILTIN_PROFILES["hf-match"])
-    cell = g.cells[0]
+    # pick a cell whose serve-recipe carries an attention backend, so we verify
+    # both the max_num_seqs (Gap-1) and the backend propagation in one pass.
+    cell = next(c for c in g.cells if c.serve["attention_backend"])
     assert cell.serve["max_num_seqs"] == 1                  # threaded into Cell.serve
     best = _best_from_cell(cell, res)
     assert best["serve_time_knobs"]["max_num_seqs"] == 1    # captured in the report
     cat = confirm_mod._winner_catalog(best)
     rt = cat["endpoints"][next(iter(cat["endpoints"]))]["runtime"]
     assert rt["max_num_seqs"] == 1                          # reproduced, not hardcoded 16
-    assert rt["attention_backend"] == "TORCH_SDPA"
+    assert rt["attention_backend"] == cell.serve["attention_backend"]
 
 
 def test_confirm_catalog_falls_back_for_legacy_best_deployment():
