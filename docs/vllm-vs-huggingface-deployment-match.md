@@ -74,7 +74,7 @@ handled.
 | Knob | Why it matters |
 |---|---|
 | **`tokenizer_mode`** (fast vs slow) | If HELM's HF client used a slow tokenizer (`use_fast=False`), fast-vs-slow can differ on edge tokens. The grid varies tokenizer *identity* but not fast/slow mode. |
-| **Chat-template / protocol** (instruct models) — *the OLMoE-ifeval uniform-miss bug* | **A `HuggingFaceClient` run is a text-completion**: it tokenizes `request.prompt` **verbatim** and generates. The oracle captured that exact prompt. If the grid resolves an instruct model to `protocol=chat`, the probe sends it to `/chat/completions`, which **re-applies the chat template on top of the already-formatted prompt** → the model sees a different input on *every* cell → uniformly low match, and no dtype/backend/tokenizer knob can fix it. **Fixed:** `hf-match` now pins `protocol=completions` (send the recorded prompt as-is); a resolved `chat` is overridden with a loud note. `chat` is only correct when the official client itself was a chat-completions server. |
+| **Chat-template / protocol** (instruct models) | **`HuggingFaceClient` applies the tokenizer's chat template** when the model has one — `apply_chat_template` auto-infers `True` from `tokenizer.chat_template` ([huggingface_client.py](../submodules/helm/src/helm/clients/huggingface_client.py) `get_prompt`), so for OLMoE-instruct the official model saw `apply_chat_template([{role:user, content: request.prompt}], add_generation_prompt=True)`, tokenized with `add_special_tokens=True`. `scenario_state` stores the **raw** `request.prompt`, not that templated string. So: an instruct model must be reproduced **with** the template (resolved `protocol=chat`, where vLLM re-applies the same template — *not* by sending the raw prompt via completions). A base model (no chat template → `apply_chat_template=False`) is the verbatim-completions case. The per-model protocol resolution already picks correctly; **do not force completions on a chat model.** For byte-exact control, replicate `get_prompt` (apply the template in-tool, send via completions with `add_special_tokens=True`) — an open enhancement. |
 | **`skip_special_tokens` / `spaces_between_special_tokens`** (detokenization) | These change the output *text string that gets scored*, independent of token ids — a source of scoring mismatches even when generation matched. |
 
 ## Tier C — sampling replay (request-time; a concrete probe gap)
@@ -154,11 +154,11 @@ What it does ([`grid.py` `BUILTIN_PROFILES["hf-match"]`](../dev/tools/deployment
 - Leaves `dtype`, `tokenizer`, and `add_special_tokens` as the other search axes —
   the recipe knobs HELM itself could vary. Narrow the backend set (or any axis)
   with `--grid {axes: {attention_backend: [...]}}`.
-- **Pins `protocol=completions`.** A `HuggingFaceClient` official is a
-  text-completion (it tokenizes `request.prompt` verbatim), so the probe must send
-  the recorded prompt as-is — never re-template an instruct model through
-  `/chat/completions`. This overrides a resolved `chat` (with a note); it is the
-  fix for the OLMoE-ifeval case where every cell missed uniformly.
+- **Keeps the per-model resolved protocol** (does *not* force completions). HELM's
+  `HuggingFaceClient` applies the tokenizer's chat template for chat models, so an
+  instruct model like OLMoE-instruct must be reproduced *with* the template
+  (resolved `chat`); a base model uses completions. See the Tier-B row above and
+  "Why the OLMoE-ifeval sweep can't localize the difference" below.
 - [`cli.py` `_warn_if_not_hf_client`](../dev/tools/deployment_match/cli.py) warns
   when the resolved `official_client_class` is not a `HuggingFaceClient` (or is
   unknown), so the profile isn't silently used against a hosted-API official.
@@ -230,6 +230,35 @@ beforehand" splits into two kinds, treated oppositely:
   caution — if a backend's outputs look wrong, re-check with chunked prefill left
   on (`--grid {runtime: {enable_chunked_prefill: true}}`). The scorer's
   `collapse`/`NO_DATA` verdicts catch gross breakage, not subtle numeric drift.
+
+## Why the OLMoE-ifeval sweep can't localize the difference
+
+Two compounding reasons, beyond any single knob:
+
+1. **Long-form greedy generation is chaotic.** ifeval generates up to 2048 tokens.
+   Greedy decoding is deterministic *given identical logits*, but the smallest
+   cross-engine logit difference (dtype/kernel/attention-backend — the very things
+   we sweep) flips one argmax, and from that token on the two sequences **diverge
+   and never resync**. So two "correct" runs can share the first N tokens and
+   differ on the remaining ~2000. Exact text reproduction of long-form generation
+   across vLLM↔HF is essentially infeasible — unlike short-answer QA (narrative_qa's
+   " Diana"), which is 1–3 robust tokens. The tool was built for the QA case.
+2. **The scorer is QA-tuned.** `composite` = quasi (SQuAD exact-match) 0.45 +
+   first-word 0.35 + similarity 0.20. On a 2000-token ifeval response quasi≈0 and
+   first-word is a coin-flip, so even a faithful recipe scores low. `similarity`
+   is the only long-form-meaningful term, and chaotic divergence drags it down too.
+
+**Implications for using the tool on long-form benchmarks:**
+
+- Prefer a **short-answer benchmark to *find* the recipe** (MMLU/narrative_qa,
+  where reproduction is tractable and the scorer discriminates), then apply the
+  winning serve-recipe to the long-form run.
+- Judge long-form reproduction by the **benchmark's own metric** (ifeval's
+  instruction-following pass rate via the real `analyze-experiment`/`compare-pair`
+  pipeline), not raw completion-text similarity — two different-but-valid responses
+  can both pass ifeval while sharing little text.
+- If you must score text on long-form, weight **first-token / first-K-token**
+  agreement (robust to the chaotic tail) over full-string similarity.
 
 ## Still open (not in the minimal example)
 

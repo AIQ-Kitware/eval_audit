@@ -72,14 +72,15 @@ BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
         # this GPU just scores NO_DATA and drops out. Each value is a separate
         # `vllm serve`, so this multiplies the (expensive) endpoint count.
         "axes": {"attention_backend": [None, "FLASH_ATTN", "XFORMERS", "TORCH_SDPA"]},
-        # Force COMPLETIONS. A HuggingFaceClient run (what hf-match targets) is a
-        # text-completion: it tokenizes request.prompt verbatim and generates. The
-        # oracle captured that exact prompt, so we must send it as-is via
-        # /completions. Resolving an instruct model to /chat/completions would
-        # re-apply the chat template on top of the already-formatted prompt and
-        # diverge on every cell — the confound no serving knob can fix.
-        "axes": {"attention_backend": [None, "FLASH_ATTN", "XFORMERS", "TORCH_SDPA"],
-                 "protocol": ["completions"]},
+        # NB protocol is NOT pinned here. HELM's HuggingFaceClient applies the
+        # tokenizer's chat template when the model has one (auto-inferred; OLMoE
+        # -instruct -> True), so the official model saw a CHAT-templated prompt
+        # while scenario_state stored the raw request.prompt. The per-model
+        # resolution already picks chat for such instruct models (vLLM re-applies
+        # the same template) and completions for base models — sending the raw
+        # prompt verbatim would be wrong for a chat model. See
+        # docs/vllm-vs-huggingface-deployment-match.md.
+        "axes": {"attention_backend": [None, "FLASH_ATTN", "XFORMERS", "TORCH_SDPA"]},
         # 4 backends x 4 dtype (x tokenizer variants) can exceed the default 64
         # cap; raise it so no backend is silently truncated.
         "cap": 128,
@@ -297,15 +298,6 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
 
     mml_values = [default_mml if m in ("auto", None) else int(m) for m in axes["max_model_len"]]
     proto_values = [resolution.protocol if p in ("auto", None) else str(p) for p in axes["protocol"]]
-    # Reproducing a HuggingFaceClient run is a text-completion: send the recorded
-    # prompt verbatim via /completions. Re-templating an instruct model through
-    # /chat/completions changes the prompt on EVERY cell (a confound no serving
-    # knob fixes), so flag when we override a resolved 'chat' down to completions.
-    if getattr(resolution, "protocol", None) == "chat" and proto_values == ["completions"]:
-        notes.append(
-            "protocol forced to completions (resolved was 'chat'): a HuggingFaceClient "
-            "official tokenizes request.prompt verbatim — /chat/completions would "
-            "re-apply the chat template and diverge on every cell")
     # None / 'auto' / 'default' => leave vLLM's own backend; else the env value.
     attn_values = [None if a in (None, "auto", "default", "none", "") else str(a)
                    for a in axes["attention_backend"]]
