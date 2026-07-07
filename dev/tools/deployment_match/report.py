@@ -99,6 +99,7 @@ def best_deployment(scored: list[dict[str, Any]], cells_by_id: dict[str, dict[st
             "tokenizer": serve.get("tokenizer"),
             "max_model_len": serve.get("max_model_len"),
             "trust_remote_code": serve.get("trust_remote_code"),
+            "attention_backend": serve.get("attention_backend"),
             "extra_args": serve.get("extra_args"),
         },
         "request_time_knobs": {

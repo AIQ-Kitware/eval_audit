@@ -43,6 +43,9 @@ def _winner_catalog(best: dict[str, Any]) -> dict[str, Any]:
     }
     if serve.get("trust_remote_code"):
         runtime["trust_remote_code"] = True
+    if serve.get("attention_backend"):
+        # infer-stack forwards this as VLLM_ATTENTION_BACKEND (see compose backend).
+        runtime["attention_backend"] = serve["attention_backend"]
     return {
         "models": {"target": {"source": f"hf://{serve.get('hf_source')}"}},
         "endpoints": {endpoint: {"engine": "vllm", "reclaim": "stop",

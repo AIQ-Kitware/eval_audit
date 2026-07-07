@@ -58,7 +58,7 @@ decoding diverges from HF.
 
 | Knob | Why it matters | Current state |
 |---|---|---|
-| **Attention backend** (`VLLM_ATTENTION_BACKEND`: FLASH_ATTN / FLASHINFER / XFORMERS / TORCH_SDPA) | The single largest numeric divergence. HF's `attn_implementation` (eager/sdpa/flash_attention_2) computes attention differently than vLLM's PagedAttention kernels. TORCH_SDPA/XFORMERS is closer to HF-eager than FLASH_ATTN. | **Not swept** — worth an axis |
+| **Attention backend** (`VLLM_ATTENTION_BACKEND`: FLASH_ATTN / FLASHINFER / XFORMERS / TORCH_SDPA) | The single largest numeric divergence. HF's `attn_implementation` (eager/sdpa/flash_attention_2) computes attention differently than vLLM's PagedAttention kernels. TORCH_SDPA/XFORMERS is closer to HF-eager than FLASH_ATTN. | **Implemented** — infer-stack `runtime.attention_backend` endpoint option; `hf-match` pins `TORCH_SDPA` (widen the axis to sweep) |
 | **Chunked prefill** (`enable_chunked_prefill`) | vLLM V1 defaults it ON; it splits prefill across steps → different logits than HF's single-pass prefill. | **Not controlled** — force **off** to match HF |
 | **Prefix caching** (`enable_prefix_caching`) | vLLM V1 defaults ON; reused KV blocks perturb numerics and make output order-dependent. HF has none. | **Not controlled** — force **off** |
 | **`tensor_parallel_size`** | TP>1 changes all-reduce order → differs from single-GPU HF. | infer-stack picks GPUs; **pin TP=1** if official was single-GPU HF |
@@ -138,12 +138,17 @@ What it does ([`grid.py` `BUILTIN_PROFILES["hf-match"]`](../dev/tools/deployment
 
 - Pins the determinism knobs as **fixed constants** (known-correct → not swept):
   `enforce_eager=True`, `enable_chunked_prefill=False`,
-  `enable_prefix_caching=False`, `max_num_seqs=1`. These render as
-  `--enforce-eager --no-enable-chunked-prefill --no-enable-prefix-caching
-  --max-num-seqs=1` on each `vllm serve` line; infer-stack already emits
-  `--tensor-parallel-size=1` for a single GPU, and `kv_cache_dtype` stays `auto`.
+  `enable_prefix_caching=False`, `max_num_seqs=1`, and
+  `attention_backend=TORCH_SDPA` (HF transformers' default `attn_implementation`
+  for most models). The first four render as `--enforce-eager
+  --no-enable-chunked-prefill --no-enable-prefix-caching --max-num-seqs=1` on each
+  `vllm serve` line; the backend is forwarded as the `VLLM_ATTENTION_BACKEND` env
+  var (see below), not a flag. infer-stack already emits `--tensor-parallel-size=1`
+  for a single GPU, and `kv_cache_dtype` stays `auto`.
 - Leaves `dtype`, `tokenizer`, and `add_special_tokens` as the search axes — the
-  recipe knobs HELM itself could vary.
+  recipe knobs HELM itself could vary. The attention backend is *pinned* (single
+  value, no cell increase); widen it to a real axis with
+  `--grid` `{axes: {attention_backend: [TORCH_SDPA, FLASH_ATTN]}}` to search it.
 - [`cli.py` `_warn_if_not_hf_client`](../dev/tools/deployment_match/cli.py) warns
   when the resolved `official_client_class` is not a `HuggingFaceClient` (or is
   unknown), so the profile isn't silently used against a hosted-API official.
@@ -151,12 +156,29 @@ What it does ([`grid.py` `BUILTIN_PROFILES["hf-match"]`](../dev/tools/deployment
 The profile merges *under* any `--grid` YAML, so a hand-written spec still
 overrides it per key.
 
+## The attention-backend env plumbing (IMPLEMENTED in infer-stack)
+
+Because vLLM selects the attention backend via the `VLLM_ATTENTION_BACKEND`
+**env var** (not a `vllm serve` flag), exposing it needed a small change in
+infer-stack, so it is now a first-class endpoint option usable by any catalog:
+
+- `runtime.attention_backend` on a vLLM endpoint is carried into
+  `vllm_service_dict` and rendered as the container env var — the compose backend
+  ([`leasing/compose.py` `_vllm_service`](../submodules/infer_stack/infer_stack/leasing/compose.py)
+  → `environment`) and the kubeai backend
+  ([`backends/kubeai.py`](../submodules/infer_stack/infer_stack/backends/kubeai.py)
+  → the Model CR's `env` map) both set it, never as a CLI arg.
+- It is part of the vLLM **compat key**
+  ([`leasing/models.py` `vllm_structural`](../submodules/infer_stack/infer_stack/leasing/models.py)),
+  so two endpoints differing only in backend are distinct deployments and never
+  coalesce onto one process.
+
+The deployment-match grid drives it through the `attention_backend` axis /
+`ServeRecipe`, and `confirm._winner_catalog` propagates a winning backend into
+the confirm catalog.
+
 ## Still open (not in the minimal example)
 
-- **`attention_backend`** as a real axis {TORCH_SDPA/XFORMERS, FLASH_ATTN}. Left
-  out because vLLM selects it via the `VLLM_ATTENTION_BACKEND` **env var**, not a
-  `vllm serve` flag — sweeping it needs per-endpoint env plumbing in infer-stack,
-  which is more than a minimal fold-in. This is the highest-value remaining knob.
 - **Full sampling replay — deliberately NOT done.** Replaying the entire official
   `SamplingParameters` in [`probe.py` `_recipe_body`](../dev/tools/deployment_match/probe.py)
   would mean honoring `n`/`best_of` > 1, which multiplies every cell's generation
@@ -166,7 +188,9 @@ overrides it per key.
   winner is confirmed authoritatively by the full `compare-pair` regardless. (The
   zero-runtime-cost params — `top_k`/penalties/`seed` — could still be forwarded
   if a non-greedy scenario ever needs them, but that is not on by default.)
-- Propagate the winning runtime + determinism constants through
-  [`confirm.py` `_winner_catalog`](../dev/tools/deployment_match/confirm.py) (it
-  still re-hardcodes `max_num_seqs=16` etc.), so the *confirm* catalog is a
-  full-fidelity match config, not just the serve args.
+- Propagate the *full* winning runtime + determinism constants through
+  [`confirm.py` `_winner_catalog`](../dev/tools/deployment_match/confirm.py). It now
+  carries `attention_backend` and `trust_remote_code`, but still re-hardcodes
+  `max_num_seqs=16` / `gpu_memory_utilization=0.85` and does not forward the
+  `enable_chunked_prefill` / `enable_prefix_caching` determinism flags — so the
+  *confirm* catalog isn't yet a full-fidelity match config.

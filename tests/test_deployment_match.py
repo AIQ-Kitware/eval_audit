@@ -169,11 +169,35 @@ def test_hf_match_profile_pins_determinism_knobs():
         assert "--no-enable-chunked-prefill" in ea
         assert "--no-enable-prefix-caching" in ea
         assert sr.runtime["max_num_seqs"] == 1
+        # HF-eager's default attention backend, pinned (single value, not swept)
+        assert sr.attention_backend == "TORCH_SDPA"
     # the determinism activation is surfaced as a grid note
     assert any("hf-match" in n for n in g.notes)
-    # and it reaches the infer-stack catalog endpoint (serialized batching)
+    # and it reaches the infer-stack catalog endpoint (serialized batching + backend)
     ep = g.serve_recipes[0].endpoint_dict("completions")
     assert ep["runtime"]["max_num_seqs"] == 1
+    assert ep["runtime"]["attention_backend"] == "TORCH_SDPA"
+
+
+def test_default_grid_omits_attention_backend():
+    """The default grid leaves vLLM's own attention backend (no env var set)."""
+    g = grid_mod.build_grid(_resolution())
+    for sr in g.serve_recipes:
+        assert sr.attention_backend is None
+        assert "attention_backend" not in sr.endpoint_dict("completions")["runtime"]
+
+
+def test_attention_backend_axis_widens_and_names_endpoints():
+    """Sweeping the backend produces distinct, backend-named serve endpoints."""
+    g = grid_mod.build_grid(
+        _resolution(tokenizer_appends_special=False, tokenizer_sibling=None),
+        spec={"axes": {"attention_backend": ["TORCH_SDPA", "FLASH_ATTN"]}})
+    assert len(g.serve_recipes) == 8            # 4 dtype x 2 backends
+    names = [s.name for s in g.serve_recipes]
+    assert len(set(names)) == 8                 # distinct endpoint names
+    assert any("attntorch-sdpa" in n for n in names)
+    assert any("attnflash-attn" in n for n in names)
+    assert {s.attention_backend for s in g.serve_recipes} == {"TORCH_SDPA", "FLASH_ATTN"}
 
 
 # --------------------------------------------------------------------------- #

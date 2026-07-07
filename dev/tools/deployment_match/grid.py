@@ -28,6 +28,7 @@ DEFAULT_AXES: dict[str, list[Any]] = {
     "tokenizer": ["default"],          # 'default' = the model's own; plus siblings if known
     "max_model_len": ["auto"],         # 'auto' = min(official max_seq_len + 1, model max_position_embeddings)
     "trust_remote_code": [False],
+    "attention_backend": [None],       # None = vLLM default; else VLLM_ATTENTION_BACKEND (e.g. TORCH_SDPA)
     "add_special_tokens": [True, False],
     "protocol": ["auto"],              # 'auto' = resolved protocol
 }
@@ -61,6 +62,12 @@ BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
             "enable_prefix_caching": False,   # no cross-request KV reuse
             "max_num_seqs": 1,                # serialize: vLLM kernels aren't batch-invariant
         },
+        # Pin the attention backend to torch SDPA — HF transformers' default
+        # attn_implementation for most models — rather than vLLM's FlashAttention
+        # kernels. A single value (not a swept axis), so the cell count is
+        # unchanged; widen it via --grid {axes: {attention_backend: [...]}} to
+        # search backends empirically.
+        "axes": {"attention_backend": ["TORCH_SDPA"]},
     },
 }
 
@@ -87,6 +94,7 @@ class ServeRecipe:
     max_model_len: int
     trust_remote_code: bool
     runtime: dict[str, Any]
+    attention_backend: str | None = None   # None = vLLM default; else VLLM_ATTENTION_BACKEND
 
     def extra_args(self) -> list[str]:
         args = ["--dtype", self.dtype]
@@ -117,6 +125,10 @@ class ServeRecipe:
         }
         if self.trust_remote_code:
             rt["trust_remote_code"] = True          # structural (compat-key) only
+        if self.attention_backend:
+            # Delivered as the VLLM_ATTENTION_BACKEND env var by infer-stack's
+            # backend renderer; structural (compat-key) so backends don't coalesce.
+            rt["attention_backend"] = self.attention_backend
         return {"engine": "vllm", "reclaim": "stop", "model": "target",
                 "protocol": protocol, "runtime": rt}
 
@@ -235,29 +247,35 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
 
     mml_values = [default_mml if m in ("auto", None) else int(m) for m in axes["max_model_len"]]
     proto_values = [resolution.protocol if p in ("auto", None) else str(p) for p in axes["protocol"]]
+    # None / 'auto' / 'default' => leave vLLM's own backend; else the env value.
+    attn_values = [None if a in (None, "auto", "default", "none", "") else str(a)
+                   for a in axes["attention_backend"]]
 
-    # ---- Tier A: serve recipes (dtype x tokenizer x max_model_len x trc) ----
+    # ---- Tier A: serve recipes (dtype x tokenizer x max_model_len x trc x attn) ----
     serve: list[ServeRecipe] = []
     seen: set[str] = set()
     for dtype in axes["dtype"]:
         for tok in tok_values:
             for mml in mml_values:
                 for trc in axes["trust_remote_code"]:
-                    name = f"dm-{model_short}-{DTYPE_TAG.get(dtype, _slug(dtype))}"
-                    if tok:
-                        name += f"-tok{_tok_tag(tok)}"
-                    if len(mml_values) > 1:
-                        name += f"-len{mml}"
-                    if trc:
-                        name += "-trc"
-                    if name in seen:
-                        continue
-                    seen.add(name)
-                    serve.append(ServeRecipe(
-                        name=name, hf_source=hf_source or "", dtype=dtype,
-                        tokenizer=tok, max_model_len=mml, trust_remote_code=bool(trc),
-                        runtime=runtime,
-                    ))
+                    for attn in attn_values:
+                        name = f"dm-{model_short}-{DTYPE_TAG.get(dtype, _slug(dtype))}"
+                        if tok:
+                            name += f"-tok{_tok_tag(tok)}"
+                        if len(mml_values) > 1:
+                            name += f"-len{mml}"
+                        if trc:
+                            name += "-trc"
+                        if attn and len(attn_values) > 1:
+                            name += f"-attn{_slug(attn)}"
+                        if name in seen:
+                            continue
+                        seen.add(name)
+                        serve.append(ServeRecipe(
+                            name=name, hf_source=hf_source or "", dtype=dtype,
+                            tokenizer=tok, max_model_len=mml, trust_remote_code=bool(trc),
+                            runtime=runtime, attention_backend=attn,
+                        ))
 
     # ---- Tier B: request variants (add_special_tokens x protocol) ----
     req: list[RequestVariant] = []
@@ -276,6 +294,7 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
                 serve={"dtype": sr.dtype, "tokenizer": sr.tokenizer,
                        "max_model_len": sr.max_model_len,
                        "trust_remote_code": sr.trust_remote_code,
+                       "attention_backend": sr.attention_backend,
                        "extra_args": sr.extra_args()},
                 request={"add_special_tokens": rv.add_special_tokens,
                          "protocol": rv.protocol},
