@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Search the best LOCAL serving recipe (dtype / tokenizer / max_model_len /
-# add_special_tokens / protocol) that reproduces ONE public HELM run — here
-# `ifeval` on `allenai/olmoe-1b-7b-0125-instruct` — via the deployment-match tool
-# at dev/tools/deployment_match/.
+# attention_backend / add_special_tokens / protocol) that reproduces ONE public
+# HELM run — here `ifeval` on `allenai/olmoe-1b-7b-0125-instruct` — via the
+# deployment-match tool at dev/tools/deployment_match/. Defaults to the `hf-match`
+# profile (see DM_PROFILE below), since the OLMoE official is a HuggingFaceClient run.
 #
 # This is an OPTIONAL diagnostic living in a SUBFOLDER of the combined olmo
 # runbook, NOT part of the fan-out grid (../10_run_smoke.sh / ../15_run_full.sh).
@@ -59,13 +60,20 @@ DM_OUT="${DM_OUT:-$STORE_ROOT/deployment-match/olmoe-1b-7b-0125-instruct--ifeval
 DM_DRY="${DM_DRY:-0}"
 # Optional: restrict serving placement to specific physical GPU indices (csv).
 DM_ALLOWED_GPUS="${DM_ALLOWED_GPUS:-}"
-# Optional: a built-in grid profile. `hf-match` pins vLLM's determinism knobs
-# (enforce-eager, no chunked-prefill, no prefix-caching, max_num_seqs=1) so the
-# sweep searches for the vLLM recipe that best matches a HELM *HuggingFaceClient*
-# run — the default OLMoE ifeval run is exactly that. See
-# docs/vllm-vs-huggingface-deployment-match.md. Empty = the default grid.
-#   DM_PROFILE=hf-match ./run_deployment_match.sh
-DM_PROFILE="${DM_PROFILE:-}"
+# Grid profile. DEFAULTS to `hf-match` because the default target (the OLMoE
+# ifeval run) is a HELM *HuggingFaceClient* run — i.e. the official completions
+# came from a local transformers.generate(), so matching-to-HF is the right goal.
+# hf-match pins vLLM's determinism knobs (enforce-eager, no chunked-prefill, no
+# prefix-caching, max_num_seqs=1 — HF has no equivalent of these) and SWEEPS the
+# attention backend {default, FLASH_ATTN, XFORMERS, TORCH_SDPA} to find the recipe
+# that best reproduces the official outputs. See
+# docs/vllm-vs-huggingface-deployment-match.md.
+#   DM_PROFILE=          ./run_deployment_match.sh   # opt out -> plain default grid
+#   DM_PROFILE=hf-match  ./run_deployment_match.sh   # explicit (the default)
+# NB: hf-match sweeps 4 backends, so it brings up ~4x the serve endpoints (each a
+# model load). Use DM_DRY=1 first to preview the grid, or DM_PROFILE= to opt out.
+# (No colon in the default so an explicit empty value opts out.)
+DM_PROFILE="${DM_PROFILE-hf-match}"
 
 # The deployment-match core imports its sibling modules by bare name (cli.py adds
 # its own dir to sys.path); the serve phase additionally imports `infer_stack`, so
