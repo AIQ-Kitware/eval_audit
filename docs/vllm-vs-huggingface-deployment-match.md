@@ -188,9 +188,18 @@ the confirm catalog.
   winner is confirmed authoritatively by the full `compare-pair` regardless. (The
   zero-runtime-cost params — `top_k`/penalties/`seed` — could still be forwarded
   if a non-greedy scenario ever needs them, but that is not on by default.)
-- Propagate the *full* winning runtime + determinism constants through
-  [`confirm.py` `_winner_catalog`](../dev/tools/deployment_match/confirm.py). It now
-  carries `attention_backend` and `trust_remote_code`, but still re-hardcodes
-  `max_num_seqs=16` / `gpu_memory_utilization=0.85` and does not forward the
-  `enable_chunked_prefill` / `enable_prefix_caching` determinism flags — so the
-  *confirm* catalog isn't yet a full-fidelity match config.
+- Propagate the *full* winning runtime through
+  [`confirm.py` `_winner_catalog`](../dev/tools/deployment_match/confirm.py). The
+  CLI-flag knobs (`--enforce-eager` / `--no-enable-chunked-prefill` /
+  `--no-enable-prefix-caching` / `--dtype`) ride through `extra_args`, and
+  `attention_backend` / `trust_remote_code` / `max_model_len` are carried — but
+  **`max_num_seqs` is dropped**: the winner's `1` becomes the hardcoded `16`,
+  silently re-introducing batch non-invariance in the confirm/full run. The cause
+  is structural: the winning runtime numbers (`max_num_seqs`,
+  `gpu_memory_utilization`, `max_num_batched_tokens`) never thread into
+  `Cell.serve`, so `report.best_deployment`'s `serve_time_knobs` can't see them
+  and `_winner_catalog` falls back to defaults. `gpu_memory_utilization=0.85` /
+  `max_num_batched_tokens=2048` happen to equal the grid defaults today, so they
+  are latent (not active) drops. Fixing it is a 3-point thread: add the runtime
+  numbers to `Cell.serve` (grid.py) → capture them in `serve_time_knobs`
+  (report.py) → use them instead of the hardcode (confirm.py).
