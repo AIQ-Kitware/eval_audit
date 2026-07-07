@@ -52,6 +52,18 @@ A *cell* is one (serve-recipe × request-variant); scoring ranks cells. `dtype`
 stays a full axis by design — the search decides empirically, nothing is pruned
 on theory.
 
+### Profiles: `--profile hf-match`
+
+To search for the vLLM recipe that best matches a HELM **`HuggingFaceClient`**
+run (official = local `transformers.generate()`), pass `--profile hf-match`. It
+pins the vLLM engine's determinism knobs — `--enforce-eager
+--no-enable-chunked-prefill --no-enable-prefix-caching --max-num-seqs=1` — so the
+sweep varies only the recipe HELM itself could (dtype / tokenizer /
+add_special_tokens), not vLLM's scheduler. It merges *under* any `--grid` YAML,
+and warns if the official `client_class` isn't HuggingFace. Full rationale +
+still-open knobs (attention backend, sampling replay):
+[`docs/vllm-vs-huggingface-deployment-match.md`](../../../docs/vllm-vs-huggingface-deployment-match.md).
+
 ## Usage
 
 ### One-shot: `auto` (chains everything)

@@ -37,9 +37,32 @@ DEFAULT_RUNTIME: dict[str, Any] = {
     "max_num_batched_tokens": 2048,
     "max_num_seqs": 16,
     "enforce_eager": True,
+    # vLLM defaults — carried explicitly so a profile can flip them (see the
+    # hf-match profile / extra_args). True = vLLM default; no flag is emitted.
+    "enable_chunked_prefill": True,
+    "enable_prefix_caching": True,
 }
 
 DEFAULT_CAP = 64
+
+# Built-in grid profiles selectable with `--profile` (merged UNDER any --grid
+# YAML, which overrides per-key). A profile is just a spec (axes/runtime/cap)
+# carrying a known-good intent.
+BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
+    # Match a HELM *HuggingFaceClient* run — one whose official completions came
+    # from a local transformers.generate(). Pin the vLLM engine to its most
+    # HF-like, deterministic execution so the sweep varies only the recipe HELM
+    # itself could vary (dtype / tokenizer / add_special_tokens), not vLLM's
+    # scheduler. See docs/vllm-vs-huggingface-deployment-match.md.
+    "hf-match": {
+        "runtime": {
+            "enforce_eager": True,            # no CUDA-graph capture
+            "enable_chunked_prefill": False,  # single-pass prefill, like HF
+            "enable_prefix_caching": False,   # no cross-request KV reuse
+            "max_num_seqs": 1,                # serialize: vLLM kernels aren't batch-invariant
+        },
+    },
+}
 
 
 def _slug(text: str) -> str:
@@ -73,6 +96,15 @@ class ServeRecipe:
             args += ["--trust-remote-code"]
         if self.runtime.get("enforce_eager", True):
             args += ["--enforce-eager"]
+        # HF-match determinism: vLLM defaults these ON; disabling them removes two
+        # sources of vLLM<->HF numeric drift — chunked prefill splits the prefill
+        # across steps (HF does it in one pass) and prefix caching reuses KV across
+        # requests. Only emit the negating flag when explicitly disabled, so the
+        # default grid keeps vLLM's own defaults untouched.
+        if not self.runtime.get("enable_chunked_prefill", True):
+            args += ["--no-enable-chunked-prefill"]
+        if not self.runtime.get("enable_prefix_caching", True):
+            args += ["--no-enable-prefix-caching"]
         return args
 
     def endpoint_dict(self, protocol: str) -> dict[str, Any]:
@@ -159,6 +191,12 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
     runtime = {**DEFAULT_RUNTIME, **((spec or {}).get("runtime") or {})}
     cap = int((spec or {}).get("cap", DEFAULT_CAP))
     notes: list[str] = []
+
+    if not runtime.get("enable_chunked_prefill", True) or \
+            not runtime.get("enable_prefix_caching", True):
+        notes.append("hf-match determinism active: chunked-prefill / prefix-caching "
+                     "disabled and batching serialized (max_num_seqs="
+                     f"{runtime.get('max_num_seqs')}) to reduce vLLM<->HF drift")
 
     hf_source = resolution.hf_source
     model_short = _slug((resolution.model or hf_source or "model").split("/")[-1])

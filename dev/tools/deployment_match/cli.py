@@ -117,12 +117,44 @@ def _build_grid_from_oracle(orc, args):
     resolution = registry_mod.resolve(
         orc.model, orc.model_deployment,
         source_override=args.source, protocol_override=args.protocol)
-    spec = None
-    if getattr(args, "grid", None):
-        _need_yaml()
-        spec = yaml.safe_load(Path(args.grid).read_text())
+    spec = _load_spec(args)
+    if getattr(args, "profile", None) == "hf-match":
+        _warn_if_not_hf_client(resolution)
     g = grid_mod.build_grid(resolution, spec=spec)
     return resolution, g
+
+
+def _load_spec(args) -> dict | None:
+    """Merge the built-in ``--profile`` spec (if any) UNDER an optional ``--grid``
+    YAML; the user's YAML overrides the profile per top-level key."""
+    spec: dict = {}
+    profile = getattr(args, "profile", None)
+    if profile:
+        prof = grid_mod.BUILTIN_PROFILES[profile]
+        spec = {k: (dict(v) if isinstance(v, dict) else v) for k, v in prof.items()}
+    if getattr(args, "grid", None):
+        _need_yaml()
+        user = yaml.safe_load(Path(args.grid).read_text()) or {}
+        for k, v in user.items():
+            if isinstance(v, dict) and isinstance(spec.get(k), dict):
+                spec[k] = {**spec[k], **v}       # deep-merge axes/runtime dicts
+            else:
+                spec[k] = v
+    return spec or None
+
+
+def _warn_if_not_hf_client(resolution) -> None:
+    """`--profile hf-match` only makes sense when the official side WAS HF."""
+    cc = resolution.official_client_class
+    if cc and "HuggingFace" not in cc:
+        print(f"WARN: --profile hf-match but official client_class={cc!r} is not a "
+              "HuggingFaceClient — the official completions were not produced by a local "
+              "transformers.generate(); matching-to-HF may be the wrong target.",
+              file=sys.stderr)
+    elif not cc:
+        print("WARN: --profile hf-match but official client_class is unknown "
+              "(not resolvable from model_deployments.yaml) — assuming HF; verify.",
+              file=sys.stderr)
 
 
 _SETTINGS_YAML = """\
@@ -345,6 +377,9 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--source", default=None, help="override the local HF source repo")
         p.add_argument("--protocol", default=None, choices=["completions", "chat"])
         p.add_argument("--grid", default=None, help="grid spec YAML (axes/runtime/cap)")
+        p.add_argument("--profile", default=None, choices=sorted(grid_mod.BUILTIN_PROFILES),
+                       help="built-in grid profile merged under --grid (hf-match: pin "
+                       "vLLM determinism knobs to match a HuggingFaceClient run)")
 
     s = sub.add_parser("sample"); s.add_argument("--run", required=True)
     _run_opts(s); s.add_argument("--out", required=True); s.set_defaults(func=cmd_sample)

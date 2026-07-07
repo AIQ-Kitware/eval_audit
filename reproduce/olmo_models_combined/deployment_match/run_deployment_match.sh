@@ -59,6 +59,13 @@ DM_OUT="${DM_OUT:-$STORE_ROOT/deployment-match/olmoe-1b-7b-0125-instruct--ifeval
 DM_DRY="${DM_DRY:-0}"
 # Optional: restrict serving placement to specific physical GPU indices (csv).
 DM_ALLOWED_GPUS="${DM_ALLOWED_GPUS:-}"
+# Optional: a built-in grid profile. `hf-match` pins vLLM's determinism knobs
+# (enforce-eager, no chunked-prefill, no prefix-caching, max_num_seqs=1) so the
+# sweep searches for the vLLM recipe that best matches a HELM *HuggingFaceClient*
+# run — the default OLMoE ifeval run is exactly that. See
+# docs/vllm-vs-huggingface-deployment-match.md. Empty = the default grid.
+#   DM_PROFILE=hf-match ./run_deployment_match.sh
+DM_PROFILE="${DM_PROFILE:-}"
 
 # The deployment-match core imports its sibling modules by bare name (cli.py adds
 # its own dir to sys.path); the serve phase additionally imports `infer_stack`, so
@@ -89,6 +96,7 @@ echo "  sample  : n=$DM_N"
 echo "  out     : $DM_OUT"
 echo "  mode    : $([[ "$DM_DRY" == 1 ]] && echo 'dry-run (CPU, no GPU)' || echo 'full (serve + probe + score, GPU)')"
 [[ -n "$DM_ALLOWED_GPUS" ]] && echo "  gpus    : restricted to $DM_ALLOWED_GPUS"
+[[ -n "$DM_PROFILE" ]] && echo "  profile : $DM_PROFILE"
 echo
 
 # --- Run ---------------------------------------------------------------------
@@ -98,6 +106,7 @@ echo
 args=(auto --run "$DM_RUN" --n "$DM_N" --out "$DM_OUT")
 [[ "$DM_DRY" == 1 ]] && args+=(--dry)
 [[ -n "$DM_ALLOWED_GPUS" ]] && args+=(--allowed-gpus "$DM_ALLOWED_GPUS")
+[[ -n "$DM_PROFILE" ]] && args+=(--profile "$DM_PROFILE")
 dm "${args[@]}"
 
 # --- Report ------------------------------------------------------------------

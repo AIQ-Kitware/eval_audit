@@ -149,6 +149,34 @@ def test_grid_max_model_len_conservative_without_config():
 
 
 # --------------------------------------------------------------------------- #
+# grid: hf-match profile (vLLM<->HF determinism knobs)
+# --------------------------------------------------------------------------- #
+def test_default_grid_keeps_vllm_defaults():
+    """The default grid must NOT emit the determinism-off flags (vLLM defaults)."""
+    g = grid_mod.build_grid(_resolution())
+    for sr in g.serve_recipes:
+        ea = sr.extra_args()
+        assert "--no-enable-chunked-prefill" not in ea
+        assert "--no-enable-prefix-caching" not in ea
+
+
+def test_hf_match_profile_pins_determinism_knobs():
+    spec = grid_mod.BUILTIN_PROFILES["hf-match"]
+    g = grid_mod.build_grid(_resolution(), spec=spec)
+    for sr in g.serve_recipes:
+        ea = sr.extra_args()
+        assert "--enforce-eager" in ea
+        assert "--no-enable-chunked-prefill" in ea
+        assert "--no-enable-prefix-caching" in ea
+        assert sr.runtime["max_num_seqs"] == 1
+    # the determinism activation is surfaced as a grid note
+    assert any("hf-match" in n for n in g.notes)
+    # and it reaches the infer-stack catalog endpoint (serialized batching)
+    ep = g.serve_recipes[0].endpoint_dict("completions")
+    assert ep["runtime"]["max_num_seqs"] == 1
+
+
+# --------------------------------------------------------------------------- #
 # score
 # --------------------------------------------------------------------------- #
 def test_score_ranks_match_over_collapse():
