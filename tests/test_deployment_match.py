@@ -229,6 +229,34 @@ def test_default_grid_keeps_small_max_num_batched_tokens():
         assert sr.endpoint_dict("completions")["runtime"]["max_num_batched_tokens"] == 2048
 
 
+def test_preflight_prunes_moe_fp32():
+    """A MoE model's float32 sub-grid is dropped a priori (can't serve: Triton MoE
+    shared-memory OOM), with a typed reason — the sweep never wastes a serve cycle."""
+    g = grid_mod.build_grid(_resolution(is_moe=True, tokenizer_appends_special=False,
+                                        tokenizer_sibling=None))
+    assert "float32" not in {sr.dtype for sr in g.serve_recipes}   # fp32 pruned
+    assert {"auto", "float16", "bfloat16"} == {sr.dtype for sr in g.serve_recipes}
+    assert any(p["reason"] == "infeasible:moe-fp32-shared-mem" for p in g.pruned)
+    assert any("preflight" in n for n in g.notes)
+
+
+def test_preflight_keeps_moe_fp32_when_allowed():
+    """allow_moe_fp32 (big-shared-mem GPU) keeps float32 in the sweep."""
+    g = grid_mod.build_grid(_resolution(is_moe=True, tokenizer_appends_special=False,
+                                        tokenizer_sibling=None),
+                            spec={"allow_moe_fp32": True})
+    assert "float32" in {sr.dtype for sr in g.serve_recipes}
+    assert not g.pruned
+
+
+def test_preflight_keeps_fp32_for_dense_models():
+    """Dense (non-MoE) models keep float32 — the prune is MoE-specific."""
+    g = grid_mod.build_grid(_resolution(is_moe=False, tokenizer_appends_special=False,
+                                        tokenizer_sibling=None))
+    assert "float32" in {sr.dtype for sr in g.serve_recipes}
+    assert not g.pruned
+
+
 def test_dtypes_override_drops_float32():
     """--dtypes narrows the dtype axis over the profile, e.g. to skip float32 on a
     MoE model whose fp32 Triton kernel OOMs the GPU's shared memory."""

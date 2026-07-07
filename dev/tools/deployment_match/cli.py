@@ -151,6 +151,8 @@ def _load_spec(args) -> dict | None:
             b.strip() for b in args.attention_backends.split(",") if b.strip()]
     if axes_override:
         spec["axes"] = {**(spec.get("axes") or {}), **axes_override}
+    if getattr(args, "allow_moe_fp32", False):
+        spec["allow_moe_fp32"] = True
     return spec or None
 
 
@@ -200,9 +202,11 @@ def _print_grid_summary(resolution, g) -> None:
           f"max_seq_len={resolution.official_max_sequence_length}")
     for n in resolution.notes:
         print(f"[grid]   note: {n}")
+    n_pruned = sum(p["n_recipes"] for p in g.pruned)
     print(f"[grid] {len(g.serve_recipes)} serve-recipes x {len(g.request_variants)} "
           f"request-variants = {len(g.cells)} cells"
-          f"{f' (+{g.capped} over cap dropped)' if g.capped else ''}")
+          f"{f' (+{g.capped} over cap dropped)' if g.capped else ''}"
+          f"{f' ({n_pruned} recipe(s) pruned preflight)' if n_pruned else ''}")
     for n in g.notes:
         print(f"[grid]   note: {n}")
 
@@ -398,6 +402,10 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--attention-backends", default=None,
                        help="comma-separated attention_backend axis override, e.g. "
                        "'none,XFORMERS' to narrow the hf-match backend sweep")
+        p.add_argument("--allow-moe-fp32", action="store_true",
+                       help="keep float32 on MoE models (the preflight filter drops it "
+                       "by default — fp32 MoE OOMs the Triton kernel on most GPUs; use "
+                       "on big-shared-mem cards like H100)")
 
     s = sub.add_parser("sample"); s.add_argument("--run", required=True)
     _run_opts(s); s.add_argument("--out", required=True); s.set_defaults(func=cmd_sample)

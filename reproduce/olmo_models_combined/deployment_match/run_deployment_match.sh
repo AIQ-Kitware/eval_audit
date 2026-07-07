@@ -74,13 +74,12 @@ DM_ALLOWED_GPUS="${DM_ALLOWED_GPUS:-}"
 # model load). Use DM_DRY=1 first to preview the grid, or DM_PROFILE= to opt out.
 # (No colon in the default so an explicit empty value opts out.)
 DM_PROFILE="${DM_PROFILE-hf-match}"
-# dtype axis. DEFAULTS to skipping float32: OLMoE is a Mixture-of-Experts model,
-# and in fp32 vLLM's Triton fused-MoE kernel needs ~128 KiB shared memory/block,
-# over most workstation GPUs' ~99 KiB limit ("triton ... out of resource: shared
-# memory") — so fp32 OLMoE won't serve here (an environment limit, not a recipe
-# bug). Set DM_DTYPES= for the full axis (incl. float32) on a big-shared-mem GPU
-# (e.g. H100), or DM_DTYPES=auto,bfloat16 to narrow further.
-DM_DTYPES="${DM_DTYPES-auto,bfloat16,float16}"
+# Optional: narrow the dtype axis, e.g. DM_DTYPES=auto,bfloat16 to serve fewer
+# endpoints. NB: float32 on OLMoE (a MoE model) is auto-pruned by the grid's
+# preflight feasibility filter — fp32 MoE OOMs vLLM's Triton fused-MoE kernel on
+# most GPUs ("out of resource: shared memory") — so you don't need to exclude it
+# here. On a big-shared-mem GPU (H100) pass --allow-moe-fp32 to keep it.
+DM_DTYPES="${DM_DTYPES:-}"
 # Optional: narrow the attention_backend sweep, e.g. DM_ATTN=none,XFORMERS.
 DM_ATTN="${DM_ATTN:-}"
 

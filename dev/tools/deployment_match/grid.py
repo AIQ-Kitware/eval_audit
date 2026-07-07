@@ -178,6 +178,10 @@ class Grid:
     request_variants: list[RequestVariant]
     cells: list[Cell]
     capped: int = 0                       # cells dropped by the cap (0 = none)
+    # Serve-recipes excluded a priori by the preflight feasibility filter, each
+    # {axis, value, reason, n_recipes} — a can't-serve-here filter, not a
+    # relevance guess (see build_grid).
+    pruned: list[dict[str, Any]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
     def to_catalog(self) -> dict[str, Any]:
@@ -205,6 +209,7 @@ class Grid:
             "request_variants": [rv.to_json() for rv in self.request_variants],
             "cells": [asdict(c) for c in self.cells],
             "capped": self.capped,
+            "pruned": self.pruned,
             "notes": self.notes,
         }
 
@@ -216,12 +221,30 @@ def _merge_axes(overrides: dict[str, Any] | None) -> dict[str, list[Any]]:
     return axes
 
 
+def _dtype_infeasible(dtype: Any, resolution: Any, *, allow_moe_fp32: bool) -> str | None:
+    """Preflight FEASIBILITY filter: a reason string if this dtype cannot serve on
+    a typical GPU (so the sweep shouldn't burn a serve cycle discovering it),
+    else None. Feasibility only — never a relevance / "unlikely to matter" guess
+    (the tool sweeps those). Extend with more rules (VRAM OOM, backend-not-in-image)
+    as the needed facts become available.
+    """
+    if (str(dtype).lower() in ("float32", "fp32")
+            and getattr(resolution, "is_moe", None) and not allow_moe_fp32):
+        # fp32 doubles the MoE Triton fused-kernel's shared-memory tiles past most
+        # GPUs' ~99 KiB/SM cap ("triton ... out of resource: shared memory"); fits
+        # on big-shared-mem cards (H100 228 KiB) -> allow_moe_fp32 to keep it.
+        return "infeasible:moe-fp32-shared-mem"
+    return None
+
+
 def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
     """Build the grid from a :class:`registry.Resolution` and an optional spec."""
     axes = _merge_axes(spec)
     runtime = {**DEFAULT_RUNTIME, **((spec or {}).get("runtime") or {})}
     cap = int((spec or {}).get("cap", DEFAULT_CAP))
+    allow_moe_fp32 = bool((spec or {}).get("allow_moe_fp32", False))
     notes: list[str] = []
+    pruned: list[dict[str, Any]] = []
 
     if not runtime.get("enable_chunked_prefill", True) or \
             not runtime.get("enable_prefix_caching", True):
@@ -283,6 +306,16 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
     serve: list[ServeRecipe] = []
     seen: set[str] = set()
     for dtype in axes["dtype"]:
+        # Preflight feasibility filter: drop whole dtype sub-grids that can't serve
+        # here (with a typed reason), rather than waste a serve cycle per cell.
+        reason = _dtype_infeasible(dtype, resolution, allow_moe_fp32=allow_moe_fp32)
+        if reason:
+            n = len(tok_values) * len(mml_values) * len(axes["trust_remote_code"]) * len(attn_values)
+            pruned.append({"axis": "dtype", "value": str(dtype), "reason": reason,
+                           "n_recipes": n})
+            notes.append(f"preflight: excluded dtype={dtype} [{reason}] "
+                         f"({n} serve-recipe(s); pass allow_moe_fp32 to keep)")
+            continue
         for tok in tok_values:
             for mml in mml_values:
                 for trc in axes["trust_remote_code"]:
@@ -340,4 +373,5 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
         cells = cells[:cap]
 
     return Grid(model=resolution.model, hf_source=hf_source, serve_recipes=serve,
-                request_variants=req, cells=cells, capped=capped, notes=notes)
+                request_variants=req, cells=cells, capped=capped, pruned=pruned,
+                notes=notes)

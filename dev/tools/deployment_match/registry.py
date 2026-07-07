@@ -66,6 +66,9 @@ class Resolution:
     # max_position_embeddings from the model's cached config.json (None when not
     # locally available) — the ceiling vLLM derives; serving above it refuses to start.
     hf_max_position_embeddings: int | None = None
+    # True/False when known (config.json or a name signal), None when unknown.
+    # Drives the grid's fp32-MoE feasibility prune.
+    is_moe: bool | None = None
     tokenizer_appends_special: bool | None = None
     tokenizer_sibling: str | None = None
     notes: list[str] = field(default_factory=list)
@@ -169,6 +172,29 @@ def hf_max_position_embeddings(repo: str) -> int | None:
         return None
 
 
+# config.json keys that mark a Mixture-of-Experts model (Mixtral/OLMoE/Qwen-MoE/…).
+_MOE_CONFIG_KEYS = ("num_experts", "num_local_experts", "n_routed_experts")
+
+
+def model_is_moe(repo: str) -> bool | None:
+    """True/False if the model is Mixture-of-Experts, from a cached config.json
+    (an ``num_experts``-family key > 1, or a ``*Moe*``/Mixtral architecture); None
+    when config.json isn't locally available to inspect. MoE matters for the grid
+    because fp32 MoE overflows vLLM's Triton fused-MoE kernel shared memory on most
+    GPUs (a serve-time infeasibility)."""
+    cfg = _local_hf_file(repo, "config.json")
+    if not cfg:
+        return None
+    try:
+        doc = json.loads(cfg.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return None
+    if any(int(doc.get(k) or 0) > 1 for k in _MOE_CONFIG_KEYS):
+        return True
+    arches = " ".join(doc.get("architectures") or []).lower()
+    return ("moe" in arches) or ("mixtral" in arches)
+
+
 def post_processor_appends_special(post_processor: Any) -> bool:
     """Pure predicate: does a tokenizer.json ``post_processor`` inject a special
     token into the ``single`` template? (the OLMo EOS-append signature).
@@ -235,6 +261,15 @@ def resolve(model: str, model_deployment: str, *,
             "max_model_len falls back to the official max_sequence_length verbatim"
         )
 
+    is_moe = model_is_moe(hf_source) if hf_source else None
+    if is_moe is None and hf_source:
+        # config.json not cached — best-effort name signal (asserts True only).
+        low = hf_source.lower()
+        if "moe" in low or "mixtral" in low:
+            is_moe = True
+            notes.append(f"'{hf_source}' inferred MoE from its name (config.json not "
+                         "cached); fp32 will be pruned — override with allow_moe_fp32")
+
     appends = tokenizer_appends_special(hf_source) if hf_source else None
     sibling = KNOWN_TOKENIZER_SIBLINGS.get(hf_source or "")
     if appends:
@@ -253,6 +288,7 @@ def resolve(model: str, model_deployment: str, *,
         official_max_sequence_length=official.get("max_sequence_length"),
         official_client_class=official.get("client_class"),
         hf_max_position_embeddings=max_pos,
+        is_moe=is_moe,
         tokenizer_appends_special=appends,
         tokenizer_sibling=sibling,
         notes=notes,

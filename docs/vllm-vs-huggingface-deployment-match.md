@@ -182,30 +182,49 @@ The deployment-match grid drives it through the `attention_backend` axis /
 `ServeRecipe`, and `confirm._winner_catalog` propagates a winning backend into
 the confirm catalog.
 
-## Known environment limits (MoE models, e.g. OLMoE)
+## Pruning the grid beforehand: feasibility vs. relevance
 
-These are *recipe/environment* limits (per `CLAUDE.md`'s taxonomy), not
-reproducibility failures — a cell that can't serve scores `NO_DATA` and drops out.
-Two show up on OLMoE (a Mixture-of-Experts model):
+The grid is a sweep on purpose — the tool exists *because* we were wrong pruning
+on theory before (the OLMo-7B fp16 mis-diagnosis). So "exclude settings
+beforehand" splits into two kinds, treated oppositely:
 
-- **`float32` won't serve on limited-shared-memory GPUs.** vLLM's Triton fused-MoE
-  kernel needs ~128 KiB shared memory/block in fp32 (double bf16's), over the
-  ~99 KiB/SM cap on workstation cards like the RTX PRO 6000 Blackwell →
+- **Feasibility pruning (safe — do it).** A recipe that *physically can't serve*
+  on this environment teaches nothing and wastes a full serve cycle. These are
+  dropped a priori with a **typed reason**, mirroring the pipeline's Stage-1
+  filter pattern (`no-local-helm-deployment`-style). Implemented in
+  [`grid.py` `_dtype_infeasible`](../dev/tools/deployment_match/grid.py) as an
+  extensible preflight table; `build_grid` records each drop in `Grid.pruned`
+  (`{axis, value, reason, n_recipes}`) and a note, and the CLI prints the count.
+- **Relevance pruning (risky — keep swept).** "This knob probably won't change the
+  output" is exactly what the tool refuses to guess. Those stay in the sweep
+  unless the user narrows an axis explicitly (`--dtypes` / `--attention-backends`
+  / `--grid`).
+
+### Preflight feasibility rules (current)
+
+- **`float32` on a MoE model → `infeasible:moe-fp32-shared-mem`.** vLLM's Triton
+  fused-MoE kernel needs ~128 KiB shared memory/block in fp32 (double bf16's),
+  over the ~99 KiB/SM cap on workstation cards like the RTX PRO 6000 Blackwell →
   `triton ... out of resource: shared memory, Required: 131072, Hardware limit:
-  101376`, and the engine fails to start. There's no serve-arg that shrinks the
-  MoE block sizes and no tuned `dtype=float32.json` for these cards. Fits on an
-  H100's 228 KiB, so it's GPU-specific. **Skip fp32** via `--dtypes
-  auto,bfloat16,float16` (the OLMoE runbook defaults `DM_DTYPES` to this) rather
-  than pay 4 crashing fp32 endpoints. fp32 of a bf16-native model is an unlikely
-  HF-match winner anyway.
+  101376`; the engine fails to start. No serve-arg shrinks the MoE block sizes.
+  Fits on an H100's 228 KiB, so it's GPU-specific — pass `--allow-moe-fp32` (or
+  `allow_moe_fp32: true` in `--grid`) to keep it. MoE is detected from the model's
+  `config.json` (`num_experts`-family / `*Moe*` architecture), with a name-based
+  fallback when config.json isn't cached
+  ([`registry.py` `model_is_moe`](../dev/tools/deployment_match/registry.py)).
+- *Candidates to add next (same table, same typed-reason shape):* VRAM-OOM from a
+  size×dtype estimate vs. the GPU (infer-stack's `model_memory_estimator` already
+  exists); an attention backend not compiled into the container image.
+
+### A related caveat (not a feasibility prune)
+
 - **Disabling chunked prefill is only a *warning* on MoE.** hf-match sets
   `--no-enable-chunked-prefill`; vLLM warns "This model does not officially support
   disabling chunked prefill ... may cause the engine to crash or produce incorrect
   outputs." It generally still serves, but treat a MoE hf-match ranking with some
   caution — if a backend's outputs look wrong, re-check with chunked prefill left
-  on (`--grid {runtime: {enable_chunked_prefill: true}}`) before trusting the
-  scores. (The scorer's `collapse`/`NO_DATA` verdicts catch gross breakage, not
-  subtle numeric corruption.)
+  on (`--grid {runtime: {enable_chunked_prefill: true}}`). The scorer's
+  `collapse`/`NO_DATA` verdicts catch gross breakage, not subtle numeric drift.
 
 ## Still open (not in the minimal example)
 
