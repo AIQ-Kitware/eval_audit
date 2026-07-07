@@ -63,6 +63,17 @@ When working on features or fixes:
 - **Cross-machine validation**: If a run passes on aiq-gpu but fails on namek, the failure mode matters. Reproducibility problems appear consistently; infrastructure problems are machine-specific.
 - **Failure taxonomy**: Categorize reproducibility failures (numeric drift, missing outputs, different model behavior) separately from infrastructure failures (GPU OOM, data unavailable).
 
+## Committing Work
+
+Commit finished logical units of work proactively as you complete them — do not wait for the user to ask for each commit.
+
+- **A "logical unit" is a coherent, self-contained change**: a completed fix, feature, refactor, or documentation update that stands on its own and passes its own validation (compiles, tests pass, pipeline segment runs). Don't bundle unrelated changes into one commit, and don't fragment one coherent change into many.
+- **If the user says "make a branch for this"** (or similar), that instruction implies committing the resulting work into that branch — you do not need separate permission to commit once the branch exists for that purpose.
+- **Order commits by dependency**: when a session touches multiple subsystems, commit the dependency first (e.g., a shared utility or submodule fix) before the subsystem that depends on it, so each commit leaves the tree in a working state.
+- **Never auto-commit submodule gitlink bumps**: if a submodule's pinned commit changed as a side effect of other work (not an intentional submodule update), leave that gitlink change unstaged and flag it to the user rather than folding it into a commit.
+- **Still follow the Git Safety Protocol**: never force-push, never skip hooks (`--no-verify`), never amend a published commit, never run destructive git commands without explicit confirmation, and always review `git status`/`git diff` before staging.
+- This instruction overrides the general default (elsewhere) of only committing when explicitly asked — in this repository, proactive commits of finished logical units are expected.
+
 ## Key Files & Concepts
 
 ### Pipeline Architecture
