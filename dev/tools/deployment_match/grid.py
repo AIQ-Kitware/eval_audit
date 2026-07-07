@@ -26,7 +26,7 @@ DTYPE_TAG = {"auto": "auto", "float16": "fp16", "bfloat16": "bf16", "float32": "
 DEFAULT_AXES: dict[str, list[Any]] = {
     "dtype": ["auto", "float16", "bfloat16", "float32"],
     "tokenizer": ["default"],          # 'default' = the model's own; plus siblings if known
-    "max_model_len": ["auto"],         # 'auto' = official max_sequence_length + 1
+    "max_model_len": ["auto"],         # 'auto' = min(official max_seq_len + 1, model max_position_embeddings)
     "trust_remote_code": [False],
     "add_special_tokens": [True, False],
     "protocol": ["auto"],              # 'auto' = resolved protocol
@@ -163,8 +163,25 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
     hf_source = resolution.hf_source
     model_short = _slug((resolution.model or hf_source or "model").split("/")[-1])
 
-    # Resolve 'auto' placeholders.
-    default_mml = (resolution.official_max_sequence_length or 2047) + 1
+    # Resolve 'auto' placeholders. HELM's max_sequence_length convention is
+    # inconsistent (together/olmo-7b: 2047 = window-1; huggingface/olmoe: 4096 =
+    # the full window), so take official+1 but clamp to the model's own
+    # max_position_embeddings — vLLM refuses to start above the derived ceiling
+    # ("User-specified max_model_len is greater than the derived max_model_len").
+    # Without a cached config.json the ceiling is unknown: fall back to the
+    # official value verbatim (never overshoot; a refused server scores nothing).
+    official_msl = resolution.official_max_sequence_length
+    model_ceiling = getattr(resolution, "hf_max_position_embeddings", None)
+    if official_msl and model_ceiling:
+        default_mml = min(official_msl + 1, model_ceiling)
+    elif official_msl:
+        default_mml = official_msl
+        notes.append(
+            "max_model_len defaults to the official max_sequence_length verbatim "
+            f"({official_msl}): no cached config.json to clamp official+1 against"
+        )
+    else:
+        default_mml = model_ceiling or 2048
     tok_values: list[str | None] = []
     for t in axes["tokenizer"]:
         if t in ("default", None):

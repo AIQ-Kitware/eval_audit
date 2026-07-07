@@ -84,7 +84,7 @@ Read the run dir (shape verified against `/data/crfm-helm-public`):
 
 - **Recipe held FIXED** (replayed verbatim, from-spec — [[all-reproductions-must-be-from-spec]]): per `request_state.request` — `prompt`, `max_tokens`, `temperature`, `stop_sequences`, `num_completions`, `echo_prompt=False`. We vary **only deployment knobs**, never the recipe.
 - **Ground truth**: `result.completions[0].text` per sampled instance (+ per-token `tokens[].text/.logprob` when present — note Together stores `logprob: 0`, so text is the primary signal).
-- **Official deployment facts** from `submodules/helm/.../model_deployments.yaml` + `tokenizer_configs.yaml`: `tokenizer_name`, `max_sequence_length`, client class → seed grid defaults (`max_model_len = max_sequence_length + 1`, default tokenizer).
+- **Official deployment facts** from `submodules/helm/.../model_deployments.yaml` + `tokenizer_configs.yaml`: `tokenizer_name`, `max_sequence_length`, client class → seed grid defaults (`max_model_len = min(max_sequence_length + 1, model max_position_embeddings)` — HELM's `max_sequence_length` is sometimes the full window and sometimes window−1, and vLLM refuses to start above the model-derived ceiling; default tokenizer).
 - **Sampling** (`--n`): deterministic head **plus** the few shortest prompts (MC-like). The EOS failure looked different on long-gen (`"The first thing…"`) vs short (`"The"`); the sample must span both response lengths.
 
 Reader: `eval_audit/normalized/loaders.py::HelmRawLoader` (or read `scenario_state.json` directly — the confirmed schema is `request_states[i].request.prompt` / `.result.completions[0].text`).

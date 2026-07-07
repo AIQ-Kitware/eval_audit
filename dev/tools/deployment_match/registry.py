@@ -5,7 +5,12 @@ Two lookups the grid generator needs:
 * **Official deployment facts** — from ``submodules/helm/.../model_deployments.yaml``
   keyed by the run's ``model_deployment`` (e.g. ``together/olmo-7b``): the
   ``tokenizer_name``, ``max_sequence_length``, and client class. These seed grid
-  defaults (``max_model_len = max_sequence_length + 1``, the reference tokenizer).
+  defaults (``max_model_len``, the reference tokenizer). HELM's
+  ``max_sequence_length`` convention is inconsistent — sometimes the full context
+  window (``huggingface/olmoe-…``: 4096), sometimes window-1 (``together/olmo-7b``:
+  2047) — so the grid clamps ``official + 1`` to the model's own
+  ``max_position_embeddings`` (read from the cached config.json when available;
+  vLLM refuses to start above it).
 
 * **Local source + protocol** — the HF repo to serve and whether it's a
   completions or chat model. Resolution order: explicit ``--source`` override →
@@ -58,6 +63,9 @@ class Resolution:
     official_tokenizer: str | None = None
     official_max_sequence_length: int | None = None
     official_client_class: str | None = None
+    # max_position_embeddings from the model's cached config.json (None when not
+    # locally available) — the ceiling vLLM derives; serving above it refuses to start.
+    hf_max_position_embeddings: int | None = None
     tokenizer_appends_special: bool | None = None
     tokenizer_sibling: str | None = None
     notes: list[str] = field(default_factory=list)
@@ -129,14 +137,36 @@ def _preset_lookup(model: str) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _local_tokenizer_json(repo: str) -> Path | None:
-    """Find a locally-cached tokenizer.json for an HF repo (best-effort)."""
+def _local_hf_file(repo: str, filename: str) -> Path | None:
+    """Find a locally-cached file for an HF repo (best-effort)."""
     slug = "models--" + repo.replace("/", "--")
     for hub in (Path.home() / ".cache/huggingface/hub",
                 Path.home() / ".cache/eval-audit-hf/hub"):
-        for tj in (hub / slug).glob("snapshots/*/tokenizer.json"):
-            return tj
+        for f in (hub / slug).glob(f"snapshots/*/{filename}"):
+            return f
     return None
+
+
+def _local_tokenizer_json(repo: str) -> Path | None:
+    """Find a locally-cached tokenizer.json for an HF repo (best-effort)."""
+    return _local_hf_file(repo, "tokenizer.json")
+
+
+def hf_max_position_embeddings(repo: str) -> int | None:
+    """``max_position_embeddings`` from a locally-cached config.json, else None.
+
+    This is the value vLLM derives its ``max_model_len`` ceiling from; a
+    user-specified value above it makes ``vllm serve`` refuse to start.
+    """
+    cfg = _local_hf_file(repo, "config.json")
+    if not cfg:
+        return None
+    try:
+        doc = json.loads(cfg.read_text(encoding="utf-8"))
+        value = doc.get("max_position_embeddings")
+        return int(value) if value else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def post_processor_appends_special(post_processor: Any) -> bool:
@@ -198,6 +228,13 @@ def resolve(model: str, model_deployment: str, *,
     if not protocol_resolved:
         notes.append(f"protocol unresolved; defaulting to '{protocol}' (override with --protocol)")
 
+    max_pos = hf_max_position_embeddings(hf_source) if hf_source else None
+    if hf_source and max_pos is None:
+        notes.append(
+            f"config.json for '{hf_source}' not in the local HF cache; "
+            "max_model_len falls back to the official max_sequence_length verbatim"
+        )
+
     appends = tokenizer_appends_special(hf_source) if hf_source else None
     sibling = KNOWN_TOKENIZER_SIBLINGS.get(hf_source or "")
     if appends:
@@ -215,6 +252,7 @@ def resolve(model: str, model_deployment: str, *,
         official_tokenizer=official.get("tokenizer_name"),
         official_max_sequence_length=official.get("max_sequence_length"),
         official_client_class=official.get("client_class"),
+        hf_max_position_embeddings=max_pos,
         tokenizer_appends_special=appends,
         tokenizer_sibling=sibling,
         notes=notes,

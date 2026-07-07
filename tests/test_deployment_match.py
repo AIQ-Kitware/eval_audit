@@ -127,6 +127,27 @@ def test_grid_cap_drops_and_reports():
     assert any("cap" in n for n in g.notes)
 
 
+def test_grid_max_model_len_clamped_to_model_ceiling():
+    """official+1 must never exceed max_position_embeddings — vLLM refuses to
+    start above the derived ceiling (the olmoe 4096+1=4097 failure)."""
+    # HELM window-1 convention (together/olmo-7b: 2047, model ceiling 2048): +1 fits.
+    g = grid_mod.build_grid(_resolution(official_max_sequence_length=2047,
+                                        hf_max_position_embeddings=2048))
+    assert all(sr.max_model_len == 2048 for sr in g.serve_recipes)
+    # HELM full-window convention (huggingface/olmoe: 4096 == ceiling): clamp, no +1.
+    g = grid_mod.build_grid(_resolution(official_max_sequence_length=4096,
+                                        hf_max_position_embeddings=4096))
+    assert all(sr.max_model_len == 4096 for sr in g.serve_recipes)
+
+
+def test_grid_max_model_len_conservative_without_config():
+    """No cached config.json -> unknown ceiling -> official verbatim (never overshoot)."""
+    g = grid_mod.build_grid(_resolution(official_max_sequence_length=4096,
+                                        hf_max_position_embeddings=None))
+    assert all(sr.max_model_len == 4096 for sr in g.serve_recipes)
+    assert any("config.json" in n for n in g.notes)
+
+
 # --------------------------------------------------------------------------- #
 # score
 # --------------------------------------------------------------------------- #
