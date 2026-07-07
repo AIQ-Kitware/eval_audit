@@ -36,9 +36,14 @@ def _winner_catalog(best: dict[str, Any]) -> dict[str, Any]:
     protocol = native.get("protocol", "completions")
     runtime: dict[str, Any] = {
         "max_model_len": serve.get("max_model_len", 2048),
-        "gpu_memory_utilization": 0.85,
-        "max_num_batched_tokens": 2048,
-        "max_num_seqs": 16,
+        # Reproduce the WINNING serving numbers, not grid defaults — esp.
+        # max_num_seqs, which sets batch invariance (an hf-match winner serves
+        # at 1; falling back to 16 would re-introduce batch non-invariance in
+        # the full run). Defaults kept for older best_deployment.yaml that
+        # predate these keys.
+        "gpu_memory_utilization": serve.get("gpu_memory_utilization", 0.85),
+        "max_num_batched_tokens": serve.get("max_num_batched_tokens", 2048),
+        "max_num_seqs": serve.get("max_num_seqs", 16),
         "extra_args": serve.get("extra_args") or [],
     }
     if serve.get("trust_remote_code"):

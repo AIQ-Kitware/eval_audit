@@ -188,18 +188,14 @@ the confirm catalog.
   winner is confirmed authoritatively by the full `compare-pair` regardless. (The
   zero-runtime-cost params — `top_k`/penalties/`seed` — could still be forwarded
   if a non-greedy scenario ever needs them, but that is not on by default.)
-- Propagate the *full* winning runtime through
-  [`confirm.py` `_winner_catalog`](../dev/tools/deployment_match/confirm.py). The
-  CLI-flag knobs (`--enforce-eager` / `--no-enable-chunked-prefill` /
-  `--no-enable-prefix-caching` / `--dtype`) ride through `extra_args`, and
-  `attention_backend` / `trust_remote_code` / `max_model_len` are carried — but
-  **`max_num_seqs` is dropped**: the winner's `1` becomes the hardcoded `16`,
-  silently re-introducing batch non-invariance in the confirm/full run. The cause
-  is structural: the winning runtime numbers (`max_num_seqs`,
-  `gpu_memory_utilization`, `max_num_batched_tokens`) never thread into
-  `Cell.serve`, so `report.best_deployment`'s `serve_time_knobs` can't see them
-  and `_winner_catalog` falls back to defaults. `gpu_memory_utilization=0.85` /
-  `max_num_batched_tokens=2048` happen to equal the grid defaults today, so they
-  are latent (not active) drops. Fixing it is a 3-point thread: add the runtime
-  numbers to `Cell.serve` (grid.py) → capture them in `serve_time_knobs`
-  (report.py) → use them instead of the hardcode (confirm.py).
+- ~~Propagate the *full* winning runtime through `confirm._winner_catalog`~~
+  **(FIXED).** The confirm catalog now reproduces the winning serving numbers
+  instead of grid defaults. The runtime numbers (`max_num_seqs`,
+  `gpu_memory_utilization`, `max_num_batched_tokens`) thread `ServeRecipe.runtime`
+  → `Cell.serve` (grid.py) → `serve_time_knobs` (report.py) →
+  [`_winner_catalog`](../dev/tools/deployment_match/confirm.py) (confirm.py, with
+  the old constants kept only as fallback for pre-fix `best_deployment.yaml`). So
+  an `hf-match` winner served at `max_num_seqs=1` now confirms at `1`, not the
+  batch-non-invariant `16`. (CLI-flag knobs — `--enforce-eager` /
+  `--no-enable-chunked-prefill` / `--no-enable-prefix-caching` / `--dtype` — were
+  always carried via `extra_args`.)

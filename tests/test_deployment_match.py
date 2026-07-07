@@ -20,9 +20,11 @@ TOOL = REPO / "dev" / "tools" / "deployment_match"
 if str(TOOL) not in sys.path:
     sys.path.insert(0, str(TOOL))
 
+import confirm as confirm_mod    # noqa: E402
 import grid as grid_mod          # noqa: E402
 import oracle as oracle_mod      # noqa: E402
 import registry as registry_mod  # noqa: E402
+import report as report_mod      # noqa: E402
 import score as score_mod        # noqa: E402
 
 GPT2_FIXTURE = (REPO / "submodules" / "every_eval_ever" / "tests" / "data" / "helm"
@@ -198,6 +200,44 @@ def test_attention_backend_axis_widens_and_names_endpoints():
     assert any("attntorch-sdpa" in n for n in names)
     assert any("attnflash-attn" in n for n in names)
     assert {s.attention_backend for s in g.serve_recipes} == {"TORCH_SDPA", "FLASH_ATTN"}
+
+
+def _best_from_cell(cell, resolution):
+    scored = [{"cell_id": cell.cell_id, "composite": 1.0, "verdict": "MATCH",
+               "request": cell.request, "quasi_match_rate": 1.0,
+               "first_token_match_rate": 1.0, "exact_match_rate": 1.0,
+               "mean_similarity": 1.0, "n_ok": 2}]
+    return report_mod.best_deployment(
+        scored, {cell.cell_id: {"serve": cell.serve, "request": cell.request}}, resolution)
+
+
+def test_confirm_catalog_reproduces_winning_max_num_seqs():
+    """Gap-1 regression: the winning serving numbers (esp. max_num_seqs, the
+    batch-invariance knob) must reach the confirm catalog, not fall back to the
+    grid defaults."""
+    res = _resolution()
+    g = grid_mod.build_grid(res, spec=grid_mod.BUILTIN_PROFILES["hf-match"])
+    cell = g.cells[0]
+    assert cell.serve["max_num_seqs"] == 1                  # threaded into Cell.serve
+    best = _best_from_cell(cell, res)
+    assert best["serve_time_knobs"]["max_num_seqs"] == 1    # captured in the report
+    cat = confirm_mod._winner_catalog(best)
+    rt = cat["endpoints"][next(iter(cat["endpoints"]))]["runtime"]
+    assert rt["max_num_seqs"] == 1                          # reproduced, not hardcoded 16
+    assert rt["attention_backend"] == "TORCH_SDPA"
+
+
+def test_confirm_catalog_falls_back_for_legacy_best_deployment():
+    """Older best_deployment.yaml without the runtime numbers keep the defaults."""
+    legacy = {
+        "winner_cell": "dm-x::ast1-completions",
+        "serve_time_knobs": {"hf_source": "org/m", "dtype": "auto",
+                             "max_model_len": 4096, "extra_args": []},
+        "request_time_knobs": {"native": {"protocol": "completions"}, "probe_only": {}},
+    }
+    rt = confirm_mod._winner_catalog(legacy)["endpoints"]["dm-x"]["runtime"]
+    assert rt["max_num_seqs"] == 16                         # default fallback
+    assert rt["gpu_memory_utilization"] == 0.85
 
 
 # --------------------------------------------------------------------------- #

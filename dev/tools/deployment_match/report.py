@@ -100,6 +100,11 @@ def best_deployment(scored: list[dict[str, Any]], cells_by_id: dict[str, dict[st
             "max_model_len": serve.get("max_model_len"),
             "trust_remote_code": serve.get("trust_remote_code"),
             "attention_backend": serve.get("attention_backend"),
+            # Serving runtime numbers so the confirm catalog reproduces the
+            # winner faithfully (max_num_seqs is the batch-invariance knob).
+            "max_num_seqs": serve.get("max_num_seqs"),
+            "gpu_memory_utilization": serve.get("gpu_memory_utilization"),
+            "max_num_batched_tokens": serve.get("max_num_batched_tokens"),
             "extra_args": serve.get("extra_args"),
         },
         "request_time_knobs": {

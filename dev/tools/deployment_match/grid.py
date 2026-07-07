@@ -295,6 +295,11 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
                        "max_model_len": sr.max_model_len,
                        "trust_remote_code": sr.trust_remote_code,
                        "attention_backend": sr.attention_backend,
+                       # Serving runtime numbers the confirm catalog must
+                       # reproduce (esp. max_num_seqs — batch invariance).
+                       "max_num_seqs": sr.runtime["max_num_seqs"],
+                       "gpu_memory_utilization": sr.runtime["gpu_memory_utilization"],
+                       "max_num_batched_tokens": sr.runtime["max_num_batched_tokens"],
                        "extra_args": sr.extra_args()},
                 request={"add_special_tokens": rv.add_special_tokens,
                          "protocol": rv.protocol},
