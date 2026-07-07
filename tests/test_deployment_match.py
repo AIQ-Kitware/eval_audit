@@ -246,6 +246,28 @@ def test_hf_match_respects_resolved_chat_protocol():
     assert {rv.protocol for rv in g_base.request_variants} == {"completions"}
 
 
+def test_add_generation_prompt_swept_for_chat_only():
+    """hf-match sweeps add_generation_prompt {True,False} for chat models (the
+    OLMoE old-vs-new chat-template quirk) and never sends it for completions."""
+    res = _resolution(protocol="chat", protocol_resolved=True,
+                      tokenizer_appends_special=False, tokenizer_sibling=None)
+    g = grid_mod.build_grid(res, spec=grid_mod.BUILTIN_PROFILES["hf-match"])
+    assert {rv.add_generation_prompt for rv in g.request_variants} == {True, False}
+    assert all(rv.protocol == "chat" for rv in g.request_variants)
+    assert all("add_generation_prompt" in c.request for c in g.cells)
+    # a completions (base) model: add_generation_prompt is inert -> never set
+    res_c = _resolution(protocol="completions", protocol_resolved=True,
+                        tokenizer_appends_special=False, tokenizer_sibling=None)
+    g_c = grid_mod.build_grid(res_c, spec=grid_mod.BUILTIN_PROFILES["hf-match"])
+    assert {rv.add_generation_prompt for rv in g_c.request_variants} == {None}
+
+
+def test_default_grid_omits_add_generation_prompt():
+    """Default grid keeps vLLM's default (doesn't send add_generation_prompt)."""
+    g = grid_mod.build_grid(_resolution())        # resolves to completions
+    assert {rv.add_generation_prompt for rv in g.request_variants} == {None}
+
+
 def test_preflight_prunes_moe_fp32():
     """A MoE model's float32 sub-grid is dropped a priori (can't serve: Triton MoE
     shared-memory OOM), with a typed reason — the sweep never wastes a serve cycle."""

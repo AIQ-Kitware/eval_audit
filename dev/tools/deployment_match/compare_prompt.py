@@ -137,6 +137,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="override the cell protocol (chat => apply chat template)")
     ap.add_argument("--add-special-tokens", choices=["true", "false"],
                     help="override the cell add_special_tokens for the live vLLM query")
+    ap.add_argument("--add-generation-prompt", choices=["true", "false"],
+                    help="override add_generation_prompt (chat). HELM's older transformers "
+                    "ignored it (=> false); set false to reproduce that render")
     ap.add_argument("--no-chat-template", action="store_true",
                     help="force apply_chat_template=False (base model)")
     ap.add_argument("--tokenize-url", help="live vLLM /tokenize URL (direct to the container)")
@@ -155,6 +158,14 @@ def main(argv: list[str] | None = None) -> int:
     protocol = args.protocol or request.get("protocol") or "chat"
     ast = (args.add_special_tokens == "true") if args.add_special_tokens is not None \
         else bool(request.get("add_special_tokens", True))
+    # add_generation_prompt: CLI > cell > True (HELM's literal call; older templates
+    # ignored it, so 'false' reproduces that effective render).
+    if args.add_generation_prompt is not None:
+        agp = args.add_generation_prompt == "true"
+    elif request.get("add_generation_prompt") is not None:
+        agp = bool(request["add_generation_prompt"])
+    else:
+        agp = True
     tok_repo = _resolve_tokenizer(args, cell, helm_model, deployment)
 
     tok = AutoTokenizer.from_pretrained(tok_repo, trust_remote_code=True)
@@ -168,17 +179,17 @@ def main(argv: list[str] | None = None) -> int:
     print(f"prompt[:120]   : {prompt[:120]!r}{' …' if len(prompt) > 120 else ''}")
     print(f"tokenizer      : {tok_repo}  (has_chat_template={has_template})")
     print(f"protocol       : {protocol}   apply_chat_template={apply_ct}   "
-          f"add_special_tokens={ast}")
+          f"add_special_tokens={ast}   add_generation_prompt={agp}")
     print("=" * 72)
 
     # ---- HELM side: what the official model was actually fed --------------------
     if apply_ct:
         rendered = tok.apply_chat_template(
-            [{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True)
+            [{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=agp)
     else:
         rendered = prompt
     helm_ids = tok(rendered, add_special_tokens=True).input_ids
-    print("\n[HELM] get_prompt render (add_generation_prompt=True), tokenized "
+    print(f"\n[HELM] get_prompt render (add_generation_prompt={agp}), tokenized "
           "add_special_tokens=True:")
     print(f"  rendered head : {rendered[:160]!r}")
     print(f"  ids           : {_fmt_ids(tok, helm_ids)}")
@@ -207,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
         served = args.served_model or (cell.get("endpoint") if cell else None) or helm_model
         if protocol == "chat" and apply_ct:
             body = {"model": served, "messages": [{"role": "user", "content": prompt}],
-                    "add_generation_prompt": True, "add_special_tokens": ast}
+                    "add_generation_prompt": agp, "add_special_tokens": ast}
         else:
             body = {"model": served, "prompt": rendered, "add_special_tokens": ast}
         try:

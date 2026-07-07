@@ -231,6 +231,34 @@ beforehand" splits into two kinds, treated oppositely:
   on (`--grid {runtime: {enable_chunked_prefill: true}}`). The scorer's
   `collapse`/`NO_DATA` verdicts catch gross breakage, not subtle numeric drift.
 
+## Chat-template *version* drift: `add_generation_prompt` (OLMoE)
+
+A subtle, real reproducibility trap surfaced on OLMoE-instruct. HELM's `get_prompt`
+always *calls* `apply_chat_template(..., add_generation_prompt=True)` — but that
+flag only does anything if the **chat template implements it**
+(`{% if add_generation_prompt %}<|assistant|>\n{% endif %}`). The OLMoE template
+shipped with HELM's **older transformers ignored it**, so `add_generation_prompt`
+was effectively **False** — the model was fed the prompt **without** the trailing
+`<|assistant|>\n`. Modern transformers/vLLM ship an updated template that honors
+it, so the same call now **appends** the suffix → a different prompt → a different
+output on every cell. (Empirically confirmed: rendering with
+`add_generation_prompt=False` on modern transformers moves the output back toward
+the official.)
+
+Implications:
+
+- **This is a chat-template-version dependency**, not a serving knob. Reproducing a
+  HELM run needs the prompt rendered the way *that* transformers version rendered
+  it.
+- **In vLLM**, `/chat/completions` honors an `add_generation_prompt` field
+  (default `True`); send `add_generation_prompt=false` to match the old effective
+  render. `hf-match` now **sweeps `add_generation_prompt` {True, False}** as a
+  cheap request-time knob (chat only) and lets the scorer pick — for OLMoE it
+  picks False. Verify the exact render with `compare_prompt.py
+  --add-generation-prompt false`.
+- **Fully version-proof alternative:** pre-render with the template HELM used
+  (or `--chat-template <old.jinja>` on `vllm serve`) and send via completions.
+
 ## Why the OLMoE-ifeval sweep can't localize the difference
 
 Two compounding reasons, beyond any single knob:

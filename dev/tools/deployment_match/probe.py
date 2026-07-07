@@ -47,7 +47,8 @@ def _recipe_body(recipe: dict[str, Any]) -> dict[str, Any]:
 
 def query_one(base_url: str, model: str, prompt: str, *, protocol: str,
               recipe: dict[str, Any], add_special_tokens: bool | None,
-              api_key: str | None, timeout: float) -> dict[str, Any]:
+              api_key: str | None, timeout: float,
+              add_generation_prompt: bool | None = None) -> dict[str, Any]:
     base = base_url.rstrip("/")
     t0 = time.time()
     try:
@@ -56,6 +57,10 @@ def query_one(base_url: str, model: str, prompt: str, *, protocol: str,
                     **_recipe_body(recipe)}
             if add_special_tokens is not None:
                 body["add_special_tokens"] = add_special_tokens
+            # add_generation_prompt=False reproduces an old chat template that
+            # didn't append the assistant turn (vLLM defaults it True).
+            if add_generation_prompt is not None:
+                body["add_generation_prompt"] = add_generation_prompt
             resp = _post(f"{base}/chat/completions", body, api_key, timeout)
             choice = resp["choices"][0]
             text = choice["message"]["content"]
@@ -95,6 +100,7 @@ def query_cell(base_url: str, cell: dict[str, Any], sample: list[dict[str, Any]]
     for s in sample:
         r = query_one(base_url, endpoint, s["prompt"], protocol=rq["protocol"],
                       recipe=recipe, add_special_tokens=rq.get("add_special_tokens"),
+                      add_generation_prompt=rq.get("add_generation_prompt"),
                       api_key=api_key, timeout=timeout)
         r["instance_id"] = s["instance_id"]
         results.append(r)

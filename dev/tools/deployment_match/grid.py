@@ -30,6 +30,8 @@ DEFAULT_AXES: dict[str, list[Any]] = {
     "trust_remote_code": [False],
     "attention_backend": [None],       # None = vLLM default; else VLLM_ATTENTION_BACKEND (e.g. TORCH_SDPA)
     "add_special_tokens": [True, False],
+    "add_generation_prompt": [None],   # chat-only; None = vLLM default (True). False reproduces
+                                       # an old chat template that ignored add_generation_prompt.
     "protocol": ["auto"],              # 'auto' = resolved protocol
 }
 
@@ -71,8 +73,12 @@ BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
         # (usually FlashAttention) as the baseline. A backend that can't serve on
         # this GPU just scores NO_DATA and drops out. Each value is a separate
         # `vllm serve`, so this multiplies the (expensive) endpoint count.
-        "axes": {"attention_backend": [None, "FLASH_ATTN", "XFORMERS", "TORCH_SDPA"]},
-        # NB protocol is NOT pinned here. HELM's HuggingFaceClient applies the
+        #
+        # Also sweep add_generation_prompt (chat-only, cheap request-time knob):
+        # HELM's older transformers shipped OLMoE chat templates that ignored it
+        # (effectively False), while modern vLLM appends the assistant generation
+        # prompt (True). A per-model/version quirk — let the scorer pick the match.
+        # NB protocol is NOT pinned. HELM's HuggingFaceClient applies the
         # tokenizer's chat template when the model has one (auto-inferred; OLMoE
         # -instruct -> True), so the official model saw a CHAT-templated prompt
         # while scenario_state stored the raw request.prompt. The per-model
@@ -80,7 +86,8 @@ BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
         # the same template) and completions for base models — sending the raw
         # prompt verbatim would be wrong for a chat model. See
         # docs/vllm-vs-huggingface-deployment-match.md.
-        "axes": {"attention_backend": [None, "FLASH_ATTN", "XFORMERS", "TORCH_SDPA"]},
+        "axes": {"attention_backend": [None, "FLASH_ATTN", "XFORMERS", "TORCH_SDPA"],
+                 "add_generation_prompt": [True, False]},
         # 4 backends x 4 dtype (x tokenizer variants) can exceed the default 64
         # cap; raise it so no backend is silently truncated.
         "cap": 128,
@@ -170,6 +177,7 @@ class RequestVariant:
     name: str
     add_special_tokens: bool
     protocol: str
+    add_generation_prompt: bool | None = None   # chat-only; None = don't send (vLLM default)
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -361,12 +369,20 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
                             extra_serve_args=extra_serve_args,
                         ))
 
-    # ---- Tier B: request variants (add_special_tokens x protocol) ----
+    # ---- Tier B: request variants (add_special_tokens x protocol x add_generation_prompt) ----
     req: list[RequestVariant] = []
     for ast in axes["add_special_tokens"]:
         for proto in proto_values:
-            rvname = f"ast{'1' if ast else '0'}-{_slug(proto)}"
-            req.append(RequestVariant(name=rvname, add_special_tokens=bool(ast), protocol=proto))
+            # add_generation_prompt only affects the chat template; for completions
+            # it's inert, so collapse to a single (unset) variant there.
+            agp_values = axes["add_generation_prompt"] if proto == "chat" else [None]
+            for agp in agp_values:
+                rvname = f"ast{'1' if ast else '0'}-{_slug(proto)}"
+                if agp is not None:
+                    rvname += f"-agp{'1' if agp else '0'}"
+                req.append(RequestVariant(name=rvname, add_special_tokens=bool(ast),
+                                          protocol=proto,
+                                          add_generation_prompt=None if agp is None else bool(agp)))
 
     # ---- Cells = serve x request, with a cap ----
     cells: list[Cell] = []
@@ -386,7 +402,8 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
                        "max_num_batched_tokens": sr.effective_max_num_batched_tokens,
                        "extra_args": sr.extra_args()},
                 request={"add_special_tokens": rv.add_special_tokens,
-                         "protocol": rv.protocol},
+                         "protocol": rv.protocol,
+                         "add_generation_prompt": rv.add_generation_prompt},
             ))
     capped = 0
     if len(cells) > cap:
