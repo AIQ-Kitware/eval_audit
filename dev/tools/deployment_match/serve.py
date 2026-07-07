@@ -35,6 +35,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,18 @@ import probe as probe_mod  # noqa: E402
 
 def _log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
+
+
+def _fmt_dur(seconds: float) -> str:
+    """Compact human duration: 45s / 6m12s / 1h04m."""
+    s = int(round(seconds))
+    if s < 60:
+        return f"{s}s"
+    m, s = divmod(s, 60)
+    if m < 60:
+        return f"{m}m{s:02d}s"
+    h, m = divmod(m, 60)
+    return f"{h}h{m:02d}m"
 
 
 def _sh(cmd: list[str], env: dict[str, str], *, dry: bool,
@@ -101,17 +114,33 @@ def run_grid(grid_dir: str | Path, out_dir: str | Path, *,
              "(operator override); default is any available GPU")
 
     groups = group_cells_by_endpoint(cells)
-    _log(f"[run] grid_dir={grid_dir} gateway={base} endpoints={len(groups)} "
-         f"cells={len(cells)}{' (DRY)' if dry else ''}")
+    n_endpoints, n_cells = len(groups), len(cells)
+    _log(f"[run] grid_dir={grid_dir} gateway={base} endpoints={n_endpoints} "
+         f"cells={n_cells}{' (DRY)' if dry else ''}")
+
+    # Progress accounting: endpoints are the expensive, uniform unit (one model
+    # load each), so an average over completed endpoints gives a usable ETA.
+    # time.monotonic() is wall-clock only (never hashed/cached), so it doesn't
+    # affect determinism.
+    t0 = time.monotonic()
+    cells_done = 0
 
     envfile = tempfile.NamedTemporaryFile(
         prefix="dm-match.", suffix=".env", delete=False).name
     try:
         _sh(["infer-stack", "gc", "--yes"], env, dry=dry)
         master_key: str | None = None
-        for endpoint, ep_cells in groups.items():
-            _log(f"\n==================== {endpoint} "
-                 f"({len(ep_cells)} cell(s)) ====================")
+        for ep_idx, (endpoint, ep_cells) in enumerate(groups.items(), 1):
+            elapsed = time.monotonic() - t0
+            done_eps = ep_idx - 1
+            if done_eps:                       # ETA needs at least one timing sample
+                avg = elapsed / done_eps
+                eta = f"avg {_fmt_dur(avg)}/ep · eta ~{_fmt_dur(avg * (n_endpoints - done_eps))}"
+            else:
+                eta = "eta —"
+            _log(f"\n=== [endpoint {ep_idx}/{n_endpoints} · cells {cells_done}/{n_cells} · "
+                 f"elapsed {_fmt_dur(elapsed)} · {eta}] {endpoint} "
+                 f"({len(ep_cells)} cell(s)) ===")
             # --queue: use whatever GPU infer-stack reports available, waiting for
             # one to free if the fleet is busy (we never request a specific GPU).
             _sh(["infer-stack", "acquire", endpoint, "--queue", "--yes",
@@ -120,11 +149,13 @@ def run_grid(grid_dir: str | Path, out_dir: str | Path, *,
                 master_key = _sh(["infer-stack", "env", "LITELLM_MASTER_KEY"],
                                  env, dry=dry, capture=True) or None
             for cell in ep_cells:
+                cells_done += 1
                 if dry:
-                    _log(f"    would probe cell {cell['cell_id']} "
+                    _log(f"  [cell {cells_done}/{n_cells}] would probe {cell['cell_id']} "
                          f"request={cell['request']} over {len(sample)} prompts")
                     continue
-                _log(f"  cell {cell['cell_id']} request={cell['request']}")
+                _log(f"  [cell {cells_done}/{n_cells}] {cell['cell_id']} "
+                     f"request={cell['request']}")
                 doc = probe_mod.query_cell(
                     base + "/v1", cell, sample, recipe,
                     api_key=master_key, timeout=timeout, progress=progress)
@@ -139,6 +170,7 @@ def run_grid(grid_dir: str | Path, out_dir: str | Path, *,
         except OSError:
             pass
 
-    _log(f"\n[run] wrote {len(cells)} cell result(s) -> {out_dir}"
-         if not dry else "\n[run] dry plan complete (no results written)")
+    total = _fmt_dur(time.monotonic() - t0)
+    _log(f"\n[run] wrote {n_cells} cell result(s) in {total} -> {out_dir}"
+         if not dry else f"\n[run] dry plan complete in {total} (no results written)")
     return out_dir
