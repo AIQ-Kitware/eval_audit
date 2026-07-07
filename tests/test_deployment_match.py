@@ -20,6 +20,7 @@ TOOL = REPO / "dev" / "tools" / "deployment_match"
 if str(TOOL) not in sys.path:
     sys.path.insert(0, str(TOOL))
 
+import cli as cli_mod            # noqa: E402
 import confirm as confirm_mod    # noqa: E402
 import grid as grid_mod          # noqa: E402
 import oracle as oracle_mod      # noqa: E402
@@ -226,6 +227,32 @@ def test_default_grid_keeps_small_max_num_batched_tokens():
     g = grid_mod.build_grid(res)
     for sr in g.serve_recipes:
         assert sr.endpoint_dict("completions")["runtime"]["max_num_batched_tokens"] == 2048
+
+
+def test_dtypes_override_drops_float32():
+    """--dtypes narrows the dtype axis over the profile, e.g. to skip float32 on a
+    MoE model whose fp32 Triton kernel OOMs the GPU's shared memory."""
+    import argparse
+    args = argparse.Namespace(profile="hf-match", grid=None,
+                              dtypes="auto,bfloat16,float16", attention_backends=None)
+    spec = cli_mod._load_spec(args)
+    assert spec["axes"]["dtype"] == ["auto", "bfloat16", "float16"]
+    g = grid_mod.build_grid(
+        _resolution(tokenizer_appends_special=False, tokenizer_sibling=None), spec=spec)
+    assert {sr.dtype for sr in g.serve_recipes} == {"auto", "bfloat16", "float16"}  # no float32
+    # the hf-match determinism knobs still apply
+    assert all(not sr.runtime.get("enable_chunked_prefill", True) for sr in g.serve_recipes)
+
+
+def test_attention_backends_override_narrows_sweep():
+    """--attention-backends narrows the swept set ('none' => vLLM default)."""
+    import argparse
+    args = argparse.Namespace(profile="hf-match", grid=None, dtypes=None,
+                              attention_backends="none,XFORMERS")
+    spec = cli_mod._load_spec(args)
+    g = grid_mod.build_grid(
+        _resolution(tokenizer_appends_special=False, tokenizer_sibling=None), spec=spec)
+    assert {sr.attention_backend for sr in g.serve_recipes} == {None, "XFORMERS"}
 
 
 def _best_from_cell(cell, resolution):

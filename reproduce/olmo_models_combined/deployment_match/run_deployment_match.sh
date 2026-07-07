@@ -74,6 +74,15 @@ DM_ALLOWED_GPUS="${DM_ALLOWED_GPUS:-}"
 # model load). Use DM_DRY=1 first to preview the grid, or DM_PROFILE= to opt out.
 # (No colon in the default so an explicit empty value opts out.)
 DM_PROFILE="${DM_PROFILE-hf-match}"
+# dtype axis. DEFAULTS to skipping float32: OLMoE is a Mixture-of-Experts model,
+# and in fp32 vLLM's Triton fused-MoE kernel needs ~128 KiB shared memory/block,
+# over most workstation GPUs' ~99 KiB limit ("triton ... out of resource: shared
+# memory") — so fp32 OLMoE won't serve here (an environment limit, not a recipe
+# bug). Set DM_DTYPES= for the full axis (incl. float32) on a big-shared-mem GPU
+# (e.g. H100), or DM_DTYPES=auto,bfloat16 to narrow further.
+DM_DTYPES="${DM_DTYPES-auto,bfloat16,float16}"
+# Optional: narrow the attention_backend sweep, e.g. DM_ATTN=none,XFORMERS.
+DM_ATTN="${DM_ATTN:-}"
 
 # The deployment-match core imports its sibling modules by bare name (cli.py adds
 # its own dir to sys.path); the serve phase additionally imports `infer_stack`, so
@@ -105,6 +114,8 @@ echo "  out     : $DM_OUT"
 echo "  mode    : $([[ "$DM_DRY" == 1 ]] && echo 'dry-run (CPU, no GPU)' || echo 'full (serve + probe + score, GPU)')"
 [[ -n "$DM_ALLOWED_GPUS" ]] && echo "  gpus    : restricted to $DM_ALLOWED_GPUS"
 [[ -n "$DM_PROFILE" ]] && echo "  profile : $DM_PROFILE"
+[[ -n "$DM_DTYPES" ]] && echo "  dtypes  : $DM_DTYPES"
+[[ -n "$DM_ATTN" ]] && echo "  attn    : $DM_ATTN"
 echo
 
 # --- Run ---------------------------------------------------------------------
@@ -115,6 +126,8 @@ args=(auto --run "$DM_RUN" --n "$DM_N" --out "$DM_OUT")
 [[ "$DM_DRY" == 1 ]] && args+=(--dry)
 [[ -n "$DM_ALLOWED_GPUS" ]] && args+=(--allowed-gpus "$DM_ALLOWED_GPUS")
 [[ -n "$DM_PROFILE" ]] && args+=(--profile "$DM_PROFILE")
+[[ -n "$DM_DTYPES" ]] && args+=(--dtypes "$DM_DTYPES")
+[[ -n "$DM_ATTN" ]] && args+=(--attention-backends "$DM_ATTN")
 dm "${args[@]}"
 
 # --- Report ------------------------------------------------------------------

@@ -182,6 +182,31 @@ The deployment-match grid drives it through the `attention_backend` axis /
 `ServeRecipe`, and `confirm._winner_catalog` propagates a winning backend into
 the confirm catalog.
 
+## Known environment limits (MoE models, e.g. OLMoE)
+
+These are *recipe/environment* limits (per `CLAUDE.md`'s taxonomy), not
+reproducibility failures — a cell that can't serve scores `NO_DATA` and drops out.
+Two show up on OLMoE (a Mixture-of-Experts model):
+
+- **`float32` won't serve on limited-shared-memory GPUs.** vLLM's Triton fused-MoE
+  kernel needs ~128 KiB shared memory/block in fp32 (double bf16's), over the
+  ~99 KiB/SM cap on workstation cards like the RTX PRO 6000 Blackwell →
+  `triton ... out of resource: shared memory, Required: 131072, Hardware limit:
+  101376`, and the engine fails to start. There's no serve-arg that shrinks the
+  MoE block sizes and no tuned `dtype=float32.json` for these cards. Fits on an
+  H100's 228 KiB, so it's GPU-specific. **Skip fp32** via `--dtypes
+  auto,bfloat16,float16` (the OLMoE runbook defaults `DM_DTYPES` to this) rather
+  than pay 4 crashing fp32 endpoints. fp32 of a bf16-native model is an unlikely
+  HF-match winner anyway.
+- **Disabling chunked prefill is only a *warning* on MoE.** hf-match sets
+  `--no-enable-chunked-prefill`; vLLM warns "This model does not officially support
+  disabling chunked prefill ... may cause the engine to crash or produce incorrect
+  outputs." It generally still serves, but treat a MoE hf-match ranking with some
+  caution — if a backend's outputs look wrong, re-check with chunked prefill left
+  on (`--grid {runtime: {enable_chunked_prefill: true}}`) before trusting the
+  scores. (The scorer's `collapse`/`NO_DATA` verdicts catch gross breakage, not
+  subtle numeric corruption.)
+
 ## Still open (not in the minimal example)
 
 - **Full sampling replay — deliberately NOT done.** Replaying the entire official

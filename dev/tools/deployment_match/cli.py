@@ -140,6 +140,17 @@ def _load_spec(args) -> dict | None:
                 spec[k] = {**spec[k], **v}       # deep-merge axes/runtime dicts
             else:
                 spec[k] = v
+    # Convenience axis overrides (win over profile + --grid): narrow the two
+    # expensive serve-time axes without hand-writing a YAML. e.g. skip float32
+    # on a MoE model that OOMs the Triton kernel: --dtypes auto,bfloat16,float16.
+    axes_override: dict = {}
+    if getattr(args, "dtypes", None):
+        axes_override["dtype"] = [d.strip() for d in args.dtypes.split(",") if d.strip()]
+    if getattr(args, "attention_backends", None):
+        axes_override["attention_backend"] = [
+            b.strip() for b in args.attention_backends.split(",") if b.strip()]
+    if axes_override:
+        spec["axes"] = {**(spec.get("axes") or {}), **axes_override}
     return spec or None
 
 
@@ -380,6 +391,13 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--profile", default=None, choices=sorted(grid_mod.BUILTIN_PROFILES),
                        help="built-in grid profile merged under --grid (hf-match: pin "
                        "vLLM determinism knobs to match a HuggingFaceClient run)")
+        p.add_argument("--dtypes", default=None,
+                       help="comma-separated dtype axis override (wins over profile/--grid), "
+                       "e.g. 'auto,bfloat16,float16' to skip float32 on a MoE model that "
+                       "OOMs the Triton kernel")
+        p.add_argument("--attention-backends", default=None,
+                       help="comma-separated attention_backend axis override, e.g. "
+                       "'none,XFORMERS' to narrow the hf-match backend sweep")
 
     s = sub.add_parser("sample"); s.add_argument("--run", required=True)
     _run_opts(s); s.add_argument("--out", required=True); s.set_defaults(func=cmd_sample)
