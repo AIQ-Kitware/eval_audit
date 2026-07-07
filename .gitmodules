@@ -13,7 +13,7 @@
 [submodule "submodules/kwdagger"]
 	path = submodules/kwdagger
 	url = https://github.com/AIQ-Kitware/kwdagger.git
-	branch = dev/0.2.5
+	branch = dev/0.2.6
 [submodule "submodules/every_eval_ever"]
 	path = submodules/every_eval_ever
 	url = https://github.com/Erotemic/every_eval_ever.git
@@ -21,4 +21,4 @@
 [submodule "submodules/cmd_queue"]
 	path = submodules/cmd_queue
 	url = https://gitlab.kitware.com/computer-vision/cmd_queue.git
-	branch = dev/0.3.1
+	branch = dev/0.3.2
