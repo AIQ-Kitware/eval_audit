@@ -82,6 +82,11 @@ DM_PROFILE="${DM_PROFILE-hf-match}"
 DM_DTYPES="${DM_DTYPES:-}"
 # Optional: narrow the attention_backend sweep, e.g. DM_ATTN=none,XFORMERS.
 DM_ATTN="${DM_ATTN:-}"
+# Optional: DM_LOG_REQUESTS=1 turns on vLLM request logging so each request's
+# post-chat-template prompt + sampling params appear in the container logs
+# (view with `infer-stack` TUI logs or `docker compose logs <vllm-service>`).
+# Useful to verify the prompt vLLM actually tokenizes matches HELM's.
+DM_LOG_REQUESTS="${DM_LOG_REQUESTS:-}"
 
 # The deployment-match core imports its sibling modules by bare name (cli.py adds
 # its own dir to sys.path); the serve phase additionally imports `infer_stack`, so
@@ -127,6 +132,7 @@ args=(auto --run "$DM_RUN" --n "$DM_N" --out "$DM_OUT")
 [[ -n "$DM_PROFILE" ]] && args+=(--profile "$DM_PROFILE")
 [[ -n "$DM_DTYPES" ]] && args+=(--dtypes "$DM_DTYPES")
 [[ -n "$DM_ATTN" ]] && args+=(--attention-backends "$DM_ATTN")
+[[ -n "$DM_LOG_REQUESTS" ]] && args+=(--log-requests)
 dm "${args[@]}"
 
 # --- Report ------------------------------------------------------------------

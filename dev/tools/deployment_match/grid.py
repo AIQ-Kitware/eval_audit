@@ -111,6 +111,7 @@ class ServeRecipe:
     trust_remote_code: bool
     runtime: dict[str, Any]
     attention_backend: str | None = None   # None = vLLM default; else VLLM_ATTENTION_BACKEND
+    extra_serve_args: list[str] = field(default_factory=list)  # appended verbatim to `vllm serve`
 
     def extra_args(self) -> list[str]:
         args = ["--dtype", self.dtype]
@@ -129,6 +130,9 @@ class ServeRecipe:
             args += ["--no-enable-chunked-prefill"]
         if not self.runtime.get("enable_prefix_caching", True):
             args += ["--no-enable-prefix-caching"]
+        # Debug/passthrough args appended verbatim (e.g. --enable-log-requests to
+        # dump each request's post-chat-template prompt into the container logs).
+        args += list(self.extra_serve_args)
         return args
 
     @property
@@ -255,6 +259,15 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
     notes: list[str] = []
     pruned: list[dict[str, Any]] = []
 
+    # Extra `vllm serve` args appended to every endpoint (passthrough). The
+    # log_requests convenience adds vLLM request logging so each request's
+    # post-chat-template prompt + sampling params land in the container logs.
+    extra_serve_args = list((spec or {}).get("extra_serve_args") or [])
+    if (spec or {}).get("log_requests"):
+        extra_serve_args += ["--enable-log-requests", "--max-log-len", "100000"]
+        notes.append("request logging on (--enable-log-requests): each request's "
+                     "rendered prompt + params appear in the vLLM container logs")
+
     if not runtime.get("enable_chunked_prefill", True) or \
             not runtime.get("enable_prefix_caching", True):
         notes.append("hf-match determinism active: chunked-prefill / prefix-caching "
@@ -345,6 +358,7 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
                             name=name, hf_source=hf_source or "", dtype=dtype,
                             tokenizer=tok, max_model_len=mml, trust_remote_code=bool(trc),
                             runtime=runtime, attention_backend=attn,
+                            extra_serve_args=extra_serve_args,
                         ))
 
     # ---- Tier B: request variants (add_special_tokens x protocol) ----

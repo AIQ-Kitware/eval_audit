@@ -273,6 +273,24 @@ def test_preflight_keeps_fp32_for_dense_models():
     assert not g.pruned
 
 
+def test_log_requests_and_extra_serve_args_reach_the_command():
+    """--log-requests / --extra-serve-args append to every endpoint's vllm serve
+    line so the request prompt shows up in the container logs."""
+    import argparse
+    args = argparse.Namespace(profile=None, grid=None, dtypes=None,
+                              attention_backends=None, allow_moe_fp32=False,
+                              log_requests=True, extra_serve_args="--foo bar")
+    spec = cli_mod._load_spec(args)
+    g = grid_mod.build_grid(_resolution(), spec=spec)
+    for sr in g.serve_recipes:
+        ea = sr.extra_args()
+        assert "--enable-log-requests" in ea and "--max-log-len" in ea
+        assert "--foo" in ea and "bar" in ea
+    # reaches the infer-stack endpoint runtime too (so it's actually served)
+    assert "--enable-log-requests" in g.serve_recipes[0].endpoint_dict("chat")["runtime"]["extra_args"]
+    assert any("request logging" in n for n in g.notes)
+
+
 def test_dtypes_override_drops_float32():
     """--dtypes narrows the dtype axis over the profile, e.g. to skip float32 on a
     MoE model whose fp32 Triton kernel OOMs the GPU's shared memory."""

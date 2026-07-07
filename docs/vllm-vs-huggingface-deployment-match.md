@@ -260,6 +260,29 @@ Two compounding reasons, beyond any single knob:
 - If you must score text on long-form, weight **first-token / first-K-token**
   agreement (robust to the chaotic tail) over full-string similarity.
 
+## Inspecting the prompt vLLM actually received
+
+To verify the prompt vLLM tokenizes matches HELM's `get_prompt` (esp. the chat
+template), two options:
+
+- **Request logging** — `--log-requests` (or `DM_LOG_REQUESTS=1`) adds
+  `--enable-log-requests --max-log-len 100000` to every endpoint, so each request's
+  **post-chat-template** prompt + sampling params print in the vLLM container logs.
+  View with the infer-stack TUI logs pane or `docker compose logs <vllm-service>`.
+  (`--extra-serve-args '<flags>'` passes arbitrary `vllm serve` args if your vLLM
+  spells the flag differently.)
+- **`/tokenize` endpoint (surgical — no generation, no truncation).** POST the
+  messages and read back exactly what vLLM renders, then diff against HELM's
+  `apply_chat_template`:
+  ```bash
+  curl -s localhost:<port>/tokenize -H 'Content-Type: application/json' -d '{
+    "model": "<served-name>",
+    "messages": [{"role":"user","content":"<request.prompt from oracle.json>"}],
+    "add_generation_prompt": true
+  }' | jq
+  # compare with: tokenizer.apply_chat_template([{...}], add_generation_prompt=True)
+  ```
+
 ## Still open (not in the minimal example)
 
 - **Full sampling replay — deliberately NOT done.** Replaying the entire official

@@ -153,6 +153,11 @@ def _load_spec(args) -> dict | None:
         spec["axes"] = {**(spec.get("axes") or {}), **axes_override}
     if getattr(args, "allow_moe_fp32", False):
         spec["allow_moe_fp32"] = True
+    if getattr(args, "log_requests", False):
+        spec["log_requests"] = True
+    if getattr(args, "extra_serve_args", None):
+        import shlex
+        spec["extra_serve_args"] = shlex.split(args.extra_serve_args)
     return spec or None
 
 
@@ -406,6 +411,13 @@ def main(argv: list[str] | None = None) -> int:
                        help="keep float32 on MoE models (the preflight filter drops it "
                        "by default — fp32 MoE OOMs the Triton kernel on most GPUs; use "
                        "on big-shared-mem cards like H100)")
+        p.add_argument("--log-requests", action="store_true",
+                       help="enable vLLM request logging on every endpoint so each "
+                       "request's post-chat-template prompt + sampling params appear in "
+                       "the container logs (adds --enable-log-requests --max-log-len)")
+        p.add_argument("--extra-serve-args", default=None,
+                       help="extra `vllm serve` args appended to every endpoint "
+                       "(shlex-split), e.g. '--enable-log-requests --max-log-len 100000'")
 
     s = sub.add_parser("sample"); s.add_argument("--run", required=True)
     _run_opts(s); s.add_argument("--out", required=True); s.set_defaults(func=cmd_sample)
