@@ -74,7 +74,7 @@ handled.
 | Knob | Why it matters |
 |---|---|
 | **`tokenizer_mode`** (fast vs slow) | If HELM's HF client used a slow tokenizer (`use_fast=False`), fast-vs-slow can differ on edge tokens. The grid varies tokenizer *identity* but not fast/slow mode. |
-| **Chat-template exactness** (instruct models) | The `protocol` axis {completions, chat} is coarse. The real divergence is *which* template string, `add_generation_prompt`, and whether BOS is injected. HELM often renders the prompt itself and sends it via `completions`; sending the same text through vLLM's `chat` path re-templates it and silently diverges. |
+| **Chat-template / protocol** (instruct models) — *the OLMoE-ifeval uniform-miss bug* | **A `HuggingFaceClient` run is a text-completion**: it tokenizes `request.prompt` **verbatim** and generates. The oracle captured that exact prompt. If the grid resolves an instruct model to `protocol=chat`, the probe sends it to `/chat/completions`, which **re-applies the chat template on top of the already-formatted prompt** → the model sees a different input on *every* cell → uniformly low match, and no dtype/backend/tokenizer knob can fix it. **Fixed:** `hf-match` now pins `protocol=completions` (send the recorded prompt as-is); a resolved `chat` is overridden with a loud note. `chat` is only correct when the official client itself was a chat-completions server. |
 | **`skip_special_tokens` / `spaces_between_special_tokens`** (detokenization) | These change the output *text string that gets scored*, independent of token ids — a source of scoring mismatches even when generation matched. |
 
 ## Tier C — sampling replay (request-time; a concrete probe gap)
@@ -154,6 +154,11 @@ What it does ([`grid.py` `BUILTIN_PROFILES["hf-match"]`](../dev/tools/deployment
 - Leaves `dtype`, `tokenizer`, and `add_special_tokens` as the other search axes —
   the recipe knobs HELM itself could vary. Narrow the backend set (or any axis)
   with `--grid {axes: {attention_backend: [...]}}`.
+- **Pins `protocol=completions`.** A `HuggingFaceClient` official is a
+  text-completion (it tokenizes `request.prompt` verbatim), so the probe must send
+  the recorded prompt as-is — never re-template an instruct model through
+  `/chat/completions`. This overrides a resolved `chat` (with a note); it is the
+  fix for the OLMoE-ifeval case where every cell missed uniformly.
 - [`cli.py` `_warn_if_not_hf_client`](../dev/tools/deployment_match/cli.py) warns
   when the resolved `official_client_class` is not a `HuggingFaceClient` (or is
   unknown), so the profile isn't silently used against a hosted-API official.

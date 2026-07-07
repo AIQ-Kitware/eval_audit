@@ -229,6 +229,19 @@ def test_default_grid_keeps_small_max_num_batched_tokens():
         assert sr.endpoint_dict("completions")["runtime"]["max_num_batched_tokens"] == 2048
 
 
+def test_hf_match_forces_completions_over_resolved_chat():
+    """Reproducing a HuggingFaceClient run is a text-completion: hf-match must send
+    the recorded prompt verbatim via /completions even when the model resolves to
+    'chat' (an instruct model) — re-templating via /chat/completions would change
+    the prompt on every cell (the OLMoE-ifeval uniform-miss confound)."""
+    res = _resolution(protocol="chat", protocol_resolved=True,
+                      tokenizer_appends_special=False, tokenizer_sibling=None)
+    g = grid_mod.build_grid(res, spec=grid_mod.BUILTIN_PROFILES["hf-match"])
+    assert {rv.protocol for rv in g.request_variants} == {"completions"}
+    assert all(c.request["protocol"] == "completions" for c in g.cells)
+    assert any("forced to completions" in n for n in g.notes)
+
+
 def test_preflight_prunes_moe_fp32():
     """A MoE model's float32 sub-grid is dropped a priori (can't serve: Triton MoE
     shared-memory OOM), with a typed reason — the sweep never wastes a serve cycle."""
