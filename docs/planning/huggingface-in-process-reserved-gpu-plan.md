@@ -1,7 +1,19 @@
 # Reproducing HuggingFace-deployed officials in-process on shared GPUs
 
-**Status:** proposed · **Author:** design session 2026-07-08 · **Scope:** infer-stack
-+ eval_audit orchestration (HELM/magnet layer needs no change)
+**Status:** mechanism IMPLEMENTED (2026-07-08); routing NOT yet wired · **Scope:**
+infer-stack + eval_audit orchestration (HELM/magnet layer needs no change)
+
+> **What landed (2026-07-08).** Layers 1 and 2's *mechanism* is built, tested, and
+> committed: infer_stack `acquire --reserve-gpus N` (commit `e5fba7b`, +
+> on-host frame probe `1109b0f`) and eval_audit `hf_inprocess.py` + the reserve
+> lease bracket / docker-node GPU pinning / bridge decoupling (commit `2d79201`).
+> **Not yet wired:** nothing in the default replay path *calls* the resolver to
+> route a HuggingFaceClient official to the reserve+HF path — `materialize_benchmark_bundle`
+> still builds only vLLM bundles, and no producer sets `lease_reserve_gpus`. So
+> replaying a public run **still uses vLLM by default**; the switch (§2.1/§2.2, the
+> HF-in-process manifest producer) is the remaining integration + the GPU-host
+> OLMoE acceptance run. The eval_audit→infer_stack submodule gitlink bump is also
+> pending (push the infer_stack branch first).
 
 ## The problem
 

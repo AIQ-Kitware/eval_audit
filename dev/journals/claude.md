@@ -173,3 +173,66 @@ reserved-gpu-plan.md` edit and a `submodules/infer_stack` gitlink that
 went `-dirty` (uncommitted changes inside the submodule). Per repo
 convention I did not fold the submodule bump into any commit — flag to
 the user.
+
+## 2026-07-08 16:01:31 -0400
+
+**Model/config:** claude-opus-4-8[1m] (Claude Code, VSCode extension harness).
+(This is the session that authored the `huggingface-in-process-reserved-gpu`
+plan-doc edit + submodule changes the preceding entry flagged as not-its-own.)
+
+**User intent:** Public runs deployed via HELM's `HuggingFaceClient` should be
+*reproduced* the same way (in-process `transformers.generate()`), not auto-swapped
+to vLLM. infer-stack can reserve a GPU without spinning up a server — use that to
+host the HF deployment. Scope it, then implement.
+
+**What I built (mechanism, two layers, three commits).**
+- *infer_stack submodule* (`e5fba7b`): `acquire --reserve-gpus N` — a reserve-only
+  lease. A non-servable ledger `Deployment` (`engine='reserved'`, `DEDICATED` so
+  two reservations never coalesce onto one card, `reclaim!='keep-warm'` so release
+  frees it). Rides the EXISTING machinery: first-fit placement
+  (`required_gpu_count` now honors `reserved_gpu_count`), `render_compose` already
+  `continue`s past non-vllm/ollama engines (no container for free, not flagged
+  `unplaced`), `probe_ready` short-circuits to ready, and the env-file already
+  supported `CUDA_VISIBLE_DEVICES` (acquire now populates it from the placement
+  assignment). Because it's a real ledger deployment under the render lock, its GPU
+  is withheld from concurrent vLLM placements cross-process — the shared-machine
+  property — and it honors `allowed_gpus`/`$SLURM_JOB_GPUS` unchanged. Plus
+  `1109b0f`: an opt-in on-host e2e probe (`test_reservation_gpu_frame_e2e.py`) that
+  infer-stack's inventory index and `docker --gpus device=` name the same physical
+  GPU — the one frame assumption the design can't verify offline.
+- *eval_audit* (`2d79201`): `hf_inprocess.py` (resolve the official client class
+  from HELM's `model_deployments.yaml`; build the reproduction entry by mirroring
+  HELM's own official entry with one knob pinned — `torch_dtype: torch.float32`,
+  the officials' effective precision that HF fp32 reproduces exactly per the
+  hf-probe result); `lease_reserve_gpus` in the lease bracket; the docker node
+  sources `lease.env` then pins `--gpus "device=${CUDA_VISIBLE_DEVICES:?...}"` (fail
+  CLOSED so a missing lease never grabs all GPUs); bridge decouples the old
+  `container_gpus="none"` assumption for reserve leases.
+
+**Design insights.** (1) The cheapest correct reproduction isn't "teach infer-stack
+to serve HF" — it has no HF engine and needs none; HELM already runs
+`HuggingFaceClient` in-process, so the only new primitive is "hold a GPU, serve
+nothing." (2) The reserve feature is ~130 lines because the seams were pre-placed
+(the `reserved` param, `claims.kind`, the env-file's `cuda_visible_devices`,
+render_compose's engine skip) — assembly of existing hooks + a non-servable
+deployment kind, not new subsystems. (3) `torch_dtype` MUST be `torch.float32` (HELM
+converts `torch.<x>` via `getattr(torch,…)`; a bare `float32` is silently ignored).
+
+**Critically NOT done — the routing switch.** Nothing in the default replay path
+calls the resolver: `materialize_benchmark_bundle` still builds only vLLM bundles
+and no producer sets `lease_reserve_gpus`. So **replaying a public run still uses
+vLLM by default** — I built the mechanism + the decision helper, not the switch that
+flips a given run. Served path deliberately untouched (270+42 infer_stack + 57
+eval_audit served-path tests unchanged).
+
+**Next steps.** (1) HF-in-process manifest producer (plan §2.1/§2.2): when
+`official_is_huggingface_inprocess(model_deployment)`, emit a manifest that sets
+`lease_reserve_gpus=N`, omits `lease_endpoint`, and ships the fp32
+`model_deployments.yaml` from `hf_inprocess_deployment_entry` — likely a `serving:
+huggingface-inprocess` preset branch (bundle_export is vLLM/`ServingFacts`-coupled,
+the invasive part). (2) GPU-host acceptance: OLMoE-instruct through the new path must
+reproduce the official exactly; run the frame probe there first. (3) Push the
+infer_stack branch and bump the eval_audit submodule gitlink (left unstaged per the
+no-auto-gitlink rule; submodule commits are unpushed). (4) Once routing is wired,
+document in user-facing `docs/pipeline.md` + `docs/vllm-vs-huggingface-deployment-match.md`
+(held until then to avoid overclaiming a path that doesn't change default behavior).
