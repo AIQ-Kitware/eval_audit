@@ -3,7 +3,7 @@
 **Status (2026-07-06): IMPLEMENTED (host/CPU side); GPU verification is the only
 open work.** This is the single live doc for the OLMo from-spec effort. It folds in
 and supersedes two now-archived siblings:
-[`olmo-from-spec-handoff.md`](../historical/planning/olmo-from-spec-handoff.md)
+`olmo-from-spec-handoff.md`
 (the continuation handoff — env gotchas + landed-commit table) and
 [`olmo-multi-model-from-spec-plan.md`](../historical/planning/olmo-multi-model-from-spec-plan.md)
 (the multi-model fan-out design).
@@ -36,7 +36,7 @@ and supersedes two now-archived siblings:
   (needs a produced from-spec run dir).
 
 **Scope:** all six OLMo vLLM presets (olmo-7b split into `-mmlu`/`-lite`) in
-[`reproduce/olmo_models/`](../../reproduce/olmo_models/) — no carve-out (OLMo has no
+`reproduce/olmo_models/` — no carve-out (OLMo has no
 temperature-deviation control, unlike the phi-2 e2e).
 **Depends on (all IMPLEMENTED):**
 [`run-from-run-spec-json-plan.md`](run-from-run-spec-json-plan.md) (the replay
@@ -68,12 +68,12 @@ reproduction differs from the official only by execution.
 This is not hypothetical for OLMo — its own runbook NOTES already document the
 drift:
 
-- [`NOTES-bbq-instructions-drift.md`](../../reproduce/olmo_models/NOTES-bbq-instructions-drift.md)
+- `NOTES-bbq-instructions-drift.md`
   — the run-entry/run-expander path silently drifts BBQ's
   `output_format_instructions` from the official recipe (raises
   `comparability_drift:same_instructions`). It even points at the truth: *"on disk
   (`/data/crfm-helm-public/.../run_spec.json`, the authoritative recipe)."*
-- [`NOTES-dropped-run-expander-keys.md`](../../reproduce/olmo_models/NOTES-dropped-run-expander-keys.md)
+- `NOTES-dropped-run-expander-keys.md`
   — run-expander keys dropped vs. the official `run_spec.json`.
 
 These are symptoms of not being from-spec. Under faithful replay they vanish by
@@ -83,7 +83,7 @@ construction — the BBQ instruction drift becomes the headline parity result
 ## 2. What the OLMo runbook looks like today
 
 1. **Six vLLM presets** (`OLMO_TARGETS` in
-   [`reproduce/olmo_models/_lib.sh:87`](../../reproduce/olmo_models/_lib.sh)),
+   `reproduce/olmo_models/_lib.sh:87`),
    each defined in [`adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py)
    (lines ~474–943) with `access_kind: vllm-direct`, a
    `model_deployment_name: vllm/allenai-<model>`, and `smoke_manifest` /
@@ -97,7 +97,7 @@ construction — the BBQ instruction drift becomes the headline parity result
    then `eval-audit-run <manifest> --container-image "$OLMO_CONTAINER_IMAGE"
    --lease` (no `--from-spec`).
 4. **Downstream is canonical-key based.**
-   [`configs/virtual-experiments/olmo-models.yaml`](../../configs/virtual-experiments/olmo-models.yaml)
+   `configs/virtual-experiments/olmo-models.yaml`
    groups the six `audit-<preset>-full` experiments and pairs them against an
    `official_public_index` source by canonical logical key. (Today the
    comparison facts the planner would derive collapse to

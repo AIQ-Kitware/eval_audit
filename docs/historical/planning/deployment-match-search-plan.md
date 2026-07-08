@@ -15,7 +15,7 @@ completions** — so we can answer "which local deployment most closely reproduc
 the HELM original?" for *any* model, not just OLMo.
 
 It generalizes the OLMo-7B MWE at
-[`reproduce/olmo_models/debug/olmo7b_deploy_matrix/`](../../reproduce/olmo_models/debug/olmo7b_deploy_matrix/):
+`reproduce/olmo_models/debug/olmo7b_deploy_matrix/`:
 same catalog + acquire/query/release shape, but (a) parameterized by an arbitrary
 HELM run instead of hand-written OLMo endpoints, and (b) scored against the
 **official outputs** rather than a self-consistency heuristic.
@@ -61,7 +61,7 @@ grid, it should be evaluated in case").
   `reproduce/` (that tree is per-model reproduction runbooks, e.g.
   `reproduce/olmo_models/`, not model-agnostic tooling), nor next to the
   OLMo-specific MWE it generalizes
-  ([`reproduce/olmo_models/debug/olmo7b_deploy_matrix/`](../../reproduce/olmo_models/debug/olmo7b_deploy_matrix/)),
+  (`reproduce/olmo_models/debug/olmo7b_deploy_matrix/`),
   nor in `dev/oneoff/` (throwaway single scripts) or `dev/poc/` (undersells a
   reusable tool). It imports `eval_audit` internals (loaders, diff, pair_report)
   directly, which works from `dev/` since the package is installed editable.

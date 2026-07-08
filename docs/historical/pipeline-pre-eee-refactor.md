@@ -3,10 +3,10 @@
 This document covers the complete reproducibility audit pipeline: from discovering historic HELM runs through aggregating final reports.
 
 **Quick Links:**
-- Operator runbook: [`reproduce/README.md`](../reproduce/README.md)
-- Package reference: [`README.md`](../README.md)
-- Design journal: [`dev/journals/codex.md`](../dev/journals/codex.md)
-- Normalized layer (EEE): [`eval_audit/normalized/`](../eval_audit/normalized/) — `NormalizedRun`, loaders for `helm` and `eee` artifact formats, compare core. All per-pair comparison code paths flow through this boundary; raw HELM JSONs remain on disk as evidence.
+- Operator runbook: [`reproduce/README.md`](../../reproduce/README.md)
+- Package reference: [`README.md`](../../README.md)
+- Design journal: [`dev/journals/codex.md`](../../dev/journals/codex.md)
+- Normalized layer (EEE): [`eval_audit/normalized/`](../../eval_audit/normalized/) — `NormalizedRun`, loaders for `helm` and `eee` artifact formats, compare core. All per-pair comparison code paths flow through this boundary; raw HELM JSONs remain on disk as evidence.
 
 ---
 

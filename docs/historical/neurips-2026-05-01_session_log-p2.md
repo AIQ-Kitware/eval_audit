@@ -1,7 +1,7 @@
 # 2026-05-01 / 05-02 — paper-writing handoff session log (part 2)
 
-Companion to [`2026-04-30_eee_heatmap_session_log.md`](2026-04-30_eee_heatmap_session_log.md)
-and [`2026-05-01_session_log.md`](2026-05-01_session_log.md).
+Companion to [`2026-04-30_eee_heatmap_session_log.md`](neurips-2026-04-30_eee_heatmap_session_log.md)
+and [`2026-05-01_session_log.md`](neurips-2026-05-01_session_log.md).
 
 This log covers what came after the slim-heatmap analysis was complete
 and the three case studies (entity_matching pandas-merge, SR-Natural
@@ -14,7 +14,7 @@ structural / formatting decisions that shaped the final
 `technical_report.tex`.
 
 The technical report itself is at
-[`dev/paper/technical_report.tex`](technical_report.tex) (~2470
+[`dev/paper/technical_report.tex`](../papers/neurips-2026/technical_report.tex) (~2470
 lines). The progressive distillation is `case_study_3_appendix.tex`
 (~970 lines) → `case_study_3.tex` (~100 lines).
 
@@ -43,7 +43,7 @@ multiple drafts. The "write long, cut twice" order was efficient.
 ## Mathematical / formal verification
 
 The user wrote
-[`wikifact_consistency_claim.lean`](wikifact_consistency_claim.lean)
+[`wikifact_consistency_claim.lean`](../papers/neurips-2026/wikifact_consistency_claim.lean)
 externally, against Mathlib, to formalize the Bernoulli-agreement
 identities the WikiFact case rests on. The Lean file *compiles*
 externally; the central theorem we cite is

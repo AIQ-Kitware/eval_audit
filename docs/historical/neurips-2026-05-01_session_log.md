@@ -1,6 +1,6 @@
 # 2026-05-01 — heatmap-paper-slim session log
 
-Companion to [`2026-04-30_eee_heatmap_session_log.md`](2026-04-30_eee_heatmap_session_log.md).
+Companion to [`2026-04-30_eee_heatmap_session_log.md`](neurips-2026-04-30_eee_heatmap_session_log.md).
 This session was the post-handoff push to (a) ship Falcon-7B as a 4th
 model, (b) drive compose wall-clock down for paper iteration, (c)
 audit + harden the EEE-only path against silent HELM fallthroughs
@@ -17,7 +17,7 @@ that would invalidate the paper claim.
 - **Compose wall-clock** dropped from 525 s → expected ~150 s with the slim manifest + flags + ~16 separate optimizations.
 - **`entity_matching` join_failed is a feature**, not a bug. Don't re-add sample_id fallback.
 - **`quac` join_failed is a real bug**: converter-version drift in the public store. Hypothesis-confirmed fix queued (re-convert + dedupe).
-- **EEE-only "hard split"** deferred per [`docs/eee-only-hard-split-todo.md`](../docs/eee-only-hard-split-todo.md). Today's flag-driven soft separation is good enough for the paper-pass; reviewers can audit the env vars.
+- **EEE-only "hard split"** deferred per [`docs/eee-only-hard-split-todo.md`](../../docs/eee-only-hard-split-todo.md). Today's flag-driven soft separation is good enough for the paper-pass; reviewers can audit the env vars.
 
 ---
 
@@ -109,14 +109,14 @@ Final outputs at `<OUT_ROOT>/heatmap/`:
 
 ## Slim manifest
 
-[`configs/virtual-experiments/heatmap-paper-slim.yaml`](../configs/virtual-experiments/heatmap-paper-slim.yaml):
+[`configs/virtual-experiments/heatmap-paper-slim.yaml`](../../configs/virtual-experiments/heatmap-paper-slim.yaml):
 
 - `scope.models`: 3 regex (pythia-6.9b, vicuna-7b-v1.3, falcon-7b)
 - `scope.benchmarks`: 14 literal names (incl. typo'd `sythetic_reasoning_natural`)
 - **No `pre_filter`** — Stage-1 filter inventory is stale and vetoes Falcon with `no-hf-deployment`. Slim path doesn't need the funnel context.
 - `output.root`: `/data/crfm-helm-audit-store/virtual-experiments/heatmap-paper-slim/`
 
-The broader [`configs/virtual-experiments/open-helm-models-reproducibility.yaml`](../configs/virtual-experiments/open-helm-models-reproducibility.yaml) keeps the prefilter for its full Sankey funnel, but it under-counts Falcon for the same reason. Regenerating `analysis/filter_inventory.json` is a separate followup.
+The broader [`configs/virtual-experiments/open-helm-models-reproducibility.yaml`](../../configs/virtual-experiments/open-helm-models-reproducibility.yaml) keeps the prefilter for its full Sankey funnel, but it under-counts Falcon for the same reason. Regenerating `analysis/filter_inventory.json` is a separate followup.
 
 ---
 
@@ -175,7 +175,7 @@ For SAME `sample_id=id2221` on official vs local Pythia-6.9B:
 - local content:    "samsung 19' black flat panel series 6 lcd hdtv..."
 
 The id-namespace itself IS stable within each run — `np.random.seed(0)
-+ np.random.choice` at [`runner.py:123`](../submodules/helm/src/helm/benchmark/runner.py#L123)
++ np.random.choice` at [`runner.py:123`](../../submodules/helm/src/helm/benchmark/runner.py#L123)
 is deterministic. The divergence is upstream: `pd.merge` produces
 different row orderings between pandas 2.0.x (HELM v0.3.0 era) and
 pandas 2.2.x+ (current) on the byte-identical Abt-Buy CSVs. Same
@@ -272,7 +272,7 @@ The dominant residual is `EeeArtifactLoader.load` per-line work: even with trust
 ## Falcon-7B integration details
 
 ### Runbook
-[`reproduce/extend_grid_falcon_7b/`](../reproduce/extend_grid_falcon_7b/) — HF-backend, single GPU, no vLLM. 41 run-specs across 14 heatmap benchmarks at HELM Classic v0.3.0.
+[`reproduce/extend_grid_falcon_7b/`](../../reproduce/extend_grid_falcon_7b/) — HF-backend, single GPU, no vLLM. 41 run-specs across 14 heatmap benchmarks at HELM Classic v0.3.0.
 
 ### HELM deployment gotcha
 HELM upstream ships only `together/falcon-7b` (Together API, requires `togetherApiKey`). It does **not** ship `huggingface/falcon-7b`. The manifest sets:
@@ -287,13 +287,13 @@ enable_huggingface_models:
 Pythia/Vicuna don't need this flag because HELM ships built-in `huggingface/pythia-*` / `huggingface/vicuna-*` deployments.
 
 ### LLaMA-2-70B vLLM scaffold (deferred)
-[`reproduce/llama2_70b_helm_audit/README.md`](../reproduce/llama2_70b_helm_audit/README.md) documents the new `pythia-llama2-70b-mixed-4x96` profile (in `submodules/vllm_service/`). Drops gpt-oss-20b for the profile so LLaMA-2-70B can use tp=2 across GPUs 0+1 at fp16. **HF gated access for LLaMA-2 not yet granted**; runbook scaffold exists, full step scripts not written. User pivoted to Falcon-only for this session.
+[`reproduce/llama2_70b_helm_audit/README.md`](../../reproduce/llama2_70b_helm_audit/README.md) documents the new `pythia-llama2-70b-mixed-4x96` profile (in `submodules/vllm_service/`). Drops gpt-oss-20b for the profile so LLaMA-2-70B can use tp=2 across GPUs 0+1 at fp16. **HF gated access for LLaMA-2 not yet granted**; runbook scaffold exists, full step scripts not written. User pivoted to Falcon-only for this session.
 
 ### LLaMA-2-13B + Falcon-7B candidates
 LLaMA-2-13B same situation (gated). Other candidates with v0.3.0 public coverage and full 14-bench match if the user broadens later: meta_llama-7b, mosaicml_mpt-30b, stanford_alpaca-7b, together_redpajama-incite-base-7b, together_gpt-j-6b, together_gpt-neox-20b, tiiuae_falcon-7b-instruct, lmsys_vicuna-13b-v1.3, eleutherai_pythia-12b-v0.
 
 ### Pythia-12B partial runbook
-[`reproduce/pythia12b_mmlu_smoke/`](../reproduce/pythia12b_mmlu_smoke/) is partially run (1 of 5 mmlu subjects + boolq + imdb + truthful_qa). Completing it would add ~4 cells of free coverage. Not blocking.
+[`reproduce/pythia12b_mmlu_smoke/`](../../reproduce/pythia12b_mmlu_smoke/) is partially run (1 of 5 mmlu subjects + boolq + imdb + truthful_qa). Completing it would add ~4 cells of free coverage. Not blocking.
 
 ---
 
@@ -356,7 +356,7 @@ Falcon's column will have `1 artifact` per cell (no replicas yet) and use `offic
 
 ### 5. Followups (not blocking the paper)
 
-- **EEE-only hard split** per [`docs/eee-only-hard-split-todo.md`](../docs/eee-only-hard-split-todo.md) — short-term flags are auditable; long-term we want `eval_audit/eee_only/` namespace with verifiable zero `eval_audit.helm.*` imports.
+- **EEE-only hard split** per [`docs/eee-only-hard-split-todo.md`](../../docs/eee-only-hard-split-todo.md) — short-term flags are auditable; long-term we want `eval_audit/eee_only/` namespace with verifiable zero `eval_audit.helm.*` imports.
 - **Stage-1 filter inventory regeneration** — needed if the broader manifest is run again. Currently vetoes Falcon with `no-hf-deployment`.
 - **Pythia-12B runbook completion** — would extend the heatmap with a 4th model (Pythia size sweep: 2.8B → 6.9B → 12B); single-GPU HF-backend; cheap.
 - **LLaMA-2-13B / 70B** — pending HF gated repo approval. Scaffold ready.
@@ -367,52 +367,52 @@ Falcon's column will have `1 artifact` per cell (no replicas yet) and use `offic
 ## Key file map
 
 ### Hot paths (load-bearing for the heatmap)
-- [`eval_audit/normalized/loaders.py`](../eval_audit/normalized/loaders.py) — `EeeArtifactLoader.load` (the dominant cost; trust-schema + stream + positional ctor optimizations live here)
-- [`eval_audit/normalized/compare.py`](../eval_audit/normalized/compare.py) — `instance_level_core_rows` / `run_level_core_rows` (the EEE-native measurement core)
-- [`eval_audit/normalized/joins.py`](../eval_audit/normalized/joins.py) — `index_instances` / `join_instances` (sample_hash join; do NOT add sample_id fallback)
-- [`eval_audit/normalized/helm_compat.py`](../eval_audit/normalized/helm_compat.py) — `HelmRunView` adapter (lets HelmRunDiff read NormalizedRun; deprecated path)
-- [`eval_audit/normalized/eee_artifacts.py`](../eval_audit/normalized/eee_artifacts.py) — EEE artifact resolution + `_official_sweep_results_by_run_path` (cached, post-opt)
-- [`eval_audit/reports/core_metrics.py`](../eval_audit/reports/core_metrics.py) — main report renderer + `main()` CLI; `_build_pair`, `_agreement_curve`, `_group_quantiles`, `_metric_quantiles`, `_write_comparison_runlevel_table`, plot family
-- [`eval_audit/reports/eee_only_heatmap.py`](../eval_audit/reports/eee_only_heatmap.py) — heatmap PNG + per-metric subplots
-- [`eval_audit/reports/pair_samples.py`](../eval_audit/reports/pair_samples.py) — per-pair text comparison (HelmRunDiff-shaped; gated)
-- [`eval_audit/helm/diff.py`](../eval_audit/helm/diff.py) — `HelmRunDiff` (legacy diagnosis core; use is gated by env var)
-- [`eval_audit/planning/core_report_planner.py`](../eval_audit/planning/core_report_planner.py) — packet planner; local_repeat generation gated here
-- [`eval_audit/cli/build_virtual_experiment.py`](../eval_audit/cli/build_virtual_experiment.py) — compose entry; stale-inventory cleanup lives here
-- [`eval_audit/workflows/build_reports_summary.py`](../eval_audit/workflows/build_reports_summary.py) — aggregate summary
-- [`eval_audit/workflows/rebuild_core_report.py`](../eval_audit/workflows/rebuild_core_report.py) — per-packet renderer
-- [`eval_audit/workflows/analyze_experiment.py`](../eval_audit/workflows/analyze_experiment.py) — packet analysis driver
-- [`eval_audit/cli/from_eee.py`](../eval_audit/cli/from_eee.py) — EEE-only entry (the demo path; `eval-audit-from-eee` CLI)
+- [`eval_audit/normalized/loaders.py`](../../eval_audit/normalized/loaders.py) — `EeeArtifactLoader.load` (the dominant cost; trust-schema + stream + positional ctor optimizations live here)
+- [`eval_audit/normalized/compare.py`](../../eval_audit/normalized/compare.py) — `instance_level_core_rows` / `run_level_core_rows` (the EEE-native measurement core)
+- [`eval_audit/normalized/joins.py`](../../eval_audit/normalized/joins.py) — `index_instances` / `join_instances` (sample_hash join; do NOT add sample_id fallback)
+- [`eval_audit/normalized/helm_compat.py`](../../eval_audit/normalized/helm_compat.py) — `HelmRunView` adapter (lets HelmRunDiff read NormalizedRun; deprecated path)
+- [`eval_audit/normalized/eee_artifacts.py`](../../eval_audit/normalized/eee_artifacts.py) — EEE artifact resolution + `_official_sweep_results_by_run_path` (cached, post-opt)
+- [`eval_audit/reports/core_metrics.py`](../../eval_audit/reports/core_metrics.py) — main report renderer + `main()` CLI; `_build_pair`, `_agreement_curve`, `_group_quantiles`, `_metric_quantiles`, `_write_comparison_runlevel_table`, plot family
+- [`eval_audit/reports/eee_only_heatmap.py`](../../eval_audit/reports/eee_only_heatmap.py) — heatmap PNG + per-metric subplots
+- [`eval_audit/reports/pair_samples.py`](../../eval_audit/reports/pair_samples.py) — per-pair text comparison (HelmRunDiff-shaped; gated)
+- [`eval_audit/helm/diff.py`](../../eval_audit/helm/diff.py) — `HelmRunDiff` (legacy diagnosis core; use is gated by env var)
+- [`eval_audit/planning/core_report_planner.py`](../../eval_audit/planning/core_report_planner.py) — packet planner; local_repeat generation gated here
+- [`eval_audit/cli/build_virtual_experiment.py`](../../eval_audit/cli/build_virtual_experiment.py) — compose entry; stale-inventory cleanup lives here
+- [`eval_audit/workflows/build_reports_summary.py`](../../eval_audit/workflows/build_reports_summary.py) — aggregate summary
+- [`eval_audit/workflows/rebuild_core_report.py`](../../eval_audit/workflows/rebuild_core_report.py) — per-packet renderer
+- [`eval_audit/workflows/analyze_experiment.py`](../../eval_audit/workflows/analyze_experiment.py) — packet analysis driver
+- [`eval_audit/cli/from_eee.py`](../../eval_audit/cli/from_eee.py) — EEE-only entry (the demo path; `eval-audit-from-eee` CLI)
 
 ### Configs / runbooks
-- [`configs/virtual-experiments/heatmap-paper-slim.yaml`](../configs/virtual-experiments/heatmap-paper-slim.yaml) — paper-pass manifest
-- [`configs/virtual-experiments/open-helm-models-reproducibility.yaml`](../configs/virtual-experiments/open-helm-models-reproducibility.yaml) — broader manifest (pre_filter still in)
-- [`reproduce/eee_only_reproducibility_heatmap/`](../reproduce/eee_only_reproducibility_heatmap/) — `10_link_tree.sh` / `20_run.sh` / `30_heatmap.sh`
-- [`reproduce/open_helm_models_reproducibility/`](../reproduce/open_helm_models_reproducibility/) — `compose.sh` / `build_summary.sh` (manifest-driven; honors `MANIFEST_FPATH`)
-- [`reproduce/extend_grid_falcon_7b/`](../reproduce/extend_grid_falcon_7b/) — Falcon-7B HF backend runbook
-- [`reproduce/llama2_70b_helm_audit/`](../reproduce/llama2_70b_helm_audit/) — LLaMA-2-70B vLLM scaffold (README only)
-- [`reproduce/finish_qwen25_gptoss/`](../reproduce/finish_qwen25_gptoss/) — reference vLLM mixed-profile runbook
-- [`reproduce/pythia12b_mmlu_smoke/`](../reproduce/pythia12b_mmlu_smoke/) — partial Pythia-12B grid
+- [`configs/virtual-experiments/heatmap-paper-slim.yaml`](../../configs/virtual-experiments/heatmap-paper-slim.yaml) — paper-pass manifest
+- [`configs/virtual-experiments/open-helm-models-reproducibility.yaml`](../../configs/virtual-experiments/open-helm-models-reproducibility.yaml) — broader manifest (pre_filter still in)
+- [`reproduce/eee_only_reproducibility_heatmap/`](../../reproduce/eee_only_reproducibility_heatmap/) — `10_link_tree.sh` / `20_run.sh` / `30_heatmap.sh`
+- [`reproduce/open_helm_models_reproducibility/`](../../reproduce/open_helm_models_reproducibility/) — `compose.sh` / `build_summary.sh` (manifest-driven; honors `MANIFEST_FPATH`)
+- [`reproduce/extend_grid_falcon_7b/`](../../reproduce/extend_grid_falcon_7b/) — Falcon-7B HF backend runbook
+- [`reproduce/llama2_70b_helm_audit/`](../../reproduce/llama2_70b_helm_audit/) — LLaMA-2-70B vLLM scaffold (README only)
+- [`reproduce/finish_qwen25_gptoss/`](../../reproduce/finish_qwen25_gptoss/) — reference vLLM mixed-profile runbook
+- [`reproduce/pythia12b_mmlu_smoke/`](../../reproduce/pythia12b_mmlu_smoke/) — partial Pythia-12B grid
 
 ### Tooling
-- [`dev/oneoff/dedupe_old_eee_conversions.py`](../dev/oneoff/dedupe_old_eee_conversions.py) — newest-by-timestamp dedupe; safe by design (groups by parent dir)
-- [`dev/oneoff/package_eee_helm_official.py`](../dev/oneoff/package_eee_helm_official.py) — zip EEE artifacts for sharing (this session's; helm_mmlu/helm_classic/helm_air_bench)
+- `dev/oneoff/dedupe_old_eee_conversions.py` — newest-by-timestamp dedupe; safe by design (groups by parent dir)
+- `dev/oneoff/package_eee_helm_official.py` — zip EEE artifacts for sharing (this session's; helm_mmlu/helm_classic/helm_air_bench)
 
 ### Submodules
-- [`submodules/every_eval_ever/`](../submodules/every_eval_ever/) — EEE schema + converter
-- [`submodules/aiq-magnet/`](../submodules/aiq-magnet/) — HELM run materialization
-- [`submodules/helm/`](../submodules/helm/) — HELM benchmark code (read-only mirror)
-- [`submodules/kwdagger/`](../submodules/kwdagger/) — scheduler
-- [`submodules/vllm_service/`](../submodules/vllm_service/) — multi-model vLLM serving (touched this session: `helm-llama-2-13b/70b` profiles + `pythia-llama2-70b-mixed-4x96` co-resident profile)
-- [`submodules/cmd_queue/`](../submodules/cmd_queue/) — cmd queue
+- [`submodules/every_eval_ever/`](../../submodules/every_eval_ever/) — EEE schema + converter
+- [`submodules/aiq-magnet/`](../../submodules/aiq-magnet/) — HELM run materialization
+- [`submodules/helm/`](../../submodules/helm/) — HELM benchmark code (read-only mirror)
+- [`submodules/kwdagger/`](../../submodules/kwdagger/) — scheduler
+- `submodules/vllm_service/` — multi-model vLLM serving (touched this session: `helm-llama-2-13b/70b` profiles + `pythia-llama2-70b-mixed-4x96` co-resident profile)
+- [`submodules/cmd_queue/`](../../submodules/cmd_queue/) — cmd queue
 
 ### Docs
-- [`CLAUDE.md`](../CLAUDE.md) — project conventions; aivm-2404 FD-limit warning
-- [`docs/pipeline.md`](../docs/pipeline.md) — pipeline architecture
-- [`docs/helm-reproduction-research-journal.md`](../docs/helm-reproduction-research-journal.md) — research framing
-- [`docs/eee-vs-helm-metadata.md`](../docs/eee-vs-helm-metadata.md) — HELM↔EEE field mapping
-- [`docs/eee-only-hard-split-todo.md`](../docs/eee-only-hard-split-todo.md) — deferred architectural plan from this session
-- [`paper_draft/2026-04-30_eee_heatmap_session_log.md`](2026-04-30_eee_heatmap_session_log.md) — prior session's exhaustive log
-- [`paper_draft/2026-05-01_session_log.md`](2026-05-01_session_log.md) — THIS doc
+- [`CLAUDE.md`](../../CLAUDE.md) — project conventions; aivm-2404 FD-limit warning
+- [`docs/pipeline.md`](../../docs/pipeline.md) — pipeline architecture
+- [`docs/helm-reproduction-research-journal.md`](../../docs/helm-reproduction-research-journal.md) — research framing
+- [`docs/eee-vs-helm-metadata.md`](../../docs/eee-vs-helm-metadata.md) — HELM↔EEE field mapping
+- [`docs/eee-only-hard-split-todo.md`](../../docs/eee-only-hard-split-todo.md) — deferred architectural plan from this session
+- [`paper_draft/2026-04-30_eee_heatmap_session_log.md`](neurips-2026-04-30_eee_heatmap_session_log.md) — prior session's exhaustive log
+- [`paper_draft/2026-05-01_session_log.md`](neurips-2026-05-01_session_log.md) — THIS doc
 
 ---
 
@@ -466,12 +466,12 @@ EEE's audit/forensics scope boundary.
 
 | Commit | File(s) | Purpose |
 |---|---|---|
-| `c4746fd` | [`dev/oneoff/audit_eee_only_run.py`](../dev/oneoff/audit_eee_only_run.py) | Runtime proof of EEE-only file access. Wraps a command with `sys.addaudithook` via `sitecustomize.py` injection on `PYTHONPATH`, propagates through every child Python process, classifies file opens, emits PASS/FAIL verdict. |
+| `c4746fd` | `dev/oneoff/audit_eee_only_run.py` | Runtime proof of EEE-only file access. Wraps a command with `sys.addaudithook` via `sitecustomize.py` injection on `PYTHONPATH`, propagates through every child Python process, classifies file opens, emits PASS/FAIL verdict. |
 | `36fc52e` | `eval_audit/helm/metrics.py`, `eval_audit/normalized/compare.py`, `eval_audit/reports/core_metrics.py`, `eval_audit/reports/eee_only_heatmap.py`, `tests/test_normalized_compare.py` | Add `f1_set_match` / `exact_set_match` / `iou_set_match` to `CORE_PREFIXES`; add `no_core_metrics` heatmap status (distinct from `join_failed`); plumb `n_joined_pairs` through compare → core_metrics → heatmap collector. |
 | `77d90af` | `eval_audit/reports/eee_only_heatmap.py` | Propagate `n_joined_pairs` into `cell_data.json` (collector accumulated it but emitter dropped it). |
-| `efa6cdf` | [`dev/oneoff/diagnose_entity_matching_join.py`](../dev/oneoff/diagnose_entity_matching_join.py) | Read-only diagnostic for the entity_matching official↔local hash divergence: tests Q1-Q5 (content overlap, id permutation, sample_hash function, fewshot stability, HELM metadata) plus cross-model official-side consistency. |
-| `5fe2f83` | [`dev/oneoff/em_pandas_mwe.sh`](../dev/oneoff/em_pandas_mwe.sh), [`dev/oneoff/em_pandas_mwe_run.py`](../dev/oneoff/em_pandas_mwe_run.py) | Pure-pandas MWE: runs ONLY the merge sequence from `EntityMatchingScenario.read_blocked_pairs` against the deepmatcher Abt-Buy CSVs across 5 (pandas, numpy) version combos and diffs `full_order_digest`. |
-| `541a116`, `ad3cd7f`, `93af14b`, `766146d`, `872b264` | [`dev/oneoff/em_helm_mwe.sh`](../dev/oneoff/em_helm_mwe.sh), [`dev/oneoff/em_helm_mwe_run.py`](../dev/oneoff/em_helm_mwe_run.py) | End-to-end HELM-in-the-loop MWE: runs `EntityMatchingScenario.get_instances → with_instance_ids → downsample_eval_instances` and diffs the resulting (rank, id, content_sig) sequence against captured `scenario_state.json` from real HELM runs. Builds two venvs (current vs `crfm-helm==0.3.0`) and reports a 4-cell verdict matrix. |
+| `efa6cdf` | `dev/oneoff/diagnose_entity_matching_join.py` | Read-only diagnostic for the entity_matching official↔local hash divergence: tests Q1-Q5 (content overlap, id permutation, sample_hash function, fewshot stability, HELM metadata) plus cross-model official-side consistency. |
+| `5fe2f83` | `dev/oneoff/em_pandas_mwe.sh`, `dev/oneoff/em_pandas_mwe_run.py` | Pure-pandas MWE: runs ONLY the merge sequence from `EntityMatchingScenario.read_blocked_pairs` against the deepmatcher Abt-Buy CSVs across 5 (pandas, numpy) version combos and diffs `full_order_digest`. |
+| `541a116`, `ad3cd7f`, `93af14b`, `766146d`, `872b264` | `dev/oneoff/em_helm_mwe.sh`, `dev/oneoff/em_helm_mwe_run.py` | End-to-end HELM-in-the-loop MWE: runs `EntityMatchingScenario.get_instances → with_instance_ids → downsample_eval_instances` and diffs the resulting (rank, id, content_sig) sequence against captured `scenario_state.json` from real HELM runs. Builds two venvs (current vs `crfm-helm==0.3.0`) and reports a 4-cell verdict matrix. |
 
 ### Case study A — entity_matching: pandas merge row-order drift
 
@@ -486,7 +486,7 @@ CSVs, even though documentation suggests `how='inner', sort=False`
 should be stable. HELM's downstream `with_instance_ids` then assigns
 `id<i>` positionally over the merged list, so the same `id<i>` points
 to a different row under different pandas versions.
-[`runner.py:123`](../submodules/helm/src/helm/benchmark/runner.py#L123)
+[`runner.py:123`](../../submodules/helm/src/helm/benchmark/runner.py#L123)
 hardcodes `np.random.seed(0)` for the downsample, so both sides pick
 the same indices into the (drifted) array — same id sequence, different
 content.
@@ -520,15 +520,15 @@ content.
 #1475 (the numpy random-state fix from 2023-04-19). Both v0.3.0 and
 v0.5.x call `set_fixed_random_state_for_dataset`. The reproducibility
 leak is the implicit pandas-version dependence at
-[`entity_matching_scenario.py:99-100`](../submodules/helm/src/helm/benchmark/scenarios/entity_matching_scenario.py#L99-L100).
+[`entity_matching_scenario.py:99-100`](../../submodules/helm/src/helm/benchmark/scenarios/entity_matching_scenario.py#L99-L100).
 Same recipe + same data + same seed + same code → different sample
 under different pandas. Three independent leaks not addressed by PR
 #1475:
 
 - The pandas merge ordering above.
-- `ensure_file_downloaded` at [`common/general.py:80`](../submodules/helm/src/helm/common/general.py#L80)
+- `ensure_file_downloaded` at [`common/general.py:80`](../../submodules/helm/src/helm/common/general.py#L80)
   doesn't checksum (comment: `"Assume it's all good"` if path exists).
-- `with_instance_ids` at [`scenario.py:284`](../submodules/helm/src/helm/benchmark/scenarios/scenario.py#L284)
+- `with_instance_ids` at [`scenario.py:284`](../../submodules/helm/src/helm/benchmark/scenarios/scenario.py#L284)
   binds `id<i>` to scenario-emit position, so any upstream ordering
   instability silently rebinds id↔content.
 
@@ -540,7 +540,7 @@ non-`join_failed` cell. Pythia-only outlier — Vicuna and Falcon are at
 
 **Mechanism**: OFFICIAL Pythia-6.9B at HELM Classic v0.3.0 was
 inferenced via Together.ai's hosted API (HELM v0.3.0
-[`auto_client.py:184-200`](../submodules/helm/src/helm/proxy/clients/auto_client.py)
+`auto_client.py:184-200`
 routes any `eleutherai/*`, `lmsys/*`, `tiiuae/*` etc. with
 `model_deployment=None` to `TogetherClient`). On Together's hosted
 Pythia at temperature=0, the greedy first token after a prompt ending
@@ -620,7 +620,7 @@ counts; per-metric agree_ratios; aggregate score gaps) but their
 
 This is a deliberate scope decision, not an oversight — captured as a
 new section "Audit vs forensics: scope distinction" in
-[`docs/eee-vs-helm-metadata.md`](../docs/eee-vs-helm-metadata.md).
+[`docs/eee-vs-helm-metadata.md`](../../docs/eee-vs-helm-metadata.md).
 The doc also adds caveats for two micro-averaged-`agree_ratio` failure
 modes surfaced by the case studies: **degenerate-zero agreement**
 (case B) and **stochastic noise floor** (case C).
@@ -633,7 +633,7 @@ at **39 present / 3 join_failed / 0 no_core_metrics / 0 missing** of
 42 cells. The 3 `join_failed` are the entity_matching row across all
 3 models (Case study A). All other 39 cells render with real
 agree_ratio numbers. Falcon-7B was newly added this session via the
-[`reproduce/extend_grid_falcon_7b/`](../reproduce/extend_grid_falcon_7b/)
+[`reproduce/extend_grid_falcon_7b/`](../../reproduce/extend_grid_falcon_7b/)
 runbook.
 
 The full heatmap re-run was wrapped under the

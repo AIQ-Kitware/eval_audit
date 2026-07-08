@@ -8,7 +8,7 @@
 > orthogonal axis. References to `OLMO_CONTAINER` / the fallback below are kept as
 > a record of the original design.
 
-**Goal:** Make [`reproduce/olmo_models/`](../../../reproduce/olmo_models/) execute
+**Goal:** Make `reproduce/olmo_models/` execute
 HELM inside the pinned `eval-audit-helm-runner` image (the containerized Stage 3
 "docker pipeline") instead of the host venv, **by default**, with an
 `OLMO_CONTAINER=0` fallback to the host-venv path. The model is still **served on
@@ -79,7 +79,7 @@ Same `experiment_name` (`audit-<preset>-{smoke,full}`) either way.
   needs a local model, follow the scheduler's `$CUDA_VISIBLE_DEVICES` instead.*
 - **`hf_cache_dir: ~/.cache/eval-audit-hf`** — dedicated, root-owned audit cache
   (the container runs as root), matching the e2e default.
-- Gated **gpqa** already works: [`_lib.sh`](../../../reproduce/olmo_models/_lib.sh)
+- Gated **gpqa** already works: `_lib.sh`
   exports `HF_TOKEN` / `HUGGING_FACE_HUB_TOKEN` into the env `eval-audit-run`
   inherits, and the docker pipeline forwards them into the container with `-e`.
 
@@ -107,7 +107,7 @@ Add `OLMO_CONTAINER` (default `1`) and `OLMO_CONTAINER_IMAGE`
 ### 3. `10_run_smoke_grid.sh` + `15_run_full_grid.sh`
 Leave the `export-benchmark-bundle` call **unchanged**. At the `eval-audit-run`
 call (smoke:
-[`10_run_smoke_grid.sh:83`](../../../reproduce/olmo_models/10_run_smoke_grid.sh#L83);
+`10_run_smoke_grid.sh:83`;
 full: the matching call), append `--container-image "$OLMO_CONTAINER_IMAGE"` when
 `OLMO_CONTAINER != 0`, and omit it otherwise — build it as an args array, exactly
 as the export call already is.
@@ -133,7 +133,7 @@ the preflight sequence (`00 → 05 → 06 → 07 → 10`). Document the two knob
 [`run_from_manifest.py`](../../../eval_audit/workflows/run_from_manifest.py),
 [`kwdagger_bridge.py`](../../../eval_audit/integrations/kwdagger_bridge.py);
 `20_index_local.sh`, `30_compose.sh`, `40_build_summary.sh`;
-[`configs/virtual-experiments/olmo-models.yaml`](../../../configs/virtual-experiments/olmo-models.yaml)
+`configs/virtual-experiments/olmo-models.yaml`
 and `olmo-models-smoke.yaml`; the infer-stack config / `models.yaml`. e2e's
 container path is untouched.
 
