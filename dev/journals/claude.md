@@ -125,3 +125,51 @@ aggregate roll-up, wire `--aggregate-diff` into the summary render path.
 (2) Cross-metric comparability: each per-metric plot auto-scales `vmax` to
 its own max |diff|; set `EVAL_AUDIT_DIFF_HEATMAP_VMAX` to pin a shared
 scale across metrics when comparing them side by side.
+
+## 2026-07-08 16:05:00 -0400
+
+**Model/config:** claude-opus-4-8[1m] (Claude Code, VSCode extension harness).
+
+**User intent:** Auto-emit the new aggregate-score-difference heatmap
+during `build_reports_summary` (previously only on the standalone
+`eee_only_heatmap` CLI).
+
+**What I did.**
+- Refactored the collector so the accumulation core takes an explicit
+  list of report paths (`_accumulate_aggregate_diff_cells`); the
+  rglob-based `_collect_aggregate_diff_cells_per_metric` now delegates to
+  it. Also extracted `_order_aggregate_diff_axes` (model/benchmark/metric
+  display ordering) and pointed the CLI at it (killed the inlined dup).
+- Added `_render_aggregate_score_diff` to `build_reports_summary` and
+  called it inside `_render_scope_plots` (include_visuals branch). It
+  drives the collector off the **scope's own `repro_rows`** (each carries
+  `report_json`/`report_dir`) rather than an rglob over a shared root —
+  so breakdown scopes stay scope-restricted. Output lands under
+  `level_001/aggregate_score_diff/`. README gained a pointer line.
+
+**Key design decisions.**
+- *Scope-correctness*: driving from `repro_rows` (already scope-filtered)
+  is what makes a future `by_benchmark/boolq` slice show only boolq. An
+  rglob over the analysis root would have leaked sibling scopes.
+- *Gating*: reused the existing `include_visuals` switch. Breakdown
+  renders pass `include_visuals=False` (they skip ALL heavy visuals by
+  design), so the heatmap correctly only appears on top-level scopes
+  (`all_results` / `--experiment-name`), matching the plotly plots. This
+  is intentional, not a gap.
+- *Soft failure*: matplotlib-absent or no-runlevel-CSV is a no-op that
+  returns an empty result dict; the rest of the summary still renders.
+  The demo run showed pre-existing Kaleido/Chrome errors on the *plotly*
+  static exports — unrelated; my matplotlib PNGs rendered fine.
+
+**Verified.** `tests/test_eee_only_demo.py` (13, incl. new
+`test_aggregate_summary_emits_score_diff_heatmap`) + smoke +
+virtual_experiment_eee green under `--run-slow`; rendered PNG shows the
+"all_results" scope title with correct color/annotation. Committed
+c8707ea.
+
+**Flagged, NOT committed.** Working tree also carries two changes I did
+not author and left unstaged: a `docs/planning/huggingface-in-process-
+reserved-gpu-plan.md` edit and a `submodules/infer_stack` gitlink that
+went `-dirty` (uncommitted changes inside the submodule). Per repo
+convention I did not fold the submodule bump into any commit — flag to
+the user.
