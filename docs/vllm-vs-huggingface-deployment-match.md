@@ -12,6 +12,9 @@ and which it currently ignores.
 It is a companion to the tool's design plan
 ([`docs/historical/planning/deployment-match-search-plan.md`](historical/planning/deployment-match-search-plan.md))
 and README ([`dev/tools/deployment_match/README.md`](../dev/tools/deployment_match/README.md)).
+For the broader inventory of deployment parameters HELM never records (and the
+effort to pin an HF revision), see
+[`helm-unrecorded-deployment-params.md`](helm-unrecorded-deployment-params.md).
 
 ## First: is HF even the right target?
 
