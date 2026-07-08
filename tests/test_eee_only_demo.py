@@ -289,3 +289,36 @@ def test_aggregate_diff_collector_reads_runlevel_scores(demo_output: Path) -> No
         exact = cells[(model, "arc_easy", "exact_match")]
         assert exact["official"] == exact["local"]
         assert exact["diff"] == 0.0
+
+
+def test_aggregate_summary_emits_score_diff_heatmap(demo_output: Path) -> None:
+    """The aggregate summary must auto-emit the per-core-metric
+    aggregate-score-difference heatmaps under the top-level scope.
+
+    The demo builds with ``--build-aggregate-summary``, so the
+    ``all-results`` scope's ``level_001/aggregate_score_diff/`` must carry
+    the text/JSON sidecars plus one PNG per core metric. The imdb/m1-small
+    full-divergence cell must be present and signed in the JSON.
+    """
+    summary_root = demo_output / "aggregate-summary" / "all-results"
+    if not summary_root.exists():
+        pytest.skip("aggregate summary not built")
+    diff_dir = summary_root / "level_001" / "aggregate_score_diff"
+    assert (diff_dir / "aggregate_score_diff_per_metric.txt").is_file()
+    json_path = diff_dir / "aggregate_score_diff_per_metric.json"
+    assert json_path.is_file()
+
+    # exact_match / quasi_exact_match are the demo's core metrics; each
+    # gets its own PNG.
+    png_dir = diff_dir / "aggregate_score_diff_per_metric"
+    pngs = {p.stem for p in png_dir.glob("*.png")}
+    assert {"exact_match", "quasi_exact_match"} <= pngs, pngs
+
+    cells = {
+        (c["model"], c["benchmark"], c["metric"]): c
+        for c in json.loads(json_path.read_text())["cells"]
+    }
+    diverged = cells[("toy/m1-small", "imdb", "exact_match")]
+    assert diverged["official"] == 1.0
+    assert diverged["local"] == 0.0
+    assert diverged["diff"] == -1.0

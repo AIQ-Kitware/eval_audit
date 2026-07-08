@@ -434,56 +434,25 @@ def _parse_float(value: Any) -> float | None:
 
 
 @profile
-def _collect_aggregate_diff_cells_per_metric(
-    analysis_root: Path,
+def _accumulate_aggregate_diff_cells(
+    report_paths: list[Path],
     *,
     include_bookkeeping: bool = False,
 ) -> dict[tuple[str, str, str], dict[str, Any]]:
-    """Collect per-(model, benchmark, metric) *aggregate score* cells.
+    """Build aggregate-score-diff cells from an explicit list of report paths.
 
-    Where :func:`_collect_cells_per_metric` measures instance-level
-    agreement (did each paired instance's score match within a
-    tolerance?), this reads the run-level aggregate score each side
-    actually reported, so the heatmap can show how far a reproduced
-    benchmark score drifted from the public one.
+    Shared core of :func:`_collect_aggregate_diff_cells_per_metric` (which
+    discovers the reports via ``rglob``). Driving it from an explicit list
+    lets scope-aware callers (e.g. ``build_reports_summary``) restrict the
+    heatmap to exactly the packets in the current scope rather than every
+    ``core_metric_report.json`` under a shared root.
 
-    For every ``core_metric_report.json`` we resolve ``(model, benchmark)``
-    exactly the way the agreement collectors do (off the component
-    ``logical_run_key`` / ``model`` fields), then read the sibling
-    ``core_runlevel_table.csv`` that ``core_metrics`` writes next to every
-    report. Its ``left_mean`` column is the official/public aggregate
-    score and ``right_mean`` the local/reproduced score, one row per core
-    metric. We keep only ``official_vs_local`` rows and micro-average
-    ``left_mean`` / ``right_mean`` across every contributing pair/packet
-    for a given (model, benchmark, metric) cell.
-
-    Returns a dict keyed ``(model_id, benchmark_family, metric_name)`` to::
-
-        {
-            "official": float,   # public aggregate score (mean of left_mean)
-            "local": float,      # reproduced aggregate score (mean right_mean)
-            "diff": float,       # local - official  (signed; colors the cell)
-            "abs_diff": float,   # |local - official|
-            "n": int,            # runlevel rows that fed the average
-            "status": "present",
-        }
-
-    ``include_bookkeeping=False`` (default) drops metrics in
-    :data:`_BOOKKEEPING_METRICS`, mirroring the per-metric agreement
-    collector so the two heatmaps cover the same scoring metrics.
-
-    Reports whose sibling ``core_runlevel_table.csv`` is absent or
-    unreadable are skipped (the cell shows as "missing" downstream) —
-    that CSV is only written on the full report path, not in
-    ``--plots-only`` re-renders.
+    See :func:`_collect_aggregate_diff_cells_per_metric` for the cell shape
+    and the meaning of ``include_bookkeeping``.
     """
     acc: dict[tuple[str, str, str], dict[str, float]] = defaultdict(
         lambda: {"sum_official": 0.0, "sum_local": 0.0, "n": 0.0}
     )
-
-    report_paths = sorted(analysis_root.rglob("core_metric_report.json"))
-    if not report_paths:
-        return {}
 
     for rp in report_paths:
         try:
@@ -552,6 +521,85 @@ def _collect_aggregate_diff_cells_per_metric(
             "status": "present",
         }
     return result
+
+
+@profile
+def _collect_aggregate_diff_cells_per_metric(
+    analysis_root: Path,
+    *,
+    include_bookkeeping: bool = False,
+) -> dict[tuple[str, str, str], dict[str, Any]]:
+    """Collect per-(model, benchmark, metric) *aggregate score* cells.
+
+    Where :func:`_collect_cells_per_metric` measures instance-level
+    agreement (did each paired instance's score match within a
+    tolerance?), this reads the run-level aggregate score each side
+    actually reported, so the heatmap can show how far a reproduced
+    benchmark score drifted from the public one.
+
+    For every ``core_metric_report.json`` we resolve ``(model, benchmark)``
+    exactly the way the agreement collectors do (off the component
+    ``logical_run_key`` / ``model`` fields), then read the sibling
+    ``core_runlevel_table.csv`` that ``core_metrics`` writes next to every
+    report. Its ``left_mean`` column is the official/public aggregate
+    score and ``right_mean`` the local/reproduced score, one row per core
+    metric. We keep only ``official_vs_local`` rows and micro-average
+    ``left_mean`` / ``right_mean`` across every contributing pair/packet
+    for a given (model, benchmark, metric) cell.
+
+    Returns a dict keyed ``(model_id, benchmark_family, metric_name)`` to::
+
+        {
+            "official": float,   # public aggregate score (mean of left_mean)
+            "local": float,      # reproduced aggregate score (mean right_mean)
+            "diff": float,       # local - official  (signed; colors the cell)
+            "abs_diff": float,   # |local - official|
+            "n": int,            # runlevel rows that fed the average
+            "status": "present",
+        }
+
+    ``include_bookkeeping=False`` (default) drops metrics in
+    :data:`_BOOKKEEPING_METRICS`, mirroring the per-metric agreement
+    collector so the two heatmaps cover the same scoring metrics.
+
+    Reports whose sibling ``core_runlevel_table.csv`` is absent or
+    unreadable are skipped (the cell shows as "missing" downstream) —
+    that CSV is only written on the full report path, not in
+    ``--plots-only`` re-renders.
+    """
+    report_paths = sorted(analysis_root.rglob("core_metric_report.json"))
+    if not report_paths:
+        return {}
+    return _accumulate_aggregate_diff_cells(
+        report_paths, include_bookkeeping=include_bookkeeping
+    )
+
+
+def _order_aggregate_diff_axes(
+    cells: dict[tuple[str, str, str], dict[str, Any]],
+) -> tuple[list[str], list[str], list[str], list[tuple[str, str]]]:
+    """Derive display order for an aggregate-diff cell dict.
+
+    Returns ``(models, benchmarks, metrics_in_order, rows_in_order)`` where
+    ``models`` / ``benchmarks`` follow the canonical order with any extras
+    appended alphabetically, ``metrics_in_order`` is alphabetical, and
+    ``rows_in_order`` is ``(benchmark, metric)`` for the combined
+    text/JSON tables (benchmarks canonical, metrics alphabetical within).
+    """
+    models_found = {m for (m, _b, _met) in cells}
+    benchmarks_found = {b for (_m, b, _met) in cells}
+    models = [m for m in _MODEL_ORDER if m in models_found]
+    models += sorted(models_found - set(_MODEL_ORDER))
+    benchmarks = [b for b in _BENCHMARK_ORDER if b in benchmarks_found]
+    benchmarks += sorted(benchmarks_found - set(_BENCHMARK_ORDER))
+    rows_in_order: list[tuple[str, str]] = []
+    for bench in benchmarks:
+        metrics_for_bench = sorted({
+            metric for (_m, b, metric) in cells if b == bench
+        })
+        rows_in_order.extend((bench, metric) for metric in metrics_for_bench)
+    metrics_in_order = sorted({metric for (_m, _b, metric) in cells})
+    return models, benchmarks, metrics_in_order, rows_in_order
 
 
 # ---------------------------------------------------------------------------

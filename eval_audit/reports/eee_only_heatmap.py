@@ -60,6 +60,8 @@ from eval_audit.reports.eee_heatmap_data import (  # noqa: F401
     _collect_cells,
     _collect_cells_per_metric,
     _collect_aggregate_diff_cells_per_metric,
+    _accumulate_aggregate_diff_cells,
+    _order_aggregate_diff_axes,
     _parse_float,
     _find_tol_row,
     _save_cell_data,
@@ -350,26 +352,12 @@ def main(argv: list[str] | None = None) -> None:
             # Order models/benchmarks from the aggregate cells directly so
             # the diff plots are self-consistent even if a report only
             # contributed run-level scores (not instance agreement).
-            diff_models_found = {m for (m, _b, _met) in diff_cells}
-            diff_benchmarks_found = {b for (_m, b, _met) in diff_cells}
-            diff_models = [m for m in _MODEL_ORDER if m in diff_models_found]
-            diff_models += sorted(diff_models_found - set(_MODEL_ORDER))
-            diff_benchmarks = [b for b in _BENCHMARK_ORDER if b in diff_benchmarks_found]
-            diff_benchmarks += sorted(diff_benchmarks_found - set(_BENCHMARK_ORDER))
-
-            # Combined text/JSON row order: benchmarks in canonical order,
-            # metrics alphabetical within each benchmark.
-            diff_rows_in_order: list[tuple[str, str]] = []
-            for bench in diff_benchmarks:
-                metrics_for_bench = sorted({
-                    metric for (_m, b, metric) in diff_cells if b == bench
-                })
-                diff_rows_in_order.extend(
-                    (bench, metric) for metric in metrics_for_bench
-                )
-            diff_metrics_in_order = sorted({
-                metric for (_m, _b, metric) in diff_cells
-            })
+            (
+                diff_models,
+                diff_benchmarks,
+                diff_metrics_in_order,
+                diff_rows_in_order,
+            ) = _order_aggregate_diff_axes(diff_cells)
 
             text_diff = _render_aggregate_diff_text_table(
                 diff_cells, diff_models, diff_rows_in_order,

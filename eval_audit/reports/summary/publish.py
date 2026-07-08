@@ -322,6 +322,8 @@ def _build_high_level_readme(
             "    2. open agreement_curve_per_metric.html for per-metric agreement curves",
             "    3. open reproducibility_buckets.html to see agreement distribution",
             "    4. for relaxed tolerances, see alt_tolerances/ subdirectory",
+            "    5. aggregate_score_diff/ — per-core-metric heatmaps of run-level score drift",
+            "       (color = local − public aggregate score; cells annotated P=public / L=local)",
             "",
             "  diagnose_failures:",
             "    1. read failure_reasons.txt to see why incomplete jobs failed",
