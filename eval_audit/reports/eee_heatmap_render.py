@@ -650,6 +650,352 @@ def _render_per_metric_text_table(
 
 
 # ---------------------------------------------------------------------------
+# Aggregate-score-difference heatmap (color = local − public score)
+# ---------------------------------------------------------------------------
+
+
+@profile
+def _render_diff_heatmap(
+    cells: dict[tuple[str, str], dict[str, Any]],
+    models: list[str],
+    benchmarks: list[str],
+    title: str,
+    out_dir: Path,
+    *,
+    out_filename: str = "aggregate_score_diff_heatmap.png",
+    subtitle: str | None = None,
+    transpose: bool = False,
+) -> Path:
+    """Render an aggregate-score-difference heatmap for a single metric.
+
+    Sibling of :func:`_render_heatmap`, but the cell encoding is entirely
+    different:
+
+    * **Color** is the *signed* difference ``local − public`` (the
+      reproduced aggregate score minus the official one), mapped through a
+      diverging colorblind-safe colormap centered on zero — Wong blue for
+      "reproduced lower than public", near-white for "matches", Wong
+      orange for "reproduced higher". The scale is symmetric about zero so
+      the white midpoint always means "no drift".
+    * **Annotation** is the two actual aggregate scores: ``P`` = public
+      (official) on top, ``L`` = local (reproduced) below.
+
+    ``cells`` is keyed ``(model, benchmark)`` and already filtered to one
+    metric (the per-metric wrapper does that). Each present cell carries
+    ``official`` / ``local`` / ``diff`` floats. ``transpose`` matches
+    :func:`_render_heatmap`: rows=benchmarks/cols=models by default, or
+    rows=models/cols=benchmarks when True.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.colors as mcolors
+
+    n_bench = len(benchmarks)
+    n_models = len(models)
+
+    if transpose:
+        fig_w = max(10.0, 0.85 * n_bench + 2.5)
+        fig_h = max(2.8, 0.62 * n_models + 1.1)
+    else:
+        fig_w = max(6.0, 2.4 * n_models + 2.0)
+        fig_h = max(5.0, 0.55 * n_bench + 1.5)
+
+    # Symmetric diverging scale about zero: 0 → white midpoint always
+    # reads as "no drift". vmax defaults to the largest |diff| present so
+    # the gradient uses its full range; override with
+    # EVAL_AUDIT_DIFF_HEATMAP_VMAX to pin a common scale across metrics.
+    present_diffs = [
+        c["diff"] for c in cells.values()
+        if c and c.get("status") == "present" and c.get("diff") is not None
+    ]
+    env_vmax = os.environ.get("EVAL_AUDIT_DIFF_HEATMAP_VMAX", "")
+    if env_vmax:
+        vmax = abs(float(env_vmax))
+    else:
+        vmax = max((abs(d) for d in present_diffs), default=0.0)
+    if vmax <= 0:
+        # Degenerate: every present cell has zero drift. Give the norm a
+        # valid width so all cells map to the white center.
+        vmax = 1.0
+    norm = mcolors.Normalize(vmin=-vmax, vmax=vmax)
+
+    cmap_name = os.environ.get("EVAL_AUDIT_DIFF_HEATMAP_CMAP", "")
+    if cmap_name:
+        cmap = plt.get_cmap(cmap_name)
+    else:
+        # Wong blue (low / reproduced-below-public) → near-white (match) →
+        # Wong orange (reproduced-above-public). Deutera/protan/tritan all
+        # keep this blue↔orange separation, and the light midpoint is a
+        # genuine "neutral" cue here (unlike the agreement heatmap, where
+        # the midpoint is arbitrary), because zero drift is the goal.
+        cmap = mcolors.LinearSegmentedColormap.from_list(
+            "BlueWhiteOrange",
+            [
+                (0.0, "#0072B2"),   # Wong blue  (local << public)
+                (0.5, "#f7f7f7"),   # near-white (local == public)
+                (1.0, "#E69F00"),   # Wong orange(local >> public)
+            ],
+            N=256,
+        )
+    scalar = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+
+    _MISSING_COLOR = "#bdbdbd"
+
+    rc_ctx = plt.rc_context(_paper_rc())
+    rc_ctx.__enter__()
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    ax.set_facecolor(_MISSING_COLOR)
+
+    cell_value_fontsize = 8 if transpose else 7
+    for i_bench, bench in enumerate(benchmarks):
+        for i_model, model in enumerate(models):
+            if transpose:
+                col, row = i_bench, i_model
+            else:
+                col, row = i_model, i_bench
+            cell = cells.get((model, bench))
+            if cell is not None and cell.get("status") == "present":
+                diff = cell["diff"]
+                cell_rgba = cmap(norm(diff))
+                rect = plt.Rectangle(
+                    (col - 0.5, row - 0.5), 1, 1,
+                    facecolor=cell_rgba,
+                    edgecolor="white", linewidth=0.5,
+                )
+                ax.add_patch(rect)
+                r, g, b = cell_rgba[:3]
+                luminance = 0.299 * r + 0.587 * g + 0.114 * b
+                text_color = "white" if luminance < 0.55 else "black"
+                # Two stacked scores: P(ublic) on top, L(ocal) below. 3
+                # significant figures keeps 0.824 / 1.0 / 0.0 legible
+                # without overflowing narrow cells.
+                official = cell["official"]
+                local = cell["local"]
+                cell_label = f"P {official:.3g}\nL {local:.3g}"
+                ax.text(
+                    col, row, cell_label,
+                    ha="center", va="center",
+                    fontsize=cell_value_fontsize, color=text_color,
+                    linespacing=1.35,
+                )
+            else:
+                # Missing: solid gray + em-dash (no runlevel score for
+                # this model/benchmark/metric).
+                rect = plt.Rectangle(
+                    (col - 0.5, row - 0.5), 1, 1,
+                    facecolor=_MISSING_COLOR,
+                    edgecolor="white", linewidth=0.5,
+                )
+                ax.add_patch(rect)
+                ax.text(
+                    col, row, "—",
+                    ha="center", va="center",
+                    fontsize=10, color="#606060",
+                )
+
+    if transpose:
+        ax.set_xticks(range(n_bench))
+        ax.set_xticklabels(
+            [_BENCHMARK_DISPLAY.get(b, b) for b in benchmarks],
+            fontsize=10, ha="right", rotation=35,
+        )
+        ax.set_yticks(range(n_models))
+        ax.set_yticklabels(
+            [_MODEL_DISPLAY.get(m, m) for m in models],
+            fontsize=10,
+        )
+        ax.set_xlabel("Benchmark", fontsize=11, labelpad=18)
+        ax.set_ylabel("Model", fontsize=11, labelpad=10)
+        ax.set_xlim(-0.5, n_bench - 0.5)
+        ax.set_ylim(-0.5, n_models - 0.5)
+    else:
+        ax.set_xticks(range(n_models))
+        ax.set_xticklabels(
+            [_MODEL_DISPLAY.get(m, m) for m in models],
+            fontsize=10, ha="right", rotation=25,
+        )
+        ax.set_yticks(range(n_bench))
+        ax.set_yticklabels(
+            [_BENCHMARK_DISPLAY.get(b, b) for b in benchmarks],
+            fontsize=10,
+        )
+        ax.set_xlabel("Model", fontsize=11)
+        ax.set_ylabel("Benchmark", fontsize=11)
+        ax.set_xlim(-0.5, n_models - 0.5)
+        ax.set_ylim(-0.5, n_bench - 0.5)
+    ax.invert_yaxis()
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.tick_params(axis="both", which="both", length=0)
+
+    if transpose:
+        cbar = fig.colorbar(scalar, ax=ax, fraction=0.02, pad=0.01)
+    else:
+        cbar = fig.colorbar(scalar, ax=ax, fraction=0.03, pad=0.02)
+    cbar.set_label(
+        "Local $-$ Public (aggregate score)"
+        if plt.rcParams.get("text.usetex")
+        else "Local − Public (aggregate score)",
+        fontsize=10,
+    )
+    cbar.ax.tick_params(labelsize=9, length=0)
+    cbar.outline.set_visible(False)
+
+    if not transpose:
+        if subtitle is None:
+            sub = "cell: P=public / L=local aggregate score; color = local − public"
+        else:
+            sub = subtitle
+        if title and sub:
+            ax.set_title(f"{title}\n{sub}", fontsize=9, pad=8)
+        elif title:
+            ax.set_title(title, fontsize=9, pad=8)
+        elif sub:
+            ax.set_title(sub, fontsize=9, pad=8)
+
+    plt.tight_layout()
+    primary_path = out_dir / out_filename
+    primary_suffix = primary_path.suffix.lower()
+    _atomic_savefig(
+        fig, primary_path,
+        dpi=300, bbox_inches="tight", pad_inches=0.3,
+    )
+    pdf_path = primary_path.with_suffix(".pdf")
+    if primary_suffix == ".pdf":
+        pdf_path = primary_path
+    else:
+        _atomic_savefig(
+            fig, pdf_path,
+            bbox_inches="tight", pad_inches=0.05,
+        )
+    plt.close(fig)
+    rc_ctx.__exit__(None, None, None)
+    if primary_suffix in {".png", ".jpg", ".jpeg"}:
+        try:
+            import kwplot
+            kwplot.cropwhite_ondisk(primary_path)
+        except ImportError as exc:
+            logger.debug(
+                f"kwplot not available ({exc}); skipping cropwhite_ondisk "
+                f"on {primary_path}."
+            )
+    logger.info(f"Wrote aggregate-diff heatmap: {rich_link(primary_path)}")
+    if pdf_path != primary_path:
+        logger.info(f"Wrote vector aggregate-diff heatmap: {rich_link(pdf_path)}")
+    return primary_path
+
+
+@profile
+def _render_aggregate_diff_heatmaps(
+    cells: dict[tuple[str, str, str], dict[str, Any]],
+    models: list[str],
+    benchmarks: list[str],
+    metrics_in_order: list[str],
+    title: str,
+    out_dir: Path,
+    *,
+    transpose: bool = False,
+    subtitle_override: str | None = None,
+) -> list[Path]:
+    """Emit one ``model × benchmark`` aggregate-score-diff heatmap per metric.
+
+    Mirrors :func:`_render_per_metric_heatmaps` but routes through
+    :func:`_render_diff_heatmap`. Plots land under
+    ``<out_dir>/aggregate_score_diff_per_metric/<metric>.png``. Benchmarks
+    that never report a given metric are dropped from that metric's plot
+    so it doesn't fill with gray "missing" rows.
+    """
+    sub_dir = out_dir / "aggregate_score_diff_per_metric"
+    sub_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for metric in metrics_in_order:
+        per_metric_cells: dict[tuple[str, str], dict[str, Any]] = {
+            (m, b): cell
+            for (m, b, met), cell in cells.items()
+            if met == metric
+        }
+        if not per_metric_cells:
+            continue
+        benchmarks_for_metric = [
+            b for b in benchmarks
+            if any((m, b) in per_metric_cells for m in models)
+        ]
+        if not benchmarks_for_metric:
+            continue
+        if subtitle_override is not None:
+            subtitle = subtitle_override
+        else:
+            subtitle = (
+                "cell: P=public / L=local aggregate score; "
+                f"color = local − public (metric: {metric})"
+            )
+        png_path = _render_diff_heatmap(
+            per_metric_cells,
+            models,
+            benchmarks_for_metric,
+            f"{title} — metric: {metric}",
+            sub_dir,
+            out_filename=f"{_safe_filename_part(metric)}.png",
+            subtitle=subtitle,
+            transpose=transpose,
+        )
+        written.append(png_path)
+    return written
+
+
+def _render_aggregate_diff_text_table(
+    cells: dict[tuple[str, str, str], dict[str, Any]],
+    models: list[str],
+    rows_in_order: list[tuple[str, str]],
+) -> str:
+    """Plain-text companion to the aggregate-score-diff heatmap.
+
+    Each cell shows ``public/local`` (the two aggregate scores) so the
+    numbers are greppable and paste-able into commit messages / drafts.
+    """
+    lines: list[str] = [
+        "Aggregate score difference table (run-level, official_vs_local)",
+        "Per (benchmark, metric): public aggregate score vs local reproduction",
+        "",
+        "Cell legend:",
+        "  0.82/0.79  public aggregate score / local (reproduced) score",
+        "  --         this metric not present for that (model, benchmark)",
+        "",
+    ]
+    col_w = 18
+    label_w = 48
+    header = f"{'Benchmark / metric':<{label_w}}" + "".join(
+        f"{_MODEL_DISPLAY.get(m, m)[:col_w]:>{col_w}}" for m in models
+    )
+    lines.append(header)
+    lines.append("-" * len(header))
+    prev_bench = None
+    for bench, metric in rows_in_order:
+        if prev_bench is not None and bench != prev_bench:
+            lines.append("")
+        prev_bench = bench
+        label = f"{_BENCHMARK_DISPLAY.get(bench, bench)}: {metric}"
+        row = f"{label[:label_w]:<{label_w}}"
+        for m in models:
+            cell = cells.get((m, bench, metric))
+            if cell is None or cell.get("status") != "present":
+                row += f"{'--':>{col_w}}"
+            else:
+                marker = f"{cell['official']:.3g}/{cell['local']:.3g}"
+                row += f"{marker:>{col_w}}"
+        lines.append(row)
+    n_present = sum(1 for c in cells.values() if c.get("status") == "present")
+    lines.append("")
+    lines.append(
+        f"Coverage: {n_present} present "
+        f"(of {len(cells)} (model, benchmark, metric) cells with data)"
+    )
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -664,6 +1010,7 @@ def _write_redraw_plots_script(
     include_bookkeeping: bool,
     transpose: bool = False,
     no_subtitle: bool = False,
+    aggregate_diff: bool = False,
 ) -> Path:
     """Drop a self-contained ``redraw_plots.sh`` next to the heatmap outputs.
 
@@ -699,6 +1046,8 @@ def _write_redraw_plots_script(
         cmd_parts.append("--transpose")
     if no_subtitle:
         cmd_parts.append("--no-subtitle")
+    if aggregate_diff:
+        cmd_parts.append("--aggregate-diff")
 
     # Quote every fixed arg; the "$SCRIPT_DIR" placeholder must remain
     # unquoted so the shell expands it.

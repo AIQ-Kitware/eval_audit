@@ -257,3 +257,35 @@ def test_helm_facts_collapse_to_unknown(demo_output: Path) -> None:
             # ``same_model`` should always resolve from EEE model_info — the
             # whole comparison hinges on this.
             assert (facts.get("same_model") or {}).get("status") == "yes"
+
+
+def test_aggregate_diff_collector_reads_runlevel_scores(demo_output: Path) -> None:
+    """The aggregate-score-difference collector reads the sibling
+    ``core_runlevel_table.csv`` and reports signed (local - public) drift
+    per (model, benchmark, metric).
+
+    The demo fixture engineers deterministic run-level drift: ``imdb`` on
+    ``m1-small`` fully diverges (public 1.0, local 0.0), while ``arc_easy``
+    reproduces perfectly on every model. This pins both the divergent and
+    the exact cell.
+    """
+    from eval_audit.reports.eee_heatmap_data import (
+        _collect_aggregate_diff_cells_per_metric,
+    )
+
+    cells = _collect_aggregate_diff_cells_per_metric(demo_output)
+    assert cells, "no aggregate-score cells collected"
+
+    # imdb / m1-small / exact_match: public 1.0 vs local 0.0 => diff -1.0.
+    diverged = cells[("toy/m1-small", "imdb", "exact_match")]
+    assert diverged["official"] == 1.0
+    assert diverged["local"] == 0.0
+    assert diverged["diff"] == -1.0
+    assert diverged["abs_diff"] == 1.0
+    assert diverged["status"] == "present"
+
+    # arc_easy reproduces exactly on every model: diff == 0 everywhere.
+    for model in ("toy/m1-small", "toy/m2-medium", "toy/m3-large"):
+        exact = cells[(model, "arc_easy", "exact_match")]
+        assert exact["official"] == exact["local"]
+        assert exact["diff"] == 0.0

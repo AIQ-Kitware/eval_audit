@@ -59,6 +59,8 @@ from eval_audit.reports.eee_heatmap_data import (  # noqa: F401
     _model_from_component,
     _collect_cells,
     _collect_cells_per_metric,
+    _collect_aggregate_diff_cells_per_metric,
+    _parse_float,
     _find_tol_row,
     _save_cell_data,
 )
@@ -72,6 +74,9 @@ from eval_audit.reports.eee_heatmap_render import (  # noqa: F401
     _safe_filename_part,
     _render_per_metric_heatmaps,
     _render_per_metric_text_table,
+    _render_diff_heatmap,
+    _render_aggregate_diff_heatmaps,
+    _render_aggregate_diff_text_table,
     _write_redraw_plots_script,
 )
 
@@ -124,6 +129,19 @@ def main(argv: list[str] | None = None) -> None:
             "off because these are deterministic and uniformly "
             "reproducible — they bury the interesting score-level "
             "metrics under a sea of 1.0 cells."
+        ),
+    )
+    parser.add_argument(
+        "--aggregate-diff",
+        action="store_true",
+        default=False,
+        help=(
+            "Also emit per-core-metric aggregate-score-difference "
+            "heatmaps. Instead of instance-level agreement, each cell's "
+            "color encodes the signed difference (local − public) between "
+            "the reproduced and official run-level scores, and is "
+            "annotated with both actual scores (P=public, L=local). Reads "
+            "the sibling core_runlevel_table.csv next to each report."
         ),
     )
     parser.add_argument(
@@ -199,6 +217,7 @@ def main(argv: list[str] | None = None) -> None:
         include_bookkeeping=args.include_bookkeeping,
         transpose=args.transpose,
         no_subtitle=args.no_subtitle,
+        aggregate_diff=args.aggregate_diff,
     )
     logger.info(f"Wrote regen script: {rich_link(redraw_path)}")
 
@@ -304,6 +323,95 @@ def main(argv: list[str] | None = None) -> None:
                 logger.warning(
                     f"matplotlib not available ({exc}); "
                     "skipping per-metric PNG output."
+                )
+
+    # Optional aggregate-score-difference drill-down: one figure per core
+    # metric, each shaped like the main heatmap, but colored by the signed
+    # (local − public) run-level score difference and annotated with both
+    # actual scores. Independent of --per-metric (agreement) above.
+    if args.aggregate_diff:
+        logger.info(
+            f"Collecting per-(model, benchmark, metric) aggregate score cells "
+            f"(include_bookkeeping={args.include_bookkeeping}) ..."
+        )
+        diff_cells = _collect_aggregate_diff_cells_per_metric(
+            analysis_root,
+            include_bookkeeping=args.include_bookkeeping,
+        )
+        logger.info(f"  found {len(diff_cells)} aggregate-score cells")
+
+        if not diff_cells:
+            logger.warning(
+                "no aggregate-score cells found; skipping aggregate-diff "
+                "output. (Is core_runlevel_table.csv present next to the "
+                "core_metric_report.json files?)"
+            )
+        else:
+            # Order models/benchmarks from the aggregate cells directly so
+            # the diff plots are self-consistent even if a report only
+            # contributed run-level scores (not instance agreement).
+            diff_models_found = {m for (m, _b, _met) in diff_cells}
+            diff_benchmarks_found = {b for (_m, b, _met) in diff_cells}
+            diff_models = [m for m in _MODEL_ORDER if m in diff_models_found]
+            diff_models += sorted(diff_models_found - set(_MODEL_ORDER))
+            diff_benchmarks = [b for b in _BENCHMARK_ORDER if b in diff_benchmarks_found]
+            diff_benchmarks += sorted(diff_benchmarks_found - set(_BENCHMARK_ORDER))
+
+            # Combined text/JSON row order: benchmarks in canonical order,
+            # metrics alphabetical within each benchmark.
+            diff_rows_in_order: list[tuple[str, str]] = []
+            for bench in diff_benchmarks:
+                metrics_for_bench = sorted({
+                    metric for (_m, b, metric) in diff_cells if b == bench
+                })
+                diff_rows_in_order.extend(
+                    (bench, metric) for metric in metrics_for_bench
+                )
+            diff_metrics_in_order = sorted({
+                metric for (_m, _b, metric) in diff_cells
+            })
+
+            text_diff = _render_aggregate_diff_text_table(
+                diff_cells, diff_models, diff_rows_in_order,
+            )
+            txt_diff = out_dir / "aggregate_score_diff_per_metric.txt"
+            write_text_atomic(txt_diff, text_diff)
+            print(text_diff)
+            logger.info(f"Wrote aggregate-diff text table: {rich_link(txt_diff)}")
+
+            json_diff = out_dir / "aggregate_score_diff_per_metric.json"
+            diff_json_rows = [
+                {
+                    "model": m,
+                    "benchmark": b,
+                    "metric": metric,
+                    **diff_cells[(m, b, metric)],
+                }
+                for (b, metric) in diff_rows_in_order
+                for m in diff_models
+                if (m, b, metric) in diff_cells
+            ]
+            write_text_atomic(
+                json_diff,
+                json.dumps({"cells": diff_json_rows}, indent=2) + "\n",
+            )
+            logger.info(f"Wrote aggregate-diff cell data: {rich_link(json_diff)}")
+
+            try:
+                written_diff = _render_aggregate_diff_heatmaps(
+                    diff_cells, diff_models, diff_benchmarks,
+                    diff_metrics_in_order, title, out_dir,
+                    transpose=args.transpose,
+                    subtitle_override=("" if args.no_subtitle else None),
+                )
+                logger.info(
+                    f"Wrote {len(written_diff)} aggregate-diff heatmap(s) under "
+                    f"{rich_link(out_dir / 'aggregate_score_diff_per_metric')}"
+                )
+            except ImportError as exc:
+                logger.warning(
+                    f"matplotlib not available ({exc}); "
+                    "skipping aggregate-diff PNG output."
                 )
 
 

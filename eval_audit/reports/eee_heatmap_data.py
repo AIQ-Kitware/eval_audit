@@ -6,6 +6,7 @@ Split out of ``eval_audit.reports.eee_only_heatmap`` on 2026-06-11
 function bodies are unchanged.
 """
 from __future__ import annotations
+import csv
 import json
 import math
 from collections import defaultdict
@@ -410,6 +411,147 @@ def _find_tol_row(
             best_dist = dist
             best = row
     return best
+
+
+# ---------------------------------------------------------------------------
+# Aggregate-score-difference collection
+# ---------------------------------------------------------------------------
+
+
+def _parse_float(value: Any) -> float | None:
+    """Coerce a CSV field to a finite float, or None.
+
+    Blank cells and non-numeric / non-finite values collapse to None so
+    the caller can skip them rather than poisoning the average.
+    """
+    if value is None or value == "":
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) else None
+
+
+@profile
+def _collect_aggregate_diff_cells_per_metric(
+    analysis_root: Path,
+    *,
+    include_bookkeeping: bool = False,
+) -> dict[tuple[str, str, str], dict[str, Any]]:
+    """Collect per-(model, benchmark, metric) *aggregate score* cells.
+
+    Where :func:`_collect_cells_per_metric` measures instance-level
+    agreement (did each paired instance's score match within a
+    tolerance?), this reads the run-level aggregate score each side
+    actually reported, so the heatmap can show how far a reproduced
+    benchmark score drifted from the public one.
+
+    For every ``core_metric_report.json`` we resolve ``(model, benchmark)``
+    exactly the way the agreement collectors do (off the component
+    ``logical_run_key`` / ``model`` fields), then read the sibling
+    ``core_runlevel_table.csv`` that ``core_metrics`` writes next to every
+    report. Its ``left_mean`` column is the official/public aggregate
+    score and ``right_mean`` the local/reproduced score, one row per core
+    metric. We keep only ``official_vs_local`` rows and micro-average
+    ``left_mean`` / ``right_mean`` across every contributing pair/packet
+    for a given (model, benchmark, metric) cell.
+
+    Returns a dict keyed ``(model_id, benchmark_family, metric_name)`` to::
+
+        {
+            "official": float,   # public aggregate score (mean of left_mean)
+            "local": float,      # reproduced aggregate score (mean right_mean)
+            "diff": float,       # local - official  (signed; colors the cell)
+            "abs_diff": float,   # |local - official|
+            "n": int,            # runlevel rows that fed the average
+            "status": "present",
+        }
+
+    ``include_bookkeeping=False`` (default) drops metrics in
+    :data:`_BOOKKEEPING_METRICS`, mirroring the per-metric agreement
+    collector so the two heatmaps cover the same scoring metrics.
+
+    Reports whose sibling ``core_runlevel_table.csv`` is absent or
+    unreadable are skipped (the cell shows as "missing" downstream) —
+    that CSV is only written on the full report path, not in
+    ``--plots-only`` re-renders.
+    """
+    acc: dict[tuple[str, str, str], dict[str, float]] = defaultdict(
+        lambda: {"sum_official": 0.0, "sum_local": 0.0, "n": 0.0}
+    )
+
+    report_paths = sorted(analysis_root.rglob("core_metric_report.json"))
+    if not report_paths:
+        return {}
+
+    for rp in report_paths:
+        try:
+            report = json.loads(rp.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        # Same (model, benchmark) resolution as the agreement collectors.
+        model_id: str | None = None
+        benchmark: str | None = None
+        for comp in (report.get("components") or []):
+            lrk = (comp.get("logical_run_key") or "").strip()
+            if not lrk:
+                continue
+            m = _model_from_component(comp)
+            if m:
+                model_id = m
+            b = _benchmark_family(lrk)
+            if b:
+                benchmark = b
+            if model_id and benchmark:
+                break
+
+        if not model_id or not benchmark:
+            continue
+
+        csv_path = rp.parent / "core_runlevel_table.csv"
+        if not csv_path.exists():
+            continue
+        try:
+            with csv_path.open(newline="") as fh:
+                rows = list(csv.DictReader(fh))
+        except OSError:
+            continue
+
+        for row in rows:
+            if (row.get("comparison_kind") or "").strip() != "official_vs_local":
+                continue
+            metric = (row.get("metric") or "").strip()
+            if not metric:
+                continue
+            if not include_bookkeeping and metric in _BOOKKEEPING_METRICS:
+                continue
+            official = _parse_float(row.get("left_mean"))
+            local = _parse_float(row.get("right_mean"))
+            if official is None or local is None:
+                continue
+            cell = acc[(model_id, benchmark, metric)]
+            cell["sum_official"] += official
+            cell["sum_local"] += local
+            cell["n"] += 1
+
+    result: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for key, cell in acc.items():
+        n = int(cell["n"])
+        if n == 0:
+            continue
+        official = cell["sum_official"] / n
+        local = cell["sum_local"] / n
+        result[key] = {
+            "official": official,
+            "local": local,
+            "diff": local - official,
+            "abs_diff": abs(local - official),
+            "n": n,
+            "status": "present",
+        }
+    return result
 
 
 # ---------------------------------------------------------------------------
