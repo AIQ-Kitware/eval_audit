@@ -24,6 +24,7 @@ import cli as cli_mod            # noqa: E402
 import compare_prompt as cmp_mod  # noqa: E402
 import confirm as confirm_mod    # noqa: E402
 import grid as grid_mod          # noqa: E402
+import hf_probe as hf_probe_mod  # noqa: E402
 import oracle as oracle_mod      # noqa: E402
 import registry as registry_mod  # noqa: E402
 import report as report_mod      # noqa: E402
@@ -438,3 +439,57 @@ def test_catalog_endpoints_have_distinct_compat_keys():
     keys = {n: cat.resolve_endpoint(n).compat_key for n in cat.endpoints}
     assert len(cat.endpoints) == len(g.serve_recipes)
     assert len(set(keys.values())) == len(keys)      # no coalescing
+
+
+# --------------------------------------------------------------------------- #
+# hf_probe: HuggingFace-side reproduction (pure doc/render/score path; the
+# transformers.generate() step is a GPU concern and injected as a stub here)
+# --------------------------------------------------------------------------- #
+def test_hf_probe_render_prompt_chat_and_base():
+    class _Tok:
+        def apply_chat_template(self, messages, tokenize, add_generation_prompt):
+            body = messages[0]["content"]
+            tail = "<|assistant|>" if add_generation_prompt else ""
+            return f"<|user|>{body}{tail}"
+
+    tok = _Tok()
+    assert hf_probe_mod.render_prompt(tok, "hi", apply_chat_template=True,
+                                      add_generation_prompt=True) == "<|user|>hi<|assistant|>"
+    assert hf_probe_mod.render_prompt(tok, "hi", apply_chat_template=True,
+                                      add_generation_prompt=False) == "<|user|>hi"
+    # base/completions: raw prompt verbatim
+    assert hf_probe_mod.render_prompt(tok, "hi", apply_chat_template=False,
+                                      add_generation_prompt=True) == "hi"
+
+
+def test_hf_probe_build_request_variants():
+    chat = hf_probe_mod.build_request_variants("chat", agp="both", ast="true")
+    assert [hf_probe_mod._variant_name(v) for v in chat] == ["ast1-chat-agp1", "ast1-chat-agp0"]
+    # completions collapses add_generation_prompt (inert there)
+    comp = hf_probe_mod.build_request_variants("completions", agp="both", ast="both")
+    assert [hf_probe_mod._variant_name(v) for v in comp] == ["ast1-completions", "ast0-completions"]
+    assert all(v["add_generation_prompt"] is None for v in comp)
+
+
+def test_hf_probe_variant_doc_shape_and_scores():
+    sample = [{"instance_id": "a", "prompt": "Q1"}, {"instance_id": "b", "prompt": "Q2"}]
+    oracle = {"a": {"instance_id": "a", "official_completion": " Diana", "official_tokens": []},
+              "b": {"instance_id": "b", "official_completion": " Paris", "official_tokens": []}}
+
+    def render_fn(raw):
+        return f"<chat>{raw}</chat>"
+
+    def gen_fn(rendered, ast):          # stub: perfect reproduction of the official
+        txt = " Diana" if "Q1" in rendered else " Paris"
+        return {"completion": txt, "finish_reason": "stop", "first_token": txt.strip(),
+                "n_tokens": 1, "latency_s": 0.0, "error": None}
+
+    doc = hf_probe_mod.probe_variant(
+        sample, cell_id="hf-m-fp32::ast1-chat-agp0", endpoint="hf-m-fp32",
+        request={"add_special_tokens": True, "protocol": "chat", "add_generation_prompt": False},
+        render_fn=render_fn, generate_fn=gen_fn, progress=False)
+    assert set(doc) == {"cell_id", "endpoint", "request", "results"}
+    assert [r["instance_id"] for r in doc["results"]] == ["a", "b"]
+    # the existing scorer consumes it unchanged
+    sc = score_mod.score_cell(doc, oracle)
+    assert sc["verdict"] == "MATCH" and sc["quasi_match_rate"] == 1.0 and sc["n_ok"] == 2

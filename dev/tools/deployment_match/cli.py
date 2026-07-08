@@ -33,6 +33,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 import grid as grid_mod          # noqa: E402
+import hf_probe as hf_probe_mod  # noqa: E402
 import oracle as oracle_mod      # noqa: E402
 import registry as registry_mod  # noqa: E402
 import report as report_mod      # noqa: E402
@@ -381,6 +382,57 @@ def cmd_confirm(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_hf_probe(args: argparse.Namespace) -> int:
+    """Reproduce the official at --dtype via HF transformers.generate (no vLLM),
+    then score the completions against the oracle (the public run). The
+    matched-precision path for a MoE fp32 official vLLM can't serve."""
+    if args.grid_dir:
+        orc = oracle_mod.Oracle.from_json(
+            json.loads((Path(args.grid_dir) / "oracle.json").read_text()))
+    elif args.run:
+        orc = oracle_mod.load_oracle(args.run, n=args.n, strategy=args.strategy)
+    else:
+        raise SystemExit("need --grid-dir (with oracle.json) or --run")
+    if not oracle_mod.has_official_completions(orc):
+        print("WARN: prompt-only oracle — scoring against official is impossible.",
+              file=sys.stderr)
+
+    resolution = registry_mod.resolve(
+        orc.model, orc.model_deployment,
+        source_override=args.source, protocol_override=args.protocol)
+    if not resolution.hf_source:
+        raise SystemExit("no hf_source resolved; pass --source <org/Model>")
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "oracle.json").write_text(json.dumps(orc.to_json(), indent=2))
+    (out_dir / "resolution.json").write_text(json.dumps(resolution.__dict__, indent=2))
+
+    cell_docs = hf_probe_mod.run_hf_probe(
+        orc, resolution, out_dir, dtype=args.dtype,
+        agp=args.add_generation_prompt, ast=args.add_special_tokens,
+        device_map=args.device_map, trust_remote_code=args.trust_remote_code)
+
+    # Score the HF completions against the oracle (= the public run's completions),
+    # reusing the exact scorer/reporter the vLLM sweep uses.
+    scored = score_mod.rank(cell_docs, _oracle_sample_dicts(orc))
+    cells_by_id = {c["cell_id"]: c for c in json.loads((out_dir / "cells.json").read_text())}
+    results_dir = out_dir / "results"
+    ranking = report_mod.render_ranking(scored)
+    snippets = report_mod.render_snippets(scored, _oracle_sample_dicts(orc))
+    best = report_mod.best_deployment(scored, cells_by_id, resolution)
+    print(ranking)
+    print(snippets)
+    (results_dir / "ranking.txt").write_text(ranking + "\n")
+    (results_dir / "snippets.txt").write_text(snippets + "\n")
+    (results_dir / "scored.json").write_text(json.dumps(scored, indent=2))
+    _need_yaml()
+    (results_dir / "best_deployment.yaml").write_text(yaml.safe_dump(best, sort_keys=False))
+    print(f"\n[hf-probe] winner: {best.get('winner_cell')} "
+          f"(composite={best.get('composite')})  -> {results_dir}/best_deployment.yaml")
+    return 0
+
+
 def cmd_selftest(_args: argparse.Namespace) -> int:
     return score_mod.selftest()
 
@@ -476,6 +528,28 @@ def main(argv: list[str] | None = None) -> int:
     cf.add_argument("--local-run", default=None, help="full local run dir to compare (optional)")
     cf.add_argument("--out", required=True)
     cf.set_defaults(func=cmd_confirm)
+
+    hp = sub.add_parser("hf-probe", help="reproduce the official at --dtype via HF "
+                        "transformers.generate (no vLLM) and score vs the oracle — the "
+                        "matched-precision path for a MoE fp32 official vLLM can't serve")
+    hp.add_argument("--grid-dir", help="dir with an oracle.json to reuse (the sweep's sample)")
+    hp.add_argument("--run", help="public HELM run dir (if no --grid-dir); builds the oracle")
+    _run_opts(hp)
+    hp.add_argument("--source", default=None, help="override the local HF source repo")
+    hp.add_argument("--protocol", default=None, choices=["completions", "chat"])
+    hp.add_argument("--dtype", default="float32",
+                    help="load dtype (default float32 — matches HELM's HuggingFaceClient "
+                    "default on transformers<5). Explicitly pinned so fp32 is fp32 on any "
+                    "transformers version.")
+    hp.add_argument("--add-generation-prompt", default="both", choices=["true", "false", "both"],
+                    help="chat-template add_generation_prompt to sweep (default both: HELM's "
+                    "older template ignored it, so 'false' reproduces that render)")
+    hp.add_argument("--add-special-tokens", default="true", choices=["true", "false", "both"],
+                    help="tokenizer add_special_tokens (default true, as HELM's get_prompt)")
+    hp.add_argument("--device-map", default="auto", help="transformers device_map (default auto, as HELM)")
+    hp.add_argument("--trust-remote-code", action="store_true")
+    hp.add_argument("--out", required=True)
+    hp.set_defaults(func=cmd_hf_probe)
 
     st = sub.add_parser("selftest"); st.set_defaults(func=cmd_selftest)
 
