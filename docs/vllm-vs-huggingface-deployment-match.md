@@ -33,6 +33,25 @@ Recommendation: have the grid read `official_client_class` and only chase the
 HF-execution knobs (Tier A below) when the official actually was
 `HuggingFaceClient`.
 
+> **Update (2026-07-08): the resolver this recommends now exists — but only the
+> mechanism is wired, not the routing.** [`eval_audit/hf_inprocess.py`](../eval_audit/hf_inprocess.py)
+> resolves `official_client_class` from `model_deployments.yaml`
+> (`official_is_huggingface_inprocess`) and builds the matched reproduction entry
+> (`hf_inprocess_deployment_entry` — HELM's own official entry with
+> `torch_dtype: torch.float32` pinned). The execution path is also built: infer-stack
+> can now hold a GPU without serving (`acquire --reserve-gpus N`) and the pipeline can
+> run HELM's in-process `HuggingFaceClient` on it (lease bracket + docker-node GPU
+> pinning). **What is NOT yet wired is the switch itself:** nothing in the default
+> replay path calls the resolver to route a `HuggingFaceClient` official to the HF
+> path, so **a public run is still reproduced with vLLM by default**. The remaining
+> piece — an HF-in-process manifest producer — plus the full design and the GPU-host
+> OLMoE acceptance test are in
+> [`docs/planning/huggingface-in-process-reserved-gpu-plan.md`](planning/huggingface-in-process-reserved-gpu-plan.md).
+> That plan is about the **main replay pipeline** (reproduce the official *by
+> running the same in-process HF client*), which is a different target from this
+> tool's job of *matching a vLLM generation to an HF one* — the two are
+> complementary, not the same switch.
+
 ## What the grid varies today
 
 Defined in [`grid.py` `DEFAULT_AXES`](../dev/tools/deployment_match/grid.py):
