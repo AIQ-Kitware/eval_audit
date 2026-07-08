@@ -70,6 +70,7 @@ from eval_audit.reports.summary.classification import (  # noqa: F401
     _default_filter_inventory_json,
     _load_filter_inventory_rows,
     _bucket_agreement,
+    agreement_bucket_label,
     FILTER_SELECTION_EXCLUDED_LABEL,
     FILTER_SELECTION_SELECTED_LABEL,
     ATTEMPTED_LABEL,
@@ -930,16 +931,16 @@ def _render_scope_plots(
         )
         repro_bucket_plot = _write_plotly_bar(
             rows=repro_bucket_rows,
-            x="official_instance_agree_bucket",
+            x="agreement_bucket",
             y="count",
-            color="official_instance_agree_bucket",
+            color="agreement_bucket",
             title=f"Official vs Local Agreement Buckets (instance-level, abs_tol={CANONICAL_AGREEMENT_TOL:g} canonical): {scope_title}",
             stem=level_001 / "reproducibility_buckets",
             machine_dpath=level_001_machine,
             interactive_dpath=level_001_interactive,
             static_dpath=level_001_static,
             xaxis_title="Agreement Bucket",
-            xaxis_count_key="official_instance_agree_bucket",
+            xaxis_count_key="agreement_bucket",
             yaxis_title="Run Count",
         )
         agreement_curve_plot = _write_agreement_curve_plot(
@@ -1208,6 +1209,9 @@ def _render_scope_summary(
     repro_bucket_rows = [
         {
             "official_instance_agree_bucket": bucket,
+            # Legend/axis label with the bucket's threshold spelled out, so
+            # "low / moderate / high / exact" always states its cutoff.
+            "agreement_bucket": agreement_bucket_label(bucket),
             "count": count,
             "share_of_analyzed": (count / n_analyzed) if n_analyzed else None,
         }

@@ -185,6 +185,36 @@ def _bucket_agreement(agree_ratio: float | None) -> str:
     return "zero_agreement"
 
 
+# Human-readable legend labels for the agreement buckets, with the
+# ``_bucket_agreement`` thresholds spelled out inline. The "%" here is the
+# *share of paired instances* whose |official − local| score difference is
+# within the canonical abs_tol (see ``CANONICAL_AGREEMENT_TOL``) — not a
+# score. Kept next to the classifier so the labels and thresholds can never
+# drift apart. Used by every plot legend / category axis that renders these
+# buckets so "low / moderate / high / exact" always states its cutoff.
+AGREEMENT_BUCKET_DISPLAY: dict[str, str] = {
+    "exact_or_near_exact": "exact / near-exact (≥99.9999% of instances)",
+    "high_agreement_0.95+": "high (≥95% of instances)",
+    "moderate_agreement_0.80+": "moderate (80–95% of instances)",
+    "low_agreement_0.00+": "low (<80% of instances)",
+    "zero_agreement": "zero (0% of instances)",
+    "not_analyzed": "not analyzed",
+    "completed_not_yet_analyzed": "completed (not yet analyzed)",
+}
+
+
+def agreement_bucket_label(bucket: str | None) -> str:
+    """Display label for an agreement bucket key, with its threshold.
+
+    Falls back to the raw key (spaces for underscores) for anything not in
+    :data:`AGREEMENT_BUCKET_DISPLAY`, so an unforeseen bucket still renders
+    legibly instead of raising.
+    """
+    if not bucket:
+        return "not analyzed"
+    return AGREEMENT_BUCKET_DISPLAY.get(bucket, bucket.replace("_", " "))
+
+
 FILTER_SELECTION_EXCLUDED_LABEL = "not selected for attempted runs"
 FILTER_SELECTION_SELECTED_LABEL = "selected for attempted runs"
 ATTEMPTED_LABEL = "attempted run"

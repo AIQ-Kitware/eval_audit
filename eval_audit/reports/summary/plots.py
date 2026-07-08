@@ -544,14 +544,17 @@ def _write_coverage_matrix_plot(
         "analyzed_high": 5,
         "analyzed_exact": 6,
     }
+    # Agreement % = share of paired instances whose |official − local| score
+    # difference is within the canonical abs_tol (see CANONICAL_AGREEMENT_TOL);
+    # thresholds mirror classification._bucket_agreement.
     STATUS_LABEL = {
         0: "all failed",
         1: "completed, not yet analyzed",
         2: "analyzed: no agreement data (join failure?)",
-        3: "analyzed: low agreement (<80%)",
-        4: "analyzed: moderate agreement (80-95%)",
-        5: "analyzed: high agreement (95%+)",
-        6: "analyzed: exact / near-exact",
+        3: "analyzed: low agreement (<80% of instances)",
+        4: "analyzed: moderate agreement (80–95% of instances)",
+        5: "analyzed: high agreement (≥95% of instances)",
+        6: "analyzed: exact / near-exact (≥99.9999% of instances)",
     }
     repro_keyed = {
         (str(r.get("experiment_name")), str(r.get("run_entry"))): r
@@ -670,17 +673,20 @@ def _write_coverage_matrix_plot(
                 zmin=-1,
                 zmax=6,
                 colorbar={
-                    "title": "Status",
+                    # Agreement % = share of instances within the canonical
+                    # abs_tol; thresholds spelled out so each band's cutoff
+                    # is legible straight off the legend.
+                    "title": "Status (agreement % = share of<br>instances within abs_tol)",
                     "tickvals": [-1, 0, 1, 2, 3, 4, 5, 6],
                     "ticktext": [
                         "not attempted",
                         "all failed",
                         "completed (not analyzed)",
                         "analyzed: no agreement data",
-                        "analyzed: low agreement",
-                        "analyzed: moderate",
-                        "analyzed: high",
-                        "analyzed: exact/near-exact",
+                        "analyzed: low agreement (<80%)",
+                        "analyzed: moderate (80–95%)",
+                        "analyzed: high (≥95%)",
+                        "analyzed: exact/near-exact (≥99.9999%)",
                     ],
                 },
             ))
