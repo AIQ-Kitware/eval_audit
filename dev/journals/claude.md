@@ -286,3 +286,58 @@ both legends now show cutoffs (coverage colorbar: "low agreement (<80%)"
 
 **Still flagged (not mine).** `submodules/infer_stack` gitlink remains
 `-dirty` — left unstaged per repo convention.
+
+## 2026-07-08 16:55:00 -0400
+
+**Model/config:** claude-opus-4-8[1m] (Claude Code, VSCode extension harness).
+
+**User intent:** A top-level version of the aggregate-score-diff heatmap
+where each benchmark uses its headline metric, so all model × benchmark
+pairs are visible holistically in one plot (instead of one plot per
+metric).
+
+**Key finding (via Explore).** eval_audit has NO headline/primary-metric
+concept — `core_metrics` is just an alphabetical set. But HELM does:
+`run_groups[].environment.main_name` in
+`submodules/helm/.../static/schema_classic.yaml` (equivalently
+`ScenarioMetadata.main_metric`). I queried the schema and transcribed the
+values for our families (mmlu→exact_match, imdb→quasi_exact_match,
+narrativeqa/quac→f1_score, gsm→exact_match_indicator, wikifact→
+quasi_exact_match, the_pile/twitter_aae→bits_per_byte, …).
+
+**Design — headline selection (`headline_metric_for_benchmark`).** Curated
+HELM main_name **iff that metric is actually present** in the data; else
+first of a headline-likeness priority list (exact_match, quasi_exact_match,
+… present); else alphabetical. The "present" guard matters: EEE-only
+inputs and metric-name drift mean the schema's exact main_name isn't
+always emitted (gsm's `exact_match_indicator` vs a run that only has
+`exact_match`), and the fallback keeps the cell populated. The plot names
+the *actually-used* metric on each benchmark's axis tick, so the choice is
+always transparent — no silent misattribution.
+
+**Design — coherence.** Headline metric is chosen per benchmark from the
+*union* of metrics across all models, so every model's cell in that
+benchmark's row uses the same metric (the row stays comparable). Reused
+`_render_diff_heatmap` (added a `benchmark_metric` axis-annotation arg)
+rather than a new renderer — the only difference from the per-metric plots
+is that cells in different benchmarks are different metrics, surfaced via
+the tick labels.
+
+**Wiring.** `_render_headline_diff` (in the render module, since it already
+does file IO) orchestrates collapse→text→json→png and is called from BOTH
+the `--aggregate-diff` CLI and `build_reports_summary._render_aggregate_score_diff`,
+so the standalone and auto-emitted paths stay identical. Output:
+`aggregate_score_diff_headline.{png,pdf,txt,json}` next to the per-metric
+subdir.
+
+**Verified.** compiles; demo (standalone + aggregate summary) picks imdb→
+quasi_exact_match, truthful_qa→exact_match, arc_easy→exact_match (fallback),
+9 holistic cells in one figure with per-benchmark metric labels; 48 tests
+green under `--run-slow` incl. new headline-selection unit test +
+summary-emission test. Committed 70c867d.
+
+**Caveat for future work.** The curated map covers the classic families;
+benchmarks outside it (or with unusual main metrics like msmarco RR@10 /
+NDCG@10, code pass@1) rely on the priority fallback, which is exact-match-
+biased. If we start auditing those benchmarks, extend
+`HEADLINE_METRIC_BY_BENCHMARK` rather than trusting the fallback.
