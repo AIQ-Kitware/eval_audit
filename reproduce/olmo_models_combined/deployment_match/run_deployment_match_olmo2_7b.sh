@@ -87,6 +87,18 @@ DM_ATTN="${DM_ATTN:-}"
 # (view with `infer-stack` TUI logs or `docker compose logs <vllm-service>`).
 # Useful to verify the prompt vLLM actually tokenizes matches HELM's.
 DM_LOG_REQUESTS="${DM_LOG_REQUESTS:-}"
+# Optional: DM_FP32_TP=N serves float32 recipes with tensor_parallel_size=N (N GPUs
+# per fp32 endpoint). This is a DENSE model, so it's a VRAM lever (fp32 weights are
+# large), not the MoE-kernel workaround it is on OLMoE.
+DM_FP32_TP="${DM_FP32_TP:-}"
+# Optional: DM_HF_FP32=1 runs a HuggingFace transformers.generate() reproduction at
+# float32 (HELM's HuggingFaceClient path) INSTEAD of the vLLM sweep, scored against
+# the same oracle. The official ran fp32 (no torch_dtype pinned) and HF is the same
+# ENGINE it used, so this is the exact-match path (removes the vLLM<->HF gap too).
+# fp32 is ALSO servable in vLLM for a dense model (DM_DTYPES=float32), but that fixes
+# only precision, not the engine gap. Needs a GPU + weights; DM_ALLOWED_GPUS maps to
+# CUDA_VISIBLE_DEVICES.
+DM_HF_FP32="${DM_HF_FP32:-}"
 
 # The deployment-match core imports its sibling modules by bare name (cli.py adds
 # its own dir to sys.path); the serve phase additionally imports `infer_stack`, so
@@ -119,21 +131,40 @@ echo "  mode    : $([[ "$DM_DRY" == 1 ]] && echo 'dry-run (CPU, no GPU)' || echo
 [[ -n "$DM_ALLOWED_GPUS" ]] && echo "  gpus    : restricted to $DM_ALLOWED_GPUS"
 [[ -n "$DM_PROFILE" ]] && echo "  profile : $DM_PROFILE"
 [[ -n "$DM_DTYPES" ]] && echo "  dtypes  : $DM_DTYPES"
+[[ -n "$DM_FP32_TP" ]] && echo "  fp32 TP : $DM_FP32_TP (float32 served on $DM_FP32_TP GPUs)"
+[[ -n "$DM_HF_FP32" ]] && echo "  mode    : HF transformers.generate() fp32 ONLY (replaces the vLLM sweep), scored vs oracle"
 [[ -n "$DM_ATTN" ]] && echo "  attn    : $DM_ATTN"
 echo
 
 # --- Run ---------------------------------------------------------------------
-# One-shot `auto`: dry-run -> run -> score -> confirm. It prints the resolved
-# recipe + grid summary before touching a GPU, then serves each cell one at a
-# time (its own gc/acquire/probe/release loop over the generated catalog).
-args=(auto --run "$DM_RUN" --n "$DM_N" --out "$DM_OUT")
-[[ "$DM_DRY" == 1 ]] && args+=(--dry)
-[[ -n "$DM_ALLOWED_GPUS" ]] && args+=(--allowed-gpus "$DM_ALLOWED_GPUS")
-[[ -n "$DM_PROFILE" ]] && args+=(--profile "$DM_PROFILE")
-[[ -n "$DM_DTYPES" ]] && args+=(--dtypes "$DM_DTYPES")
-[[ -n "$DM_ATTN" ]] && args+=(--attention-backends "$DM_ATTN")
-[[ -n "$DM_LOG_REQUESTS" ]] && args+=(--log-requests)
-dm "${args[@]}"
+# Two modes: the vLLM sweep (default `auto`) or the HuggingFace fp32 reproduction
+# (DM_HF_FP32=1). Both write the same results/ layout (ranking.txt + scored.json +
+# best_deployment.yaml), so the report section below is identical.
+if [[ -n "$DM_HF_FP32" ]]; then
+  # HuggingFace transformers.generate() reproduction at fp32 — no vLLM, no infer-stack.
+  if [[ "$DM_DRY" == 1 ]]; then
+    echo "NOTE: DM_DRY is not supported with DM_HF_FP32 — the HF probe loads the model"
+    echo "      and generates (GPU required). Unset DM_DRY on a GPU host and re-run."
+    exit 0
+  fi
+  # transformers uses device_map=auto over the visible GPUs; map the same restriction.
+  [[ -n "$DM_ALLOWED_GPUS" ]] && export CUDA_VISIBLE_DEVICES="$DM_ALLOWED_GPUS"
+  args=(hf-probe --run "$DM_RUN" --n "$DM_N" --out "$DM_OUT" --dtype float32)
+  dm "${args[@]}"
+else
+  # One-shot `auto`: dry-run -> run -> score -> confirm. It prints the resolved
+  # recipe + grid summary before touching a GPU, then serves each cell one at a
+  # time (its own gc/acquire/probe/release loop over the generated catalog).
+  args=(auto --run "$DM_RUN" --n "$DM_N" --out "$DM_OUT")
+  [[ "$DM_DRY" == 1 ]] && args+=(--dry)
+  [[ -n "$DM_ALLOWED_GPUS" ]] && args+=(--allowed-gpus "$DM_ALLOWED_GPUS")
+  [[ -n "$DM_PROFILE" ]] && args+=(--profile "$DM_PROFILE")
+  [[ -n "$DM_DTYPES" ]] && args+=(--dtypes "$DM_DTYPES")
+  [[ -n "$DM_FP32_TP" ]] && args+=(--fp32-tensor-parallel-size "$DM_FP32_TP")
+  [[ -n "$DM_ATTN" ]] && args+=(--attention-backends "$DM_ATTN")
+  [[ -n "$DM_LOG_REQUESTS" ]] && args+=(--log-requests)
+  dm "${args[@]}"
+fi
 
 # --- Report ------------------------------------------------------------------
 if [[ "$DM_DRY" == 1 ]]; then
