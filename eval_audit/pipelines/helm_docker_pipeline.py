@@ -46,6 +46,7 @@ import kwdagger
 from magnet.backends.helm.pipeline import MaterializeHelmRunNode
 
 from eval_audit.pipelines.lease_bracket import (
+    _LEASE_ENV_BASENAME,
     LEASE_KEYS as _LEASE_KEYS,
     LEASE_PERF_PARAMS,
     LeaseBracketMixin,
@@ -151,6 +152,7 @@ class MaterializeHelmRunDockerNode(LeaseBracketMixin, MaterializeHelmRunNode):
 
         q = shlex.quote
         gpus = cfg.get("container_gpus")
+        reserve_gpus = int(cfg.get("lease_reserve_gpus") or 0)
         shm_size = cfg.get("container_shm_size") or "32g"
         ipc_host = bool(cfg.get("container_ipc_host"))
         network = cfg.get("container_network")
@@ -171,7 +173,17 @@ class MaterializeHelmRunDockerNode(LeaseBracketMixin, MaterializeHelmRunNode):
 
         # GPU exposure. None => follow the scheduler's per-worker assignment;
         # "none"/"" => omit (CPU runs / local smoke tests); else use verbatim.
-        if gpus is None:
+        if reserve_gpus > 0:
+            # In-process HuggingFace on a *reserved* GPU (shared machine): the
+            # acquire setup wrote CUDA_VISIBLE_DEVICES=<reserved host index(es)>
+            # into lease.env (sourced below). Pin the container to exactly that
+            # card. Fail CLOSED (``:?``) — if the lease didn't populate it we must
+            # NOT fall back to "all" GPUs on a shared host.
+            lines.append(
+                '--gpus "device=${CUDA_VISIBLE_DEVICES:?reserved GPU unset — '
+                'lease.env missing CUDA_VISIBLE_DEVICES}"'
+            )
+        elif gpus is None:
             lines.append('--gpus "device=${CUDA_VISIBLE_DEVICES:-all}"')
         elif str(gpus).strip().lower() not in ("none", ""):
             lines.append(f"--gpus {q(str(gpus))}")
@@ -234,7 +246,17 @@ class MaterializeHelmRunDockerNode(LeaseBracketMixin, MaterializeHelmRunNode):
         # P2: pre-clean a leaked container (separate statement, not a
         # backslash-continued flag) so a re-run doesn't fail on a name conflict.
         pre_clean = f"docker rm -f {q(container_name)} >/dev/null 2>&1 || true\n"
-        return pre_clean + docker_prefix + " \\\n    " + inner_command
+        # Reserve path: source the lease env-file so the reserved GPU index the
+        # acquire setup wrote (CUDA_VISIBLE_DEVICES) is in this command's shell
+        # before `docker run --gpus device=${CUDA_VISIBLE_DEVICES}` expands it.
+        # setup and command are separate cmd_queue steps, so exported env does not
+        # survive — the file does. Not forwarded INTO the container: `--gpus
+        # device=k` already isolates the card (renumbered to 0 inside).
+        source_lease = ""
+        if reserve_gpus > 0:
+            env_file = q(f"{out_dpath}/{_LEASE_ENV_BASENAME}")
+            source_lease = f"set -a; . {env_file}; set +a\n"
+        return pre_clean + source_lease + docker_prefix + " \\\n    " + inner_command
 
     @property
     def teardown(self) -> str | None:

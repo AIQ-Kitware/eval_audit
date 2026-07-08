@@ -49,6 +49,12 @@ LEASE_KEYS = frozenset(
         "lease_catalog",
         "lease_queue",
         "lease_snapshot",
+        # Reserve-only lease: hold N GPUs without serving (the in-process
+        # HuggingFace path). Mutually exclusive with lease_endpoint(s) — a run is
+        # either *served* (vLLM behind the gateway) or *reserved* (HELM loads the
+        # model itself on the reserved GPU). See docs/planning/
+        # huggingface-in-process-reserved-gpu-plan.md.
+        "lease_reserve_gpus",
     }
 )
 
@@ -150,6 +156,23 @@ def _resolve_lease_endpoint(cfg: dict[str, Any]) -> str | None:
     return str(endpoint) if endpoint else None
 
 
+def _resolve_lease_request(cfg: dict[str, Any]) -> tuple[str, Any] | None:
+    """Classify this run's lease as ``('reserved', N)``, ``('served', endpoint)``
+    or ``None`` (no lease requested).
+
+    A reserve-GPU request (``lease_reserve_gpus``) wins over any endpoint: the two
+    are mutually exclusive (a run is served *or* reserved), and honoring reserve
+    first means a stray endpoint never routes an in-process run at the gateway.
+    """
+    reserve_gpus = int(cfg.get("lease_reserve_gpus") or 0)
+    if reserve_gpus > 0:
+        return ("reserved", reserve_gpus)
+    endpoint = _resolve_lease_endpoint(cfg)
+    if endpoint:
+        return ("served", endpoint)
+    return None
+
+
 def render_lease_setup(cfg: dict[str, Any]) -> str | None:
     """Render the infer-stack ``acquire`` setup for one HELM-run node.
 
@@ -158,10 +181,17 @@ def render_lease_setup(cfg: dict[str, Any]) -> str | None:
     (``--queue``), writes a per-node lease handle, and — best-effort — snapshots
     the concurrency context (co-held lease ``demand``) the determinism study
     consumes (design §7). Returns ``None`` when no lease is requested.
+
+    Two shapes, one bracket: a *served* run leases a catalog endpoint (vLLM behind
+    the gateway); a *reserved* run holds N GPUs with ``--reserve-gpus`` and serves
+    nothing (HELM loads the model in-process on the reserved GPU). Both write the
+    same ``lease.env`` — the reserved case adds ``CUDA_VISIBLE_DEVICES`` so the
+    docker node can pin the container to exactly the reserved card.
     """
-    endpoint = _resolve_lease_endpoint(cfg)
-    if not endpoint:
+    req = _resolve_lease_request(cfg)
+    if req is None:
         return None
+    mode, target = req
     out_dpath = str(cfg["out_dpath"])
     q = shlex.quote
     env_file = q(f"{out_dpath}/{_LEASE_ENV_BASENAME}")
@@ -171,7 +201,12 @@ def render_lease_setup(cfg: dict[str, Any]) -> str | None:
 
     timeout_s = _duration_seconds(cfg.get("lease_timeout") or _DEFAULT_LEASE_TIMEOUT)
 
-    acquire = ["infer-stack", "acquire", q(endpoint), "--ttl", q(ttl), "--yes"]
+    acquire = ["infer-stack", "acquire"]
+    if mode == "reserved":
+        acquire += ["--reserve-gpus", str(int(target))]
+    else:
+        acquire.append(q(target))
+    acquire += ["--ttl", q(ttl), "--yes"]
     if queue:
         acquire.append("--queue")
     # Always explicit: infer-stack's 600 s default is far too short for the
@@ -180,6 +215,9 @@ def render_lease_setup(cfg: dict[str, Any]) -> str | None:
     acquire += ["--env-file", env_file]
     catalog = cfg.get("lease_catalog")
     if catalog:
+        # Pass --catalog on BOTH modes: even a reserve acquire converges the shared
+        # compose project, so it must render the gateway from the SAME catalog as
+        # concurrent served runs or it recreates their gateway container mid-flight.
         acquire += ["--catalog", q(str(catalog))]
 
     # Ensure the node dir exists before acquire writes lease.env into it (the
@@ -216,9 +254,11 @@ def render_lease_teardown(cfg: dict[str, Any]) -> str | None:
     catalog as acquire — the static-superset gateway route table is derived
     from it, and a mismatched render recreates the gateway container mid-flight
     for every other concurrently leased run.
+
+    Mode-agnostic: ``release --env-file`` recovers the lease id from the env-file
+    and frees it, whether it was a served endpoint or a reserved GPU.
     """
-    endpoint = _resolve_lease_endpoint(cfg)
-    if not endpoint:
+    if _resolve_lease_request(cfg) is None:
         return None
     out_dpath = str(cfg["out_dpath"])
     env_file = shlex.quote(f"{out_dpath}/{_LEASE_ENV_BASENAME}")

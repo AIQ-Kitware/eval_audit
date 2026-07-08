@@ -155,12 +155,13 @@ def build_lease_matrix_entries(
     """
     endpoint = manifest.get("lease_endpoint")
     endpoints = manifest.get("lease_endpoints")
-    if not endpoint and not endpoints:
+    reserve_gpus = manifest.get("lease_reserve_gpus")
+    if not endpoint and not endpoints and not reserve_gpus:
         raise ValueError(
-            "leasing was requested but the manifest declares neither "
-            "'lease_endpoint' nor 'lease_endpoints'. Re-materialize the bundle "
-            "(eval-audit export-benchmark-bundle bakes the lease facts in) or "
-            "schedule without --lease."
+            "leasing was requested but the manifest declares none of "
+            "'lease_endpoint' / 'lease_endpoints' / 'lease_reserve_gpus'. "
+            "Re-materialize the bundle (eval-audit export-benchmark-bundle bakes "
+            "the lease facts in) or schedule without --lease."
         )
     entries: dict[str, Any] = {}
     if endpoints:
@@ -207,6 +208,12 @@ def build_broadcast_lease_knobs(
     catalog = catalog_override or manifest.get("lease_catalog")
     if catalog:
         entries["helm.lease_catalog"] = [str(Path(catalog).expanduser().resolve())]
+    # Reserve-only lease (in-process HuggingFace): broadcast the GPU count to
+    # every run so its bracket renders `acquire --reserve-gpus N` and the docker
+    # node pins the container to the reserved card (see helm_docker_pipeline).
+    reserve_gpus = manifest.get("lease_reserve_gpus")
+    if reserve_gpus:
+        entries["helm.lease_reserve_gpus"] = [int(reserve_gpus)]
     entries["helm.lease_queue"] = [bool(queue)]
     return entries
 
@@ -426,14 +433,19 @@ def prepare_schedule_request(
             default_max_eval_instances=default_cap,
         )
 
-    # Per-run GPU leasing (opt-in, §5/§13). infer-stack owns every GPU, so the
-    # HELM *client* must request none (container_gpus="none"). On the exact-path
-    # replay each run's lease endpoint is carried per-run in the submatrix, so
-    # only the broadcast knobs (ttl/catalog/queue) come from the manifest here;
-    # the run-entry path resolves the endpoint from the manifest's lease facts.
+    # Per-run GPU leasing (opt-in, §5/§13). For a *served* lease infer-stack owns
+    # every GPU and the HELM *client* is a pure HTTP caller, so it must request
+    # none (container_gpus="none"). A *reserved* lease (in-process HuggingFace) is
+    # the opposite: the container runs the model ON the reserved GPU, so leave
+    # container_gpus unset — the docker node pins it to the reserved card via the
+    # lease's CUDA_VISIBLE_DEVICES. On the exact-path replay each run's lease
+    # endpoint is carried per-run in the submatrix, so only the broadcast knobs
+    # (ttl/catalog/queue) come from the manifest here; the run-entry path resolves
+    # the endpoint from the manifest's lease facts.
     lease_entries: dict[str, Any] | None = None
     if lease:
-        manifest.setdefault("container_gpus", "none")
+        if not manifest.get("lease_reserve_gpus"):
+            manifest.setdefault("container_gpus", "none")
         if materialized_runs is not None:
             lease_entries = build_broadcast_lease_knobs(
                 manifest, ttl_override=lease_ttl,
