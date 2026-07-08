@@ -493,3 +493,19 @@ def test_hf_probe_variant_doc_shape_and_scores():
     # the existing scorer consumes it unchanged
     sc = score_mod.score_cell(doc, oracle)
     assert sc["verdict"] == "MATCH" and sc["quasi_match_rate"] == 1.0 and sc["n_ok"] == 2
+
+
+def test_hf_probe_plan_cells_sweeps_dtypes():
+    variants = hf_probe_mod.build_request_variants("chat", agp="both", ast="true")
+    plan = hf_probe_mod.plan_cells("olmoe-1b-7b", ["float32", "bfloat16"], variants)
+    # 2 dtypes x 2 variants = 4 distinct cells, dtype-tagged endpoints
+    assert len(plan) == 4
+    ids = [c["cell_id"] for c in plan]
+    assert len(set(ids)) == 4
+    assert ids == [
+        "hf-olmoe-1b-7b-fp32::ast1-chat-agp1", "hf-olmoe-1b-7b-fp32::ast1-chat-agp0",
+        "hf-olmoe-1b-7b-bf16::ast1-chat-agp1", "hf-olmoe-1b-7b-bf16::ast1-chat-agp0",
+    ]
+    assert {c["dtype"] for c in plan} == {"float32", "bfloat16"}
+    # endpoints differ by dtype so cells never collide across dtypes
+    assert {c["endpoint"] for c in plan} == {"hf-olmoe-1b-7b-fp32", "hf-olmoe-1b-7b-bf16"}

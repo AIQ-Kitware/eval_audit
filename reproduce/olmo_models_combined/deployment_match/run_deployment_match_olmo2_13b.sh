@@ -149,7 +149,7 @@ if [[ -n "$DM_HF_FP32" ]]; then
   fi
   # transformers uses device_map=auto over the visible GPUs; map the same restriction.
   [[ -n "$DM_ALLOWED_GPUS" ]] && export CUDA_VISIBLE_DEVICES="$DM_ALLOWED_GPUS"
-  args=(hf-probe --run "$DM_RUN" --n "$DM_N" --out "$DM_OUT" --dtype float32)
+  args=(hf-probe --run "$DM_RUN" --n "$DM_N" --out "$DM_OUT" --dtype "${DM_HF_DTYPES:-float32}")
   dm "${args[@]}"
 else
   # One-shot `auto`: dry-run -> run -> score -> confirm. It prints the resolved

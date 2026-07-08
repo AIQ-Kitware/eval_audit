@@ -25,6 +25,8 @@
 #   ENGINES  (default "vllm hf")   which engines to run, space-separated
 #   SKIP     (default "")          space-separated model slugs to skip
 #   DM_N     (default 12)          sampled instances per model
+#   DM_HF_DTYPES (default float32) HF dtype(s) to sweep, comma-separated, e.g.
+#                                  "float32,bfloat16,float16" (one model load each)
 #   DM_DRY=1                       preview: vLLM emits its CPU plan; HF is skipped (no dry mode)
 #   LOG_DIR  (default <store>/deployment-match/_overnight-<stamp>)
 #   AUDIT_STORE_ROOT               override the store root (tests: point at /tmp)

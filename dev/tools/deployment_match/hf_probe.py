@@ -5,7 +5,7 @@ Why this exists: vLLM can't serve fp32 on a MoE (the Triton fused-kernel
 shared-memory OOM — see docs/vllm-vs-huggingface-deployment-match.md), and the
 official OLMoE run was a HuggingFaceClient fp32 run *anyway*. So the faithful
 matched-precision comparison is HF-side, not vLLM. This module loads the model
-once at ``--dtype`` (default float32, matching HELM's HuggingFaceClient default on
+once per ``--dtype`` (default float32, a comma list sweeps them — matching HELM's HuggingFaceClient default on
 transformers<5), reconstructs HELM's ``get_prompt`` (chat template +
 add_generation_prompt + add_special_tokens, exactly as compare_prompt.py does),
 greedily generates each sampled instance, and emits the **same result-doc shape**
@@ -184,11 +184,36 @@ def _cell_serve(resolution: Any, dtype: str) -> dict[str, Any]:
             "extra_args": ["--dtype", dtype, "(huggingface transformers.generate)"]}
 
 
-def run_hf_probe(orc: Any, resolution: Any, out_dir: Path, *, dtype: str,
+def plan_cells(model_short: str, dtypes: list[str],
+               variants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """(pure) Enumerate the sweep: one cell per (dtype x request-variant), with a
+    dtype-tagged endpoint so cells from different dtypes never collide. Testable
+    without loading a model."""
+    plan: list[dict[str, Any]] = []
+    for dtype in dtypes:
+        endpoint = f"hf-{model_short}-{DTYPE_TAG.get(dtype, dtype)}"
+        for req in variants:
+            plan.append({"dtype": dtype, "endpoint": endpoint,
+                         "cell_id": f"{endpoint}::{_variant_name(req)}", "request": req})
+    return plan
+
+
+def run_hf_probe(orc: Any, resolution: Any, out_dir: Path, *, dtypes: list[str],
                  agp: str, ast: str, device_map: str, trust_remote_code: bool,
                  progress: bool = True) -> list[dict[str, Any]]:
-    """Load once, probe every request variant, write cells.json + results/*.json.
-    Returns the list of cell result docs (for scoring)."""
+    """Sweep dtypes x request-variants: load the model once PER dtype, probe every
+    request variant, write cells.json + results/*.json. Returns all cell docs.
+
+    Each dtype is a separate full model load (unlike vLLM, where dtype is a cheap
+    serve-arg), so dtypes run sequentially and the previous model is freed before
+    the next loads — sweeping fp32,bf16,fp16 confirms fp32 matches and the reduced
+    precisions don't, from the HF side."""
+    import gc
+    try:
+        import torch
+    except Exception:  # noqa: BLE001
+        torch = None
+
     out_dir = Path(out_dir)
     results_dir = out_dir / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -196,41 +221,47 @@ def run_hf_probe(orc: Any, resolution: Any, out_dir: Path, *, dtype: str,
     protocol = resolution.protocol or "chat"
     variants = build_request_variants(protocol, agp=agp, ast=ast)
     model_short = _slug((resolution.model or resolution.hf_source or "model").split("/")[-1])
-    endpoint = f"hf-{model_short}-{DTYPE_TAG.get(dtype, dtype)}"
-
     tokenizer_repo = resolution.official_tokenizer or resolution.hf_source
-    _log(f"[hf-probe] loading {resolution.hf_source} (dtype={dtype}, device_map={device_map}) "
-         f"tokenizer={tokenizer_repo} …")
-    model, tok, device = load_model_and_tokenizer(
-        resolution.hf_source, tokenizer_repo, dtype=dtype, device_map=device_map,
-        trust_remote_code=trust_remote_code)
-    _log(f"[hf-probe] loaded on {device}; model dtype={next(model.parameters()).dtype}")
-
-    has_template = bool(getattr(tok, "chat_template", None))
     recipe = orc.recipe or {}
     max_new = int(recipe.get("max_tokens") or 512)
     stop = recipe.get("stop_sequences") or []
     sample = [{"instance_id": s.instance_id, "prompt": s.prompt} for s in orc.sample]
-    generate_fn = make_generate_fn(model, tok, device, max_new_tokens=max_new, stop=stop)
 
     cell_docs: list[dict[str, Any]] = []
     cells_index: list[dict[str, Any]] = []
-    serve = _cell_serve(resolution, dtype)
-    for req in variants:
-        apply_ct = has_template and req["protocol"] == "chat"
-        agp_val = bool(req.get("add_generation_prompt")) if req.get("add_generation_prompt") is not None else True
-        cell_id = f"{endpoint}::{_variant_name(req)}"
-        _log(f"[hf-probe] variant {_variant_name(req)} (apply_chat_template={apply_ct}, "
-             f"add_generation_prompt={agp_val}, add_special_tokens={req['add_special_tokens']})")
+    for dtype in dtypes:
+        endpoint = f"hf-{model_short}-{DTYPE_TAG.get(dtype, dtype)}"
+        _log(f"[hf-probe] loading {resolution.hf_source} (dtype={dtype}, device_map={device_map}) "
+             f"tokenizer={tokenizer_repo} …")
+        model, tok, device = load_model_and_tokenizer(
+            resolution.hf_source, tokenizer_repo, dtype=dtype, device_map=device_map,
+            trust_remote_code=trust_remote_code)
+        _log(f"[hf-probe] loaded on {device}; model dtype={next(model.parameters()).dtype}")
+        has_template = bool(getattr(tok, "chat_template", None))
+        generate_fn = make_generate_fn(model, tok, device, max_new_tokens=max_new, stop=stop)
+        serve = _cell_serve(resolution, dtype)
 
-        def render_fn(raw: str, _ct=apply_ct, _g=agp_val) -> str:
-            return render_prompt(tok, raw, apply_chat_template=_ct, add_generation_prompt=_g)
+        for req in variants:
+            apply_ct = has_template and req["protocol"] == "chat"
+            agp_val = bool(req.get("add_generation_prompt")) if req.get("add_generation_prompt") is not None else True
+            cell_id = f"{endpoint}::{_variant_name(req)}"
+            _log(f"[hf-probe] {dtype} / {_variant_name(req)} (apply_chat_template={apply_ct}, "
+                 f"add_generation_prompt={agp_val}, add_special_tokens={req['add_special_tokens']})")
 
-        doc = probe_variant(sample, cell_id=cell_id, endpoint=endpoint, request=req,
-                            render_fn=render_fn, generate_fn=generate_fn, progress=progress)
-        (results_dir / f"{cell_id.replace('::', '__')}.json").write_text(json.dumps(doc, indent=2))
-        cell_docs.append(doc)
-        cells_index.append({"cell_id": cell_id, "endpoint": endpoint, "serve": serve, "request": req})
+            def render_fn(raw: str, _ct=apply_ct, _g=agp_val) -> str:
+                return render_prompt(tok, raw, apply_chat_template=_ct, add_generation_prompt=_g)
+
+            doc = probe_variant(sample, cell_id=cell_id, endpoint=endpoint, request=req,
+                                render_fn=render_fn, generate_fn=generate_fn, progress=progress)
+            (results_dir / f"{cell_id.replace('::', '__')}.json").write_text(json.dumps(doc, indent=2))
+            cell_docs.append(doc)
+            cells_index.append({"cell_id": cell_id, "endpoint": endpoint, "serve": serve, "request": req})
+
+        # Free this dtype's model before the next full load (don't hold two at once).
+        del model, tok, generate_fn
+        gc.collect()
+        if torch is not None and getattr(torch, "cuda", None) is not None and torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     (out_dir / "cells.json").write_text(json.dumps(cells_index, indent=2))
     return cell_docs

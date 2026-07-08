@@ -408,8 +408,9 @@ def cmd_hf_probe(args: argparse.Namespace) -> int:
     (out_dir / "oracle.json").write_text(json.dumps(orc.to_json(), indent=2))
     (out_dir / "resolution.json").write_text(json.dumps(resolution.__dict__, indent=2))
 
+    dtypes = [d.strip() for d in args.dtype.split(",") if d.strip()]
     cell_docs = hf_probe_mod.run_hf_probe(
-        orc, resolution, out_dir, dtype=args.dtype,
+        orc, resolution, out_dir, dtypes=dtypes,
         agp=args.add_generation_prompt, ast=args.add_special_tokens,
         device_map=args.device_map, trust_remote_code=args.trust_remote_code)
 
@@ -538,9 +539,11 @@ def main(argv: list[str] | None = None) -> int:
     hp.add_argument("--source", default=None, help="override the local HF source repo")
     hp.add_argument("--protocol", default=None, choices=["completions", "chat"])
     hp.add_argument("--dtype", default="float32",
-                    help="load dtype (default float32 — matches HELM's HuggingFaceClient "
-                    "default on transformers<5). Explicitly pinned so fp32 is fp32 on any "
-                    "transformers version.")
+                    help="load dtype(s), comma-separated to SWEEP (default float32 — matches "
+                    "HELM's HuggingFaceClient default on transformers<5). Pinned so fp32 is "
+                    "fp32 on any transformers version. e.g. 'float32,bfloat16,float16' loads "
+                    "the model once per dtype and ranks all together (fp32 should match, the "
+                    "reduced precisions shouldn't).")
     hp.add_argument("--add-generation-prompt", default="both", choices=["true", "false", "both"],
                     help="chat-template add_generation_prompt to sweep (default both: HELM's "
                     "older template ignored it, so 'false' reproduces that render)")
