@@ -44,7 +44,7 @@ Most HELM runs are greedy, so "does it change the argmax" is the right yardstick
 | Parameter | Why it matters | Recoverable? |
 |---|---|---|
 | **Model weight revision (HF commit SHA)** | Same name ≠ same weights. Authors re-upload checkpoints, patch configs/tokenizers under one repo name. 7/148 pin it. | Pinnable in the deployment config; almost never is. **The master key** (below). |
-| **Load precision / dtype** (fp32/bf16/fp16) | Different logits → greedy flips (the OLMoE case). 129/148 unpinned → the default is *transformers-version-dependent* (pre-v5 = float32, ignoring the checkpoint's bf16 config). | Deployment config *can* carry `torch_dtype`; usually doesn't. Else inferred from the transformers version. |
+| **Load precision / dtype** (fp32/bf16/fp16) | Different logits → greedy flips. 129/148 unpinned → the default is *transformers-version-dependent* (pre-v5 = float32, ignoring the checkpoint's bf16 config). **Confirmed decisive**: HF fp32 reproduces OLMoE *exactly* (vs ~0.17 at fp16), and the same unpinned default applies to **all** OLMo-2 HF deployments (`vllm-vs-huggingface-deployment-match.md` → "Scope"). | Deployment config *can* carry `torch_dtype`; usually doesn't. Else inferred from the transformers version. |
 | **Quantization** (GPTQ/AWQ/fp8/bitsandbytes) | Changes the weights outright. A quantized repro of an fp16 official is a different model. | Sometimes in the deployment config; mostly unspecified. |
 | **Software stack versions** (transformers, torch, tokenizers, engine) | A *meta-parameter*: the transformers version sets the fp32-vs-bf16 default **and** whether the chat template honors `add_generation_prompt`. Engine/flash-attn versions change kernels. | Nowhere in the run dir. Lost unless separately logged. |
 

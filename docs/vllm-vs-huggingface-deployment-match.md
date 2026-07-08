@@ -276,6 +276,14 @@ Implications:
 The single most consequential OLMoE finding, because it turns the fp32-MoE
 feasibility prune above from harmless into decisive.
 
+> **CONFIRMED (2026-07).** Reproducing the official on the HF side at **float32**
+> (`eval-audit`'s `deployment_match hf-probe`, i.e. `transformers.generate()` at
+> fp32, `add_generation_prompt=false`) reproduces the official completions
+> **exactly** — quasi/exact match ≈ 1.0, not the ~0.17 the best fp16 vLLM cell
+> reached. This settles the earlier "float32 vs auto" uncertainty empirically: the
+> official was float32, and matched precision → matched output. The transformers
+> `<5` inference below is corroborated by the exact match, not merely assumed.
+
 **The official was float32.** HELM's `HuggingFaceClient` loads the model with only
 whatever kwargs the deployment config supplies, and
 [`model_deployments.yaml`](../submodules/helm/src/helm/config/model_deployments.yaml)
@@ -317,7 +325,32 @@ fp32 on a big-MoE-shared-mem card (H100) at TP=1. (3) reproduce the official sid
 under HF `transformers.generate()` in fp32 rather than vLLM (what `--profile
 hf-match` targets — but see the "HF fits, vLLM doesn't" note). Options (1)/(2) are
 the ones that put a *matched-precision* cell in the ranking instead of only
-reduced-precision approximations.
+reduced-precision approximations. **Option (3) is what actually landed the exact
+match** (the `hf-probe` path) — for a MoE, HF fp32 is the reliable route since
+vLLM's Triton kernel blocks fp32 regardless of TP (TP shards experts, not the
+per-block shared-memory tile; empirically TP=2/4 still OOM on a workstation card).
+
+### Scope: this affects the OLMo-2 reproductions too, not just OLMoE
+
+The dtype gap is **not** an OLMoE quirk — it is the default for *every* OLMo
+HuggingFaceClient run. All of these public deployments pin **no `torch_dtype`**
+(verified in `model_deployments.yaml`), so each official ran **float32**:
+
+| Model | Official deployment | dtype | Arch | fp32 reproduction path |
+|---|---|---|---|---|
+| OLMoE-1B-7B-0125-Instruct | `huggingface/olmoe-…` | fp32 | **MoE** | HF fp32 only (`hf-probe`) — vLLM MoE kernel blocks fp32 |
+| OLMo-2-1124-7B-Instruct | `huggingface/olmo-2-…7b…` | fp32 | dense | HF fp32, or vLLM fp32 (~28 GB, fits 40/80 GB) |
+| OLMo-2-1124-13B-Instruct | `huggingface/olmo-2-…13b…` | fp32 | dense | HF fp32, or vLLM fp32 (~52 GB, needs 80 GB / TP2) |
+| OLMo-2-0325-32B-Instruct | `huggingface/olmo-2-…32b…` | fp32 | dense | HF fp32, or vLLM fp32 (~128 GB, needs TP2×80 GB) |
+| OLMo-1.7-7B | `huggingface/olmo-1.7-7b` | fp32 | dense | HF fp32 (no public run confirmed here) |
+| OLMo-7B | **`together/olmo-7b`** | Together-hosted | dense | **N/A — not an HF run**; see the EOS-append case, bf16 |
+
+So any OLMo-2 reproduction served at bf16/fp16 is a **precision mismatch**, and a
+bf16-vs-official disagreement there is a *deployment-boundary* artifact, not a
+reproducibility failure — re-run at fp32 (the dense ones can even do it in vLLM).
+**OLMo-7B is the lone exception**: its official was Together-hosted, so its target
+is a hosted service's precision, not HF fp32 — the relevant issue there is the
+tokenizer EOS-append, not dtype.
 
 ### "But direct HuggingFace deployment fits on the GPU and doesn't use float32"
 
