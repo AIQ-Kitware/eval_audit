@@ -236,3 +236,53 @@ infer_stack branch and bump the eval_audit submodule gitlink (left unstaged per 
 no-auto-gitlink rule; submodule commits are unpushed). (4) Once routing is wired,
 document in user-facing `docs/pipeline.md` + `docs/vllm-vs-huggingface-deployment-match.md`
 (held until then to avoid overclaiming a path that doesn't change default behavior).
+
+## 2026-07-08 16:35:00 -0400
+
+**Model/config:** claude-opus-4-8[1m] (Claude Code, VSCode extension harness).
+
+**User intent:** For any existing plot that displays low / moderate /
+exact / near-exact agreement categories, state the numeric threshold on
+the legend.
+
+**Where the categories are defined.** `classification._bucket_agreement`
+(single source of truth): ratio ≥0.999999 → exact_or_near_exact, ≥0.95 →
+high, ≥0.80 → moderate, >0 → low, ==0 → zero. The "ratio" is the *share
+of paired instances* whose |official − local| is within
+`CANONICAL_AGREEMENT_TOL` (0.05) — a fraction of instances, NOT a score.
+That subtlety is why the legend labels say "…% of instances".
+
+**What I changed (the two *visual* legends that lacked thresholds).**
+- `classification`: added `AGREEMENT_BUCKET_DISPLAY` + `agreement_bucket_label()`,
+  the human labels with thresholds inline, co-located with the classifier
+  so they can't drift.
+- `plots._write_coverage_matrix_plot`: colorbar `ticktext` + hover
+  `STATUS_LABEL` now carry the cutoffs; colorbar title notes the % is
+  "share of instances within abs_tol".
+- `build_reports_summary` reproducibility-buckets bar: added an
+  `agreement_bucket` display column and pointed the bar's x/color at it
+  (raw `official_instance_agree_bucket` key preserved for logic + README +
+  tests). `_AXIS_COUNT_TAGS` already had an `agreement_bucket → n_buckets`
+  entry, so the count tag stayed correct.
+
+**Deliberately left alone.** The sankey "Reproduction/agreement" stage and
+the management-summary prose already enumerate the thresholds in their
+stage-description legend text — no change needed. The EEE agreement
+heatmaps render raw numeric `agree_ratio` per cell (no categorical
+bucket legend), so they're out of scope.
+
+**Design note.** Kept the raw bucket key on every data row and only added
+a parallel *display* field, so nothing that keys off the snake_case
+bucket (reproducibility_rows.csv consumers, triage classes, tests
+asserting `exact_or_near_exact` counts) had to change. The label is a
+presentation concern layered on top, not a replacement.
+
+**Verified.** compiles; end-to-end + eee-demo + virtual-experiment + smoke
+(43) green under `--run-slow`; new `test_agreement_bucket_labels.py` (3)
+locks labels↔classifier. Rebuilt the demo aggregate summary and confirmed
+both legends now show cutoffs (coverage colorbar: "low agreement (<80%)"
+… "exact/near-exact (≥99.9999%)"; bar legend: "exact / near-exact
+(≥99.9999% of instances)" etc.). Committed 0c8d0eb.
+
+**Still flagged (not mine).** `submodules/infer_stack` gitlink remains
+`-dirty` — left unstaged per repo convention.
