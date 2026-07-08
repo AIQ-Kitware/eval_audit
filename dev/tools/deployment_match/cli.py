@@ -153,6 +153,8 @@ def _load_spec(args) -> dict | None:
         spec["axes"] = {**(spec.get("axes") or {}), **axes_override}
     if getattr(args, "allow_moe_fp32", False):
         spec["allow_moe_fp32"] = True
+    if getattr(args, "fp32_tensor_parallel_size", None):
+        spec["fp32_tensor_parallel_size"] = int(args.fp32_tensor_parallel_size)
     if getattr(args, "log_requests", False):
         spec["log_requests"] = True
     if getattr(args, "extra_serve_args", None):
@@ -411,6 +413,13 @@ def main(argv: list[str] | None = None) -> int:
                        help="keep float32 on MoE models (the preflight filter drops it "
                        "by default — fp32 MoE OOMs the Triton kernel on most GPUs; use "
                        "on big-shared-mem cards like H100)")
+        p.add_argument("--fp32-tensor-parallel-size", type=int, default=None, metavar="N",
+                       help="serve float32 recipes with tensor_parallel_size=N (allocates "
+                       "N GPUs per fp32 endpoint). N>1 shards the fp32 MoE Triton "
+                       "fused-kernel across GPUs so it can fit the per-SM shared-memory cap "
+                       "that OOMs fp32 MoE on one GPU, and lifts the fp32-MoE preflight "
+                       "prune. Default 1 (unchanged). E.g. --fp32-tensor-parallel-size 2 "
+                       "to give the float32 sweep an extra GPU.")
         p.add_argument("--log-requests", action="store_true",
                        help="enable vLLM request logging on every endpoint so each "
                        "request's post-chat-template prompt + sampling params appear in "

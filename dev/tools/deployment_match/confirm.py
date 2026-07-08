@@ -51,6 +51,11 @@ def _winner_catalog(best: dict[str, Any]) -> dict[str, Any]:
     if serve.get("attention_backend"):
         # infer-stack forwards this as VLLM_ATTENTION_BACKEND (see compose backend).
         runtime["attention_backend"] = serve["attention_backend"]
+    if serve.get("tensor_parallel_size") and int(serve["tensor_parallel_size"]) > 1:
+        # A fp32 winner served under tensor parallelism must confirm the same way —
+        # infer-stack allocates tp GPUs and renders --tensor-parallel-size; a TP=1
+        # confirm would re-hit the fp32 MoE shared-memory OOM.
+        runtime["tensor_parallel_size"] = int(serve["tensor_parallel_size"])
     return {
         "models": {"target": {"source": f"hf://{serve.get('hf_source')}"}},
         "endpoints": {endpoint: {"engine": "vllm", "reclaim": "stop",

@@ -100,6 +100,9 @@ def best_deployment(scored: list[dict[str, Any]], cells_by_id: dict[str, dict[st
             "max_model_len": serve.get("max_model_len"),
             "trust_remote_code": serve.get("trust_remote_code"),
             "attention_backend": serve.get("attention_backend"),
+            # Carried so the confirm catalog re-serves fp32 with the same GPU count
+            # (TP>1 is what let fp32 MoE serve at all — a TP=1 confirm would OOM).
+            "tensor_parallel_size": serve.get("tensor_parallel_size"),
             # Serving runtime numbers so the confirm catalog reproduces the
             # winner faithfully (max_num_seqs is the batch-invariance knob).
             "max_num_seqs": serve.get("max_num_seqs"),

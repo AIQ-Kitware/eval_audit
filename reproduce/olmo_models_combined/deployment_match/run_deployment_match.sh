@@ -80,6 +80,13 @@ DM_PROFILE="${DM_PROFILE-hf-match}"
 # most GPUs ("out of resource: shared memory") — so you don't need to exclude it
 # here. On a big-shared-mem GPU (H100) pass --allow-moe-fp32 to keep it.
 DM_DTYPES="${DM_DTYPES:-}"
+# Optional: DM_FP32_TP=2 serves the float32 recipes with tensor_parallel_size=2
+# (an extra GPU per fp32 endpoint). This shards the fp32 MoE Triton fused-kernel
+# across GPUs so it can fit the per-SM shared-memory cap that OOMs it on one GPU,
+# and lifts the fp32-MoE preflight prune — the way to actually TRY fp32 on OLMoE
+# without an H100. It's a "let it try": a cell that still OOMs scores NO_DATA.
+# Needs that many free GPUs (infer-stack --queue waits for them).
+DM_FP32_TP="${DM_FP32_TP:-}"
 # Optional: narrow the attention_backend sweep, e.g. DM_ATTN=none,XFORMERS.
 DM_ATTN="${DM_ATTN:-}"
 # Optional: DM_LOG_REQUESTS=1 turns on vLLM request logging so each request's
@@ -119,6 +126,7 @@ echo "  mode    : $([[ "$DM_DRY" == 1 ]] && echo 'dry-run (CPU, no GPU)' || echo
 [[ -n "$DM_ALLOWED_GPUS" ]] && echo "  gpus    : restricted to $DM_ALLOWED_GPUS"
 [[ -n "$DM_PROFILE" ]] && echo "  profile : $DM_PROFILE"
 [[ -n "$DM_DTYPES" ]] && echo "  dtypes  : $DM_DTYPES"
+[[ -n "$DM_FP32_TP" ]] && echo "  fp32 TP : $DM_FP32_TP (float32 served on $DM_FP32_TP GPUs)"
 [[ -n "$DM_ATTN" ]] && echo "  attn    : $DM_ATTN"
 echo
 
@@ -131,6 +139,7 @@ args=(auto --run "$DM_RUN" --n "$DM_N" --out "$DM_OUT")
 [[ -n "$DM_ALLOWED_GPUS" ]] && args+=(--allowed-gpus "$DM_ALLOWED_GPUS")
 [[ -n "$DM_PROFILE" ]] && args+=(--profile "$DM_PROFILE")
 [[ -n "$DM_DTYPES" ]] && args+=(--dtypes "$DM_DTYPES")
+[[ -n "$DM_FP32_TP" ]] && args+=(--fp32-tensor-parallel-size "$DM_FP32_TP")
 [[ -n "$DM_ATTN" ]] && args+=(--attention-backends "$DM_ATTN")
 [[ -n "$DM_LOG_REQUESTS" ]] && args+=(--log-requests)
 dm "${args[@]}"

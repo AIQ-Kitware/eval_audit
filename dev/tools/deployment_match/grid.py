@@ -118,6 +118,10 @@ class ServeRecipe:
     trust_remote_code: bool
     runtime: dict[str, Any]
     attention_backend: str | None = None   # None = vLLM default; else VLLM_ATTENTION_BACKEND
+    tensor_parallel_size: int = 1          # >1 shards across GPUs; infer-stack allocates
+                                           # tp GPUs (required_gpu_count) and renders
+                                           # --tensor-parallel-size. Used to make fp32 MoE
+                                           # fit the per-SM shared-memory cap that OOMs it on 1 GPU.
     extra_serve_args: list[str] = field(default_factory=list)  # appended verbatim to `vllm serve`
 
     def extra_args(self) -> list[str]:
@@ -168,6 +172,11 @@ class ServeRecipe:
             # Delivered as the VLLM_ATTENTION_BACKEND env var by infer-stack's
             # backend renderer; structural (compat-key) so backends don't coalesce.
             rt["attention_backend"] = self.attention_backend
+        if self.tensor_parallel_size and int(self.tensor_parallel_size) > 1:
+            # infer-stack derives required_gpu_count = tp*pp*dp (placement.py) and
+            # renders --tensor-parallel-size; structural (compat-key) so a TP endpoint
+            # never coalesces onto a TP=1 process.
+            rt["tensor_parallel_size"] = int(self.tensor_parallel_size)
         return {"engine": "vllm", "reclaim": "stop", "model": "target",
                 "protocol": protocol, "runtime": rt}
 
@@ -242,7 +251,8 @@ def _merge_axes(overrides: dict[str, Any] | None) -> dict[str, list[Any]]:
     return axes
 
 
-def _dtype_infeasible(dtype: Any, resolution: Any, *, allow_moe_fp32: bool) -> str | None:
+def _dtype_infeasible(dtype: Any, resolution: Any, *, allow_moe_fp32: bool,
+                      tensor_parallel_size: int = 1) -> str | None:
     """Preflight FEASIBILITY filter: a reason string if this dtype cannot serve on
     a typical GPU (so the sweep shouldn't burn a serve cycle discovering it),
     else None. Feasibility only — never a relevance / "unlikely to matter" guess
@@ -250,10 +260,15 @@ def _dtype_infeasible(dtype: Any, resolution: Any, *, allow_moe_fp32: bool) -> s
     as the needed facts become available.
     """
     if (str(dtype).lower() in ("float32", "fp32")
-            and getattr(resolution, "is_moe", None) and not allow_moe_fp32):
+            and getattr(resolution, "is_moe", None) and not allow_moe_fp32
+            and int(tensor_parallel_size or 1) <= 1):
         # fp32 doubles the MoE Triton fused-kernel's shared-memory tiles past most
-        # GPUs' ~99 KiB/SM cap ("triton ... out of resource: shared memory"); fits
-        # on big-shared-mem cards (H100 228 KiB) -> allow_moe_fp32 to keep it.
+        # GPUs' ~99 KiB/SM cap ("triton ... out of resource: shared memory"). Two
+        # ways out, both bypass this prune: a big-shared-mem card (H100 228 KiB) ->
+        # allow_moe_fp32; or tensor parallelism (tensor_parallel_size > 1), which
+        # shards the fused-MoE kernel across GPUs so each shard's tiles shrink under
+        # the cap. TP is not guaranteed to fit — if it still OOMs the cell scores
+        # NO_DATA and drops out — so it's a "let it try", not a feasibility promise.
         return "infeasible:moe-fp32-shared-mem"
     return None
 
@@ -264,6 +279,11 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
     runtime = {**DEFAULT_RUNTIME, **((spec or {}).get("runtime") or {})}
     cap = int((spec or {}).get("cap", DEFAULT_CAP))
     allow_moe_fp32 = bool((spec or {}).get("allow_moe_fp32", False))
+    # Serve float32 recipes with this many GPUs (tensor parallelism). >1 both
+    # shards the fp32 MoE Triton kernel across GPUs (so it can fit the per-SM
+    # shared-memory cap that OOMs it on one GPU) AND lifts the fp32-MoE preflight
+    # prune below. Default 1 = current behaviour (fp32 MoE pruned).
+    fp32_tp = max(1, int((spec or {}).get("fp32_tensor_parallel_size", 1) or 1))
     notes: list[str] = []
     pruned: list[dict[str, Any]] = []
 
@@ -336,21 +356,35 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
     serve: list[ServeRecipe] = []
     seen: set[str] = set()
     for dtype in axes["dtype"]:
+        is_fp32 = str(dtype).lower() in ("float32", "fp32")
+        recipe_tp = fp32_tp if is_fp32 else 1
         # Preflight feasibility filter: drop whole dtype sub-grids that can't serve
         # here (with a typed reason), rather than waste a serve cycle per cell.
-        reason = _dtype_infeasible(dtype, resolution, allow_moe_fp32=allow_moe_fp32)
+        # A fp32 tensor_parallel_size > 1 lifts the fp32-MoE prune (TP is the fit
+        # mitigation) — so pass it into the decision.
+        reason = _dtype_infeasible(dtype, resolution, allow_moe_fp32=allow_moe_fp32,
+                                   tensor_parallel_size=recipe_tp)
         if reason:
             n = len(tok_values) * len(mml_values) * len(axes["trust_remote_code"]) * len(attn_values)
             pruned.append({"axis": "dtype", "value": str(dtype), "reason": reason,
                            "n_recipes": n})
             notes.append(f"preflight: excluded dtype={dtype} [{reason}] "
-                         f"({n} serve-recipe(s); pass allow_moe_fp32 to keep)")
+                         f"({n} serve-recipe(s); pass allow_moe_fp32 or "
+                         "fp32_tensor_parallel_size>1 to keep)")
             continue
+        if is_fp32 and recipe_tp > 1:
+            notes.append(
+                f"dtype=float32 served with tensor_parallel_size={recipe_tp} "
+                f"({recipe_tp} GPUs/endpoint): shards the fp32 MoE Triton fused-kernel "
+                "across GPUs to fit the per-SM shared-memory cap that OOMs it on one "
+                "GPU (a 'let it try' mitigation — a cell that still OOMs scores NO_DATA)")
         for tok in tok_values:
             for mml in mml_values:
                 for trc in axes["trust_remote_code"]:
                     for attn in attn_values:
                         name = f"dm-{model_short}-{DTYPE_TAG.get(dtype, _slug(dtype))}"
+                        if recipe_tp > 1:
+                            name += f"-tp{recipe_tp}"
                         if tok:
                             name += f"-tok{_tok_tag(tok)}"
                         if len(mml_values) > 1:
@@ -366,6 +400,7 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
                             name=name, hf_source=hf_source or "", dtype=dtype,
                             tokenizer=tok, max_model_len=mml, trust_remote_code=bool(trc),
                             runtime=runtime, attention_backend=attn,
+                            tensor_parallel_size=recipe_tp,
                             extra_serve_args=extra_serve_args,
                         ))
 
@@ -395,6 +430,7 @@ def build_grid(resolution: Any, *, spec: dict[str, Any] | None = None) -> Grid:
                        "max_model_len": sr.max_model_len,
                        "trust_remote_code": sr.trust_remote_code,
                        "attention_backend": sr.attention_backend,
+                       "tensor_parallel_size": sr.tensor_parallel_size,
                        # Serving runtime numbers the confirm catalog must
                        # reproduce (esp. max_num_seqs — batch invariance).
                        "max_num_seqs": sr.runtime["max_num_seqs"],

@@ -211,11 +211,20 @@ beforehand" splits into two kinds, treated oppositely:
   fused-MoE kernel needs ~128 KiB shared memory/block in fp32 (double bf16's),
   over the ~99 KiB/SM cap on workstation cards like the RTX PRO 6000 Blackwell →
   `triton ... out of resource: shared memory, Required: 131072, Hardware limit:
-  101376`; the engine fails to start. No serve-arg shrinks the MoE block sizes.
-  Fits on an H100's 228 KiB, so it's GPU-specific — pass `--allow-moe-fp32` (or
-  `allow_moe_fp32: true` in `--grid`) to keep it. MoE is detected from the model's
-  `config.json` (`num_experts`-family / `*Moe*` architecture), with a name-based
-  fallback when config.json isn't cached
+  101376`; the engine fails to start. No *single-GPU* serve-arg shrinks the MoE
+  block sizes. Two ways to keep fp32, both of which lift this prune: (1) a
+  big-shared-mem card (H100 228 KiB) — pass `--allow-moe-fp32` (or `allow_moe_fp32:
+  true` in `--grid`); or (2) **tensor parallelism** — `--fp32-tensor-parallel-size
+  2` (`fp32_tensor_parallel_size: 2` in `--grid`, `DM_FP32_TP=2` on the runbook)
+  serves the fp32 recipes with `tensor_parallel_size=2`, sharding the fused-MoE
+  kernel across 2 GPUs so each shard's tiles fall under the per-SM cap. TP is not a
+  guarantee (the per-shard tile may still exceed the cap on a small card); it's a
+  "let it try" — a cell that still OOMs scores `NO_DATA` and drops out. infer-stack
+  allocates the extra GPU (`required_gpu_count = tp·pp·dp`) and threads
+  `--tensor-parallel-size` through to `vllm serve`; the winning TP is carried into
+  the confirm catalog so the full run re-serves the same way. MoE is detected from
+  the model's `config.json` (`num_experts`-family / `*Moe*` architecture), with a
+  name-based fallback when config.json isn't cached
   ([`registry.py` `model_is_moe`](../dev/tools/deployment_match/registry.py)).
 - *Candidates to add next (same table, same typed-reason shape):* VRAM-OOM from a
   size×dtype estimate vs. the GPU (infer-stack's `model_memory_estimator` already
@@ -258,6 +267,75 @@ Implications:
   --add-generation-prompt false`.
 - **Fully version-proof alternative:** pre-render with the template HELM used
   (or `--chat-template <old.jinja>` on `vllm serve`) and send via completions.
+
+## The official OLMoE run used float32 — the one dtype vLLM can't serve for a MoE
+
+The single most consequential OLMoE finding, because it turns the fp32-MoE
+feasibility prune above from harmless into decisive.
+
+**The official was float32.** HELM's `HuggingFaceClient` loads the model with only
+whatever kwargs the deployment config supplies, and
+[`model_deployments.yaml`](../submodules/helm/src/helm/config/model_deployments.yaml)
+gives `huggingface/olmoe-1b-7b-0125-instruct` exactly `args: {device_map: auto}` —
+**no `torch_dtype`**. The client injects none of its own (it only *converts* a
+`torch_dtype` string if the config already has one —
+[`huggingface_client.py` `_process_huggingface_client_kwargs`](../submodules/helm/src/helm/clients/huggingface_client.py)).
+So `AutoModelForCausalLM.from_pretrained(..., device_map="auto")` is called with no
+dtype, and **every transformers 4.x** defaults that to `torch.float32` for
+backward-compat, *ignoring the checkpoint's bf16 config*. Auto-detecting the
+config dtype is a **v5** change — even late 4.x (verified in 4.57.6
+`modeling_utils.py`) still hits `else: set fp32 as the default dtype for BC` and
+carries the comment *"we … won't rely on config.dtype till v5."* The OLMoE
+architecture only landed in transformers ~4.45 (late 2024), so a Jan-2025 run is
+squarely in the fp32-default regime. (Residual: the run dir captures no
+environment, so the exact version isn't readable from artifacts — only bounded. If
+a run were ever produced under transformers ≥5 the default flips to bf16 and this
+conclusion moves.)
+
+**Why that's decisive.** The matching precision (fp32) is exactly the one cell that
+can't run: vLLM's Triton fused-MoE kernel OOMs in fp32 (the shared-memory limit in
+"Preflight feasibility rules" above — a *kernel* limit, not a VRAM limit). So every
+runnable local cell is reduced-precision (fp16/bf16), and none reproduces an fp32
+reference. In the OLMoE-ifeval store the fp16 cells win (composite 0.494) over
+bf16/auto (0.391), and **fp16 winning is coincidental, not a precision match** —
+fp16's finer mantissa (10 bits vs bf16's 7) flips fewer greedy near-ties against a
+high-precision reference. That ranking is itself corroboration: *if the official
+were bf16, local bf16 would match best.* fp16 > bf16 says the reference is
+higher-precision than bf16 — consistent with fp32.
+
+**Framing:** this is a **recipe/deployment-boundary failure**, not pure numeric
+irreproducibility — the official recipe implies a precision the local vLLM engine
+cannot easily provide for this MoE architecture. Three ways to attempt closing it:
+(1) **tensor-parallel fp32 in-grid** — `--fp32-tensor-parallel-size 2`
+(`DM_FP32_TP=2` on the runbook) shards the fp32 MoE kernel across 2 GPUs so it can
+serve without an H100 (see "Preflight feasibility rules"); the sweep then scores an
+actual fp32 vs the official — the true apples-to-apples precision match. (2) serve
+fp32 on a big-MoE-shared-mem card (H100) at TP=1. (3) reproduce the official side
+under HF `transformers.generate()` in fp32 rather than vLLM (what `--profile
+hf-match` targets — but see the "HF fits, vLLM doesn't" note). Options (1)/(2) are
+the ones that put a *matched-precision* cell in the ranking instead of only
+reduced-precision approximations.
+
+### "But direct HuggingFace deployment fits on the GPU and doesn't use float32"
+
+Two separate things, both consistent with the above:
+
+- **Fitting is not evidence of bf16.** OLMoE-1B-7B is ~6.9B total params → fp32
+  weights ≈ 28 GB, which fits comfortably on a 40/80 GB card (and `device_map=auto`
+  would shard/offload if not). The vLLM fp32 failure is **not** a weight-VRAM OOM —
+  it's the Triton fused-MoE **kernel** exceeding per-SM shared memory (~131 KiB
+  required vs ~99 KiB cap on workstation cards). So HF fp32 (just holds weights in
+  VRAM) fits while vLLM fp32-MoE dies at the kernel — different resources, both true
+  at once.
+- **Whether a *direct* load shows bf16 depends on your load path, which differs
+  from HELM's old one.** Raw `from_pretrained(device_map="auto")` with **no
+  `torch_dtype`** on **pre-v5 transformers** yields fp32 (HELM's path). You get bf16
+  instead if any of: you're on transformers ≥5 (default now reads config dtype); you
+  pass `torch_dtype="auto"` or `torch_dtype=torch.bfloat16` (explicitly or via a
+  helper/`pipeline`); or you deploy through a serving stack (vLLM/TGI) that defaults
+  to the config dtype. Confirm what you actually loaded with
+  `print(next(model.parameters()).dtype)` — if it's bf16 you changed at least one of
+  those three vs. the archival HELM run.
 
 ## Why the OLMoE-ifeval sweep can't localize the difference
 
