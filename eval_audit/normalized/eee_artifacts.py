@@ -269,13 +269,7 @@ def convert_helm_run_to_cached_eee(
     )
 
 
-def _clean_optional_text(value: Any) -> str | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.lower() in {"none", "nan"}:
-        return None
-    return text
+from eval_audit.utils.coercion import clean_optional_text as _clean_optional_text  # R-6
 
 
 def _resolve_existing_dir(value: str | Path | None) -> Path | None:

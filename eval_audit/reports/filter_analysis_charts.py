@@ -1,7 +1,7 @@
 """Plotly bar-chart helpers and emitters for the Stage 1 filter report.
 
 Split out of ``eval_audit.reports.filter_analysis`` on 2026-06-11
-(Phase 2 of docs/planning/repo-refactor-plan.md). Pure relocation:
+(Phase 2 of docs/historical/planning/repo-refactor-plan.md). Pure relocation:
 function bodies are unchanged.
 """
 from __future__ import annotations
@@ -46,12 +46,7 @@ def _bar_axis_values(rows: list[dict[str, Any]], x: str) -> list[str]:
     return unique_x
 
 
-def _abbreviate_label(text: str, *, max_chars: int = 24) -> str:
-    if len(text) <= max_chars:
-        return text
-    if max_chars <= 3:
-        return '.' * max_chars
-    return text[: max_chars - 3].rstrip() + '...'
+from eval_audit.utils.coercion import abbreviate_label as _abbreviate_label  # R-6
 
 
 def _bar_chart_layout(rows: list[dict[str, Any]], x: str, *, compact: bool = False) -> dict[str, Any]:

@@ -26,23 +26,15 @@ from eval_audit.reports.core_packet_summary import (
 )
 from eval_audit.utils.numeric import nested_get
 
+# R-6: shared scalar/lookup helpers now live in one place. Keep the local
+# `_name` bindings so this module's call sites are unchanged. `_find_pair`
+# was always a thin alias for the canonical pair-lookup.
+from eval_audit.utils.coercion import (
+    load_json as _load_json,
+    find_curve_value as _find_curve_value,
+)
 
-def _load_json(fpath: Path) -> dict[str, Any]:
-    return json.loads(fpath.read_text())
-
-
-def _find_pair(report: dict[str, Any], label: str) -> dict[str, Any]:
-    return find_report_pair(report, label)
-
-
-def _find_curve_value(rows: list[dict[str, Any]], abs_tol: float) -> float | None:
-    for row in rows or []:
-        try:
-            if float(row.get('abs_tol')) == float(abs_tol):
-                return float(row.get('agree_ratio'))
-        except Exception:
-            pass
-    return None
+_find_pair = find_report_pair
 
 
 def _assessment_label(repeat_agree_0: float | None, official_agree_01: float | None) -> str:

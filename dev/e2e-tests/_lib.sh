@@ -98,7 +98,7 @@ export EVAL_AUDIT_GROUP_STRIP="${EVAL_AUDIT_GROUP_STRIP:-1}"
 # Faithful replay is the DEFAULT and only path for the comparable scenarios — the
 # e2e always replays the OFFICIAL microsoft/phi-2 run_spec.json verbatim rather
 # than reconstructing the recipe from the run-entry string (migration plan
-# docs/planning/e2e-from-run-spec-migration-plan.md). There is no run-entry
+# docs/historical/planning/e2e-from-run-spec-migration-plan.md). There is no run-entry
 # opt-out: the hf manifests are from-spec and the grids always pass `--from-spec`
 # to export-benchmark-bundle for the vLLM baseline. The incomparable negative
 # control is the SOLE carve-out (see e2e_uses_from_spec) — it stays on the

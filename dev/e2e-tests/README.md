@@ -66,9 +66,9 @@ serves the run under a **local** deployment name (`huggingface/phi-2-local` for
 name (the manifest's `model_deployment` field threads it in). So the produced run
 records the served endpoint and the audit reports `same_deployment=no` — surfacing
 the engine substitution instead of masking it. See the migration plan
-[`docs/planning/e2e-from-run-spec-migration-plan.md`](../../docs/planning/e2e-from-run-spec-migration-plan.md)
+[`docs/historical/planning/e2e-from-run-spec-migration-plan.md`](../../docs/historical/planning/e2e-from-run-spec-migration-plan.md)
 and the deployment-rewrite plan
-[`docs/planning/from-spec-deployment-rewrite-plan.md`](../../docs/planning/from-spec-deployment-rewrite-plan.md).
+[`docs/historical/planning/from-spec-deployment-rewrite-plan.md`](../../docs/historical/planning/from-spec-deployment-rewrite-plan.md).
 
 The **incomparable** control is the sole carve-out (`e2e_uses_from_spec` in
 `_lib.sh`): it stays on the run-entry path because from-spec replays the official

@@ -1,25 +1,57 @@
-# Migrating the OLMo reproduction to faithful `run_spec.json` replay — plan
+# OLMo from-spec reproduction — status & plan
 
-**Status:** PLAN (not yet implemented). The from-spec *machinery* is already
-shipped (built for the phi-2 e2e); this migration is **wiring + run-entry
-reconciliation**, not new infrastructure.
-**Scope:** all **six** OLMo vLLM presets in
-[`reproduce/olmo_models/`](../../reproduce/olmo_models/). Unlike the phi-2 e2e there
-is **no carve-out** — OLMo has no temperature-deviation negative control and no
-hf-direct scenario, so every preset migrates uniformly.
+**Status (2026-07-06): IMPLEMENTED (host/CPU side); GPU verification is the only
+open work.** This is the single live doc for the OLMo from-spec effort. It folds in
+and supersedes two now-archived siblings:
+[`olmo-from-spec-handoff.md`](../historical/planning/olmo-from-spec-handoff.md)
+(the continuation handoff — env gotchas + landed-commit table) and
+[`olmo-multi-model-from-spec-plan.md`](../historical/planning/olmo-multi-model-from-spec-plan.md)
+(the multi-model fan-out design).
+
+**What's done.**
+- **Single-model from-spec migration — CPU-complete** on `impl/run-from-run-spec`.
+  Changes 1–4, 6, 7, 8 landed (commits `b5c4cfe` converter `prod_env` fix,
+  `5c31a05`/`b2ebad7` discovery dry-check + preset reconciliation incl. the
+  olmo-7b `-mmlu`/`-lite` split, `99bdc0e` grid `--from-spec`, `037ba68`
+  corpus-gated tests, `1ad68a8` data_dir hardening, `90d9581` docs). All 7 presets
+  resolve 1:1 (149 entries, 0 NO_MATCH / 0 AMBIGUOUS). See the per-change DONE
+  markers in §6.
+- **Multi-model fan-out — implemented.** The combined preset
+  `allenai-olmo-combined` (`eval_audit/integrations/infer_stack/presets.py`) plus
+  the [`reproduce/olmo_models_combined/`](../../reproduce/olmo_models_combined/)
+  runbook fan five OLMo models across GPUs under one schedule via
+  `export-benchmark-bundle --from-spec --freeze-rel-paths` + `eval-audit-run
+  --tmux-workers N`; olmo-7b runs as two extra single-model suites folded into the
+  same grouped virtual experiment. The multi-model plan's local-deployment-token
+  discovery strip is realized through the exact-path `--freeze-rel-paths` replay.
+
+**What's open (GPU box + the user's own shell).**
+- **Change 5 — first GPU smoke + downstream verification** (single-model and
+  combined): confirm the produced run dir == official `run_spec.name`, recorded
+  `model_deployment: vllm/allenai-<model>`, `same_deployment=no`, and that the
+  `comparability_unknown:*` warnings clear. Preflight with
+  `reproduce/olmo_models/08_check_discovery.sh` (must be 0 NO_MATCH / 0 AMBIGUOUS).
+- **Change 6 parity diff** — diff a from-spec BBQ run against the archived
+  run-entry result to quantify the removed `output_format_instructions` drift
+  (needs a produced from-spec run dir).
+
+**Scope:** all six OLMo vLLM presets (olmo-7b split into `-mmlu`/`-lite`) in
+[`reproduce/olmo_models/`](../../reproduce/olmo_models/) — no carve-out (OLMo has no
+temperature-deviation control, unlike the phi-2 e2e).
 **Depends on (all IMPLEMENTED):**
 [`run-from-run-spec-json-plan.md`](run-from-run-spec-json-plan.md) (the replay
-pipeline), [`from-spec-deployment-rewrite-plan.md`](from-spec-deployment-rewrite-plan.md)
+pipeline),
+[`from-spec-deployment-rewrite-plan.md`](../historical/planning/from-spec-deployment-rewrite-plan.md)
 (the `--model-deployment` rewrite), and
-[`e2e-from-run-spec-migration-plan.md`](e2e-from-run-spec-migration-plan.md) (the
-exporter/grid wiring this mirrors). Also depends on the converter `prod_env`
-registration fix (`b5c4cfe`, `eval_audit/normalized/eee_artifacts.py`) — without
-it the local run's `vllm/allenai-<model>` deployment won't resolve at HELM→EEE
+[`e2e-from-run-spec-migration-plan.md`](../historical/planning/e2e-from-run-spec-migration-plan.md)
+(the exporter/grid wiring this mirrors). Also depends on the converter `prod_env`
+registration fix (`b5c4cfe`, `eval_audit/normalized/eee_artifacts.py`) — without it
+the local run's `vllm/allenai-<model>` deployment won't resolve at HELM→EEE
 conversion time (the same bug the e2e hf scenario hit).
-**Method:** read the six OLMo presets in
-[`adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py), the olmo
-grid + `_lib.sh`, the e2e from-spec implementation, and the **real** official OLMo
-artifacts under `/data/crfm-helm-public`. 2026-06-29.
+**Method:** read the OLMo presets in
+[`adapter.py`](../../eval_audit/integrations/infer_stack/adapter.py)/`presets.py`, the
+olmo grids + `_lib.sh`, and the **real** official OLMo artifacts under
+`/data/crfm-helm-public`. Baseline measured 2026-06-29.
 
 ---
 

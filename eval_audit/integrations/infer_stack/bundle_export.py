@@ -365,7 +365,7 @@ def materialize_benchmark_bundle(
         # to it — so the produced run records the local endpoint (same_deployment=no)
         # with the rewrite target and the registration agreeing by construction.
         # This supersedes the earlier by-name rekey to the official name; see
-        # docs/planning/from-spec-deployment-rewrite-plan.md Change 5.
+        # docs/historical/planning/from-spec-deployment-rewrite-plan.md Change 5.
         deployment_name = spec.get("model_deployment_name")
         model_entries.append(
             _model_deployment_entry(

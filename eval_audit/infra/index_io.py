@@ -49,3 +49,19 @@ def load_rows(index_fpath: Path) -> list[dict[str, Any]]:
             {k: ("" if v is None else v) for k, v in row.items()}
             for row in csv.DictReader(file)
         ]
+
+
+def latest_run_inventory_csv(history_root: Path) -> Path:
+    """Resolve the newest ``run_inventory_*.csv`` under *history_root*.
+
+    Single source of truth for the aggregate-summary run-inventory history
+    lookup shared by the ``portfolio_status`` and ``analyze_backlog`` CLIs
+    (R-6 consolidation). Names sort lexically newest-last, so a reverse sort
+    puts the current file first.
+    """
+    cands = sorted(Path(history_root).rglob("run_inventory_*.csv"), reverse=True)
+    if not cands:
+        raise FileNotFoundError(
+            f"No run_inventory_*.csv files found under {history_root}"
+        )
+    return cands[0]

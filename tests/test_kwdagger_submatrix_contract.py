@@ -1,7 +1,7 @@
 """Contract test: kwdagger's matrix/submatrix expansion semantics.
 
 The ``(public_root, relative_path)`` reproduction plan
-(``docs/planning/run-from-relative-path-plan.md``) carries each run's per-run
+(``docs/historical/planning/run-from-relative-path-plan.md``) carries each run's per-run
 tuple — the materialized ``run_spec.json`` path, its lease endpoint, and a
 run-entry label — as a kwdagger ``submatrices`` entry rather than as parallel
 plain matrix axes. That choice rests on two facts about kwdagger we do not own:

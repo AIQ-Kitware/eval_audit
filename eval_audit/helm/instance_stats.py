@@ -2,14 +2,14 @@
 used by :class:`eval_audit.helm.analysis.HelmRunAnalysis`.
 
 Split out of ``eval_audit.helm.analysis`` on 2026-06-11
-(Phase 2 of docs/planning/repo-refactor-plan.md). Pure relocation:
+(Phase 2 of docs/historical/planning/repo-refactor-plan.md). Pure relocation:
 function bodies are unchanged.
 """
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 import ubelt as ub
-from eval_audit.helm import hashers as helm_hashers
+from eval_audit.utils import hashers as helm_hashers
 from eval_audit.utils.numeric import safe_float as _safe_float
 
 

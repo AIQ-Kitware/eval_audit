@@ -1,7 +1,7 @@
 """Stage 1 filtering/eligibility: run tables, failure reasons, filter inventory.
 
 Split out of ``eval_audit.cli.index_historic_helm_runs`` on 2026-06-11
-(Phase 2 of docs/planning/repo-refactor-plan.md). Pure relocation:
+(Phase 2 of docs/historical/planning/repo-refactor-plan.md). Pure relocation:
 function bodies are unchanged.
 """
 from __future__ import annotations

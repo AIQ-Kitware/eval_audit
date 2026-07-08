@@ -12,8 +12,31 @@ import kwutil
 
 from eval_audit.helm.diff import HelmRunDiff
 from eval_audit.infra.fs_publish import write_text_atomic
-from eval_audit.normalized import SourceKind
-from eval_audit.normalized.helm_compat import helm_view_from_path
+from eval_audit.normalized import NormalizedRunRef, SourceKind, load_run
+from eval_audit.normalized.diff import (
+    NormalizedDiff,
+    agreement_curve,
+    group_quantiles,
+    metric_quantiles,
+)
+from eval_audit.normalized.helm_compat import helm_view
+
+# R-2 (2026-07-06): the run-level / instance-level agreement, distance, and
+# tolerance-sweep numbers now come from the unified normalized comparison core
+# (NormalizedDiff), not the retired legacy half of HelmRunDiff. HelmRunDiff is
+# kept here only for the run_spec/scenario *semantic* diagnosis, which is
+# meaningful only over raw HELM run dirs (which this CLI always has).
+#
+# Behavior deltas vs the legacy path (see docs/eee-vs-helm-metadata.md and audit
+# item IM-13):
+#   * Agreement/distance are computed over the normalized join
+#     (``(sample_hash|sample_id, metric_id)``) and over *core* metrics only —
+#     the legacy path joined per-stat over all metric classes with a different
+#     key granularity. The numbers are the same ones the production
+#     core_metric_report already publishes.
+#   * Tolerance is pure ``abs_tol`` (rel_tol is dropped). The curve is therefore
+#     a true function of abs_tol, so ``tolerance_highlights`` and
+#     ``tolerance_highlights_abs_only`` are identical.
 
 
 def load_yaml_or_default(text: str | None, default: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -41,12 +64,11 @@ def default_tolerances() -> list[dict[str, Any]]:
 def abs_only_tolerances(tolerances: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Same abs_tol grid with rel_tol forced to 0 (P1-13).
 
-    The default sweep couples abs_tol with a rising rel_tol (up to 1.0 at
-    abs_tol=0.1). When the resulting agreement is plotted on a *pure*-abs_tol
-    axis (the cross-machine curve overlaid on the abs_tol agreement curves),
-    the line is systematically inflated: at abs_tol=0.1 the paired rel_tol=1.0
-    counts near-equal large values as agreeing. This yields a curve that is a
-    true function of abs_tol alone.
+    Retained for the cross-machine overlay loader and its regression test. On
+    the normalized core rel_tol is *always* 0 (the agreement curve is a pure
+    function of abs_tol), so ``tolerance_highlights`` already equals
+    ``tolerance_highlights_abs_only``; this helper keeps the abs_tol grid
+    explicit for callers that build their own sweeps.
     """
     return [
         {'name': cfg.get('name', 'unnamed'), 'abs_tol': cfg.get('abs_tol', 0.0), 'rel_tol': 0.0}
@@ -70,22 +92,135 @@ def validate_run_dir(run_dpath: Path) -> None:
         )
 
 
-def summarize_tolerance_hits(sweep: dict[str, Any]) -> dict[str, Any]:
-    out = {'run_level': [], 'instance_level': []}
-    for level_key, target in [('run_level', 'overall'), ('instance_level', 'means')]:
-        for row in sweep.get(level_key, []):
-            summary = row.get('summary', {}) or {}
-            if level_key == 'run_level':
-                agree = ((summary.get('overall', {}) or {}).get('agree_ratio', None))
-            else:
-                agree = ((summary.get('means', {}) or {}).get('agree_ratio', None))
-            out[level_key].append({
-                'name': row.get('name'),
-                'abs_tol': row.get('abs_tol'),
-                'rel_tol': row.get('rel_tol'),
-                'agree_ratio': agree,
-            })
-    return out
+def _agree_ratio_at(curve: list[dict[str, Any]], abs_tol: float) -> float | None:
+    """Read the agreement ratio at a specific abs_tol from an agreement curve."""
+    for row in curve:
+        if float(row['abs_tol']) == float(abs_tol):
+            return row['agree_ratio']
+    return None
+
+
+def _tolerance_highlights(
+    curve: list[dict[str, Any]], tolerances: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Zip a NormalizedDiff agreement curve back onto the named tolerance grid.
+
+    ``curve`` is computed at the abs_tol points drawn from ``tolerances`` (same
+    order), so the two align positionally. ``rel_tol`` is reported as 0.0 — the
+    normalized core does not apply a relative tolerance.
+    """
+    highlights: list[dict[str, Any]] = []
+    for cfg, row in zip(tolerances, curve):
+        highlights.append({
+            'name': cfg.get('name', 'unnamed'),
+            'abs_tol': float(cfg.get('abs_tol', 0.0) or 0.0),
+            'rel_tol': 0.0,
+            'agree_ratio': row.get('agree_ratio'),
+        })
+    return highlights
+
+
+def _agreement_block(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Strict (abs_tol=0) run/instance agreement in the legacy nested shape.
+
+    Only the fields downstream consumers read are populated
+    (``overall.agree_ratio`` / ``means.agree_ratio`` + the comparable count).
+    Sourced from the normalized core rows, so this is core-metric agreement over
+    the normalized join — see the module-level behavior-delta note.
+    """
+    n = len(rows)
+    if n:
+        agree = sum(1 for r in rows if float(r['abs_delta']) <= 0.0)
+        agree_ratio: float | None = agree / n
+        mismatched = n - agree
+    else:
+        agree_ratio = None
+        mismatched = 0
+    return {'comparable': n, 'mismatched': mismatched, 'agree_ratio': agree_ratio}
+
+
+def build_pair_report(
+    *,
+    run_a: str | Path,
+    run_b: str | Path,
+    label_a: str = "A",
+    label_b: str = "B",
+    display_label_a: str | None = None,
+    display_label_b: str | None = None,
+    run_tolerances_yaml: str | None = None,
+    instance_tolerances_yaml: str | None = None,
+) -> dict[str, Any]:
+    run_a_dpath = Path(run_a).expanduser().resolve()
+    run_b_dpath = Path(run_b).expanduser().resolve()
+    validate_run_dir(run_a_dpath)
+    validate_run_dir(run_b_dpath)
+
+    # Fully normalize both runs (populates instances) so the unified
+    # comparison core can compute agreement. The raw HELM JSONs stay reachable
+    # via helm_view() for the semantic diagnosis below.
+    nrun_a = load_run(
+        NormalizedRunRef.from_helm_run(run_a_dpath, source_kind=SourceKind.OFFICIAL)
+    )
+    nrun_b = load_run(
+        NormalizedRunRef.from_helm_run(run_b_dpath, source_kind=SourceKind.LOCAL)
+    )
+    ndiff = NormalizedDiff(nrun_a, nrun_b, label=f'{label_a}_vs_{label_b}')
+
+    run_tolerances = load_yaml_or_default(run_tolerances_yaml, default_tolerances())
+    instance_tolerances = load_yaml_or_default(instance_tolerances_yaml, default_tolerances())
+    run_thresholds = [float(cfg.get('abs_tol', 0.0) or 0.0) for cfg in run_tolerances]
+    inst_thresholds = [float(cfg.get('abs_tol', 0.0) or 0.0) for cfg in instance_tolerances]
+
+    run_curve = agreement_curve(ndiff.run_rows, run_thresholds)
+    inst_curve = agreement_curve(ndiff.inst_rows, inst_thresholds)
+
+    # Semantic diagnosis stays HelmRunDiff's (run_spec.json semantic diff),
+    # sourced from the raw HELM artifacts behind helm_view(). summary_dict no
+    # longer carries value/instance agreement (R-2); we inject the normalized
+    # agreement blocks below so the pair_report.json shape is unchanged.
+    diff = HelmRunDiff(
+        helm_view(nrun_a),
+        helm_view(nrun_b),
+        a_name=label_a,
+        b_name=label_b,
+    )
+    strict_summary = diff.summary_dict(level=20)
+    strict_summary['value_agreement'] = {'overall': _agreement_block(ndiff.run_rows)}
+    strict_summary['instance_value_agreement'] = {'means': _agreement_block(ndiff.inst_rows)}
+
+    tolerance_highlights = {
+        'run_level': _tolerance_highlights(run_curve, run_tolerances),
+        'instance_level': _tolerance_highlights(inst_curve, instance_tolerances),
+    }
+    return {
+        'generated_utc': datetime_mod.datetime.now(datetime_mod.UTC).strftime('%Y%m%dT%H%M%SZ'),
+        'inputs': {
+            'run_a': str(run_a_dpath),
+            'run_b': str(run_b_dpath),
+            'label_a': label_a,
+            'label_b': label_b,
+        },
+        'display_labels': {
+            'label_a': display_label_a or label_a,
+            'label_b': display_label_b or label_b,
+        },
+        'strict_summary': strict_summary,
+        'distance_summary': {
+            'run_level': {
+                'overall': group_quantiles(ndiff.run_rows),
+                'by_metric': metric_quantiles(ndiff.run_rows),
+            },
+            'instance_level': {
+                'overall': group_quantiles(ndiff.inst_rows),
+                'by_metric': metric_quantiles(ndiff.inst_rows),
+            },
+        },
+        'tolerance_highlights': tolerance_highlights,
+        # rel_tol is always 0 on the normalized core, so the abs-only curve is
+        # identical to the joint one; both keys are emitted for compatibility
+        # with the cross-machine overlay loader.
+        'tolerance_highlights_abs_only': tolerance_highlights,
+    }
 
 
 def write_text_report(report: dict[str, Any], out_fpath: Path) -> None:
@@ -141,66 +276,6 @@ def write_text_report(report: dict[str, Any], out_fpath: Path) -> None:
             f"  {row.get('name')}: abs_tol={row.get('abs_tol')} rel_tol={row.get('rel_tol')} agree_ratio={row.get('agree_ratio')}"
         )
     write_text_atomic(out_fpath, '\n'.join(lines) + '\n')
-
-
-def build_pair_report(
-    *,
-    run_a: str | Path,
-    run_b: str | Path,
-    label_a: str = "A",
-    label_b: str = "B",
-    display_label_a: str | None = None,
-    display_label_b: str | None = None,
-    run_tolerances_yaml: str | None = None,
-    instance_tolerances_yaml: str | None = None,
-) -> dict[str, Any]:
-    run_a_dpath = Path(run_a).expanduser().resolve()
-    run_b_dpath = Path(run_b).expanduser().resolve()
-    validate_run_dir(run_a_dpath)
-    validate_run_dir(run_b_dpath)
-
-    diff = HelmRunDiff(
-        run_a=helm_view_from_path(run_a_dpath, source_kind=SourceKind.OFFICIAL),
-        run_b=helm_view_from_path(run_b_dpath, source_kind=SourceKind.LOCAL),
-        a_name=label_a,
-        b_name=label_b,
-    )
-    run_tolerances = load_yaml_or_default(run_tolerances_yaml, default_tolerances())
-    instance_tolerances = load_yaml_or_default(instance_tolerances_yaml, default_tolerances())
-    tolerance_sweep = diff.tolerance_sweep_summary(
-        run_tolerances=run_tolerances,
-        instance_tolerances=instance_tolerances,
-    )
-    # P1-13: a second sweep at rel_tol=0 over the same abs_tol grid, so a curve
-    # plotted on pure-abs_tol axes (the cross-machine overlay) reflects abs_tol
-    # alone. The joint-tolerance `tolerance_highlights` above stays for the text
-    # report (which shows rel_tol explicitly).
-    tolerance_sweep_abs_only = diff.tolerance_sweep_summary(
-        run_tolerances=abs_only_tolerances(run_tolerances),
-        instance_tolerances=abs_only_tolerances(instance_tolerances),
-    )
-    return {
-        'generated_utc': datetime_mod.datetime.now(datetime_mod.UTC).strftime('%Y%m%dT%H%M%SZ'),
-        'inputs': {
-            'run_a': str(run_a_dpath),
-            'run_b': str(run_b_dpath),
-            'label_a': label_a,
-            'label_b': label_b,
-        },
-        'display_labels': {
-            'label_a': display_label_a or label_a,
-            'label_b': display_label_b or label_b,
-        },
-        'strict_summary': diff.summary_dict(level=20),
-        'distance_summary': {
-            'run_level': diff.value_distance_profile(),
-            'instance_level': diff.instance_distance_profile(),
-        },
-        'tolerance_sweep': tolerance_sweep,
-        'tolerance_highlights': summarize_tolerance_hits(tolerance_sweep),
-        # P1-13: rel_tol=0 curve for plotting on pure-abs_tol axes.
-        'tolerance_highlights_abs_only': summarize_tolerance_hits(tolerance_sweep_abs_only),
-    }
 
 
 def main(argv: list[str] | None = None) -> None:

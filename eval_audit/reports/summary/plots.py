@@ -1,7 +1,7 @@
 """Plotly figure writers: bars, agreement curves, coverage matrix, failure taxonomy.
 
 Split out of ``eval_audit.workflows.build_reports_summary`` on
-2026-06-11 (Phase 2 of docs/planning/repo-refactor-plan.md). Pure
+2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md). Pure
 relocation: function bodies are unchanged.
 """
 from __future__ import annotations
@@ -46,12 +46,7 @@ def _ordered_unique_values(rows: list[dict[str, Any]], key: str) -> list[str]:
     return values
 
 
-def _abbreviate_label(text: str, *, max_chars: int = 24) -> str:
-    if len(text) <= max_chars:
-        return text
-    if max_chars <= 3:
-        return "." * max_chars
-    return text[: max_chars - 3].rstrip() + "..."
+from eval_audit.utils.coercion import abbreviate_label as _abbreviate_label  # R-6
 
 
 def _bar_count_label(axis_key: str, n_bars: int, *, axis_title: str | None = None) -> str:

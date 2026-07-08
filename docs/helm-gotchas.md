@@ -237,8 +237,9 @@ upload to GCS (apparent based on consistent-byte-offset failures
 across the v0.2.2/v0.2.3/v0.2.4 mirrors). Recently re-uploaded
 versions are ~44 MB and parse cleanly.
 
-**Workaround.** `dev/poc/eee-audit/sweep.py --show-failure-paths
-JSONDecodeError` lists the affected paths; redownload via
+**Workaround.** The EEE converter (`eval-audit-prepare-eee`, backed by
+`eval_audit/normalized/eee_artifacts.py`) surfaces these as
+`JSONDecodeError` failures; redownload the affected paths via
 `download_helm_results.py` (size mismatch triggers fresh fetch).
 
 ---

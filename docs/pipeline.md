@@ -118,15 +118,14 @@ $AUDIT_STORE_ROOT/eee/local/<experiment>/<helm_id>/<run-slug>/
 
 For public HELM runs, the equivalent tree lives under
 `$AUDIT_STORE_ROOT/crfm-helm-public-eee-test/<suite>/<version>/<run>/eee_output/`.
-That sweep is driven by [`dev/poc/eee-audit/sweep.py`](../dev/poc/eee-audit/sweep.py)
-— it converts ~36k public runs and is the slow upstream step. **UNSURE**: the
-exact set of suites/versions currently in scope and how often this is rerun;
-the script's own header documents the latest invocation it knows about.
+That conversion is driven by the `eval-audit-prepare-eee` CLI
+([`eval_audit/cli/prepare_eee.py`](../eval_audit/cli/prepare_eee.py), backed by
+[`eval_audit/normalized/eee_artifacts.py`](../eval_audit/normalized/eee_artifacts.py))
+— it converts the official runs in scope on demand (the full public corpus is
+~36k runs; converting all of it is the slow upstream step).
 
 EEE artifacts carry `source_organization_name=eval_audit_local` for local
-runs (renamed from `helm_audit_local` on 2026-04-28; see
-[`dev/oneoff/migrate_eee_source_org_tag.py`](../dev/oneoff/migrate_eee_source_org_tag.py)
-to backfill old artifacts).
+runs (renamed from `helm_audit_local` on 2026-04-28).
 
 ## Stage 2 — Virtual experiment compose
 

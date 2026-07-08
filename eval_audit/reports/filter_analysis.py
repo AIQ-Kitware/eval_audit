@@ -16,7 +16,7 @@ from loguru import logger
 
 # --- compat re-exports -------------------------------------------------
 # Implementation moved to reports.filter_analysis_{tables,text,charts,io}
-# on 2026-06-11 (Phase 2 of docs/planning/repo-refactor-plan.md). The
+# on 2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md). The
 # filter tests import these names from this module; keep re-exporting.
 from eval_audit.reports.filter_analysis_tables import (  # noqa: F401
     UNCLASSIFIED_EXCLUSION,

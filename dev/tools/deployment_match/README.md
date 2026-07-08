@@ -11,7 +11,7 @@ It generalizes the OLMo-7B deploy-matrix MWE (the since-retired
 `olmo7b_deploy_matrix` debug harness): same catalog + acquire/query/release
 shape, but parameterized by an arbitrary HELM run and scored against the
 official completions instead of a self-consistency heuristic.
-Design: [`docs/planning/deployment-match-search-plan.md`](../../../docs/planning/deployment-match-search-plan.md).
+Design: [`docs/historical/planning/deployment-match-search-plan.md`](../../../docs/historical/planning/deployment-match-search-plan.md).
 
 ## Why
 

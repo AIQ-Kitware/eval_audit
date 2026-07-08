@@ -3,7 +3,7 @@ agreement curves, quantiles, diagnostics, metric domains, and the
 official/local pair builder. No rendering here.
 
 Split out of ``eval_audit.reports.core_metrics`` on 2026-06-11
-(Phase 2 of docs/planning/repo-refactor-plan.md). Pure relocation:
+(Phase 2 of docs/historical/planning/repo-refactor-plan.md). Pure relocation:
 function bodies are unchanged.
 """
 from __future__ import annotations
@@ -40,9 +40,10 @@ from eval_audit.infra.profiling import profile
 
 MetricDomain = tuple[float, float]
 
-
-def _load_json(fpath: Path) -> Any:
-    return json.loads(fpath.read_text())
+# R-6: canonical JSON loader (identical body). `_find_pair`/`_find_curve_value`
+# in this module deliberately keep their *different* pairs-list / no-coerce
+# semantics and are NOT consolidated.
+from eval_audit.utils.coercion import load_json as _load_json
 
 
 def _load_optional_cross_machine_pair(report_dpath: Path) -> dict[str, Any] | None:

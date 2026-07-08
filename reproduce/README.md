@@ -1,87 +1,80 @@
 # reproduce/
 
-This directory is the operator runbook layer for `eval_audit`.
+This directory is the operator runbook layer for `eval_audit`. One folder per
+scenario; the shell files are intentionally thin runbook steps, not the
+implementation — each delegates to an `eval_audit` Python CLI such as
+`eval-audit-run`, `eval-audit-index`, `eval-audit-analyze-experiment`, or
+`eval-audit-build-virtual-experiment`. For `eval-audit-run`, preview is the
+default; pass `--run=1` when you actually want to execute the scheduled
+`kwdagger` job.
 
-Most scenario folders are short numbered sequences (the original convention):
+## The numbered-script idiom
 
-- `00_*`: environment checks or indexing setup
-- `10_*`: manifest generation or analysis selection
-- `20_*`: execution or rebuild step
-- `30_*`: comparison or follow-on reporting
+Most execution-shaped scenarios are short numbered sequences (the original
+convention):
 
-A scenario should match this layout when it actually has those phases. When
-it doesn't (e.g. an analysis-only runbook over pre-existing artifacts),
-prefer descriptive script names. The convention is a guideline, not a rule.
+- `00_*` — environment checks or indexing setup
+- `10_*` — manifest generation or analysis selection
+- `20_*` — execution or rebuild step
+- `30_*` — comparison or follow-on reporting
 
-Current scenarios:
+A scenario matches this layout only when it actually has those phases.
+Analysis-only or EEE-only runbooks operate over pre-existing artifacts and use
+descriptive script names instead. The convention is a guideline, not a rule.
 
-- `smoke/`: minimal end-to-end sanity run
-- `apples/`: apples-to-apples reproduction control
-- `historic_grid/`: historic public-run manifest and rebuild flow
-- `machine_compare/`: cross-machine indexing, analysis, and pairwise compare
-- `qwen35_vllm/`: local vLLM smoke run for `qwen/qwen3.5-9b` through the existing `kwdagger` and materialized HELM path
-- `qwen2_72b_vllm/`: local vLLM smoke plus full EWOK historic-grid batch for `qwen/qwen2-72b-instruct` using the `helm-qwen2-72b-instruct` server profile
-- `gpt_oss_20b_vllm/`: local LiteLLM-backed vLLM smoke plus targeted overnight batch for the `openai/gpt-oss-20b` runs that were filtered out only because they had no local deployment path
-- `small_models_kubeai/`: KubeAI-backed overnight batch that keeps both `qwen/qwen2.5-7b-instruct-turbo` and `lmsys/vicuna-7b-v1.3` live together on the cluster and emits one combined benchmark bundle
-- `pythia_mmlu_stress/`: virtual-experiment slice (Pythia × MMLU) over already-executed audit data; analysis + publication only, no execution step yet
+## Scenarios
 
-The shell files here are intentionally thin. They are runbook steps, not the
-implementation. Each one should delegate to a `eval_audit` Python CLI such as
-`eval-audit-run`, `eval-audit-index`, or `eval-audit-analyze-experiment`.
-For `eval-audit-run`, preview is the default. Use `--run=1` in runbooks when
-you actually want to execute the scheduled `kwdagger` job.
+Status labels are carried over from the runbook table in the top-level
+[`README.md`](../README.md); scenarios absent from that table are marked
+*status unrecorded*. **WORKING** / **UNSURE** / **IN PROGRESS** mean only what
+that table's author could (or couldn't) confirm at the time — re-validate
+before relying on a claim.
 
-Generated manifests referenced by these runbooks now default to
-`$AUDIT_STORE_ROOT/configs/manifests/` with
+| scenario | purpose | status |
+|---|---|---|
+| `apples/` | apples-to-apples reproduction control (check_env → make_manifest → run → compare) | **UNSURE** |
+| `eee_only_demo/` | self-contained EEE-only tutorial: compare official vs local EEE artifact trees via `eval-audit-from-eee` against a checked-in 3×3 fixture | **WORKING** (2026-04-29) |
+| `eee_only_reproducibility_heatmap/` | model × benchmark instance-agreement heatmap (paper Case Study 3), entirely in EEE format — no GPU/internet at report time | **WORKING** (2026-05) |
+| `extend_grid_falcon_7b/` | local Falcon-7B reproduction across the heatmap's 14 benchmarks (HELM HF backend, single GPU) | **WORKING** (2026-05, execution side) |
+| `finish_qwen25_gptoss/` | close the Qwen 2.5 7B + gpt-oss audit gaps surfaced by Case Study 3 (re-run public run_specs with prompt prefix intact) | **WORKING** (2026-05, gated-dataset caveats) |
+| `gpt_oss_20b_core_grid/` | run `openai/gpt-oss-20b` on the 14 core reproducibility benchmarks for a cross-model comparison (TMLR paper context) | status unrecorded |
+| `gpt_oss_20b_vllm/` | LiteLLM-fronted vLLM smoke + overnight batch for `openai/gpt-oss-20b` | **UNSURE** (vLLM/LiteLLM-side) |
+| `historic_grid/` | regenerate a historic public-run manifest grid and rebuild reports | **UNSURE** |
+| `inspectai_helm_eee_compare/` | EEE-only comparability stress: HELM-shaped + InspectAI-shaped artifacts in one bundle; probes what the planner can conclude | **WORKING** (2026-05) |
+| `llama2_70b_helm_audit/` | local LLaMA-2-70B reproduction (vLLM tp=2, 2×96 GB) to add a 4th model to the Case Study 3 heatmap | **IN PROGRESS** (2026-05) |
+| `machine_compare/` | cross-machine indexing, per-experiment analysis, and pairwise compare | **UNSURE** |
+| `olmo_models/` | six AllenAI OLMo models: smoke + full grids folded into one grouped virtual-experiment report (from-spec) | status unrecorded |
+| `olmo_models_combined/` | sibling of `olmo_models/` — a single multi-deployment preset fans five OLMo models across GPUs under one schedule | status unrecorded |
+| `open_helm_models_reproducibility/` | virtual experiment over existing audit data: how reproducible are the open-weight public-HELM models (analysis + publication only) | **WORKING** (analysis) |
+| `pythia12b_mmlu_smoke/` | local `pythia-12b-v0` run through the `eval-audit-run` → `kwdagger` → `magnet` → `helm-run` execution chain | **WORKING** (2026-04-28) |
+| `pythia_mmlu_stress/` | virtual-experiment slice (Pythia × MMLU) over already-executed audit data; analysis + publication only, no execution step | **WORKING** (analysis) |
+| `pythia_smoke_eee_only/` | EEE-only counterpart to `pythia12b_mmlu_smoke/` (no execution; `pythia-6.9b` on MMLU/BoolQ) | **WORKING** (2026-05) |
+| `qwen2_72b_vllm/` | local vLLM smoke + full EWOK historic-grid batch for `qwen/qwen2-72b-instruct` | **UNSURE** (vLLM-side) |
+| `qwen35_vllm/` | local vLLM smoke for `qwen/qwen3.5-9b` through `kwdagger` + the materialized HELM path | **UNSURE** (vLLM-side) |
+| `setup/` | one-time host setup (e.g. install Chrome for Plotly/Kaleido static image export on Ubuntu 24.04) | **UNSURE** but harmless |
+| `small_models_kubeai/` | KubeAI overnight batch keeping `qwen2.5-7b` + `vicuna-7b` resident together; emits one combined benchmark bundle | **UNSURE** (KubeAI-side) |
+| `smoke/` | minimal end-to-end sanity run (check_env → make_manifest → run → compare) | **UNSURE** |
+
+## Conventions & assumptions
+
+Generated manifests referenced by these runbooks default to
+`$AUDIT_STORE_ROOT/configs/manifests/`, with
 `AUDIT_STORE_ROOT=/data/crfm-helm-audit-store` as the fallback. Checked-in
 `configs/` files remain source-controlled inputs and overrides, not a sink for
 generated experiment state.
 
-The `qwen35_vllm/` runbook assumes:
-- a local vLLM OpenAI-compatible server is available on `http://localhost:8000/v1`
-- the downstream `materialize_helm_run.py` copies the manifest's `model_deployments_fpath` into `<job_dir>/prod_env/model_deployments.yaml` before invoking `helm-run`
-
-The `qwen2_72b_vllm/` runbook assumes:
-- a local vLLM OpenAI-compatible server is available on `http://localhost:8000/v1`
-- the service is launched with the `helm-qwen2-72b-instruct` profile, or equivalently serves `Qwen/Qwen2-72B-Instruct` with the HELM alias `qwen/qwen2-72b-instruct`
-- the downstream `materialize_helm_run.py` copies the manifest's `model_deployments_fpath` into `<job_dir>/prod_env/model_deployments.yaml` before invoking `helm-run`
-
-The `gpt_oss_20b_vllm/` runbook assumes:
-- the local service is exposed through LiteLLM on `http://localhost:14000/v1`
-- `LITELLM_MASTER_KEY` is available, either already exported or via `/data/service/service-repo/vllm/generated/.env`
-- the runbook writes a machine-local bundle under `$AUDIT_STORE_ROOT/local-bundles/gpt_oss_20b_vllm/` so secrets and absolute paths do not need to live in checked-in YAML
-- the local `gpt-oss` deployment should use the legacy completions path, not chat completions, because the observed chat response shape returned `message.content: null` for this backend/model combination
-- chat-oriented runs can still opt into an explicit chat deployment via `model_deployment=litellm/gpt-oss-20b-chat-local` when that is the cleaner scenario-level fit
-- the overnight manifest is now trimmed to the in-scope subset and does not schedule benchmarks that require proprietary / credentialed judges by default
-
-The `small_models_kubeai/` runbook assumes:
-- the KubeAI chart is already installed and reachable at `KUBEAI_BASE_URL` (default `http://127.0.0.1:8000/openai/v1`, typically via `kubectl port-forward`)
-- the `infer_stack` repo is configured for the same KubeAI namespace and can `switch --apply` the `qwen2-5-7b-instruct-turbo-default` and `vicuna-7b-v1-3-no-chat-template` profiles
-- applying the second profile is additive on the cluster, so both KubeAI `Model` objects remain resident for the combined overnight manifest
-- on `aiq-gpu`, the KubeAI Helm release currently lives in the `default` namespace, so these scripts default `KUBEAI_NAMESPACE=default`
-- tonight's runbook also applies an explicit post-deploy patch so both model CRs use `resourceProfile=gpu-single-default:1`, `minReplicas=1`, and `--served-model-name=<public profile name>` to match the routed OpenAI model ids exposed by `/openai/v1/models`
-- the benchmark bundle export normalizes HELM-facing tokenizer aliases before writing `model_deployments.yaml`; regenerate the bundle after pulling changes if smoke/full previously failed on tokenizer lookup
-
-Exact `aiq-gpu` flow:
+The serving-backed runbooks (`qwen35_vllm/`, `qwen2_72b_vllm/`,
+`gpt_oss_20b_vllm/`, `small_models_kubeai/`) carry their operational
+assumptions — local server URLs, LiteLLM keys, KubeAI namespaces, deployment
+profiles — in their own scripts and in the presets/configs they reference
+(`eval_audit/integrations/infer_stack/presets.py`, `configs/local_models/`);
+e.g. gpt-oss deliberately uses the legacy completions protocol
+(`protocol_mode: completions`) because its chat path returned
+`message.content: null`. Those assumptions drift fast; read the scripts before
+running. Run every runbook from the repo root, e.g.:
 
 ```bash
-cd /home/joncrall/code/helm_audit
 export KUBEAI_NAMESPACE=default
 export KUBEAI_BASE_URL=http://127.0.0.1:8000/openai/v1
-
-bash reproduce/small_models_kubeai/00_check_env.sh
-bash reproduce/small_models_kubeai/05_deploy_models.sh
-bash reproduce/small_models_kubeai/15_wait_ready.sh
-bash reproduce/small_models_kubeai/10_write_bundle.sh
-bash reproduce/small_models_kubeai/30_run_smoke.sh
-bash reproduce/small_models_kubeai/50_run_full.sh
-```
-
-One-command overnight entrypoint:
-
-```bash
-cd /home/joncrall/code/helm_audit
-export KUBEAI_NAMESPACE=default
-export KUBEAI_BASE_URL=http://127.0.0.1:8000/openai/v1
-bash reproduce/small_models_kubeai/99_run_tonight.sh
+bash reproduce/small_models_kubeai/99_run_tonight.sh   # one-command overnight entrypoint
 ```

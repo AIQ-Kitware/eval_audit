@@ -1,6 +1,6 @@
 """Exact-path replay wiring: materializer -> bridge submatrix -> docker node.
 
-Covers the eval_audit side of ``docs/planning/run-from-relative-path-plan.md``
+Covers the eval_audit side of ``docs/historical/planning/run-from-relative-path-plan.md``
 §4.2/4.3/4.4/4.6: ``build_schedule_params`` emits one kwdagger ``submatrices``
 entry per materialized run (no run-entry axis, no corpus mount), the params
 expand to exactly N jobs through the real kwdagger grid, the from-spec docker

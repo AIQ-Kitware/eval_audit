@@ -41,13 +41,13 @@ from typing import Any, Mapping
 
 import ubelt as ub
 
-from eval_audit.helm import hashers as helm_hashers
+from eval_audit.utils import hashers as helm_hashers
 from eval_audit.helm import metrics as helm_metrics
 from eval_audit.utils.numeric import safe_float as _safe_float
 
 # --- compat re-exports -------------------------------------------------
 # Implementation moved to helm.instance_stats / helm.analysis_report on
-# 2026-06-11 (Phase 2 of docs/planning/repo-refactor-plan.md).
+# 2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md).
 # HelmRunAnalysis methods resolve summary/summary_dict through this
 # module's globals; keep re-exporting.
 from eval_audit.helm.instance_stats import (  # noqa: F401

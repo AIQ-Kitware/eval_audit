@@ -34,7 +34,7 @@ from eval_audit.infra.profiling import profile
 
 # --- compat re-exports -------------------------------------------------
 # The implementation moved to eval_audit.reports.summary.* on 2026-06-11
-# (Phase 2 of docs/planning/repo-refactor-plan.md). Tests and operational
+# (Phase 2 of docs/historical/planning/repo-refactor-plan.md). Tests and operational
 # scripts import these names from this module; keep re-exporting them.
 from eval_audit.reports.summary.common import (  # noqa: F401
     DEFAULT_BREAKDOWN_DIMS,
@@ -258,66 +258,13 @@ def _render_breakdown_scopes(
     _write_json(manifest_rows, manifest_fpath)
 
 
-@profile
-def _render_scope_summary(
+
+def _build_enriched_scope_rows(
     *,
-    scope_kind: str,
-    scope_value: str | None,
     scope_rows: list[dict[str, Any]],
     repro_rows: list[dict[str, Any]],
     filter_inventory_rows: list[dict[str, Any]],
-    filter_inventory_json: Path | None,
-    index_fpath: Path,
-    summary_root: Path,
-    breakdown_dims: list[str],
-    max_items_per_breakdown: int,
-    include_visuals: bool = True,
-    top_level_summary_root: Path | None = None,
-    unreadable_reports: list[str] | None = None,
-    reproduce_extra_args: str = "",
-) -> None:
-    """Render a summary tree under ``summary_root``.
-
-    When ``top_level_summary_root`` is None (default), this is the
-    canonical/top-level call: scope is either ``all_results`` or a real
-    ``--experiment-name`` value, so the emitted ``reproduce.sh`` /
-    ``redraw_plots.sh`` invoke ``build_reports_summary`` with that scope
-    directly.
-
-    When ``top_level_summary_root`` is provided, this is a recursive
-    breakdown render (e.g. ``by_benchmark/boolq/``). The scope (e.g.
-    ``benchmark`` / ``boolq``) is *not* a filter the CLI knows how to
-    honor — there is no ``--benchmark`` flag — so the breakdown's
-    ``reproduce.sh`` / ``redraw_plots.sh`` are emitted as **delegating
-    stubs** that exec the top-level scripts. Running the breakdown's
-    script then regenerates the entire report (including this
-    breakdown's slice) which is the only correct refresh for a
-    derived view.
-    """
-    if not scope_rows:
-        return
-
-    generated_utc = datetime_mod.datetime.now(datetime_mod.UTC).strftime("%Y%m%dT%H%M%SZ")
-    summary_root.mkdir(parents=True, exist_ok=True)
-    level_001 = summary_root / "level_001"
-    level_002 = summary_root / "level_002"
-    level_001.mkdir(parents=True, exist_ok=True)
-    level_002.mkdir(parents=True, exist_ok=True)
-    level_001_machine = level_001 / "machine"
-    level_001_interactive = level_001 / "interactive"
-    level_001_static = level_001 / "static"
-    level_002_machine = level_002 / "machine"
-    level_002_static = level_002 / "static"
-    for d in [level_001_machine, level_001_interactive, level_001_static, level_002_machine, level_002_static]:
-        d.mkdir(parents=True, exist_ok=True)
-
-    alt_tol_dpath = level_001 / "alt_tolerances"
-    alt_tol_machine = alt_tol_dpath / "machine"
-    alt_tol_interactive = alt_tol_dpath / "interactive"
-    alt_tol_static = alt_tol_dpath / "static"
-    for d in [alt_tol_machine, alt_tol_interactive, alt_tol_static]:
-        d.mkdir(parents=True, exist_ok=True)
-
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[tuple[str, str], dict[str, Any]]]:
     repro_keyed = {
         (str(row.get("experiment_name")), str(row.get("run_entry"))): row
         for row in repro_rows
@@ -372,62 +319,16 @@ def _render_scope_summary(
             enriched.update(failure)
             failed_rows.append(enriched)
         enriched_rows.append(enriched)
+    return enriched_rows, failed_rows, repro_keyed
 
-    n_total = len(enriched_rows)
-    n_completed = sum(1 for row in enriched_rows if row.get("completed_with_run_artifacts"))
-    n_failed = n_total - n_completed
-    n_analyzed = len(repro_rows)
 
-    failure_counts = Counter(row.get("failure_reason") or "unknown_failure" for row in failed_rows)
-    failure_reason_rows = [
-        {"failure_reason": reason, "count": count, "share_of_failed": (count / n_failed) if n_failed else None}
-        for reason, count in failure_counts.most_common()
-    ]
-    repro_bucket_counts = Counter(row.get("official_instance_agree_bucket") or "not_analyzed" for row in repro_rows)
-    repro_bucket_rows = [
-        {
-            "official_instance_agree_bucket": bucket,
-            "count": count,
-            "share_of_analyzed": (count / n_analyzed) if n_analyzed else None,
-        }
-        for bucket, count in repro_bucket_counts.most_common()
-    ]
-    filter_selection_by_model_rows = _build_filter_selection_by_model_rows(filter_inventory_rows)
-
-    benchmark_status_rows = _build_breakdown_rows(enriched_rows, group_key="benchmark", repro_keyed=repro_keyed)
-    benchmark_summary = _summarize_by_dimension(enriched_rows, dimension="benchmark", repro_keyed=repro_keyed)
-    run_inventory = enriched_rows
-    repro_inventory = repro_rows
-    off_story_summary = _build_off_story_summary(
-        filter_inventory_rows=filter_inventory_rows,
-        scope_rows=scope_rows,
-        repro_rows=repro_rows,
-    )
-    run_multiplicity_summary = _build_run_multiplicity_summary(
-        filter_inventory_rows=filter_inventory_rows,
-        scope_rows=scope_rows,
-        repro_rows=repro_rows,
-    )
-    prioritized_breakdowns_summary = _build_prioritized_breakdown_summary(
-        enriched_rows=enriched_rows,
-        repro_rows=repro_rows,
-        run_multiplicity_summary=run_multiplicity_summary,
-        breakdown_dims=breakdown_dims,
-        level_002=level_002,
-    )
-    if breakdown_dims:
-        _render_breakdown_scopes(
-            enriched_rows=enriched_rows,
-            all_repro_rows=repro_rows,
-            filter_inventory_rows=filter_inventory_rows,
-            filter_inventory_json=filter_inventory_json,
-            index_fpath=index_fpath,
-            breakdown_dims=breakdown_dims,
-            level_002=level_002,
-            max_items_per_breakdown=max_items_per_breakdown,
-            include_values_by_dim=prioritized_breakdowns_summary.get("include_values_by_dim"),
-        )
-
+def _build_scope_sankey_rows(
+    *,
+    enriched_rows: list[dict[str, Any]],
+    repro_rows: list[dict[str, Any]],
+    filter_inventory_rows: list[dict[str, Any]],
+    scope_rows: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
     operational_sankey_rows = []
     for row in enriched_rows:
         if row.get("completed_with_run_artifacts"):
@@ -509,8 +410,47 @@ def _render_scope_summary(
     # dropped: Stage A and Stage B together carry the same information without
     # the eight-stage cramping that made the combined view unreadable. Anyone
     # reading both sankeys side-by-side recovers the full chain.
+    return {
+        "operational_sankey_rows": operational_sankey_rows,
+        "repro_sankey_rows": repro_sankey_rows,
+        "repro_tol001_rows": repro_tol001_rows,
+        "repro_tol010_rows": repro_tol010_rows,
+        "repro_tol050_rows": repro_tol050_rows,
+        "metric_sankey_rows": metric_sankey_rows,
+        "universe_to_scope_rows": universe_to_scope_rows,
+        "scope_to_analyzed_exact_rows": scope_to_analyzed_exact_rows,
+        "scope_to_analyzed_tol001_rows": scope_to_analyzed_tol001_rows,
+        "scope_to_analyzed_tol010_rows": scope_to_analyzed_tol010_rows,
+        "scope_to_analyzed_tol050_rows": scope_to_analyzed_tol050_rows,
+    }
 
-    scope_title = _scope_label(scope_kind, scope_value)
+
+def _render_scope_sankeys(
+    *,
+    include_visuals: bool,
+    sankey_rows: dict[str, list[dict[str, Any]]],
+    level_001: Path,
+    level_001_machine: Path,
+    level_001_interactive: Path,
+    level_001_static: Path,
+    alt_tol_dpath: Path,
+    alt_tol_machine: Path,
+    alt_tol_interactive: Path,
+    alt_tol_static: Path,
+    generated_utc: str,
+    scope_title: str,
+) -> dict[str, dict[str, Any]]:
+    operational_sankey_rows = sankey_rows["operational_sankey_rows"]
+    repro_sankey_rows = sankey_rows["repro_sankey_rows"]
+    repro_tol001_rows = sankey_rows["repro_tol001_rows"]
+    repro_tol010_rows = sankey_rows["repro_tol010_rows"]
+    repro_tol050_rows = sankey_rows["repro_tol050_rows"]
+    metric_sankey_rows = sankey_rows["metric_sankey_rows"]
+    universe_to_scope_rows = sankey_rows["universe_to_scope_rows"]
+    scope_to_analyzed_exact_rows = sankey_rows["scope_to_analyzed_exact_rows"]
+    scope_to_analyzed_tol001_rows = sankey_rows["scope_to_analyzed_tol001_rows"]
+    scope_to_analyzed_tol010_rows = sankey_rows["scope_to_analyzed_tol010_rows"]
+    scope_to_analyzed_tol050_rows = sankey_rows["scope_to_analyzed_tol050_rows"]
     if include_visuals:
         operational_art = emit_sankey_artifacts(
             rows=operational_sankey_rows,
@@ -752,7 +692,45 @@ def _render_scope_summary(
         end_to_end_tol001_art = {"json": None, "txt": None, "key_txt": None, "html": None, "jpg": None, "plotly_error": None}
         end_to_end_tol010_art = {"json": None, "txt": None, "key_txt": None, "html": None, "jpg": None, "plotly_error": None}
         end_to_end_tol050_art = {"json": None, "txt": None, "key_txt": None, "html": None, "jpg": None, "plotly_error": None}
+    return {
+        "operational_art": operational_art,
+        "repro_art": repro_art,
+        "repro_tol001_art": repro_tol001_art,
+        "repro_tol010_art": repro_tol010_art,
+        "repro_tol050_art": repro_tol050_art,
+        "repro_metric_art": repro_metric_art,
+        "filter_to_attempt_art": filter_to_attempt_art,
+        "attempted_to_repro_art": attempted_to_repro_art,
+        "attempted_to_repro_tol001_art": attempted_to_repro_tol001_art,
+        "attempted_to_repro_tol010_art": attempted_to_repro_tol010_art,
+        "attempted_to_repro_tol050_art": attempted_to_repro_tol050_art,
+        "end_to_end_art": end_to_end_art,
+        "end_to_end_tol001_art": end_to_end_tol001_art,
+        "end_to_end_tol010_art": end_to_end_tol010_art,
+        "end_to_end_tol050_art": end_to_end_tol050_art,
+    }
 
+
+def _write_scope_tables(
+    *,
+    failed_rows: list[dict[str, Any]],
+    failure_reason_rows: list[dict[str, Any]],
+    benchmark_summary: list[dict[str, Any]],
+    run_inventory: list[dict[str, Any]],
+    repro_inventory: list[dict[str, Any]],
+    off_story_summary: dict[str, Any],
+    run_multiplicity_summary: dict[str, Any],
+    prioritized_breakdowns_summary: dict[str, Any],
+    generated_utc: str,
+    scope_title: str,
+    index_fpath: Path,
+    level_001: Path,
+    level_001_machine: Path,
+    level_001_static: Path,
+    level_002: Path,
+    level_002_machine: Path,
+    level_002_static: Path,
+) -> dict[str, Any]:
     failure_table = _write_table_artifacts(failed_rows, level_001 / "failure_runs", machine_dpath=level_001_machine, static_dpath=level_001_static)
     failure_reason_table = _write_table_artifacts(failure_reason_rows, level_001 / "failure_reasons", machine_dpath=level_001_machine, static_dpath=level_001_static)
     benchmark_table = _write_table_artifacts(benchmark_summary, level_002 / "benchmark_summary", machine_dpath=level_002_machine, static_dpath=level_002_static)
@@ -816,7 +794,35 @@ def _render_scope_summary(
         summary=prioritized_breakdowns_summary,
         repair_results=prioritized_example_repairs,
     )
+    return {
+        "failure_table": failure_table,
+        "failure_reason_table": failure_reason_table,
+        "benchmark_table": benchmark_table,
+        "run_inventory_table": run_inventory_table,
+        "repro_table": repro_table,
+        "off_story_table": off_story_table,
+        "run_multiplicity_table": run_multiplicity_table,
+        "prioritized_breakdowns_table": prioritized_breakdowns_table,
+        "prioritized_example_repairs": prioritized_example_repairs,
+        "prioritized_examples_tree": prioritized_examples_tree,
+    }
 
+
+def _render_scope_plots(
+    *,
+    include_visuals: bool,
+    benchmark_status_rows: list[dict[str, Any]],
+    repro_bucket_rows: list[dict[str, Any]],
+    repro_rows: list[dict[str, Any]],
+    enriched_rows: list[dict[str, Any]],
+    failed_rows: list[dict[str, Any]],
+    filter_selection_by_model_rows: list[dict[str, Any]],
+    scope_title: str,
+    level_001: Path,
+    level_001_machine: Path,
+    level_001_interactive: Path,
+    level_001_static: Path,
+) -> dict[str, dict[str, Any]]:
     if include_visuals:
         benchmark_plot = _write_plotly_bar(
             rows=benchmark_status_rows,
@@ -904,6 +910,333 @@ def _render_scope_summary(
         coverage_matrix_plot = {"json": None, "html": None, "jpg": None, "plotly_error": None}
         failure_taxonomy_plot = {"json": None, "html": None, "jpg": None, "plotly_error": None}
         filter_selection_by_model_plot = {"json": None, "html": None, "jpg": None, "png": None, "plotly_error": None}
+    return {
+        "benchmark_plot": benchmark_plot,
+        "repro_bucket_plot": repro_bucket_plot,
+        "agreement_curve_plot": agreement_curve_plot,
+        "per_metric_agreement_plot": per_metric_agreement_plot,
+        "coverage_matrix_plot": coverage_matrix_plot,
+        "failure_taxonomy_plot": failure_taxonomy_plot,
+        "filter_selection_by_model_plot": filter_selection_by_model_plot,
+    }
+
+
+def _write_scope_scripts(
+    *,
+    top_level_summary_root: Path | None,
+    level_001: Path,
+    scope_kind: str,
+    scope_value: str | None,
+    index_fpath: Path,
+    filter_inventory_json: Path | None,
+    reproduce_extra_args: str,
+) -> None:
+    if top_level_summary_root is None:
+        # Top-level scope: emit real scripts that invoke the build CLI
+        # with --experiment-name (or no scope arg for all_results).
+        reproduce_sh_fpath = level_001 / "reproduce.sh"
+        _write_reproduce_sh(
+            reproduce_sh_fpath,
+            scope_kind,
+            scope_value,
+            index_path=index_fpath,
+            filter_inventory_json=filter_inventory_json,
+            extra_args=reproduce_extra_args,
+        )
+        redraw_plots_fpath = level_001 / "redraw_plots.sh"
+        _write_redraw_plots_sh(
+            redraw_plots_fpath,
+            scope_kind,
+            scope_value,
+            index_path=index_fpath,
+            filter_inventory_json=filter_inventory_json,
+        )
+    else:
+        # Breakdown sub-render: there is no CLI flag for "scope by
+        # benchmark / model / machine / suite", so we cannot emit a
+        # standalone build invocation. Stub scripts delegate to the
+        # top-level scripts; running them rebuilds the whole report
+        # (which regenerates this slice as a side effect — the only
+        # correct refresh for a derived view).
+        top_reproduce = top_level_summary_root / "reproduce.sh"
+        top_redraw = top_level_summary_root / "redraw_plots.sh"
+        _write_delegating_script(
+            level_001 / "reproduce.sh",
+            target_script=top_reproduce,
+            purpose=(
+                f"Delegating reproduce.sh for breakdown {scope_kind}={scope_value!r}."
+            ),
+        )
+        _write_delegating_script(
+            level_001 / "redraw_plots.sh",
+            target_script=top_redraw,
+            purpose=(
+                f"Delegating redraw_plots.sh for breakdown {scope_kind}={scope_value!r}."
+            ),
+        )
+
+
+def _write_story_index(
+    *,
+    level_001: Path,
+    generated_utc: str,
+    scope_title: str,
+) -> None:
+    story_index_lines = [
+        "Story Index — Canonical Reading Order",
+        "======================================",
+        f"Generated: {generated_utc}",
+        f"Scope: {scope_title}",
+        "",
+        "The reproducibility story has two stages plus an executive summary",
+        "and a detail view. Read in order:",
+        "",
+        "s01 — Executive Operational Summary",
+        "  All attempted runs: benchmark group → lifecycle status → outcome/failure reason.",
+        "  File: sankey_s01_operational.{html,jpg,txt}",
+        "",
+        "Stage A — Universe → Scope (filter funnel)",
+        "  How the source universe gets narrowed to the in-scope set. Every filter gate",
+        "  (structural, model metadata, open-weight, tag/modality, deployment, size,",
+        "  selection) is a stage; terminal nodes are 'selected' (in scope) or",
+        "  'excluded: <reason>'. This is the context-establishment view.",
+        "  File: sankey_a_universe_to_scope.{html,jpg,txt}",
+        "",
+        "Stage B — Scope → Attempt → Execution → Analysis → Reproduction",
+        "  Of the in-scope rows, how many we attempted, completed, analyzed, and at",
+        "  what agreement bucket they landed (abs_tol=0). This is the coverage view.",
+        "  File: sankey_b_scope_to_analyzed.{html,jpg,txt}",
+        "  Tolerance variants live under alt_tolerances/ as",
+        "  sankey_b_scope_to_analyzed_tol{001,010,050}.",
+        "",
+        "s05 — Detailed Reproducibility Breakdown",
+        "  Group → local repeatability → official-vs-local agreement → diagnosis.",
+        "  File: sankey_s05_reproducibility.{html,jpg,txt}",
+        "",
+        "Supplementary",
+        "  prioritized_breakdowns.txt: triage-first shortlist with direct paths",
+        "  prioritized_examples/: filesystem-first symlink tree for shortlisted examples",
+        "  off_story_summary.txt: off-story local extensions with stage counts",
+        "  run_multiplicity_summary.txt: logical-result identity, repeats, machines",
+        "  sankey_repro_by_metric: per-metric drift (max |official - local| across runs)",
+        "  alt_tolerances/: tolerance sweep variants for Stage B and s05",
+        "  agreement_curve.html: agreement-rate vs tolerance curve",
+        "  coverage_matrix.html: model × benchmark reproducibility heat-map",
+    ]
+    story_index_fpath = level_001 / "story_index.txt"
+    _write_text(story_index_lines, story_index_fpath)
+
+
+@profile
+def _render_scope_summary(
+    *,
+    scope_kind: str,
+    scope_value: str | None,
+    scope_rows: list[dict[str, Any]],
+    repro_rows: list[dict[str, Any]],
+    filter_inventory_rows: list[dict[str, Any]],
+    filter_inventory_json: Path | None,
+    index_fpath: Path,
+    summary_root: Path,
+    breakdown_dims: list[str],
+    max_items_per_breakdown: int,
+    include_visuals: bool = True,
+    top_level_summary_root: Path | None = None,
+    unreadable_reports: list[str] | None = None,
+    reproduce_extra_args: str = "",
+) -> None:
+    """Render a summary tree under ``summary_root``.
+
+    When ``top_level_summary_root`` is None (default), this is the
+    canonical/top-level call: scope is either ``all_results`` or a real
+    ``--experiment-name`` value, so the emitted ``reproduce.sh`` /
+    ``redraw_plots.sh`` invoke ``build_reports_summary`` with that scope
+    directly.
+
+    When ``top_level_summary_root`` is provided, this is a recursive
+    breakdown render (e.g. ``by_benchmark/boolq/``). The scope (e.g.
+    ``benchmark`` / ``boolq``) is *not* a filter the CLI knows how to
+    honor — there is no ``--benchmark`` flag — so the breakdown's
+    ``reproduce.sh`` / ``redraw_plots.sh`` are emitted as **delegating
+    stubs** that exec the top-level scripts. Running the breakdown's
+    script then regenerates the entire report (including this
+    breakdown's slice) which is the only correct refresh for a
+    derived view.
+    """
+    if not scope_rows:
+        return
+
+    generated_utc = datetime_mod.datetime.now(datetime_mod.UTC).strftime("%Y%m%dT%H%M%SZ")
+    summary_root.mkdir(parents=True, exist_ok=True)
+    level_001 = summary_root / "level_001"
+    level_002 = summary_root / "level_002"
+    level_001.mkdir(parents=True, exist_ok=True)
+    level_002.mkdir(parents=True, exist_ok=True)
+    level_001_machine = level_001 / "machine"
+    level_001_interactive = level_001 / "interactive"
+    level_001_static = level_001 / "static"
+    level_002_machine = level_002 / "machine"
+    level_002_static = level_002 / "static"
+    for d in [level_001_machine, level_001_interactive, level_001_static, level_002_machine, level_002_static]:
+        d.mkdir(parents=True, exist_ok=True)
+
+    alt_tol_dpath = level_001 / "alt_tolerances"
+    alt_tol_machine = alt_tol_dpath / "machine"
+    alt_tol_interactive = alt_tol_dpath / "interactive"
+    alt_tol_static = alt_tol_dpath / "static"
+    for d in [alt_tol_machine, alt_tol_interactive, alt_tol_static]:
+        d.mkdir(parents=True, exist_ok=True)
+
+    enriched_rows, failed_rows, repro_keyed = _build_enriched_scope_rows(
+        scope_rows=scope_rows,
+        repro_rows=repro_rows,
+        filter_inventory_rows=filter_inventory_rows,
+    )
+
+    n_total = len(enriched_rows)
+    n_completed = sum(1 for row in enriched_rows if row.get("completed_with_run_artifacts"))
+    n_failed = n_total - n_completed
+    n_analyzed = len(repro_rows)
+
+    failure_counts = Counter(row.get("failure_reason") or "unknown_failure" for row in failed_rows)
+    failure_reason_rows = [
+        {"failure_reason": reason, "count": count, "share_of_failed": (count / n_failed) if n_failed else None}
+        for reason, count in failure_counts.most_common()
+    ]
+    repro_bucket_counts = Counter(row.get("official_instance_agree_bucket") or "not_analyzed" for row in repro_rows)
+    repro_bucket_rows = [
+        {
+            "official_instance_agree_bucket": bucket,
+            "count": count,
+            "share_of_analyzed": (count / n_analyzed) if n_analyzed else None,
+        }
+        for bucket, count in repro_bucket_counts.most_common()
+    ]
+    filter_selection_by_model_rows = _build_filter_selection_by_model_rows(filter_inventory_rows)
+
+    benchmark_status_rows = _build_breakdown_rows(enriched_rows, group_key="benchmark", repro_keyed=repro_keyed)
+    benchmark_summary = _summarize_by_dimension(enriched_rows, dimension="benchmark", repro_keyed=repro_keyed)
+    run_inventory = enriched_rows
+    repro_inventory = repro_rows
+    off_story_summary = _build_off_story_summary(
+        filter_inventory_rows=filter_inventory_rows,
+        scope_rows=scope_rows,
+        repro_rows=repro_rows,
+    )
+    run_multiplicity_summary = _build_run_multiplicity_summary(
+        filter_inventory_rows=filter_inventory_rows,
+        scope_rows=scope_rows,
+        repro_rows=repro_rows,
+    )
+    prioritized_breakdowns_summary = _build_prioritized_breakdown_summary(
+        enriched_rows=enriched_rows,
+        repro_rows=repro_rows,
+        run_multiplicity_summary=run_multiplicity_summary,
+        breakdown_dims=breakdown_dims,
+        level_002=level_002,
+    )
+    if breakdown_dims:
+        _render_breakdown_scopes(
+            enriched_rows=enriched_rows,
+            all_repro_rows=repro_rows,
+            filter_inventory_rows=filter_inventory_rows,
+            filter_inventory_json=filter_inventory_json,
+            index_fpath=index_fpath,
+            breakdown_dims=breakdown_dims,
+            level_002=level_002,
+            max_items_per_breakdown=max_items_per_breakdown,
+            include_values_by_dim=prioritized_breakdowns_summary.get("include_values_by_dim"),
+        )
+
+    _sankey_rows = _build_scope_sankey_rows(
+        enriched_rows=enriched_rows,
+        repro_rows=repro_rows,
+        filter_inventory_rows=filter_inventory_rows,
+        scope_rows=scope_rows,
+    )
+
+    scope_title = _scope_label(scope_kind, scope_value)
+    _sankey_arts = _render_scope_sankeys(
+        include_visuals=include_visuals,
+        sankey_rows=_sankey_rows,
+        level_001=level_001,
+        level_001_machine=level_001_machine,
+        level_001_interactive=level_001_interactive,
+        level_001_static=level_001_static,
+        alt_tol_dpath=alt_tol_dpath,
+        alt_tol_machine=alt_tol_machine,
+        alt_tol_interactive=alt_tol_interactive,
+        alt_tol_static=alt_tol_static,
+        generated_utc=generated_utc,
+        scope_title=scope_title,
+    )
+    operational_art = _sankey_arts["operational_art"]
+    repro_art = _sankey_arts["repro_art"]
+    repro_tol001_art = _sankey_arts["repro_tol001_art"]
+    repro_tol010_art = _sankey_arts["repro_tol010_art"]
+    repro_tol050_art = _sankey_arts["repro_tol050_art"]
+    repro_metric_art = _sankey_arts["repro_metric_art"]
+    filter_to_attempt_art = _sankey_arts["filter_to_attempt_art"]
+    attempted_to_repro_art = _sankey_arts["attempted_to_repro_art"]
+    attempted_to_repro_tol001_art = _sankey_arts["attempted_to_repro_tol001_art"]
+    attempted_to_repro_tol010_art = _sankey_arts["attempted_to_repro_tol010_art"]
+    attempted_to_repro_tol050_art = _sankey_arts["attempted_to_repro_tol050_art"]
+    end_to_end_art = _sankey_arts["end_to_end_art"]
+    end_to_end_tol001_art = _sankey_arts["end_to_end_tol001_art"]
+    end_to_end_tol010_art = _sankey_arts["end_to_end_tol010_art"]
+    end_to_end_tol050_art = _sankey_arts["end_to_end_tol050_art"]
+
+    _scope_tables = _write_scope_tables(
+        failed_rows=failed_rows,
+        failure_reason_rows=failure_reason_rows,
+        benchmark_summary=benchmark_summary,
+        run_inventory=run_inventory,
+        repro_inventory=repro_inventory,
+        off_story_summary=off_story_summary,
+        run_multiplicity_summary=run_multiplicity_summary,
+        prioritized_breakdowns_summary=prioritized_breakdowns_summary,
+        generated_utc=generated_utc,
+        scope_title=scope_title,
+        index_fpath=index_fpath,
+        level_001=level_001,
+        level_001_machine=level_001_machine,
+        level_001_static=level_001_static,
+        level_002=level_002,
+        level_002_machine=level_002_machine,
+        level_002_static=level_002_static,
+    )
+    failure_table = _scope_tables["failure_table"]
+    failure_reason_table = _scope_tables["failure_reason_table"]
+    benchmark_table = _scope_tables["benchmark_table"]
+    run_inventory_table = _scope_tables["run_inventory_table"]
+    repro_table = _scope_tables["repro_table"]
+    off_story_table = _scope_tables["off_story_table"]
+    run_multiplicity_table = _scope_tables["run_multiplicity_table"]
+    prioritized_breakdowns_table = _scope_tables["prioritized_breakdowns_table"]
+    prioritized_example_repairs = _scope_tables["prioritized_example_repairs"]
+    prioritized_examples_tree = _scope_tables["prioritized_examples_tree"]
+
+    _scope_plots = _render_scope_plots(
+        include_visuals=include_visuals,
+        benchmark_status_rows=benchmark_status_rows,
+        repro_bucket_rows=repro_bucket_rows,
+        repro_rows=repro_rows,
+        enriched_rows=enriched_rows,
+        failed_rows=failed_rows,
+        filter_selection_by_model_rows=filter_selection_by_model_rows,
+        scope_title=scope_title,
+        level_001=level_001,
+        level_001_machine=level_001_machine,
+        level_001_interactive=level_001_interactive,
+        level_001_static=level_001_static,
+    )
+    benchmark_plot = _scope_plots["benchmark_plot"]
+    repro_bucket_plot = _scope_plots["repro_bucket_plot"]
+    agreement_curve_plot = _scope_plots["agreement_curve_plot"]
+    per_metric_agreement_plot = _scope_plots["per_metric_agreement_plot"]
+    coverage_matrix_plot = _scope_plots["coverage_matrix_plot"]
+    failure_taxonomy_plot = _scope_plots["failure_taxonomy_plot"]
+    filter_selection_by_model_plot = _scope_plots["filter_selection_by_model_plot"]
 
     level_001_readme = _build_high_level_readme(
         scope_title=scope_title,
@@ -1053,49 +1386,15 @@ def _render_scope_summary(
     manifest_fpath = level_001_machine / "summary_manifest.json"
     _write_json(manifest, manifest_fpath)
 
-    if top_level_summary_root is None:
-        # Top-level scope: emit real scripts that invoke the build CLI
-        # with --experiment-name (or no scope arg for all_results).
-        reproduce_sh_fpath = level_001 / "reproduce.sh"
-        _write_reproduce_sh(
-            reproduce_sh_fpath,
-            scope_kind,
-            scope_value,
-            index_path=index_fpath,
-            filter_inventory_json=filter_inventory_json,
-            extra_args=reproduce_extra_args,
-        )
-        redraw_plots_fpath = level_001 / "redraw_plots.sh"
-        _write_redraw_plots_sh(
-            redraw_plots_fpath,
-            scope_kind,
-            scope_value,
-            index_path=index_fpath,
-            filter_inventory_json=filter_inventory_json,
-        )
-    else:
-        # Breakdown sub-render: there is no CLI flag for "scope by
-        # benchmark / model / machine / suite", so we cannot emit a
-        # standalone build invocation. Stub scripts delegate to the
-        # top-level scripts; running them rebuilds the whole report
-        # (which regenerates this slice as a side effect — the only
-        # correct refresh for a derived view).
-        top_reproduce = top_level_summary_root / "reproduce.sh"
-        top_redraw = top_level_summary_root / "redraw_plots.sh"
-        _write_delegating_script(
-            level_001 / "reproduce.sh",
-            target_script=top_reproduce,
-            purpose=(
-                f"Delegating reproduce.sh for breakdown {scope_kind}={scope_value!r}."
-            ),
-        )
-        _write_delegating_script(
-            level_001 / "redraw_plots.sh",
-            target_script=top_redraw,
-            purpose=(
-                f"Delegating redraw_plots.sh for breakdown {scope_kind}={scope_value!r}."
-            ),
-        )
+    _write_scope_scripts(
+        top_level_summary_root=top_level_summary_root,
+        level_001=level_001,
+        scope_kind=scope_kind,
+        scope_value=scope_value,
+        index_fpath=index_fpath,
+        filter_inventory_json=filter_inventory_json,
+        reproduce_extra_args=reproduce_extra_args,
+    )
 
     symlink_to(level_002, level_001 / "next_level")
     symlink_to(level_001, level_002 / "up_level")
@@ -1116,49 +1415,11 @@ def _render_scope_summary(
         if analysis_dpath is not None:
             symlink_to(analysis_dpath, level_002 / "experiment-analysis")
 
-    story_index_lines = [
-        "Story Index — Canonical Reading Order",
-        "======================================",
-        f"Generated: {generated_utc}",
-        f"Scope: {scope_title}",
-        "",
-        "The reproducibility story has two stages plus an executive summary",
-        "and a detail view. Read in order:",
-        "",
-        "s01 — Executive Operational Summary",
-        "  All attempted runs: benchmark group → lifecycle status → outcome/failure reason.",
-        "  File: sankey_s01_operational.{html,jpg,txt}",
-        "",
-        "Stage A — Universe → Scope (filter funnel)",
-        "  How the source universe gets narrowed to the in-scope set. Every filter gate",
-        "  (structural, model metadata, open-weight, tag/modality, deployment, size,",
-        "  selection) is a stage; terminal nodes are 'selected' (in scope) or",
-        "  'excluded: <reason>'. This is the context-establishment view.",
-        "  File: sankey_a_universe_to_scope.{html,jpg,txt}",
-        "",
-        "Stage B — Scope → Attempt → Execution → Analysis → Reproduction",
-        "  Of the in-scope rows, how many we attempted, completed, analyzed, and at",
-        "  what agreement bucket they landed (abs_tol=0). This is the coverage view.",
-        "  File: sankey_b_scope_to_analyzed.{html,jpg,txt}",
-        "  Tolerance variants live under alt_tolerances/ as",
-        "  sankey_b_scope_to_analyzed_tol{001,010,050}.",
-        "",
-        "s05 — Detailed Reproducibility Breakdown",
-        "  Group → local repeatability → official-vs-local agreement → diagnosis.",
-        "  File: sankey_s05_reproducibility.{html,jpg,txt}",
-        "",
-        "Supplementary",
-        "  prioritized_breakdowns.txt: triage-first shortlist with direct paths",
-        "  prioritized_examples/: filesystem-first symlink tree for shortlisted examples",
-        "  off_story_summary.txt: off-story local extensions with stage counts",
-        "  run_multiplicity_summary.txt: logical-result identity, repeats, machines",
-        "  sankey_repro_by_metric: per-metric drift (max |official - local| across runs)",
-        "  alt_tolerances/: tolerance sweep variants for Stage B and s05",
-        "  agreement_curve.html: agreement-rate vs tolerance curve",
-        "  coverage_matrix.html: model × benchmark reproducibility heat-map",
-    ]
-    story_index_fpath = level_001 / "story_index.txt"
-    _write_text(story_index_lines, story_index_fpath)
+    _write_story_index(
+        level_001=level_001,
+        generated_utc=generated_utc,
+        scope_title=scope_title,
+    )
 
     _write_scope_level_aliases(level_001, level_002, summary_root)
 

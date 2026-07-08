@@ -780,12 +780,11 @@ def main(argv: list[str] | None = None) -> None:
                             "stats_coverage_by_name_count": summary.get(
                                 "stats_coverage_by_name_count", None
                             ),
-                            "value_agreement": summary.get(
-                                "value_agreement", None
-                            ),
-                            "instance_value_agreement": summary.get(
-                                "instance_value_agreement", None
-                            ),
+                            # R-2 (2026-07-06): value/instance agreement were
+                            # retired from summary_dict; this batch report keeps
+                            # the semantic diagnosis + coverage, which is all it
+                            # consumed downstream. Per-metric agreement lives in
+                            # the core_metric_report path (NormalizedDiff).
                         }
                     )
                 except Exception as ex:

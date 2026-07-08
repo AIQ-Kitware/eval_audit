@@ -1,8 +1,8 @@
 """Tests for the phi-2 e2e from-spec migration.
 
 Covers the exporter-side wiring of
-``docs/planning/e2e-from-run-spec-migration-plan.md`` as amended by
-``docs/planning/from-spec-deployment-rewrite-plan.md``: the ``_manifest_doc``
+``docs/historical/planning/e2e-from-run-spec-migration-plan.md`` as amended by
+``docs/historical/planning/from-spec-deployment-rewrite-plan.md``: the ``_manifest_doc``
 gating under ``--from-spec`` (Change 2), the preset wiring (comparable carries it,
 the incomparable control deliberately does not), the deployment rewrite — the
 bundle keeps its NATIVE local name and the generated manifest emits that name as

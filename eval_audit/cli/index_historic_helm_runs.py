@@ -78,7 +78,7 @@ from eval_audit.model_registry import local_model_registry_by_name
 
 # --- compat re-exports -------------------------------------------------
 # Stage 1 library logic moved to eval_audit.indexing.* on 2026-06-11
-# (Phase 2 of docs/planning/repo-refactor-plan.md). filter_analysis and
+# (Phase 2 of docs/historical/planning/repo-refactor-plan.md). filter_analysis and
 # the index/filter tests import these names from this module; keep
 # re-exporting them.
 from eval_audit.indexing.historic_filtering import (  # noqa: F401
@@ -340,14 +340,13 @@ class CompileHelmReproListConfig(scfg.DataConfig):
             })
         # logger.info(f'chosen_rows = {ub.urepr(chosen_rows, nl=1)}')
 
-        if 1:
-            # Show filtered histograms
-            scenario_histo = ub.dict_hist([r['scenario_class'] for r in chosen_rows])
-            model_histo = ub.dict_hist([r['model'] for r in chosen_rows])
-            scenario_histo = ub.udict.sorted_values(scenario_histo)
-            model_histo = ub.udict.sorted_values(model_histo)
-            logger.info(f'scenario_histo = {ub.urepr(scenario_histo, nl=1)}')
-            logger.info(f'model_histo = {ub.urepr(model_histo, nl=1)}')
+        # Show filtered histograms
+        scenario_histo = ub.dict_hist([r['scenario_class'] for r in chosen_rows])
+        model_histo = ub.dict_hist([r['model'] for r in chosen_rows])
+        scenario_histo = ub.udict.sorted_values(scenario_histo)
+        model_histo = ub.udict.sorted_values(model_histo)
+        logger.info(f'scenario_histo = {ub.urepr(scenario_histo, nl=1)}')
+        logger.info(f'model_histo = {ub.urepr(model_histo, nl=1)}')
 
         # Generate filter-step report if requested
         inventory_rows = None
