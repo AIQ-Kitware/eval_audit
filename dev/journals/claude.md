@@ -64,3 +64,64 @@ consolidation, `_MsgspecRunView`. The branch is unmerged; merge with
 `--no-ff` per repo convention. Pre-R-2 report stores keep the old pair_report
 semantics — regenerate before citing (same caveat class as the olmo-models
 store note).
+
+## 2026-07-08 15:53:29 -0400
+
+**Model/config:** claude-opus-4-8[1m] (Claude Code, VSCode extension harness).
+
+**User intent:** Add a new plot to the experiment reporting — a variant of
+the reproducibility heatmap that, instead of instance-level agreement,
+shows the difference between the *reproduced* (local) and *official*
+(public) **aggregate** scores, per core metric. Color = the score
+difference; each cell annotated with both the public and the local score.
+
+**What I built.** A per-core-metric aggregate-score-difference heatmap,
+plumbed through the existing `eee_only_heatmap` surface behind a new
+`--aggregate-diff` flag:
+
+- `eee_heatmap_data._collect_aggregate_diff_cells_per_metric` — resolves
+  `(model, benchmark)` from each `core_metric_report.json` the same way the
+  agreement collectors do, then reads the **sibling
+  `core_runlevel_table.csv`** (`left_mean`=official, `right_mean`=local)
+  that `core_metrics` already writes next to every report. Filters to
+  `official_vs_local` core rows, drops bookkeeping metrics by default, and
+  micro-averages public/local across contributing pairs. Returns
+  `{official, local, diff=local−official, abs_diff, n, status}`.
+- `eee_heatmap_render._render_diff_heatmap` — diverging Wong blue↔white↔
+  orange colormap on a **symmetric `Normalize(-vmax, +vmax)`** so 0 always
+  reads as the white "no drift" midpoint; cells annotated `P <public>` /
+  `L <local>`. Plus `_render_aggregate_diff_heatmaps` (one figure per
+  metric) and `_render_aggregate_diff_text_table`.
+
+**Key design decision — data source.** The signed per-metric aggregate
+means are *not* serialized into `core_metric_report.json`
+(`run_level_summary()` only emits abs_delta quantiles). Two options:
+(a) add signed means to the JSON and re-render every packet, or (b) read
+the run-level CSV that's already written and aliased next to the report.
+Chose (b): it works on **existing** outputs with no re-render, it's the
+canonical run-level table (`_write_comparison_runlevel_table`), and it's
+reliably co-located (`_write_latest_alias` → `report_dpath`). The only
+cost is a second artifact read; the collector skips reports whose CSV is
+absent (only happens on `--plots-only` re-renders).
+
+**Reused vs. new.** Deliberately wrote a separate `_render_diff_heatmap`
+rather than parametrizing the well-tested `_render_heatmap` — the color
+semantics (diverging/signed vs. sequential/ratio) and annotation (two
+scores vs. one percentage) differ enough that overloading it would muddy
+both. Figure sizing / despine / transpose logic mirror the original so the
+two heatmaps stay visually coherent.
+
+**Verified.** Compiles; `tests/test_eee_only_demo.py` (12 tests, incl. a
+new `test_aggregate_diff_collector_reads_runlevel_scores`) green under
+`--run-slow`. Rendered both default and `--transpose` layouts against the
+demo fixture — imdb/m1 (public 1.0 → local 0.0) shows deep blue with
+`P 1 / L 0`; arc_easy reproduces exactly (white, diff 0). Committed as
+545357e.
+
+**Next steps / open questions.** (1) The aggregate-diff plot is currently
+only exposed on the standalone `eee_only_heatmap` CLI, not auto-emitted by
+`build_reports_summary`'s scope plots — if the paper wants it in the
+aggregate roll-up, wire `--aggregate-diff` into the summary render path.
+(2) Cross-metric comparability: each per-metric plot auto-scales `vmax` to
+its own max |diff|; set `EVAL_AUDIT_DIFF_HEATMAP_VMAX` to pin a shared
+scale across metrics when comparing them side by side.
