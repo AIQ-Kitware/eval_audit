@@ -322,3 +322,28 @@ def test_aggregate_summary_emits_score_diff_heatmap(demo_output: Path) -> None:
     assert diverged["official"] == 1.0
     assert diverged["local"] == 0.0
     assert diverged["diff"] == -1.0
+
+
+def test_aggregate_summary_emits_headline_score_diff(demo_output: Path) -> None:
+    """The aggregate summary must also emit the holistic headline-metric
+    diff heatmap (one metric per benchmark, all model × benchmark pairs in
+    a single figure)."""
+    summary_root = demo_output / "aggregate-summary" / "all-results"
+    if not summary_root.exists():
+        pytest.skip("aggregate summary not built")
+    diff_dir = summary_root / "level_001" / "aggregate_score_diff"
+    assert (diff_dir / "aggregate_score_diff_headline.png").is_file()
+    assert (diff_dir / "aggregate_score_diff_headline.txt").is_file()
+    payload = json.loads((diff_dir / "aggregate_score_diff_headline.json").read_text())
+
+    # Each benchmark collapses to one metric; imdb's headline is
+    # quasi_exact_match (HELM main_name), truthful_qa's is exact_match.
+    bm = payload["benchmark_metric"]
+    assert bm.get("imdb") == "quasi_exact_match", bm
+    assert bm.get("truthful_qa") == "exact_match", bm
+
+    # One cell per (model, benchmark) — no metric multiplicity.
+    cells = {(c["model"], c["benchmark"]): c for c in payload["cells"]}
+    assert cells[("toy/m1-small", "imdb")]["diff"] == -1.0
+    # Exactly 9 holistic cells (3 models × 3 benchmarks).
+    assert len(payload["cells"]) == 9, len(payload["cells"])

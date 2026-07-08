@@ -7,19 +7,25 @@ Split out of ``eval_audit.reports.eee_only_heatmap`` on 2026-06-11
 function bodies are unchanged.
 """
 from __future__ import annotations
+import json
 import os
 import re
 from pathlib import Path
 from typing import Any
 import safer
 from loguru import logger
+from eval_audit.infra.fs_publish import write_text_atomic
 from eval_audit.infra.logging import rich_link
 from eval_audit.infra.report_layout import (
     portable_repo_root_lines,
     write_reproduce_script,
 )
 from eval_audit.infra.profiling import profile
-from eval_audit.reports.eee_heatmap_data import _BENCHMARK_DISPLAY, _MODEL_DISPLAY
+from eval_audit.reports.eee_heatmap_data import (
+    _BENCHMARK_DISPLAY,
+    _MODEL_DISPLAY,
+    _collect_headline_diff_cells,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -665,8 +671,9 @@ def _render_diff_heatmap(
     out_filename: str = "aggregate_score_diff_heatmap.png",
     subtitle: str | None = None,
     transpose: bool = False,
+    benchmark_metric: dict[str, str] | None = None,
 ) -> Path:
-    """Render an aggregate-score-difference heatmap for a single metric.
+    """Render an aggregate-score-difference heatmap.
 
     Sibling of :func:`_render_heatmap`, but the cell encoding is entirely
     different:
@@ -680,12 +687,20 @@ def _render_diff_heatmap(
     * **Annotation** is the two actual aggregate scores: ``P`` = public
       (official) on top, ``L`` = local (reproduced) below.
 
-    ``cells`` is keyed ``(model, benchmark)`` and already filtered to one
-    metric (the per-metric wrapper does that). Each present cell carries
-    ``official`` / ``local`` / ``diff`` floats. ``transpose`` matches
+    ``cells`` is keyed ``(model, benchmark)``. In the per-metric wrapper
+    every cell is the same metric; in the holistic "headline" view each
+    benchmark's cell is *its own* headline metric — pass
+    ``benchmark_metric`` (benchmark → metric name) so each benchmark's
+    axis tick names the metric it used. ``transpose`` matches
     :func:`_render_heatmap`: rows=benchmarks/cols=models by default, or
     rows=models/cols=benchmarks when True.
     """
+    def _bench_label(bench: str) -> str:
+        base = _BENCHMARK_DISPLAY.get(bench, bench)
+        if benchmark_metric and bench in benchmark_metric:
+            return f"{base}\n({benchmark_metric[bench]})"
+        return base
+
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -797,7 +812,7 @@ def _render_diff_heatmap(
     if transpose:
         ax.set_xticks(range(n_bench))
         ax.set_xticklabels(
-            [_BENCHMARK_DISPLAY.get(b, b) for b in benchmarks],
+            [_bench_label(b) for b in benchmarks],
             fontsize=10, ha="right", rotation=35,
         )
         ax.set_yticks(range(n_models))
@@ -817,7 +832,7 @@ def _render_diff_heatmap(
         )
         ax.set_yticks(range(n_bench))
         ax.set_yticklabels(
-            [_BENCHMARK_DISPLAY.get(b, b) for b in benchmarks],
+            [_bench_label(b) for b in benchmarks],
             fontsize=10,
         )
         ax.set_xlabel("Model", fontsize=11)
@@ -993,6 +1008,134 @@ def _render_aggregate_diff_text_table(
     )
     lines.append("")
     return "\n".join(lines)
+
+
+def _render_headline_diff_text_table(
+    cells: dict[tuple[str, str], dict[str, Any]],
+    models: list[str],
+    benchmarks: list[str],
+    benchmark_metric: dict[str, str],
+) -> str:
+    """Plain-text companion to the holistic headline-metric diff heatmap.
+
+    One row per benchmark (labeled with the headline metric it used), one
+    column per model; each cell is ``public/local`` aggregate score.
+    """
+    lines: list[str] = [
+        "Headline aggregate score difference (one metric per benchmark)",
+        "Per benchmark: public aggregate score vs local reproduction, at the",
+        "benchmark's headline metric (HELM main_name; fallback if absent).",
+        "",
+        "Cell legend:",
+        "  0.82/0.79  public aggregate score / local (reproduced) score",
+        "  --         benchmark's headline metric not present for that model",
+        "",
+    ]
+    col_w = 16
+    label_w = 40
+    header = f"{'Benchmark (headline metric)':<{label_w}}" + "".join(
+        f"{_MODEL_DISPLAY.get(m, m)[:col_w]:>{col_w}}" for m in models
+    )
+    lines.append(header)
+    lines.append("-" * len(header))
+    for bench in benchmarks:
+        metric = benchmark_metric.get(bench, "?")
+        label = f"{_BENCHMARK_DISPLAY.get(bench, bench)} ({metric})"
+        row = f"{label[:label_w]:<{label_w}}"
+        for m in models:
+            cell = cells.get((m, bench))
+            if cell is None or cell.get("status") != "present":
+                row += f"{'--':>{col_w}}"
+            else:
+                marker = f"{cell['official']:.3g}/{cell['local']:.3g}"
+                row += f"{marker:>{col_w}}"
+        lines.append(row)
+    n_present = sum(1 for c in cells.values() if c.get("status") == "present")
+    lines.append("")
+    lines.append(
+        f"Coverage: {n_present} present "
+        f"(of {len(cells)} (model, benchmark) headline cells with data)"
+    )
+    lines.append("")
+    return "\n".join(lines)
+
+
+@profile
+def _render_headline_diff(
+    per_metric_cells: dict[tuple[str, str, str], dict[str, Any]],
+    models: list[str],
+    benchmarks: list[str],
+    title: str,
+    out_dir: Path,
+    *,
+    transpose: bool = False,
+    subtitle_override: str | None = None,
+) -> dict[str, Any]:
+    """Emit the holistic model × benchmark headline-metric diff heatmap.
+
+    Collapses the per-(model, benchmark, metric) diff cells to one headline
+    metric per benchmark (see
+    :func:`eval_audit.reports.eee_heatmap_data._collect_headline_diff_cells`)
+    and renders a single heatmap plus text/JSON sidecars, so every
+    model × benchmark pair is visible in one figure. Each benchmark's axis
+    tick names the metric it used. Returns
+    ``{"png": Path|None, "txt": Path|None, "json": Path|None}``.
+    """
+    cells, benchmark_metric = _collect_headline_diff_cells(per_metric_cells)
+    if not cells:
+        return {"png": None, "txt": None, "json": None}
+
+    benchmarks_present = [
+        b for b in benchmarks if any((m, b) in cells for m in models)
+    ]
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    text = _render_headline_diff_text_table(
+        cells, models, benchmarks_present, benchmark_metric,
+    )
+    txt_path = out_dir / "aggregate_score_diff_headline.txt"
+    write_text_atomic(txt_path, text)
+
+    json_rows = [
+        {
+            "model": m,
+            "benchmark": b,
+            "metric": benchmark_metric.get(b),
+            **cells[(m, b)],
+        }
+        for b in benchmarks_present
+        for m in models
+        if (m, b) in cells
+    ]
+    json_path = out_dir / "aggregate_score_diff_headline.json"
+    write_text_atomic(
+        json_path,
+        json.dumps(
+            {"benchmark_metric": benchmark_metric, "cells": json_rows},
+            indent=2,
+        )
+        + "\n",
+    )
+
+    if subtitle_override is not None:
+        subtitle = subtitle_override
+    else:
+        subtitle = (
+            "one headline metric per benchmark (named on each axis tick); "
+            "cell: P=public / L=local; color = local − public"
+        )
+    png_path = _render_diff_heatmap(
+        cells,
+        models,
+        benchmarks_present,
+        title,
+        out_dir,
+        out_filename="aggregate_score_diff_headline.png",
+        subtitle=subtitle,
+        transpose=transpose,
+        benchmark_metric=benchmark_metric,
+    )
+    return {"png": png_path, "txt": txt_path, "json": json_path}
 
 
 # ---------------------------------------------------------------------------

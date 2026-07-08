@@ -39,3 +39,30 @@ def test_unknown_bucket_falls_back_legibly() -> None:
     # An unforeseen key renders as spaced text, never raises.
     assert agreement_bucket_label("some_new_bucket") == "some new bucket"
     assert agreement_bucket_label(None) == "not analyzed"
+
+
+def test_headline_metric_selection() -> None:
+    """Headline metric = curated HELM main_name when present, else priority
+    fallback, else alphabetical."""
+    from eval_audit.reports.eee_heatmap_data import headline_metric_for_benchmark
+
+    # Curated: imdb -> quasi_exact_match (present).
+    assert headline_metric_for_benchmark(
+        "imdb", {"exact_match", "quasi_exact_match"}
+    ) == "quasi_exact_match"
+    # Curated: mmlu -> exact_match.
+    assert headline_metric_for_benchmark(
+        "mmlu", {"exact_match", "quasi_exact_match"}
+    ) == "exact_match"
+    # Curated metric absent -> priority fallback picks exact_match.
+    assert headline_metric_for_benchmark(
+        "imdb", {"exact_match", "f1_score"}
+    ) == "exact_match"
+    # Unknown benchmark -> priority fallback (exact_match leads).
+    assert headline_metric_for_benchmark(
+        "arc_easy", {"exact_match", "quasi_exact_match"}
+    ) == "exact_match"
+    # No priority match -> alphabetical.
+    assert headline_metric_for_benchmark("weird", {"zeta", "alpha"}) == "alpha"
+    # Empty -> None.
+    assert headline_metric_for_benchmark("imdb", set()) is None

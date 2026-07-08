@@ -154,6 +154,7 @@ from eval_audit.reports.eee_heatmap_data import (
 from eval_audit.reports.eee_heatmap_render import (
     _render_aggregate_diff_heatmaps,
     _render_aggregate_diff_text_table,
+    _render_headline_diff,
 )
 from eval_audit.reports.summary.publish import (  # noqa: F401
     _write_table_artifacts,
@@ -836,7 +837,9 @@ def _render_aggregate_score_diff(
     "error": str|None}``; a missing-matplotlib or empty-cells case is a
     soft no-op (the rest of the summary still renders).
     """
-    result: dict[str, Any] = {"png": [], "txt": None, "json": None, "error": None}
+    result: dict[str, Any] = {
+        "png": [], "txt": None, "json": None, "headline": None, "error": None,
+    }
 
     # Resolve each scope row to its core_metric_report.json. Prefer the
     # explicit ``report_json`` field; fall back to report_dir/<name>.
@@ -890,6 +893,14 @@ def _render_aggregate_score_diff(
             out_dir,
         )
         result["png"] = written
+        # Holistic top-level view: one headline metric per benchmark, so
+        # every model × benchmark pair is visible in a single figure.
+        headline = _render_headline_diff(
+            cells, models, benchmarks,
+            f"Headline Aggregate Score Drift (local − public): {scope_title}",
+            out_dir,
+        )
+        result["headline"] = headline
     except ImportError as exc:
         logger.warning(
             f"matplotlib not available ({exc}); "

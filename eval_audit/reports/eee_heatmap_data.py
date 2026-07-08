@@ -575,6 +575,141 @@ def _collect_aggregate_diff_cells_per_metric(
     )
 
 
+# ---------------------------------------------------------------------------
+# Headline-metric selection (one representative metric per benchmark)
+# ---------------------------------------------------------------------------
+
+# HELM's authoritative per-benchmark headline metric — the single number a
+# benchmark is summarized by on the leaderboard. Transcribed from the
+# vendored schema's ``run_groups[].environment.main_name``
+# (submodules/helm/src/helm/benchmark/static/schema_classic.yaml); the code
+# equivalent is each scenario's ``ScenarioMetadata.main_metric``. Keyed by
+# the benchmark family as it appears in a logical_run_key. Both spellings of
+# the (mis-spelled upstream) synthetic_reasoning_natural family are listed
+# so whichever the data uses resolves. Only used to *pick* which metric a
+# cell shows in the holistic view; if the named metric isn't actually
+# present in the data, ``headline_metric_for_benchmark`` falls back.
+HEADLINE_METRIC_BY_BENCHMARK: dict[str, str] = {
+    "boolq": "quasi_exact_match",
+    "civil_comments": "quasi_exact_match",
+    "entity_data_imputation": "quasi_exact_match",
+    "entity_matching": "quasi_exact_match",
+    "gsm": "exact_match_indicator",
+    "imdb": "quasi_exact_match",
+    "legal_support": "quasi_exact_match",
+    "legalbench": "quasi_exact_match",
+    "lsat_qa": "quasi_exact_match",
+    "mmlu": "exact_match",
+    "narrative_qa": "f1_score",
+    "narrativeqa": "f1_score",
+    "quac": "f1_score",
+    "raft": "quasi_exact_match",
+    "synthetic_reasoning": "quasi_exact_match",
+    "synthetic_reasoning_natural": "f1_set_match",
+    "sythetic_reasoning_natural": "f1_set_match",
+    "the_pile": "bits_per_byte",
+    "truthful_qa": "exact_match",
+    "twitter_aae": "bits_per_byte",
+    "wikifact": "quasi_exact_match",
+    "hellaswag": "exact_match",
+    "openbookqa": "exact_match",
+    "babi_qa": "quasi_exact_match",
+    "bbq": "quasi_exact_match",
+    "math_regular": "math_equiv",
+    "math_chain_of_thought": "math_equiv_chain_of_thought",
+    "code_humaneval": "pass",
+    "msmarco_regular": "RR@10",
+    "msmarco_trec": "NDCG@10",
+}
+
+# Fallback ordering when a benchmark isn't in the curated map (or its curated
+# metric isn't present in the data): pick the first of these that the cell
+# data actually carries. Ordered most- to least- "headline-like"; the
+# exact-match family leads because it is by far the most common HELM main
+# metric.
+_HEADLINE_METRIC_PRIORITY: tuple[str, ...] = (
+    "exact_match",
+    "quasi_exact_match",
+    "exact_match_indicator",
+    "prefix_exact_match",
+    "quasi_prefix_exact_match",
+    "f1_score",
+    "f1_set_match",
+    "exact_set_match",
+    "classification_macro_f1",
+    "classification_micro_f1",
+    "math_equiv",
+    "math_equiv_chain_of_thought",
+    "rouge_2",
+    "rouge_l",
+    "bleu_4",
+    "bits_per_byte",
+    "chain_of_thought_correctness",
+    "safety_score",
+)
+
+
+def headline_metric_for_benchmark(
+    benchmark: str,
+    available_metrics: set[str] | frozenset[str],
+) -> str | None:
+    """Choose the single headline metric to show for a benchmark.
+
+    Resolution order:
+
+    1. HELM's curated headline (:data:`HEADLINE_METRIC_BY_BENCHMARK`) **if**
+       that metric is actually present in ``available_metrics``.
+    2. otherwise the first :data:`_HEADLINE_METRIC_PRIORITY` entry present.
+    3. otherwise the alphabetically-first available metric.
+    4. ``None`` when no metric is available.
+
+    The fallback matters because EEE-only inputs and metric-name drift mean
+    the schema's exact ``main_name`` isn't always emitted; picking the best
+    available keeps the holistic cell populated, and the caller surfaces
+    which metric was actually used.
+    """
+    if not available_metrics:
+        return None
+    curated = HEADLINE_METRIC_BY_BENCHMARK.get(benchmark)
+    if curated and curated in available_metrics:
+        return curated
+    for metric in _HEADLINE_METRIC_PRIORITY:
+        if metric in available_metrics:
+            return metric
+    return sorted(available_metrics)[0]
+
+
+def _collect_headline_diff_cells(
+    per_metric_cells: dict[tuple[str, str, str], dict[str, Any]],
+) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[str, str]]:
+    """Collapse per-(model, benchmark, metric) diff cells to one metric per
+    benchmark for the holistic model × benchmark view.
+
+    For each benchmark the headline metric is chosen from the union of
+    metrics present across all models (so every model's cell in that
+    benchmark's row/column uses the *same* metric — the row stays
+    coherent). Returns ``(cells, benchmark_metric)`` where ``cells`` is
+    keyed ``(model, benchmark)`` (same shape ``_render_diff_heatmap``
+    consumes) and ``benchmark_metric`` maps each benchmark to the metric
+    that was chosen (for axis annotation).
+    """
+    metrics_by_benchmark: dict[str, set[str]] = defaultdict(set)
+    for (_model, benchmark, metric) in per_metric_cells:
+        metrics_by_benchmark[benchmark].add(metric)
+
+    benchmark_metric: dict[str, str] = {}
+    for benchmark, metrics in metrics_by_benchmark.items():
+        chosen = headline_metric_for_benchmark(benchmark, metrics)
+        if chosen is not None:
+            benchmark_metric[benchmark] = chosen
+
+    cells: dict[tuple[str, str], dict[str, Any]] = {}
+    for (model, benchmark, metric), cell in per_metric_cells.items():
+        if benchmark_metric.get(benchmark) == metric:
+            cells[(model, benchmark)] = cell
+    return cells, benchmark_metric
+
+
 def _order_aggregate_diff_axes(
     cells: dict[tuple[str, str, str], dict[str, Any]],
 ) -> tuple[list[str], list[str], list[str], list[tuple[str, str]]]:

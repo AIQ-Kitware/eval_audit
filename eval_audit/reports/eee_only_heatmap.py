@@ -79,6 +79,8 @@ from eval_audit.reports.eee_heatmap_render import (  # noqa: F401
     _render_diff_heatmap,
     _render_aggregate_diff_heatmaps,
     _render_aggregate_diff_text_table,
+    _render_headline_diff_text_table,
+    _render_headline_diff,
     _write_redraw_plots_script,
 )
 
@@ -400,6 +402,26 @@ def main(argv: list[str] | None = None) -> None:
                 logger.warning(
                     f"matplotlib not available ({exc}); "
                     "skipping aggregate-diff PNG output."
+                )
+
+            # Holistic top-level view: one headline metric per benchmark, so
+            # every model × benchmark pair lands in a single figure.
+            try:
+                headline = _render_headline_diff(
+                    diff_cells, diff_models, diff_benchmarks,
+                    f"{title} — headline metric per benchmark", out_dir,
+                    transpose=args.transpose,
+                    subtitle_override=("" if args.no_subtitle else None),
+                )
+                if headline.get("png"):
+                    logger.info(
+                        f"Wrote headline aggregate-diff heatmap: "
+                        f"{rich_link(headline['png'])}"
+                    )
+            except ImportError as exc:
+                logger.warning(
+                    f"matplotlib not available ({exc}); "
+                    "skipping headline aggregate-diff PNG output."
                 )
 
 
