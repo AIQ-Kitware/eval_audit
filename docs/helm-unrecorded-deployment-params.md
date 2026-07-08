@@ -10,8 +10,9 @@ the deployment-match tool does about it today and could do next.
 Companion to
 [`vllm-vs-huggingface-deployment-match.md`](vllm-vs-huggingface-deployment-match.md)
 (the vLLM↔HF knob inventory) and
-[`eee-vs-helm-metadata.md`](eee-vs-helm-metadata.md) (the sidecar-metadata
-recommendation). The concrete case that motivated this — OLMoE ran in float32
+[`eee-vs-helm-metadata.md`](eee-vs-helm-metadata.md) (the HELM↔EEE field mapping
+and how to ship metadata via the `recipe_facts` block). The concrete case that
+motivated this — OLMoE ran in float32
 because no `torch_dtype` was pinned — is written up in the deployment-match doc's
 "The official OLMoE run used float32" section.
 
@@ -80,7 +81,8 @@ Several Tier-3 gaps collapse into Tier-1 #1. The tokenizer, chat template, and
 `generation_config.json` all live *inside the model repo* — so **pinning the model
 revision (commit SHA) recovers all of them as-of-then.** You don't need HELM to
 have recorded the template if you can reconstruct the repo state it saw. The
-revision is the highest-leverage single field HELM (or a sidecar) could add:
+revision is the highest-leverage single field HELM (or a machine-readable
+`recipe_facts` block — see "Where a provenance block should live" below) could add:
 `model_revision` + `torch_dtype` + `transformers_version` together close the
 majority of the gap, because those three transitively fix the
 tokenizer/template/generation_config state and the precision default.
@@ -140,6 +142,45 @@ most-valuable first:
 7. **Capture + diff the resolved chat template.** `compare_prompt.py` already
    reconstructs HELM's `get_prompt`; extend it to record the resolved template
    string and warn when it differs from the revision the official likely used.
+
+## Where a provenance block should live (existing machinery)
+
+"Provenance sidecar" is loose shorthand — the codebase already has this machinery,
+with precise names. Three real things exist today:
+
+- **The `recipe_facts` resolver**
+  ([`eval_audit/normalized/recipe_facts.py`](../eval_audit/normalized/recipe_facts.py),
+  `resolve_recipe_facts`) answers "what recipe produced this run?" in priority
+  order: a **native `recipe_facts` block** JSON-encoded inside an EEE aggregate's
+  `source_metadata.additional_details["recipe_facts"]` → a **sidecar
+  `run_spec.json`** next to the artifact (or the HELM run dir's own) → **unknown**
+  (facts collapse to `status='unknown'` and the pipeline emits
+  `comparability_unknown:*`). It resolves the *recipe* fields — `model`,
+  `model_deployment`, `scenario_class`, `benchmark_group`, `instructions`,
+  `max_eval_instances`, `run_spec_hash`, `judge_models`.
+- **`container_provenance.json`**
+  ([`eval_audit/integrations/docker_provenance.py`](../eval_audit/integrations/docker_provenance.py),
+  `write_container_provenance`) records the container image + digest a run executed
+  in — which, because the container env is frozen at build time, transitively pins
+  the software stack (transformers / torch / vLLM versions).
+- **`provenance.json`** (analyze-experiment / build-virtual-experiment) records
+  what the *pipeline* composed (sources, rows discarded) — pipeline provenance,
+  not model execution.
+
+The execution-substrate fields this doc is about — dtype, revision, quantization,
+attn implementation, TF32, transformers version — are recorded by **none** of these
+at the per-model level. The natural home is the **native `recipe_facts` block**:
+its `RecipeFacts.extra` slot already preserves unknown keys
+([`_facts_from_native_block`](../eval_audit/normalized/recipe_facts.py)), so a
+converter can emit `{"torch_dtype": ..., "model_revision": ...,
+"transformers_version": ...}` **today with no schema change** and the resolver
+round-trips them. So "a provenance block" here means concretely: populate the
+execution-substrate fields into the existing `recipe_facts` slot — not a new file
+format. Keep them **out** of the run-spec name / `adapter_spec.model` /
+`model_deployment` identity strings, which are the pairing key and the
+comparability facts (`same_model` / `same_deployment`): a SHA in those breaks
+official↔local pairing, whereas a SHA in the `recipe_facts` block is invisible to
+pairing and comparability.
 
 ## How much change to pin a specific HF revision?
 
@@ -223,6 +264,7 @@ downstream of that already honors it.
 
 - [`vllm-vs-huggingface-deployment-match.md`](vllm-vs-huggingface-deployment-match.md)
   — the per-knob vLLM↔HF inventory and the OLMoE float32 case study.
-- [`eee-vs-helm-metadata.md`](eee-vs-helm-metadata.md) — the sidecar-metadata
-  mapping and `recipe_facts` resolver, the natural home for a provenance block.
+- [`eee-vs-helm-metadata.md`](eee-vs-helm-metadata.md) — the HELM↔EEE field
+  mapping; the native `recipe_facts` block / sidecar `run_spec.json` are where
+  shipped metadata lands (see "Where a provenance block should live" above).
 - [`helm-gotchas.md`](helm-gotchas.md) — other HELM reproduction traps.
