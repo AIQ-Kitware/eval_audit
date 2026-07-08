@@ -3,7 +3,7 @@
 # The official microsoft/phi-2 mmlu:philosophy run_spec.json names
 # `model_deployment: together/phi-2` (the hosted Together API). To run the
 # official recipe locally AND record that fact honestly, the from-spec pipeline
-# does two things (docs/planning/from-spec-deployment-rewrite-plan.md):
+# does two things (docs/historical/planning/from-spec-deployment-rewrite-plan.md):
 #
 #   1. This file registers a LOCAL deployment `huggingface/phi-2-local` pointed at
 #      an in-process HuggingFace client (the engine that actually serves the run).
@@ -21,7 +21,7 @@
 # This is the hf scenario's analogue of the vLLM path: the bundle exporter binds
 # the native `vllm/phi-2-local` name and the generated manifest carries the same
 # name. See the deployment-rewrite plan, which supersedes the earlier by-name-only
-# rekey in the migration plan (docs/planning/e2e-from-run-spec-migration-plan.md).
+# rekey in the migration plan (docs/historical/planning/e2e-from-run-spec-migration-plan.md).
 model_deployments:
   - name: huggingface/phi-2-local   # LOCAL name; the replay rewrites the spec to this
     model_name: microsoft/phi-2

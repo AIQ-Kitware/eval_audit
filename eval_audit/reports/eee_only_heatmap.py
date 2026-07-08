@@ -46,7 +46,7 @@ from eval_audit.infra.profiling import profile
 
 # --- compat re-exports -------------------------------------------------
 # Implementation moved to reports.eee_heatmap_{data,render} on 2026-06-11
-# (Phase 2 of docs/planning/repo-refactor-plan.md). This module stays the
+# (Phase 2 of docs/historical/planning/repo-refactor-plan.md). This module stays the
 # 'python -m eval_audit.reports.eee_only_heatmap' surface used by
 # reproduce/eee_only_reproducibility_heatmap/30_heatmap.sh.
 from eval_audit.reports.eee_heatmap_data import (  # noqa: F401

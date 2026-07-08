@@ -66,13 +66,7 @@ def _maybe_latest_official_index_csv(index_dpath: Path) -> str | None:
         return None
 
 
-def _clean_optional_text(value: Any) -> str | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.lower() in {"none", "nan"}:
-        return None
-    return text
+from eval_audit.utils.coercion import clean_optional_text as _clean_optional_text  # R-6
 
 
 def _existing_run_path(value: Any) -> str | None:
@@ -462,14 +456,14 @@ def main(argv: list[str] | None = None) -> None:
         for component in components
         if component.get("component_id")
     }
-    # pair_samples writes per-pair instance-comparison TEXT reports
-    # (top-N mismatches etc.) via HelmRunDiff.summarize_instances. That
-    # path is HELM-shaped (helm_view_from_path → run_spec.json fallback)
-    # and represents ~14% of total wall-clock per the latest profile.
-    # Honor the same env var that gates the diagnosis dict in
-    # _build_pair: when EVAL_AUDIT_SKIP_HELM_DIAGNOSIS=1 is set, the
-    # caller has declared "no HELM-derived analysis output" — pair
-    # samples are HELM-derived too, so skip them. The agreement-ratio
+    # pair_samples writes per-pair instance-comparison TEXT reports (top-N
+    # mismatches etc.). Since R-2 (2026-07-06) it renders from NormalizedDiff
+    # over the HELM run dirs (load_run → HELM->EEE conversion, disk-cached), not
+    # the retired HelmRunDiff.summarize_instances. It still requires HELM run
+    # dirs on disk, so it stays gated by the same env var that gates the
+    # diagnosis dict in _build_pair: when EVAL_AUDIT_SKIP_HELM_DIAGNOSIS=1 is
+    # set, the caller has declared "no HELM-derived analysis output" — pair
+    # samples need HELM run dirs too, so skip them. The agreement-ratio
     # numbers and the runlevel-table CSV/MD still write normally.
     _skip_pair_samples = os.environ.get(
         "EVAL_AUDIT_SKIP_HELM_DIAGNOSIS", ""

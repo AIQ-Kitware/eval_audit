@@ -248,7 +248,7 @@ flags it; revisit only if the thin forensics prove to obscure real triage.
 ## 5. Change — substitution is by-name only (decided)
 
 > **AMENDED (2026-06-25) by
-> [`from-spec-deployment-rewrite-plan.md`](from-spec-deployment-rewrite-plan.md).**
+> [`from-spec-deployment-rewrite-plan.md`](../historical/planning/from-spec-deployment-rewrite-plan.md).**
 > The CLI now also accepts an **optional** `--model-deployment <local-name>` that,
 > after deserialization, rewrites `adapter_spec.model_deployment` to that local
 > name (the by-name override registers the local name; the rewrite points the spec
@@ -302,7 +302,7 @@ unchanged. (Do **not** add `model` to `algo_params` — the model identity alway
 replays verbatim. **Amended:** the deployment-rewrite plan *does* add
 `model_deployment` to the from-spec node's `algo_params` — the optional
 rewrite target, default `None`/by-name; see
-[`from-spec-deployment-rewrite-plan.md`](from-spec-deployment-rewrite-plan.md)
+[`from-spec-deployment-rewrite-plan.md`](../historical/planning/from-spec-deployment-rewrite-plan.md)
 Change 3.) The `precomputed_root` `:ro` mount already delivers the official
 `run_spec.json` into the container.
 
@@ -401,7 +401,7 @@ Because the new module is in magnet, the only image action is a rebuild:
   cross-reference (no self-describing version stamp exists in the artifacts).
 - **Primary `model_deployment` rewrite — DONE (2026-06-25).** The optional
   `--model-deployment` rewrite landed (see the §5 amendment and
-  [`from-spec-deployment-rewrite-plan.md`](from-spec-deployment-rewrite-plan.md)):
+  [`from-spec-deployment-rewrite-plan.md`](../historical/planning/from-spec-deployment-rewrite-plan.md)):
   the produced run now records the **local** deployment, so the comparison reports
   `same_deployment=no` instead of masking the engine substitution. Default stays
   pure by-name; the e2e opts in.

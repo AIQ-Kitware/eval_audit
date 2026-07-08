@@ -1,7 +1,7 @@
 """Small shared helpers and constants for the aggregate summary build.
 
 Split out of ``eval_audit.workflows.build_reports_summary`` on
-2026-06-11 (Phase 2 of docs/planning/repo-refactor-plan.md). Pure
+2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md). Pure
 relocation: function bodies are unchanged.
 """
 from __future__ import annotations
@@ -32,6 +32,22 @@ CANONICAL_AGREEMENT_TOL = 0.05
 # latest_index_csv` call sites (build_reports_summary) keep working.
 from eval_audit.infra.index_io import latest_index_csv, load_rows  # noqa: F401
 
+# R-6: the small scalar/text helpers below now live in one shared module.
+# Re-exported under their historical private names so this subtree's callers
+# (build_reports_summary, breakdown, classification, loading, multiplicity,
+# publish, failure_triage) keep importing them from here unchanged.
+from eval_audit.utils.coercion import (  # noqa: F401
+    load_json as _load_json,
+    normalize_text as _normalize_text,
+    is_truthy_text as _is_truthy_text,
+    coerce_float as _coerce_float,
+    clean_optional_text as _clean_optional_text,
+    find_curve_value as _find_curve_value,
+)
+
+# `_find_pair` was always a thin alias for the canonical pair-lookup.
+_find_pair = find_report_pair
+
 
 def slugify(text: str) -> str:
     return (
@@ -44,54 +60,12 @@ def slugify(text: str) -> str:
     )
 
 
-def _load_json(fpath: Path) -> dict[str, Any]:
-    return json.loads(fpath.read_text())
-
-
 def _write_json(payload: Any, fpath: Path) -> None:
     write_text_atomic(fpath, json.dumps(kwutil.Json.ensure_serializable(payload), indent=2))
 
 
 def _write_text(lines: list[str], fpath: Path) -> None:
     write_text_atomic(fpath, "\n".join(lines).rstrip() + "\n")
-
-
-def _find_pair(report: dict[str, Any], label: str) -> dict[str, Any]:
-    return find_report_pair(report, label)
-
-
-def _find_curve_value(rows: list[dict[str, Any]], abs_tol: float) -> float | None:
-    for row in rows or []:
-        try:
-            if float(row.get("abs_tol")) == float(abs_tol):
-                return float(row.get("agree_ratio"))
-        except Exception:
-            pass
-    return None
-
-
-def _normalize_text(value: Any) -> str:
-    return str(value or "").strip().lower()
-
-
-def _is_truthy_text(value: Any) -> bool:
-    return _normalize_text(value) in {"true", "1", "yes"}
-
-
-def _coerce_float(value: Any) -> float:
-    try:
-        return float(value)
-    except Exception:
-        return float("-inf")
-
-
-def _clean_optional_text(value: Any) -> str | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.lower() in {"none", "nan"}:
-        return None
-    return text
 
 
 def _preview_values(values: list[str], *, max_items: int = 6) -> list[str]:

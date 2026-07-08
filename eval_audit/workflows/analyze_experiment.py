@@ -13,7 +13,6 @@ from typing import Any
 import pandas as pd
 from loguru import logger
 
-from eval_audit.reports.aggregate import _find_curve_value
 from eval_audit.infra.api import audit_root, default_index_root
 from eval_audit.infra.logging import rich_link, setup_cli_logging
 from eval_audit.infra.paths import official_public_index_dpath
@@ -47,20 +46,16 @@ from eval_audit.workflows.rebuild_core_report import (
 
 from eval_audit.infra.profiling import profile
 
-
-def _load_json(fpath: Path) -> dict[str, Any]:
-    return json.loads(fpath.read_text())
-
-
-def _coerce_float(value: Any) -> float:
-    try:
-        return float(value)
-    except Exception:
-        return float("-inf")
-
-
-def _is_truthy_text(value: Any) -> bool:
-    return str(value).strip().lower() in {"true", "1", "yes"}
+# R-6: shared scalar helpers now live in one module (was: local copies here +
+# a `_find_curve_value` imported from reports.aggregate, a workflows->reports
+# layering violation). Keep the local `_name` bindings so call sites are
+# unchanged.
+from eval_audit.utils.coercion import (
+    load_json as _load_json,
+    coerce_float as _coerce_float,
+    is_truthy_text as _is_truthy_text,
+    find_curve_value as _find_curve_value,
+)
 
 
 def _latest_matching_aiq_gpu_row(

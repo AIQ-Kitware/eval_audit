@@ -26,11 +26,8 @@ def _default_summary_history_root() -> Path:
 DEFAULT_HISTORIC_ROOT = Path("/data/crfm-helm-public")
 
 
-def _latest_run_inventory_csv(summary_history_root: Path) -> Path:
-    cands = sorted(summary_history_root.rglob("run_inventory_*.csv"), reverse=True)
-    if not cands:
-        raise FileNotFoundError(f"No run_inventory_*.csv files found under {summary_history_root}")
-    return cands[0]
+# R-6: shared with cli.analyze_backlog; canonical def in infra.index_io.
+from eval_audit.infra.index_io import latest_run_inventory_csv as _latest_run_inventory_csv
 
 
 def _load_rows(run_inventory_csv: Path) -> list[dict[str, str]]:

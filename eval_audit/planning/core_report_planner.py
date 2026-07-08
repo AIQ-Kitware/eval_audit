@@ -36,15 +36,10 @@ from eval_audit.normalized.eee_artifacts import (
 from eval_audit.reports.core_packet import slugify_identifier
 
 from eval_audit.infra.profiling import profile
-
-
-def _clean_optional_text(value: Any) -> str | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.lower() in {"none", "nan"}:
-        return None
-    return text
+from eval_audit.utils.coercion import (  # R-6
+    clean_optional_text as _clean_optional_text,
+    coerce_float as _coerce_float,
+)
 
 
 PLANNER_VERSION = "core_report_packet_planner.v1"
@@ -68,13 +63,6 @@ if _GROUP_STRIP_ENV in {"0", "false", "no"}:
         DeprecationWarning,
         stacklevel=2,
     )
-
-
-def _coerce_float(value: Any) -> float:
-    try:
-        return float(value)
-    except Exception:
-        return float("-inf")
 
 
 def _build_attempt_fallback_key(row: dict[str, Any]) -> str:

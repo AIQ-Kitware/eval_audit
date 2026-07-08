@@ -264,7 +264,7 @@ separation requires a longer caveat.
 - We are **not** breaking the HELM-driven analysis path. It stays as a
   separate tool for converter validation, debugging EEE conversion
   drift, and the converter-sweep flow at
-  [`dev/poc/eee-audit/sweep.py`](../dev/poc/eee-audit/sweep.py).
+  `dev/poc/eee-audit/sweep.py`.
 - We are **not** removing the `helm_compat.py` shim. It documents the
   legacy bridge; future readers should still be able to find it. We're
   just removing its in-process callers from the EEE-only path.

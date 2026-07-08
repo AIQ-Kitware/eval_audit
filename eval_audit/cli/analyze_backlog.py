@@ -34,11 +34,8 @@ def _default_all_results_history_root() -> Path:
     return aggregate_summary_reports_root() / "all-results" / ".history"
 
 
-def _latest_run_inventory_csv(history_root: Path) -> Path:
-    cands = sorted(history_root.rglob("run_inventory_*.csv"), reverse=True)
-    if not cands:
-        raise FileNotFoundError(f"No run_inventory_*.csv files found under {history_root}")
-    return cands[0]
+# R-6: shared with cli.portfolio_status; canonical def in infra.index_io.
+from eval_audit.infra.index_io import latest_run_inventory_csv as _latest_run_inventory_csv
 
 
 def _load_csv_rows(path: Path) -> list[dict[str, str]]:

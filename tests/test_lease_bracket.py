@@ -1,7 +1,7 @@
 """Per-run GPU-lease bracket (infer-stack acquire/release) wiring.
 
 Covers the eval_audit side of the kwdagger fan-out described in
-``docs/planning/infer-stack-kwdagger-eval-audit-handoff.md``: each HELM run is a
+``docs/historical/planning/infer-stack-kwdagger-eval-audit-handoff.md``: each HELM run is a
 ``ProcessNode`` that brackets itself with an infer-stack lease (acquire --queue
 before, release after), so kwdagger can fan many runs out without a per-model
 serial serve loop. These tests render the bracket and the matrix knobs (no GPU /

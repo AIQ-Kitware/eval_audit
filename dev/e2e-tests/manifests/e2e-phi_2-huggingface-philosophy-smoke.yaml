@@ -3,7 +3,7 @@ schema_version: 1
 # mmlu:philosophy run_spec.json verbatim instead of reconstructing the recipe
 # from the run-entry string — this is the DEFAULT and only path for this
 # comparable scenario (there is no run-entry opt-out; see _lib.sh / the migration
-# plan docs/planning/e2e-from-run-spec-migration-plan.md). The incomparable
+# plan docs/historical/planning/e2e-from-run-spec-migration-plan.md). The incomparable
 # negative control is the sole carve-out (it stays on the run-entry path because
 # from-spec would erase its temperature=1 deviation).
 experiment_name: e2e-phi_2-huggingface-philosophy-smoke

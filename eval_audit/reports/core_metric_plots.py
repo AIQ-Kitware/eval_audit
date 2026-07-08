@@ -3,7 +3,7 @@ styles, and every figure writer. Curve math lives in
 ``reports.core_metric_curves``.
 
 Split out of ``eval_audit.reports.core_metrics`` on 2026-06-11
-(Phase 2 of docs/planning/repo-refactor-plan.md). Pure relocation:
+(Phase 2 of docs/historical/planning/repo-refactor-plan.md). Pure relocation:
 function bodies are unchanged.
 """
 from __future__ import annotations

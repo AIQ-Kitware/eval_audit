@@ -7,7 +7,7 @@ run it (1) extracts a small instance sample + the official completions as the or
 (2) generates a grid of local serving recipes for that model, (3) runs each on
 the sample, and (4) ranks them by agreement with the official outputs.
 
-See ``docs/planning/deployment-match-search-plan.md`` for the design.
+See ``docs/historical/planning/deployment-match-search-plan.md`` for the design.
 
 Modules
 -------

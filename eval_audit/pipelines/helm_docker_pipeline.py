@@ -292,7 +292,7 @@ class MaterializeHelmRunFromSpecDockerNode(MaterializeHelmRunDockerNode):
     algo param — the model identity always replays verbatim (by-name), and the
     produced run dir keeps the official ``run_spec.name`` (HELM names encode
     ``model=…``, not ``model_deployment=…``). When unset, replay is pure by-name.
-    See docs/planning/from-spec-deployment-rewrite-plan.md.
+    See docs/historical/planning/from-spec-deployment-rewrite-plan.md.
     """
 
     executable = (

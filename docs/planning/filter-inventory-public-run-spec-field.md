@@ -21,7 +21,7 @@ reconstruction draws only from `scenario_spec.args`, `adapter_spec.method/model`
 and **display-name** tokens. It therefore *structurally cannot* recover the
 **droppable run-expander keys** (`output_format_instructions`, `temperature`,
 `chatml`, `process_output`, …) catalogued in
-[`reproduce/olmo_models/NOTES-dropped-run-expander-keys.md`](../../reproduce/olmo_models/NOTES-dropped-run-expander-keys.md).
+`reproduce/olmo_models/NOTES-dropped-run-expander-keys.md`.
 
 The run name is unreliable at **every** level — index `run_spec_name`, the run
 directory name, and `run_spec.json["name"]` are the same expander-blind string.

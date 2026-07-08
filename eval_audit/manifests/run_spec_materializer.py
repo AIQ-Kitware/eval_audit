@@ -31,7 +31,7 @@ in-container ``--model-deployment`` / ``--max-eval-instances`` rewrite is not
 exercised on this path; ``adapter_spec.model`` is never touched, so the produced
 run dir keeps the official ``run_spec.name`` and Stages 4–6 are unchanged.
 
-See ``docs/planning/run-from-relative-path-plan.md`` §4.1.
+See ``docs/historical/planning/run-from-relative-path-plan.md`` §4.1.
 """
 from __future__ import annotations
 

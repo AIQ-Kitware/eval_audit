@@ -37,49 +37,10 @@ def _dummy_analysis(run_spec: dict[str, Any], stats: list[dict[str, Any]]):
     return ana
 
 
-def test_instance_summary_serializable():
-    """The output of ``instance_summary_dict`` must be JSON serializable.
-
-    In particular the previously-used tuple keys were converted to a list of
-    objects with explicit ``metric_class``/``metric`` fields.  Exercise the
-    computation path using minimal dummy data so we don't depend on HELM or
-    pandas.
-    """
-    # build two joined tables that share a key but have different means
-    key = ("id", 0, None, "m", "split", None, None)
-    row_a = {
-        'key': key,
-        'stat': {'mean': 1.0, 'count': 1, 'name': {'name': 'm'}},
-        'request_state': {},
-    }
-    row_b = {
-        'key': key,
-        'stat': {'mean': 2.0, 'count': 1, 'name': {'name': 'm'}},
-        'request_state': {},
-    }
-
-    # create bare HelmRunAnalysis instances and override their joiners
-    ana_a = HelmRunAnalysis.__new__(HelmRunAnalysis)
-    ana_b = HelmRunAnalysis.__new__(HelmRunAnalysis)
-    # give them the minimal attributes expected by other methods
-    for ana in (ana_a, ana_b):
-        ana._raw_cache = {}
-        ana._cache = {}
-        ana.run = None
-        ana.name = None
-        ana.scenario = lambda: {}
-        ana.run_spec = lambda: {}
-        ana.stats = lambda: []
-    ana_a.joined_instance_stat_table = lambda *args, **kwargs: DummyJoined([row_a])
-    ana_b.joined_instance_stat_table = lambda *args, **kwargs: DummyJoined([row_b])
-    rd = HelmRunDiff(ana_a, ana_b)
-    info = rd.instance_summary_dict(top_n=1)
-    # also check that the higher-level summary_dict exposes the same list
-    sdict = rd.summary_dict(level=20)
-    iva = sdict.get('instance_value_agreement', {})
-    assert isinstance(iva.get('top_mismatches_by_group'), list)
-    # strict JSON: no NaN / Infinity
-    json.dumps(sdict, allow_nan=False)
+# R-2 (2026-07-06): test_instance_summary_serializable was removed with
+# HelmRunDiff.instance_summary_dict / the level>=20 instance_value_agreement
+# block. Per-instance agreement (and its JSON-serializability) is now served by
+# NormalizedDiff — see tests/test_phase3_normalized_diff.py.
 
 
 def test_dataset_overlap_json_serializable():
