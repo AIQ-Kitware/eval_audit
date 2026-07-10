@@ -478,3 +478,121 @@ mis-generating, not vLLM being more faithful.
 Reverted an unwanted change: I'd flipped the HF dtype-sweep default from fp32→sweep
 on the wrong assumption the overnight only swept fp32; the user corrected (their
 overnight DID sweep via DM_HF_DTYPES) and I restored HEAD (3ff73c5). Tree clean.
+
+## 2026-07-10 09:39:13 -0400
+
+**Model/harness.** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude Code.
+
+**Intent.** Diagnose the previous session's open puzzle — why OLMo-2 instruct
+diverges when reproduced via the HF probe even though the public run was itself a
+`HuggingFaceClient` (transformers) run — then modify the HF probe so a *sweep* can
+reproduce the OLMo-2 officials.
+
+### Diagnosis: it's the fp32 FORWARD PASS, not the prompt (hypothesis (a) refuted)
+
+Ran the forensic comparison the last entry proposed. Findings, in order of force:
+
+1. **The prompt is identical everywhere.** Tokenizing the exact ifeval sample
+   prompt with the OLMo-2 tokenizer: `add_special_tokens` True==False (no double-BOS
+   — `GPT2TokenizerFast`, `add_bos_token` unset, doesn't auto-prepend), and the
+   probe's `agp1` render == `apply_chat_template(tokenize=True)` == 48 tokens
+   `[100257, 27, 91, 882, 91, 397, …]`. `<|user|>`/`<|assistant|>` are NOT special
+   tokens here — they BPE-split — but consistently across every path. So the probe's
+   faithful cell feeds byte-identical tokens to what vLLM feeds.
+
+2. **vLLM fp32 reproduces the official character-for-character; the HF probe does
+   not.** For instance id1236: official and vLLM-fp32-agp0 both begin "These new
+   armchairs from LuxErgo…" (vLLM ranking: MATCH 0.915, first-token **1.00**, sim
+   0.95). HF-probe-fp32 begins "Discover the pinnacle…" (agp0) / "Introducing the
+   latest… UltraComfort…" (agp1) — coherent, on-task, totally different wording,
+   first-token agreement **0.42**.
+
+3. **Therefore the divergence is a fp32 forward-pass difference, and it starts at
+   token 0.** Identical prompt ⇒ no accumulated history at step 0 ⇒ a different first
+   token can only mean the probe's fp32 forward pass computed a different logit
+   vector than the run that produced the official. Greedy is deterministic but
+   chaotic: one sub-ULP logit flip at an early near-tie cascades into different but
+   coherent text. vLLM happens to land on the official's argmax; today's
+   transformers on the probe host does not — *"official was HF" is true, but the
+   probe's HF ≠ the original run's HF numerically.*
+
+The discriminating knobs (none recorded in `run_spec.json`, so unrecoverable and
+must be searched): **attn_implementation**, **device placement** (accelerate
+`device_map=auto` shards a fits-on-one-GPU model across GPUs, changing fp32
+reduction order), and the **decode path** (HELM's `do_sample=True, temperature=1e-7`
+vs the probe's `do_sample=False` greedy). Note the vLLM sweep matched at fp32 across
+ALL three attention backends (first-token 1.00 each), which hints the dominant HF
+lever is device-map sharding, not attention — but both are worth sweeping.
+
+Why OLMoE matched via HF but OLMo-2 didn't is NOT science: OLMoE's greedy trajectory
+is numerically robust (stable argmax across engines); OLMo-2 has early near-ties
+sensitive to the exact fp32 stack. Exactly insight #3 from the prior entry
+("matched precision ≠ matched kernels/engine"), now pinned to the **first token**.
+
+### Change: turn the forward-pass numerics into HF-probe sweep axes
+
+`dev/tools/deployment_match/hf_probe.py` + `cli.py` (commit 4516b70). The probe swept
+only `dtype × {agp, ast}` — none of which touch the forward pass — so every cell was
+doomed. Added, mirroring the vLLM grid's `dtype × attention_backend` sweep:
+
+- `--attn-impls` (default `eager,sdpa`; fp32-safe — flash-attn is fp16/bf16-only and
+  is caught+skipped on fp32). Passed to `from_pretrained(attn_implementation=…)`.
+- `--device-maps` (default `auto`; `single` == `{"": 0}` pins the whole model on GPU
+  0 to remove accelerate's cross-GPU reduction-order shift). New `_resolve_device_map`.
+- `--decode` (default `helm` = `do_sample=True, temperature=1e-7, top_p` from the
+  recipe, exactly replicating `HuggingFaceServer.serve_request`; `greedy` retained as
+  a diagnostic — the old `do_sample=False` argmax).
+
+Each `(dtype × attn × device_map)` is a full model reload (they change the forward
+pass); `decode × request-variant` are cheap inner loops. Endpoint names encode the
+reload axes (`hf-<model>-fp32-attnsdpa-devsingle`), cell ids append the cheap axes
+(`…::ast1-chat-agp1-helm`) — 24 distinct cells for a 1×3×2×2×2 sweep, verified.
+Infeasible recipes (flash-attn+fp32, single-GPU OOM) are caught and skipped so the
+sweep continues instead of aborting. Runbooks wire `DM_HF_ATTN/DM_HF_DEVMAPS/
+DM_HF_DECODE` (7B/13B default `auto,single`; 32B fp32 ~128 GB can't fit one card so
+its device-map stays `auto` — the `single` lever is infeasible there, and vLLM
+fp32-TP remains the confirmed 32B path).
+
+### Design tradeoffs / uncertainties
+
+- **`single` is the bet, but unproven.** I couldn't run a GPU repro (hit the known
+  `aivm` FD-exhaustion issue mid-session; it recovered but I didn't burn a GPU on
+  spec). The strongest hypothesis is that `device_map=single` on 7B/13B collapses the
+  first-token divergence; the next GPU run of `DM_HF_FP32=1` with the new defaults
+  will confirm or refute. If `single` still diverges, the residue is transformers/
+  torch/CUDA version skew vs the original public-HELM run → pin those versions next.
+- **Why axes over hardcoding.** The user asked for a *sweep* that reproduces, and the
+  exact serving numerics aren't in `run_spec.json`. Sweeping is the honest analogue
+  of what already made vLLM reproducible; hardcoding `single`+`helm` would bake in an
+  unverified guess and hide the 32B case where `single` is impossible.
+- **`helm` decode is faithful but probably not the fix.** `temperature=1e-7` sampling
+  is argmax-equivalent, so it likely won't move OLMo-2; I made it the default anyway
+  because it removes a real probe-vs-HELM infidelity (the probe should replicate
+  `serve_request`, not approximate it), and kept `greedy` swept so the decode path can
+  be ruled in/out empirically.
+
+### Reusable design insights
+
+1. **First-token disagreement on a byte-identical prompt is a clean litmus for a
+   forward-pass (kernel/precision/device) difference** — it excludes prompt,
+   template, sampling-trajectory, and history-accumulation causes in one shot,
+   because at step 0 there is no history. Reach for it before blaming the prompt.
+2. **"Same engine family" (transformers→transformers) does NOT imply reproducible.**
+   device_map sharding, attn_implementation default drift across versions, and the
+   sample-vs-greedy code path each perturb fp32 logits enough to diverge greedy
+   decoding. A reproduction probe must sweep them, not assume the engine name matches.
+3. **A sweep only reproduces if its axes touch the quantity that varies.** The old HF
+   probe swept prompt-render knobs against a *forward-pass* problem — orthogonal, so
+   0/N cells could ever match. Diagnose which layer the divergence lives in first,
+   then put the axes there.
+
+### Next steps
+
+- GPU run `DM_HF_FP32=1 ./run_deployment_match_olmo2_7b.sh` (defaults now sweep
+  eager/sdpa × auto/single × helm). Expect a `-devsingle` cell to hit first-token
+  ~1.0 / MATCH. Then 13B. Confirm, and record which recipe wins in
+  `docs/vllm-vs-huggingface-deployment-match.md`.
+- If `single` doesn't close it: pin transformers/torch to the public-HELM release
+  versions and re-sweep (version skew is the remaining suspect).
+- 32B: `single` is infeasible; if HF can't reproduce it under sharding, document that
+  vLLM fp32-TP is the only confirmed 32B path (already the journal's standing result).
