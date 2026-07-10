@@ -100,6 +100,59 @@ def _model_deployment_entry(
     return entry
 
 
+#: The era shim's OpenAI-compatible completions client (installed inside the era
+#: image only). Deployments generated for an era run bind the official model name
+#: to this client via the era model_deployment registry.
+_ERA_CLIENT_CLASS = "helm_era_shim.openai_compat_client.OpenAICompatCompletionsClient"
+
+
+def _model_deployment_entry_era(
+    facts: ServingFacts,
+    *,
+    helm_model_name: str,
+    base_url: str | None = None,
+) -> dict[str, Any]:
+    """Build an ERA-schema (pre-v0.5) ``model_deployments.yaml`` entry.
+
+    Differences from the modern :func:`_model_deployment_entry`:
+
+    * The deployment ``name`` is the **exact official model name** (equal to the
+      run_spec.json's ``adapter_spec.model``). Era replay is verbatim by-name —
+      there is no ``model_deployment`` field to rewrite — so the registered name
+      must match the official model, not a synthesized local deployment name.
+    * ``client_spec.class_name`` is the era shim client; ``args`` carry only
+      ``base_url`` + ``openai_model_name`` (the served name). **No ``api_key``** —
+      the era ``credentials.conf`` (written by the shim) owns the per-deployment
+      key; v0.2.4's ``AutoClient`` reads it from there.
+    * All five cattrs-no-defaults keys are emitted explicitly
+      (``model_name`` / ``tokenizer_name: null`` / ``max_sequence_length: null``)
+      so ``cattrs.structure`` at the era succeeds. ``tokenizer_name: null`` lets
+      the era WindowService (keyed on the official model name) reproduce official
+      tokenization/windowing untouched.
+    """
+    if not helm_model_name:
+        raise ValueError(
+            "era model deployment requires helm_model_name (it must equal the "
+            "official run_spec.json adapter_spec.model — era replay is by-name)."
+        )
+    resolved_base_url = base_url or _default_gateway_base_url()
+    return {
+        "name": helm_model_name,
+        "model_name": helm_model_name,
+        # null => auto-inferred by the era WindowService keyed on model_name.
+        "tokenizer_name": None,
+        "max_sequence_length": None,
+        "client_spec": {
+            "class_name": _ERA_CLIENT_CLASS,
+            "args": {
+                "base_url": resolved_base_url,
+                # vLLM's served model name (what the /v1/completions call sends).
+                "openai_model_name": facts.served_model_name,
+            },
+        },
+    }
+
+
 def _helm_config_paths() -> tuple[Path, Path]:
     helm_root = repo_root() / "submodules" / "helm" / "src" / "helm" / "config"
     return helm_root / "model_metadata.yaml", helm_root / "tokenizer_configs.yaml"
@@ -227,6 +280,7 @@ def _manifest_doc(
     precomputed_root: str | None = None,
     model_deployment: str | None = None,
     run_spec_sources: list[dict[str, Any]] | None = None,
+    era: str | None = None,
 ) -> dict[str, Any]:
     # From-spec replay: the generated manifest must carry from_run_spec: true and a
     # precomputed_root (the recipe SOURCE the bridge requires). Because this builder
@@ -273,6 +327,11 @@ def _manifest_doc(
         # model_deployment lifts the single-deployment restriction below.
         if run_spec_sources is not None:
             doc["run_spec_sources"] = run_spec_sources
+    # Era (pre-v0.5) replay: pin the measurement instrument. The bridge selects
+    # the era pipeline + guards the image's org.aiq.era label against this. None
+    # (the modern default) is omitted so modern manifests stay byte-compatible.
+    if era is not None:
+        doc["era"] = era
     for key in _CONTAINER_SPEC_KEYS:
         if key in spec:
             doc[key] = spec[key]
@@ -327,10 +386,17 @@ def materialize_benchmark_bundle(
     from_run_spec: bool = False,
     precomputed_root: str | None = None,
     freeze_rel_paths: bool = False,
+    era: str | None = None,
 ) -> dict[str, Any]:
     output_dir = output_dir.resolve()
     preset_cfg = _resolve_preset_cfg(preset)
     specs = profile_specs or _profile_specs("", preset_cfg)
+    # Era (pre-v0.5) mode: CLI --era wins, else the preset may declare one. When
+    # set, the generated deployments use the era schema + era shim client, the
+    # modern HELM-alias assertion is skipped (it validates against the modern
+    # submodule — the wrong universe; the shim preflight is the loud check), and
+    # replay is verbatim by-name (no model_deployment rewrite).
+    resolved_era = era or preset_cfg.get("era")
     model_entries = []
     selected_accesses = []
     for fact, spec in zip(facts, specs, strict=True):
@@ -367,20 +433,32 @@ def materialize_benchmark_bundle(
         # This supersedes the earlier by-name rekey to the official name; see
         # docs/historical/planning/from-spec-deployment-rewrite-plan.md Change 5.
         deployment_name = spec.get("model_deployment_name")
-        model_entries.append(
-            _model_deployment_entry(
-                fact,
-                protocol_mode=resolved_protocol_mode,
-                helm_model_name=spec.get("helm_model_name"),
-                helm_tokenizer_name=spec.get("helm_tokenizer_name"),
-                helm_max_sequence_and_generated_tokens_length=spec.get("helm_max_sequence_and_generated_tokens_length"),
-                access_kind=selected_kind,
-                model_deployment_name=deployment_name,
-                base_url=base_url,
-                api_key_value=api_key_value,
+        if resolved_era is not None:
+            # Era deployment: bind the OFFICIAL model name to the era shim client
+            # (verbatim by-name). No modern alias assertion (wrong submodule
+            # universe) and no rewrite target.
+            model_entries.append(
+                _model_deployment_entry_era(
+                    fact,
+                    helm_model_name=spec.get("helm_model_name"),
+                    base_url=base_url,
+                )
             )
-        )
-        _assert_helm_aliases_exist(model_entries[-1]["model_name"], model_entries[-1]["tokenizer_name"])
+        else:
+            model_entries.append(
+                _model_deployment_entry(
+                    fact,
+                    protocol_mode=resolved_protocol_mode,
+                    helm_model_name=spec.get("helm_model_name"),
+                    helm_tokenizer_name=spec.get("helm_tokenizer_name"),
+                    helm_max_sequence_and_generated_tokens_length=spec.get("helm_max_sequence_and_generated_tokens_length"),
+                    access_kind=selected_kind,
+                    model_deployment_name=deployment_name,
+                    base_url=base_url,
+                    api_key_value=api_key_value,
+                )
+            )
+            _assert_helm_aliases_exist(model_entries[-1]["model_name"], model_entries[-1]["tokenizer_name"])
         # The old contract carried a rich access dict; under default-B the only
         # facts worth recording are the resolved transport (for bundle.yaml
         # traceability — nothing downstream parses it).
@@ -470,10 +548,17 @@ def materialize_benchmark_bundle(
     # manifest-level target; a multi-deployment bundle stays pure by-name. The
     # *exact-path* path (--freeze-rel-paths) instead carries a per-run rewrite
     # target inside each frozen source, so this restriction does not apply there.
+    # Era replay is verbatim by-name: there is no model_deployment to rewrite
+    # (and the materializer guard would reject inserting the novel field). So the
+    # era path never sets a rewrite target regardless of deployment count.
     rewrite_deployment = (
-        model_entries[0]["name"]
-        if from_run_spec and len(model_entries) == 1
-        else None
+        None
+        if resolved_era is not None
+        else (
+            model_entries[0]["name"]
+            if from_run_spec and len(model_entries) == 1
+            else None
+        )
     )
 
     # Exact-path replay (rel-path plan §4.5): resolve each run-entry to its pinned
@@ -501,10 +586,12 @@ def materialize_benchmark_bundle(
         smoke_sources = _freeze_run_spec_sources(
             smoke_spec, precomputed_root=smoke_root, model_entries=model_entries,
             lease_facts=lease_facts, runs=_runs_for(smoke_root),
+            omit_model_deployment=resolved_era is not None,
         )
         full_sources = _freeze_run_spec_sources(
             full_spec, precomputed_root=full_root, model_entries=model_entries,
             lease_facts=lease_facts, runs=_runs_for(full_root),
+            omit_model_deployment=resolved_era is not None,
         )
 
     benchmark_smoke_manifest = _manifest_doc(
@@ -515,6 +602,7 @@ def materialize_benchmark_bundle(
         precomputed_root=precomputed_root,
         model_deployment=rewrite_deployment,
         run_spec_sources=smoke_sources,
+        era=resolved_era,
     )
     benchmark_full_manifest = _manifest_doc(
         spec=full_spec,
@@ -524,6 +612,7 @@ def materialize_benchmark_bundle(
         precomputed_root=precomputed_root,
         model_deployment=rewrite_deployment,
         run_spec_sources=full_sources,
+        era=resolved_era,
     )
     benchmark_smoke_path = output_dir / "benchmark_smoke_manifest.yaml"
     benchmark_full_path = output_dir / "benchmark_full_manifest.yaml"
@@ -591,6 +680,7 @@ def export_benchmark_bundle(
     from_run_spec: bool = False,
     precomputed_root: str | None = None,
     freeze_rel_paths: bool = False,
+    era: str | None = None,
 ) -> dict[str, Any]:
     # Exact-path replay is a from-spec variant: freezing rel-paths implies it.
     if freeze_rel_paths:
@@ -636,4 +726,5 @@ def export_benchmark_bundle(
         from_run_spec=from_run_spec,
         precomputed_root=precomputed_root,
         freeze_rel_paths=freeze_rel_paths,
+        era=era,
     )

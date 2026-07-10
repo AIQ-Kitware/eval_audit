@@ -182,6 +182,21 @@ def materialize_run_spec(
     substitutions: dict[str, dict[str, Any]] = {}
 
     if source.model_deployment is not None:
+        # Era guard: a pre-v0.5 adapter_spec has NO ``model_deployment`` field.
+        # Rewriting it would INSERT a novel key into an era spec — silently
+        # producing a spec shape that never existed at the era and breaking the
+        # verbatim-replay guarantee. The key's *absence* is exactly the era
+        # signal (a modern adapter_spec always carries it, possibly null), so
+        # fail loud rather than fabricate the field. See
+        # docs/planning/era-pinned-helm-containers-plan.md commit 4.
+        if _MODEL_DEPLOYMENT_KEY not in adapter_spec:
+            raise ValueError(
+                f"official run_spec.json {str(official_path)!r} has no "
+                f"adapter_spec.{_MODEL_DEPLOYMENT_KEY} (a pre-v0.5 spec); refusing "
+                f"to insert a novel field to satisfy the model_deployment rewrite "
+                f"{source.model_deployment!r}. Era replay is verbatim: route "
+                "by-name via the era deployment registry instead (no rewrite)."
+            )
         before = adapter_spec.get(_MODEL_DEPLOYMENT_KEY)
         if before != source.model_deployment:
             adapter_spec[_MODEL_DEPLOYMENT_KEY] = source.model_deployment
