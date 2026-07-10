@@ -381,3 +381,100 @@ transpose in `_render_aggregate_diff_heatmaps`.
 "Squared error (Local − Public)²" 0–1; imdb/m1 (sq 1.0) deep red, exact
 cells near-white; title retained. 36 tests green under `--run-slow`
 (headline test now also asserts squared_error). Committed 29fc76c.
+
+## 2026-07-10 09:03:40 -0400
+
+**Model/harness.** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude Code.
+
+**Intent.** Settle the OLMoE/OLMo-2 fp32 reproduction question end-to-end: build
+the tooling to test it (HF-side probe + fp32-in-vLLM), run overnight sweeps for
+all OLMo instruct models, and interpret the HF-vs-vLLM results.
+
+### Central finding: fp32 reproduces every OLMo instruct official
+
+The public HELM OLMo instruct runs (OLMoE-1B-7B, OLMo-2 7B/13B/32B) all use
+`huggingface/<model>` HuggingFaceClient deployments that pin NO `torch_dtype`, so
+they ran in float32 (pre-v5 transformers default). Reproducing at fp32 matches;
+bf16/fp16 don't. Confirmed by the overnight sweeps (n=12 ifeval, scored vs the
+official completions), `/data/crfm-helm-audit-store/deployment-match/<model>--ifeval-{hf,vllm}`:
+
+| Model | HF best | vLLM best |
+|---|---|---|
+| OLMoE-1B-7B | **fp32 MATCH 0.971** (quasi 1.0) | fp16 PARTIAL 0.494 |
+| OLMo-2-7B  | fp32 PARTIAL 0.175 (quasi 0.0) | **fp32 MATCH 0.915** |
+| OLMo-2-13B | fp32 PARTIAL 0.324 (quasi 0.0) | **fp32 MATCH 0.904** |
+| OLMo-2-32B | fp16 PARTIAL 0.234 (quasi 0.0) | **fp32-tp2 MATCH 0.961** |
+
+**fp32 wins on whichever engine can serve it faithfully.** OLMoE is MoE → vLLM's
+Triton fused-kernel can't do fp32 (shared-mem OOM; TP shards experts not the
+per-block tile, so it doesn't help) → only HF fp32 reproduces it. The dense
+OLMo-2s → vLLM fp32 reproduces them near-exactly.
+
+### Open puzzle: the HF probe is broken for OLMo-2 (NOT a science problem)
+
+`hf-probe` (transformers.generate at fp32) matches OLMoE EXACTLY but gives
+quasi=0 / sim~0.15 for all three OLMo-2 models. The output is coherent, on-task,
+semantically identical to the official — just WORDED DIFFERENTLY, and stable
+across dtypes (fp32/bf16/fp16 agp0 agree with each other, all diverge from the
+official). So it is a SYSTEMATIC divergence (prompt or generation-config), not
+precision noise. vLLM fp32 — which also applies the chat template — reproduces the
+official's exact wording. Since the official IS a HuggingFaceClient run, the HF
+probe *should* match it better than vLLM, not worse ⇒ a probe-fidelity bug
+specific to OLMo-2. Undiagnosed hypotheses: (a) the probe's manual
+`apply_chat_template` reconstruction differs from HELM's `get_prompt` (OLMo-2
+template quirk; note the 13B resolves to the 7B tokenizer); (b) OLMo-2's
+`generation_config.json` defaults that HELM's `generate()` picks up but the probe
+overrides. NEXT STEP (read-only): diff the probe's prompt+sampling params vs
+HELM's `serve_request` for one OLMo-2 instance (`compare_prompt.py` + run_spec +
+generation_config.json).
+
+Interpretation stays clean: all four officials reproduce at fp32 (OLMoE via HF,
+dense OLMo-2 via vLLM). "vLLM beats HF" is real for OLMo-2 but it is the PROBE
+mis-generating, not vLLM being more faithful.
+
+### Tooling built (deployment_match)
+
+- `--fp32-tensor-parallel-size N` / `DM_FP32_TP` — serve fp32 across N GPUs,
+  lifting the fp32-MoE prune. Confirmed a "let it try": TP does NOT fix OLMoE's
+  MoE shared-mem OOM (per-block tiles, not shard count); right knob for dense
+  fp32 VRAM. (2698389)
+- `hf-probe` — reproduce at fp32 via transformers.generate, score vs the same
+  oracle, same result-doc shape as the vLLM probe; `DM_HF_FP32=1` replaces the
+  vLLM sweep. (37d91af)
+- `hf-probe` dtype sweep — `--dtype` comma list, load once per dtype, rank
+  together; `DM_HF_DTYPES` passthrough (default fp32). (3ff73c5)
+- `run_all_hf_and_vllm_overnight.sh` — both engines × all 4 models, separate
+  dirs, per-run logs, summary table, failure-tolerant. (c00394e)
+- OLMo-2 per-model runbooks caught up with DM_HF_FP32/DM_FP32_TP. (79ab77b)
+
+### Docs
+
+- `docs/helm-unrecorded-deployment-params.md` (new) — the reproduction provenance
+  gap (dtype/revision/quantization/transformers-version/attn/TF32/template/
+  generation_config), ranked by greedy-output effect; 7 deployment-match
+  improvements; HF-revision pinning effort (infer-stack + HELM already accept it;
+  only eval_audit's boundary layer drops it, ~3-4 files). (426710f)
+- `docs/vllm-vs-huggingface-deployment-match.md` — OLMoE fp32 finding + CONFIRMED
+  exact match + OLMo-2 scope table.
+
+### Reusable design insights
+
+1. **Revision/dtype pinning is invisible to comparability** iff it lives in
+   `client_spec.args` / catalog.yaml / a provenance block — NOT in
+   `run_spec.name` / `adapter_spec.model` / `model_deployment` name (the pairing
+   key + comparability facts read those). Bake a SHA into an identity string and
+   public runs stop pairing.
+2. **vLLM-vs-HF winner-composite comparisons are only fair if both sweep the same
+   axes.** They share oracle+scorer, but the vLLM sweep is ~64 cells (dtype × attn
+   × ast × agp) vs the HF probe's handful. Compare the matched fp32 cell, not the
+   two maxima.
+3. **Matched precision ≠ matched engine.** fp32-vs-fp32 can still diverge (vLLM↔HF
+   kernels) — which is why hf-probe (same engine as the official) exists — but the
+   probe must faithfully replicate HELM's `generate()` or it diverges anyway (the
+   OLMo-2 bug).
+
+### Note
+
+Reverted an unwanted change: I'd flipped the HF dtype-sweep default from fp32→sweep
+on the wrong assumption the overnight only swept fp32; the user corrected (their
+overnight DID sweep via DM_HF_DTYPES) and I restored HEAD (3ff73c5). Tree clean.
