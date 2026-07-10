@@ -701,3 +701,50 @@ during that pass and fold the findings back into the plan. One reusable insight:
 reading era submodule source with `git show <release-commit>:<path>` (rather than
 checking out) let me pin the exact era API surface without perturbing the working
 tree — essential when one superproject must target two incompatible library eras.
+
+## 2026-07-10 12:24:00 -0400
+
+**Model/harness.** Fable 5 (`claude-fable-5`), Claude Code (review + harness session).
+
+**Intent.** (1) Audit the six era-pinned commits; (2) make the validation
+ladder runnable by anyone, on any machine, without editing scripts.
+
+**Review.** 8-angle review with every era-API claim checked against the era
+source (`git -C submodules/helm show 626d8609:… / 8ea285f7:…`) plus one
+empirical pyhocon test. 10 findings (8 CONFIRMED, 2 PLAUSIBLE) written to
+`docs/planning/era-pinned-review-findings-2026-07-10.md` with per-finding
+fix + verify blocks and a commit-grouped fix plan for the next session.
+Headline: the shim's era contract was written against v0.3.0 semantics —
+v0.2.4 never registers the deployments yaml (silent Together fallthrough for
+eleutherai/lmsys/meta/…), and pyhocon dot-splits credential keys so dotted
+model names (pythia-6.9b, the flagship) die at both eras.
+
+**Ladder harness.** New in `reproduce/classic_era_replay/`:
+`05_ladder_gate.sh` (tiered orchestrator: PASS/FAIL/SKIP table, skips name
+the unlocking env var), `15_instrument_fidelity.sh` (rung 2: era-image
+dry-run + host instance-identity diff vs official `scenario_state.json`),
+`50_hf_fetch_audit.sh` (rung 5: one dry-run per scenario family from
+`configs/run_details.yaml`), `drivers/{dryrun_driver,instance_diff}.py`,
+`ladder.env.example` (the single machine-specific file; gitignored as
+`ladder.env`). Plus `tests/test_era_shim_imports.py` — a static era-import
+checker that AST-parses the shim's `helm.*` imports and verifies each symbol
+exists at BOTH era commits via `git show`; try/except-guarded imports are
+exempt (the sanctioned fix pattern). It xfails exactly findings 3+8 (3
+xfailed, 33 pass) so the suite stays green while new era-incompatible
+imports fail loudly — this closes the "no host test imports era helm" gap
+that let the review findings through.
+
+**Design insights.** (1) The dry-run driver imports the *installed* shim's
+own helpers inside the container, so rungs 2/5 validate the real decode
+path, not a parallel one. (2) `run_benchmarking(dry_run=True)` is the
+era-stable primitive for both instance-identity and fetch auditing (it is
+what `helm-run --dry-run` does at both eras); rung 5 caps adaptation for
+speed but rung 2 must never cap (capping changes instance selection — the
+thing under test). (3) Portable-runbook pattern: all machine specifics in
+one sourced env file + a gate that skips-and-names, never scripts that need
+editing.
+
+**Next steps.** Opus applies the findings-doc fixes (commit grouping is in
+the doc; the import checker's KNOWN_BAD entries come out with findings 3/8);
+then walk `05_ladder_gate.sh` on a docker host and the GPU machine for both
+eras. Findings 1, 2, 5 surface at rung 3 if not fixed first.
