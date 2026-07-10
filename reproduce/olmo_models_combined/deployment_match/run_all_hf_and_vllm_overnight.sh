@@ -21,12 +21,40 @@
 #   GPU_13B   (default 0)      OLMo-2-13B   ~52 GB fp32 -> 1x80 GB (use 0,1 on 40 GB)
 #   GPU_32B   (default 0,1)    OLMo-2-32B  ~128 GB fp32 -> 2x80 GB (use 0,1,2,3 on 40 GB)
 #
+# This runner sweeps EVERY parameter both engines expose (SWEEP=full, the default):
+#
+#   vLLM (already maximal at its defaults): the hf-match profile sweeps the
+#     attention backend {default, FLASH_ATTN, XFORMERS, TORCH_SDPA} x
+#     add_generation_prompt {True, False}, and the grid default sweeps dtype
+#     {auto, float16, bfloat16, float32} x add_special_tokens {True, False}. vLLM's
+#     scheduler determinism knobs (enforce-eager / no-chunked-prefill / no-prefix-
+#     cache / max_num_seqs=1) stay PINNED — they're confounder-removal for matching
+#     an HF official, not axes to vary.
+#   HF probe (transformers.generate): sweeps the fp32-FORWARD-PASS knobs that
+#     actually move the greedy logits — dtype {float32, bfloat16, float16} x
+#     attn_implementation {eager, sdpa} x device_map {auto, single*} — plus the
+#     request/decode variants decode {helm, greedy} x add_generation_prompt {T,F} x
+#     add_special_tokens {T,F}. (*single is per-model: infeasible for 32B fp32,
+#     which can't fit one GPU, so 32B keeps device_map=auto.)
+#
+# Cost: the HF sweep is a big cartesian (full = up to 3x2x2 reloads x 2x2x2 = 96
+# cells/model, each cell = DM_N generations at fp32 — slow). It's an overnight job.
+# Use SWEEP=quick, or narrow any single axis, to cut it.
+#
 # Other knobs:
 #   ENGINES  (default "vllm hf")   which engines to run, space-separated
 #   SKIP     (default "")          space-separated model slugs to skip
 #   DM_N     (default 12)          sampled instances per model
-#   DM_HF_DTYPES (default float32) HF dtype(s) to sweep, comma-separated, e.g.
-#                                  "float32,bfloat16,float16" (one model load each)
+#   SWEEP    (default full)        full = every parameter; quick = narrow (fp32 / sdpa
+#                                  / helm / one devmap) for a fast pass
+#   DM_HF_DTYPES  HF dtype axis (comma list; default per SWEEP)
+#   DM_HF_ATTN    HF attn_implementation axis (default per SWEEP; 'none' = tf default)
+#   DM_HF_DEVMAPS HF device placement axis (default: per-model — auto,single ≤13B/OLMoE;
+#                                  auto for 32B). Set to override globally.
+#   DM_HF_DECODE  HF decode axis (helm,greedy; default per SWEEP)
+#   DM_HF_AST / DM_HF_AGP  HF add_special_tokens / add_generation_prompt (default per SWEEP)
+#   DM_PROFILE (default hf-match)  vLLM grid profile (empty = plain default grid)
+#   DM_DTYPES / DM_ATTN  narrow the vLLM dtype / attention_backend sweep (empty = full)
 #   DM_DRY=1                       preview: vLLM emits its CPU plan; HF is skipped (no dry mode)
 #   LOG_DIR  (default <store>/deployment-match/_overnight-<stamp>)
 #   AUDIT_STORE_ROOT               override the store root (tests: point at /tmp)
@@ -49,6 +77,32 @@ DM_N="${DM_N:-12}"
 DM_DRY="${DM_DRY:-0}"
 ENGINES="${ENGINES:-vllm hf}"
 SKIP="${SKIP:-}"
+SWEEP="${SWEEP:-full}"
+
+# ---- Sweep axes (both engines) ---------------------------------------------
+# SWEEP=full exercises every parameter; SWEEP=quick is a narrow fast pass. Any
+# individual knob below still overrides the preset (`${VAR:-...}`).
+if [[ "$SWEEP" == full ]]; then
+  DM_HF_DTYPES="${DM_HF_DTYPES:-float32,bfloat16,float16}"   # fp32 is the known match; sweep down to prove it
+  DM_HF_ATTN="${DM_HF_ATTN:-eager,sdpa}"                     # fp32-safe kernels (flash is fp16/bf16-only)
+  DM_HF_DECODE="${DM_HF_DECODE:-helm,greedy}"                # HELM's sample-at-1e-7 vs plain argmax
+  DM_HF_AST="${DM_HF_AST:-both}"
+  DM_HF_AGP="${DM_HF_AGP:-both}"
+else                                                          # quick
+  DM_HF_DTYPES="${DM_HF_DTYPES:-float32}"
+  DM_HF_ATTN="${DM_HF_ATTN:-sdpa}"
+  DM_HF_DECODE="${DM_HF_DECODE:-helm}"
+  DM_HF_AST="${DM_HF_AST:-true}"
+  DM_HF_AGP="${DM_HF_AGP:-both}"
+fi
+# device_map is per-MODEL (single is infeasible for 32B fp32), so leave it to each
+# runbook's own default unless the user pins it globally here.
+DM_HF_DEVMAPS="${DM_HF_DEVMAPS:-}"
+# vLLM is already maximal at its defaults: hf-match sweeps attn x add_generation_prompt,
+# the grid default sweeps all dtypes x add_special_tokens. Keep them full unless narrowed.
+DM_PROFILE="${DM_PROFILE:-hf-match}"
+DM_DTYPES="${DM_DTYPES:-}"      # empty = grid default (auto,float16,bfloat16,float32)
+DM_ATTN="${DM_ATTN:-}"          # empty = hf-match's 4 backends
 
 # slug | per-model runbook | GPU set (HF device_map visible set / vLLM fp32 TP count)
 MODELS=(
@@ -73,10 +127,16 @@ run() {  # $1=slug $2=engine $3=script $4=gpus $5=out_dir
   (
     export DM_OUT="$out" DM_N="$DM_N" DM_DRY="$DM_DRY" DM_ALLOWED_GPUS="$gpus"
     if [[ "$engine" == "hf" ]]; then
-      export DM_HF_FP32=1                       # HF transformers.generate() fp32
+      export DM_HF_FP32=1                       # HF transformers.generate() reproduction
+      # Full forward-pass + request sweep (device_map left per-model unless pinned).
+      export DM_HF_DTYPES DM_HF_ATTN DM_HF_DECODE DM_HF_AST DM_HF_AGP
+      [[ -n "$DM_HF_DEVMAPS" ]] && export DM_HF_DEVMAPS
     else
       unset DM_HF_FP32                          # vLLM sweep
       export DM_FP32_TP="$(gpu_count "$gpus")"  # let fp32 vLLM cells fit on the dense models
+      export DM_PROFILE                         # hf-match: sweep attn x add_generation_prompt
+      [[ -n "$DM_DTYPES" ]] && export DM_DTYPES
+      [[ -n "$DM_ATTN" ]] && export DM_ATTN
     fi
     "$HERE/$script"
   ) >"$log" 2>&1 || rc=$?
@@ -95,9 +155,11 @@ run() {  # $1=slug $2=engine $3=script $4=gpus $5=out_dir
 }
 
 echo "================================================================"
-echo "OLMo instruct overnight — engines=[$ENGINES]  n=$DM_N  dry=$DM_DRY"
+echo "OLMo instruct overnight — engines=[$ENGINES]  n=$DM_N  dry=$DM_DRY  sweep=$SWEEP"
 echo "  store : $STORE_ROOT/deployment-match/"
 echo "  logs  : $LOG_DIR"
+[[ " $ENGINES " == *" hf "* ]] && echo "  hf    : dtype=$DM_HF_DTYPES attn=$DM_HF_ATTN devmap=${DM_HF_DEVMAPS:-<per-model>} decode=$DM_HF_DECODE ast=$DM_HF_AST agp=$DM_HF_AGP"
+[[ " $ENGINES " == *" vllm "* ]] && echo "  vllm  : profile=${DM_PROFILE:-<default-grid>} dtype=${DM_DTYPES:-<all>} attn=${DM_ATTN:-<hf-match 4>}"
 [[ -n "$SKIP" ]] && echo "  skip  : $SKIP"
 echo "  start : $(date '+%Y-%m-%d %H:%M:%S')"
 echo "================================================================"

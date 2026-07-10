@@ -94,6 +94,23 @@ DM_FP32_TP="${DM_FP32_TP:-}"
 # OOM). Needs a GPU + the weights; sweeps add_generation_prompt {true,false} like
 # the vLLM sweep. Restrict GPUs with DM_ALLOWED_GPUS (mapped to CUDA_VISIBLE_DEVICES).
 DM_HF_FP32="${DM_HF_FP32:-}"
+# HF-probe forward-pass-numerics + request sweep (only used when DM_HF_FP32=1). The
+# fp32 forward pass — not the prompt — is what a HuggingFaceClient reproduction has
+# to match, and the recipe that produced it isn't in run_spec.json, so sweep it:
+#   DM_HF_ATTN     attn_implementation set (default eager,sdpa); HF analogue of the
+#                  vLLM attention_backend sweep.
+#   DM_HF_DEVMAPS  device placement (default 'auto,single'); 'single' pins the whole
+#                  model on GPU 0 (OLMoE fp32 ~28 GB fits one card), avoiding
+#                  accelerate's cross-GPU fp32 reduction-order shift.
+#   DM_HF_DECODE   decode mode(s) (default 'helm'); 'helm' = HELM's
+#                  do_sample=True,temperature=1e-7,top_p; 'greedy' the old argmax.
+#   DM_HF_AST      tokenizer add_special_tokens (default both).
+#   DM_HF_AGP      chat add_generation_prompt (default both).
+DM_HF_ATTN="${DM_HF_ATTN:-eager,sdpa}"
+DM_HF_DEVMAPS="${DM_HF_DEVMAPS:-auto,single}"
+DM_HF_DECODE="${DM_HF_DECODE:-helm}"
+DM_HF_AST="${DM_HF_AST:-both}"
+DM_HF_AGP="${DM_HF_AGP:-both}"
 # Optional: narrow the attention_backend sweep, e.g. DM_ATTN=none,XFORMERS.
 DM_ATTN="${DM_ATTN:-}"
 # Optional: DM_LOG_REQUESTS=1 turns on vLLM request logging so each request's
@@ -135,6 +152,7 @@ echo "  mode    : $([[ "$DM_DRY" == 1 ]] && echo 'dry-run (CPU, no GPU)' || echo
 [[ -n "$DM_DTYPES" ]] && echo "  dtypes  : $DM_DTYPES"
 [[ -n "$DM_FP32_TP" ]] && echo "  fp32 TP : $DM_FP32_TP (float32 served on $DM_FP32_TP GPUs)"
 [[ -n "$DM_HF_FP32" ]] && echo "  mode    : HF transformers.generate() fp32 ONLY (replaces the vLLM sweep), scored vs oracle"
+[[ -n "$DM_HF_FP32" ]] && echo "  hf sweep: dtype=${DM_HF_DTYPES:-float32} attn=$DM_HF_ATTN device_map=$DM_HF_DEVMAPS decode=$DM_HF_DECODE ast=$DM_HF_AST agp=$DM_HF_AGP"
 [[ -n "$DM_ATTN" ]] && echo "  attn    : $DM_ATTN"
 echo
 
@@ -152,6 +170,11 @@ if [[ -n "$DM_HF_FP32" ]]; then
   # transformers uses device_map=auto over the visible GPUs; map the same restriction.
   [[ -n "$DM_ALLOWED_GPUS" ]] && export CUDA_VISIBLE_DEVICES="$DM_ALLOWED_GPUS"
   args=(hf-probe --run "$DM_RUN" --n "$DM_N" --out "$DM_OUT" --dtype "${DM_HF_DTYPES:-float32}")
+  [[ -n "$DM_HF_ATTN" ]] && args+=(--attn-impls "$DM_HF_ATTN")
+  [[ -n "$DM_HF_DEVMAPS" ]] && args+=(--device-maps "$DM_HF_DEVMAPS")
+  [[ -n "$DM_HF_DECODE" ]] && args+=(--decode "$DM_HF_DECODE")
+  [[ -n "$DM_HF_AST" ]] && args+=(--add-special-tokens "$DM_HF_AST")
+  [[ -n "$DM_HF_AGP" ]] && args+=(--add-generation-prompt "$DM_HF_AGP")
   dm "${args[@]}"
 else
   # One-shot `auto`: dry-run -> run -> score -> confirm. It prints the resolved

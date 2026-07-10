@@ -110,6 +110,9 @@ DM_HF_FP32="${DM_HF_FP32:-}"
 DM_HF_ATTN="${DM_HF_ATTN:-eager,sdpa}"
 DM_HF_DEVMAPS="${DM_HF_DEVMAPS:-auto,single}"
 DM_HF_DECODE="${DM_HF_DECODE:-helm}"
+# add_special_tokens / add_generation_prompt request axes (default both = full sweep).
+DM_HF_AST="${DM_HF_AST:-both}"
+DM_HF_AGP="${DM_HF_AGP:-both}"
 
 # The deployment-match core imports its sibling modules by bare name (cli.py adds
 # its own dir to sys.path); the serve phase additionally imports `infer_stack`, so
@@ -144,7 +147,7 @@ echo "  mode    : $([[ "$DM_DRY" == 1 ]] && echo 'dry-run (CPU, no GPU)' || echo
 [[ -n "$DM_DTYPES" ]] && echo "  dtypes  : $DM_DTYPES"
 [[ -n "$DM_FP32_TP" ]] && echo "  fp32 TP : $DM_FP32_TP (float32 served on $DM_FP32_TP GPUs)"
 [[ -n "$DM_HF_FP32" ]] && echo "  mode    : HF transformers.generate() fp32 ONLY (replaces the vLLM sweep), scored vs oracle"
-[[ -n "$DM_HF_FP32" ]] && echo "  hf sweep: attn=$DM_HF_ATTN | device_map=$DM_HF_DEVMAPS | decode=$DM_HF_DECODE"
+[[ -n "$DM_HF_FP32" ]] && echo "  hf sweep: dtype=${DM_HF_DTYPES:-float32} attn=$DM_HF_ATTN device_map=$DM_HF_DEVMAPS decode=$DM_HF_DECODE ast=$DM_HF_AST agp=$DM_HF_AGP"
 [[ -n "$DM_ATTN" ]] && echo "  attn    : $DM_ATTN"
 echo
 
@@ -165,6 +168,8 @@ if [[ -n "$DM_HF_FP32" ]]; then
   [[ -n "$DM_HF_ATTN" ]] && args+=(--attn-impls "$DM_HF_ATTN")
   [[ -n "$DM_HF_DEVMAPS" ]] && args+=(--device-maps "$DM_HF_DEVMAPS")
   [[ -n "$DM_HF_DECODE" ]] && args+=(--decode "$DM_HF_DECODE")
+  [[ -n "$DM_HF_AST" ]] && args+=(--add-special-tokens "$DM_HF_AST")
+  [[ -n "$DM_HF_AGP" ]] && args+=(--add-generation-prompt "$DM_HF_AGP")
   dm "${args[@]}"
 else
   # One-shot `auto`: dry-run -> run -> score -> confirm. It prints the resolved
