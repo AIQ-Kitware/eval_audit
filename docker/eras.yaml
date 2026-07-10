@@ -1,0 +1,42 @@
+# Era-pinned HELM reproduction registry.
+#
+# One era = one HELM release commit = one Docker image = one measurement
+# instrument (the audit's provenance unit). Each era is keyed on the
+# ``(public_track, suite_version)`` signal that the official public index
+# derives from a run dir's path (see eval_audit/eras.py :: era_for_run_dir).
+#
+# Read by BOTH:
+#   - docker/build.sh (ERA=<key> mode) to stage + build the era image, and
+#   - eval_audit/eras.py (load_era_registry / resolve_era) at manifest time.
+#
+# Absence of a match => the modern era: the existing helm-runner image and
+# magnet's from-spec CLI, unchanged. Modern is NOT listed here.
+#
+# ``matches`` predicates are OR-ed; each predicate is an AND over its keys.
+# ``suite_version`` values match the directory name under
+# ``benchmark_output/runs/<suite_version>/`` (e.g. ``v0.2.4``).
+# ``public_track`` matches the corpus track (e.g. ``classic``); ``"*"`` is a
+# wildcard for a key that should not constrain the match.
+
+eras:
+  helm-v0.2.4:
+    helm_git_ref: "626d8609"          # Release v0.2.4 (#1849)
+    python_version: "3.10"
+    constraints: docker/eras/constraints-helm-v0.2.4.txt
+    helm_extras: all
+    capability: era-shim-from-spec
+    image_name: helm-runner-era-v0-2-4
+    matches:
+      - public_track: classic
+        suite_version: v0.2.4
+
+  helm-v0.3.0:
+    helm_git_ref: "8ea285f7"          # Release v0.3.0 (#1962)
+    python_version: "3.10"
+    constraints: docker/eras/constraints-helm-v0.3.0.txt
+    helm_extras: all
+    capability: era-shim-from-spec
+    image_name: helm-runner-era-v0-3-0
+    matches:
+      - public_track: classic
+        suite_version: v0.3.0

@@ -1,0 +1,9 @@
+# Seed pip constraints for the helm-v0.3.0 era image.
+#
+# These are the tech-report-validated pins that govern *instance selection*
+# (pandas 2.0.x vs 2.2+ flips instance identity; numpy travels with it). They
+# are a SEED only: the frozen-at-build-time policy requires building with these,
+# running ``pip freeze`` in-container, and committing the full freeze back over
+# this file (see docker/README.md :: "Era constraints freeze workflow").
+pandas==2.0.3
+numpy==1.23.5

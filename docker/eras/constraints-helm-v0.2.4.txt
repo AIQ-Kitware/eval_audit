@@ -1,0 +1,8 @@
+# Seed pip constraints for the helm-v0.2.4 era image.
+#
+# Starts from the v0.3.0-validated instance-selection pins; the v0.2.4
+# entity_matching determinism check (validation ladder step 2) may require a
+# different pandas/numpy pair — settle empirically, then freeze (see
+# docker/README.md :: "Era constraints freeze workflow"). This is a SEED only.
+pandas==2.0.3
+numpy==1.23.5
