@@ -141,10 +141,53 @@ cat <result_root>/.../materialize_helm_run/<hash>/container_provenance.json
 docker image inspect --format '{{index .RepoDigests 0}}' <ref>
 ```
 
+## Era (pre-v0.5) images
+
+~59% of the audit corpus is pre-v0.5 (classic-track `v0.2.4` / `v0.3.0` runs).
+The modern image cannot replay them (it pins HELM 0.5.x + Python 3.11, and
+magnet's from-spec CLI imports v0.5+ module paths). Each era instead gets its own
+**CPU-only** image whose HELM harness is checked out at the era's release commit,
+with era Python + era dep pins — the measurement instrument frozen at the era,
+with model inference kept out-of-process on modern vLLM (infer-stack lease). See
+`docs/planning/era-pinned-helm-containers-plan.md` and `docker/README.md`.
+
+```bash
+# 1. Build the era image (declared in docker/eras.yaml)
+ERA=helm-v0.3.0 ./docker/build.sh
+
+# 2. Export an ERA bundle (era-schema model_deployments.yaml + exact-path sources)
+python -m eval_audit.integrations.infer_stack export-benchmark-bundle \
+  --preset <era-preset> --era helm-v0.3.0 --freeze-rel-paths \
+  --precomputed-root /data/crfm-helm-public
+
+# 3. make-manifest resolves the era from the sources' rel-paths (auto)
+eval-audit-make-manifest --from-run-spec --era auto \
+  --run-spec-sources-fpath <sources.yaml> --precomputed-root /data/crfm-helm-public \
+  --container-image helm-runner-era-v0-3-0:dev ...
+
+# 4. Run — the bridge selects the era pipeline (helm_era_shim.replay) and guards
+#    the image's org.aiq.era label against the manifest era at schedule time.
+eval-audit-run <manifest.yaml> --run
+```
+
+Key invariants:
+
+- **One manifest = one era = one image = one measurement instrument.** A mixed-era
+  source set is a hard error at make-manifest time (`eval_audit/eras.py`).
+- **Verbatim replay.** A pre-v0.5 `adapter_spec` has no `model_deployment` field,
+  so nothing is rewritten — routing to vLLM is purely by-name (the era shim
+  registers a deployment under the exact official model name). The materializer
+  **refuses** to insert a `model_deployment` field into an era spec.
+- **`same_deployment` resolves `unknown`** for era pairs (both sides lack the
+  field) — the correct behavior, not a bug; no Stage 5/6 changes.
+- **Provenance.** The era key + the image's `org.aiq.era` label are recorded in
+  `container_provenance.json`; the era value also rides the manifest.
+
 ## Limitations / follow-ups
 
 - A no-GPU host cannot run `--gpus all`; for CPU smoke tests set
-  `container_gpus: "none"` (or build/run the image directly).
+  `container_gpus: "none"` (or build/run the image directly). The era images are
+  CPU-only by design (model inference is out-of-process on vLLM).
 - Surfacing `container_provenance.json` in the Stage 4 index (to flag digest
   drift across an experiment) is a natural next step, not yet built.
 - Rootless `podman` / userns is not implemented; the schema reserves

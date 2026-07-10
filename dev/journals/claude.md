@@ -619,3 +619,85 @@ Design note: I did NOT add a determinism-knob axis to vLLM (enforce-eager / chun
 prefill / prefix-cache) — those are confounder-removal for matching an HF official,
 not parameters of the model recipe, so sweeping them would muddy the comparison
 rather than widen it. "All parameters" means the recipe surface, not vLLM's scheduler.
+
+## 2026-07-10 10:53:25 -0400
+
+**Model/harness.** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude Code.
+
+**Intent.** Implement the era-pinned HELM reproduction plan
+(`docs/planning/era-pinned-helm-containers-plan.md`) end to end: enable verbatim
+from-spec replay of the ~59% of the corpus that is pre-v0.5 (classic-track
+`v0.2.4`/`v0.3.0`) inside CPU-only era images whose HELM harness is the era's
+release commit, with model inference kept out-of-process on modern vLLM.
+
+**What I built (branch `impl/era-pinned-helm-containers`, six dependency-ordered
+commits).**
+
+1. **Era registry.** `docker/eras.yaml` (helm-v0.2.4=`626d8609`,
+   helm-v0.3.0=`8ea285f7`, python 3.10, seed constraints `pandas==2.0.3`/`numpy==1.23.5`)
+   + `eval_audit/eras.py` (frozen `EraSpec`/`EraMatch`, `resolve_era` keyed on the
+   path-derived `(public_track, suite_version)` signal, `resolve_era_for_sources`
+   raising on mixed eras). 11 unit tests.
+2. **Era image build.** `docker/build.sh` `ERA=` mode (reads the registry via a
+   tiny `read_eras.py`, `git archive`s HELM at the era commit, stages the shim +
+   constraints, skips magnet/eval_audit, rejects `BUILD_FROM=worktree`), a
+   CPU-only `ubuntu:22.04` era dockerfile with final-stage assertions
+   (`register_model_deployments_from_path`, `helm.benchmark.runner.RunSpec`, shim
+   imports, py3.10, pin spot-check) stamping `org.aiq.era`, plus the freeze
+   workflow in `docker/README.md`.
+3. **The shim** `docker/era_shim/helm_era_shim/`: `replay.py` (flag-compatible
+   with magnet's from-spec CLI via stdlib argparse; strict-dacite-decode into the
+   era RunSpec = drift detector; preflight; prepares `prod_env` + a
+   `credentials.conf` keyed on the official model name for v0.2.4's eager
+   AutoClient; drives era `run_benchmarking`; Stage-4-compatible output contract)
+   and `openai_compat_client.py` (requests port to `/v1/completions` building era
+   `Sequence`/`Token`, constructor tolerant of both eras' injection styles).
+4. **Host-side.** `run_spec_materializer.py` guard refuses to insert a
+   `model_deployment` field into a spec that lacks it (the era signal);
+   `bundle_export._model_deployment_entry_era` emits the era schema (official
+   model name, shim client, no api_key, cattrs-no-defaults nulls); `freeze.py`
+   `omit_model_deployment` for era sources; `--era` export flag. 5 tests.
+5. **Threading.** `ManifestSpec.era`; make-manifest `--era {auto,<key>,modern}`
+   (auto resolves from sources, mixed-era = SystemExit, exact-path-only
+   validation); `MaterializeHelmRunFromSpecEraDockerNode` (executable =
+   `helm_era_shim.replay`) + factory + `-e EVAL_AUDIT_ERA_API_KEY`; the bridge
+   selects the era pipeline on the exact-path branch, rejects era on
+   run-entry/discovery, and guards the image's `org.aiq.era` label against the
+   manifest era at schedule time (new `docker_provenance.image_label`). 7 tests.
+6. **Docs + runbook.** `reproduce/classic_era_replay/` (README + 4 scripts mapped
+   to the validation ladder), a `container-execution.md` era section, a
+   `helm-gotchas.md` G10 cross-ref, and a status banner on the plan.
+
+**Design tradeoffs / what I'm confident vs uncertain about.**
+
+- *Confident (host-verifiable):* the registry resolution, mixed-era rejection,
+  materializer guard, bundle era schema, builder era resolution, bridge pipeline
+  selection + era↔image guard — all unit-tested with the repo `.venv`. build.sh
+  passes `bash -n`; the shim's framework-free logic (argparse, guards, coercion)
+  is smoke-tested without importing era HELM.
+- *Uncertain (needs a GPU host + docker):* nothing that imports era `helm.*` has
+  actually run. The shim and era dockerfile are validated only by `py_compile` /
+  `bash -n`. I studied the era source at both release commits (`git show`) to get
+  the API right — RunSpec is `helm.benchmark.runner.RunSpec` with exactly 6
+  fields at both eras; `run_benchmarking` is signature-identical; the AutoClient
+  builds a `ServerService(base_path=local_path)` which auto-registers deployments
+  + demands `credentials.conf` (v0.2.4 requires a per-deployment key); the
+  completions response shape matches vLLM's `/v1/completions`. But the plan's
+  open questions (torch-CPU pin style, `pyext~=0.7` build under uv/3.10, dacite
+  strict-decode of the full AdapterSpec, HF-Hub drift for old `datasets`) are all
+  empirical and unresolved.
+- *Ordering wrinkle:* commit 2 (era dockerfile referencing `docker/era_shim/`)
+  landed before commit 3 (the shim), per the plan's narrative order. The tree
+  stays working because neither the dockerfile nor the era build path is
+  exercised by tests/compile; the modern build is byte-identical to before.
+
+**Next steps (all empirical, on a GPU host).** Walk the validation ladder:
+build both era images → freeze + commit the era constraints → instrument-fidelity
+diff on a pandas-sensitive `entity_matching` run (byte-for-byte instance identity,
+no model) → the `synthetic_reasoning_natural × pythia-6.9b` flagship (expect
+~20% recovered vs the official 0% Together artifact) → one full packet per era
+through Stages 3–6 → the per-scenario HF-fetch audit. Settle the open questions
+during that pass and fold the findings back into the plan. One reusable insight:
+reading era submodule source with `git show <release-commit>:<path>` (rather than
+checking out) let me pin the exact era API surface without perturbing the working
+tree — essential when one superproject must target two incompatible library eras.
