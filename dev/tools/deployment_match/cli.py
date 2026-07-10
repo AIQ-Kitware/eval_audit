@@ -409,10 +409,18 @@ def cmd_hf_probe(args: argparse.Namespace) -> int:
     (out_dir / "resolution.json").write_text(json.dumps(resolution.__dict__, indent=2))
 
     dtypes = [d.strip() for d in args.dtype.split(",") if d.strip()]
+    # Forward-pass-numerics sweep axes (each attn/device_map is a full model reload).
+    # "none"/"default" in --attn-impls means "let transformers pick" (None).
+    attn_impls = [None if a.lower() in ("none", "default") else a
+                  for a in (args.attn_impls.split(",") if args.attn_impls else [])
+                  if a.strip()] or None
+    device_maps = [d.strip() for d in args.device_maps.split(",") if d.strip()] or None
+    decodes = [d.strip() for d in args.decode.split(",") if d.strip()] or None
     cell_docs = hf_probe_mod.run_hf_probe(
         orc, resolution, out_dir, dtypes=dtypes,
         agp=args.add_generation_prompt, ast=args.add_special_tokens,
-        device_map=args.device_map, trust_remote_code=args.trust_remote_code)
+        device_map=args.device_map, trust_remote_code=args.trust_remote_code,
+        attn_impls=attn_impls, device_maps=device_maps, decodes=decodes)
 
     # Score the HF completions against the oracle (= the public run's completions),
     # reusing the exact scorer/reporter the vLLM sweep uses.
@@ -549,7 +557,23 @@ def main(argv: list[str] | None = None) -> int:
                     "older template ignored it, so 'false' reproduces that render)")
     hp.add_argument("--add-special-tokens", default="true", choices=["true", "false", "both"],
                     help="tokenizer add_special_tokens (default true, as HELM's get_prompt)")
-    hp.add_argument("--device-map", default="auto", help="transformers device_map (default auto, as HELM)")
+    hp.add_argument("--attn-impls", default="eager,sdpa",
+                    help="attn_implementation axis to SWEEP, comma-separated (default "
+                    "'eager,sdpa' — the two fp32-safe kernels; 'none' means transformers' "
+                    "own default). This is the HF analogue of the vLLM attention_backend "
+                    "sweep and a prime lever for the greedy first-token divergence. "
+                    "flash_attention_2 is fp16/bf16-only and will be skipped on fp32.")
+    hp.add_argument("--device-maps", default="auto",
+                    help="device-placement axis to SWEEP, comma-separated (default 'auto'). "
+                    "'single' (== whole model on GPU 0) avoids accelerate's cross-GPU fp32 "
+                    "reduction-order shift; add it ('auto,single') when a fits-on-one-GPU "
+                    "official won't reproduce under sharded device_map=auto.")
+    hp.add_argument("--decode", default="helm",
+                    help="decode-mode axis, comma-separated (default 'helm' — replicate "
+                    "HELM's do_sample=True,temperature=1e-7,top_p exactly; 'greedy' is the "
+                    "old do_sample=False argmax, kept as a diagnostic).")
+    hp.add_argument("--device-map", default="auto",
+                    help="single device_map when --device-maps is unset (default auto, as HELM)")
     hp.add_argument("--trust-remote-code", action="store_true")
     hp.add_argument("--out", required=True)
     hp.set_defaults(func=cmd_hf_probe)

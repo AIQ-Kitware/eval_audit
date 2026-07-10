@@ -99,6 +99,23 @@ DM_FP32_TP="${DM_FP32_TP:-}"
 # only precision, not the engine gap. Needs a GPU + weights; DM_ALLOWED_GPUS maps to
 # CUDA_VISIBLE_DEVICES.
 DM_HF_FP32="${DM_HF_FP32:-}"
+# HF-probe forward-pass-numerics sweep (only used when DM_HF_FP32=1). fp32 + the
+# right prompt is NOT enough to reproduce the OLMo-2 official: it diverges from the
+# first token because the probe's fp32 FORWARD PASS differs from the run that
+# produced the official. These three axes are what move the greedy logits and are
+# NOT recorded in run_spec.json, so they must be swept:
+#   DM_HF_ATTN     attn_implementation set (default eager,sdpa). HF analogue of the
+#                  vLLM attention_backend sweep.
+#   DM_HF_DEVMAPS  device placement (default 'auto,single'). 'single' pins the whole
+#                  model on GPU 0, avoiding accelerate's cross-GPU fp32 reduction-
+#                  order shift — the prime suspect for the first-token divergence on
+#                  a model that fits on one card (7B fp32 ~28 GB).
+#   DM_HF_DECODE   decode mode (default helm). 'helm' replicates HELM's
+#                  do_sample=True,temperature=1e-7,top_p exactly; 'greedy' is the old
+#                  argmax path. Sweep 'helm,greedy' to rule the decode path in/out.
+DM_HF_ATTN="${DM_HF_ATTN:-eager,sdpa}"
+DM_HF_DEVMAPS="${DM_HF_DEVMAPS:-auto,single}"
+DM_HF_DECODE="${DM_HF_DECODE:-helm}"
 
 # The deployment-match core imports its sibling modules by bare name (cli.py adds
 # its own dir to sys.path); the serve phase additionally imports `infer_stack`, so
@@ -133,6 +150,7 @@ echo "  mode    : $([[ "$DM_DRY" == 1 ]] && echo 'dry-run (CPU, no GPU)' || echo
 [[ -n "$DM_DTYPES" ]] && echo "  dtypes  : $DM_DTYPES"
 [[ -n "$DM_FP32_TP" ]] && echo "  fp32 TP : $DM_FP32_TP (float32 served on $DM_FP32_TP GPUs)"
 [[ -n "$DM_HF_FP32" ]] && echo "  mode    : HF transformers.generate() fp32 ONLY (replaces the vLLM sweep), scored vs oracle"
+[[ -n "$DM_HF_FP32" ]] && echo "  hf sweep: attn=$DM_HF_ATTN | device_map=$DM_HF_DEVMAPS | decode=$DM_HF_DECODE"
 [[ -n "$DM_ATTN" ]] && echo "  attn    : $DM_ATTN"
 echo
 
@@ -150,6 +168,9 @@ if [[ -n "$DM_HF_FP32" ]]; then
   # transformers uses device_map=auto over the visible GPUs; map the same restriction.
   [[ -n "$DM_ALLOWED_GPUS" ]] && export CUDA_VISIBLE_DEVICES="$DM_ALLOWED_GPUS"
   args=(hf-probe --run "$DM_RUN" --n "$DM_N" --out "$DM_OUT" --dtype "${DM_HF_DTYPES:-float32}")
+  [[ -n "$DM_HF_ATTN" ]] && args+=(--attn-impls "$DM_HF_ATTN")
+  [[ -n "$DM_HF_DEVMAPS" ]] && args+=(--device-maps "$DM_HF_DEVMAPS")
+  [[ -n "$DM_HF_DECODE" ]] && args+=(--decode "$DM_HF_DECODE")
   dm "${args[@]}"
 else
   # One-shot `auto`: dry-run -> run -> score -> confirm. It prints the resolved

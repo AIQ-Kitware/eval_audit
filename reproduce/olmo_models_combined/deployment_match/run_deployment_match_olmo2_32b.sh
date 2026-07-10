@@ -100,6 +100,18 @@ DM_FP32_TP="${DM_FP32_TP:-}"
 # only precision, not the engine gap. Needs a GPU + weights; DM_ALLOWED_GPUS maps to
 # CUDA_VISIBLE_DEVICES. (32B fp32 device_map=auto needs multiple visible GPUs.)
 DM_HF_FP32="${DM_HF_FP32:-}"
+# HF-probe forward-pass-numerics sweep (only used when DM_HF_FP32=1). fp32 + the
+# right prompt is NOT enough to reproduce the OLMo-2 official — it diverges from the
+# first token because the probe's fp32 FORWARD PASS differs from the run that
+# produced the official. DM_HF_ATTN (default eager,sdpa) is the HF analogue of the
+# vLLM attention_backend sweep. DM_HF_DEVMAPS defaults to 'auto' ONLY here: 32B fp32
+# (~128 GB) cannot fit one GPU, so accelerate MUST shard — the 'single' lever that
+# helps 7B/13B is infeasible at this size (a shard-order-invariant reproduction may
+# not exist for 32B on the HF side; vLLM fp32-TP is the confirmed path). DM_HF_DECODE
+# (default helm = HELM's do_sample/temp=1e-7/top_p).
+DM_HF_ATTN="${DM_HF_ATTN:-eager,sdpa}"
+DM_HF_DEVMAPS="${DM_HF_DEVMAPS:-auto}"
+DM_HF_DECODE="${DM_HF_DECODE:-helm}"
 
 # The deployment-match core imports its sibling modules by bare name (cli.py adds
 # its own dir to sys.path); the serve phase additionally imports `infer_stack`, so
@@ -134,6 +146,7 @@ echo "  mode    : $([[ "$DM_DRY" == 1 ]] && echo 'dry-run (CPU, no GPU)' || echo
 [[ -n "$DM_DTYPES" ]] && echo "  dtypes  : $DM_DTYPES"
 [[ -n "$DM_FP32_TP" ]] && echo "  fp32 TP : $DM_FP32_TP (float32 served on $DM_FP32_TP GPUs)"
 [[ -n "$DM_HF_FP32" ]] && echo "  mode    : HF transformers.generate() fp32 ONLY (replaces the vLLM sweep), scored vs oracle"
+[[ -n "$DM_HF_FP32" ]] && echo "  hf sweep: attn=$DM_HF_ATTN | device_map=$DM_HF_DEVMAPS | decode=$DM_HF_DECODE"
 [[ -n "$DM_ATTN" ]] && echo "  attn    : $DM_ATTN"
 echo
 
@@ -151,6 +164,9 @@ if [[ -n "$DM_HF_FP32" ]]; then
   # transformers uses device_map=auto over the visible GPUs; map the same restriction.
   [[ -n "$DM_ALLOWED_GPUS" ]] && export CUDA_VISIBLE_DEVICES="$DM_ALLOWED_GPUS"
   args=(hf-probe --run "$DM_RUN" --n "$DM_N" --out "$DM_OUT" --dtype "${DM_HF_DTYPES:-float32}")
+  [[ -n "$DM_HF_ATTN" ]] && args+=(--attn-impls "$DM_HF_ATTN")
+  [[ -n "$DM_HF_DEVMAPS" ]] && args+=(--device-maps "$DM_HF_DEVMAPS")
+  [[ -n "$DM_HF_DECODE" ]] && args+=(--decode "$DM_HF_DECODE")
   dm "${args[@]}"
 else
   # One-shot `auto`: dry-run -> run -> score -> confirm. It prints the resolved

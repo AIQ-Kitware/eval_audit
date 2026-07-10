@@ -85,12 +85,33 @@ _TORCH_DTYPES = {
 }
 
 
+def _resolve_device_map(device_map: str):
+    """Map the friendly ``single`` alias onto a whole-model single-GPU placement.
+
+    ``device_map="auto"`` lets accelerate SHARD a model across every visible GPU
+    when it doesn't fit on one. Sharding changes the fp32 reduction/accumulation
+    order at the layer boundaries, which shifts greedy logits enough to flip an
+    early near-tie token — the exact first-token divergence the OLMo-2 probe hits
+    (the model produced the official on one GPU; a sharded reload doesn't match).
+    ``single`` (== ``{"": 0}``) forces the whole model onto GPU 0 so the forward
+    pass is single-device, matching how a fits-on-one-GPU official was served."""
+    if str(device_map) in ("single", "one-gpu", "cuda:0", "0"):
+        return {"": 0}
+    return device_map
+
+
 def load_model_and_tokenizer(hf_source: str, tokenizer_repo: str, *, dtype: str,
-                             device_map: str = "auto", trust_remote_code: bool = False):
+                             device_map: str = "auto", attn_implementation: str | None = None,
+                             trust_remote_code: bool = False):
     """Load exactly the way HELM's HuggingFaceClient does (device_map=auto), but
     pin the dtype explicitly so fp32 is fp32 regardless of the transformers major
     version (pre-v5 defaults to fp32 anyway; v5 would otherwise read the bf16
-    config). Returns (model, tokenizer, device)."""
+    config). ``attn_implementation`` (eager/sdpa/flash_attention_2) and
+    ``device_map`` are the two forward-pass-numerics knobs the sweep varies to
+    find the one that reproduces the official's greedy logits — HELM/transformers
+    leaves both at the (version-dependent) default, so the recipe that produced a
+    public run is not recoverable from run_spec.json and must be searched. Returns
+    (model, tokenizer, device)."""
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -100,19 +121,39 @@ def load_model_and_tokenizer(hf_source: str, tokenizer_repo: str, *, dtype: str,
     torch_dtype = "auto" if norm == "auto" else getattr(torch, norm)
 
     tok = AutoTokenizer.from_pretrained(tokenizer_repo, trust_remote_code=trust_remote_code)
-    model = AutoModelForCausalLM.from_pretrained(
-        hf_source, torch_dtype=torch_dtype, device_map=device_map,
-        trust_remote_code=trust_remote_code)
+    load_kwargs: dict[str, Any] = {"torch_dtype": torch_dtype,
+                                   "device_map": _resolve_device_map(device_map),
+                                   "trust_remote_code": trust_remote_code}
+    if attn_implementation:
+        load_kwargs["attn_implementation"] = attn_implementation
+    model = AutoModelForCausalLM.from_pretrained(hf_source, **load_kwargs)
     model.eval()
     device = next(model.parameters()).device
     return model, tok, device
 
 
 def make_generate_fn(model: Any, tok: Any, device: Any, *, max_new_tokens: int,
-                     stop: list[str] | None) -> Callable[[str, bool], dict[str, Any]]:
-    """Greedy (temperature=0) generation, decoding only the new tokens. Returns a
-    generate_fn(rendered, add_special_tokens) -> probe-shaped result dict."""
+                     stop: list[str] | None, decode: str = "helm",
+                     temperature: float = 0.0, top_p: float | None = None,
+                     ) -> Callable[[str, bool], dict[str, Any]]:
+    """Decode only the new tokens. ``decode`` selects the generation path:
+
+    * ``helm`` (default) — replicate HELM's HuggingFaceServer.serve_request EXACTLY:
+      ``do_sample=True`` with ``temperature`` mapped ``0 -> 1e-7`` and ``top_p`` from
+      the recipe. HELM never does true greedy; it samples at a near-zero temperature
+      (argmax-equivalent in expectation but a DIFFERENT transformers code path than
+      greedy — different logits-warper stack, so it must be matched to reproduce a
+      HuggingFaceClient official).
+    * ``greedy`` — ``do_sample=False`` argmax (the old probe behavior; kept as a
+      diagnostic axis, not the default).
+
+    Returns a generate_fn(rendered, add_special_tokens) -> probe-shaped result dict."""
     import torch
+
+    # HELM maps temperature==0 -> 1e-7 (helm mode) so `generate` stays on the sample
+    # path with an argmax-peaked distribution; greedy mode ignores temperature.
+    helm = decode == "helm"
+    temp = 1e-7 if (temperature or 0.0) == 0 else float(temperature)
 
     def _gen(rendered: str, add_special_tokens: bool) -> dict[str, Any]:
         t0 = time.time()
@@ -121,8 +162,13 @@ def make_generate_fn(model: Any, tok: Any, device: Any, *, max_new_tokens: int,
             input_ids = enc["input_ids"].to(device)
             attn = enc.get("attention_mask")
             attn = attn.to(device) if attn is not None else None
-            gen_kwargs: dict[str, Any] = {"max_new_tokens": max_new_tokens,
-                                          "do_sample": False, "num_beams": 1}
+            gen_kwargs: dict[str, Any] = {"max_new_tokens": max_new_tokens}
+            if helm:
+                gen_kwargs.update(do_sample=True, temperature=temp, num_return_sequences=1)
+                if top_p is not None:
+                    gen_kwargs["top_p"] = top_p
+            else:
+                gen_kwargs.update(do_sample=False, num_beams=1)
             if tok.eos_token_id is not None:
                 gen_kwargs["pad_token_id"] = tok.eos_token_id
             with torch.no_grad():
@@ -174,14 +220,35 @@ def _variant_name(req: dict[str, Any]) -> str:
     return name
 
 
-def _cell_serve(resolution: Any, dtype: str) -> dict[str, Any]:
+def _hf_endpoint(model_short: str, dtype: str, attn: str | None, device_map: str) -> str:
+    """Endpoint name encoding the reload axes (dtype x attn_impl x device_map) so
+    cells from different serve-recipes never collide. Mirrors the vLLM grid's
+    ``-attn<backend>`` naming; the default (attn unset, device_map=auto) keeps the
+    plain ``hf-<model>-<dtype>`` name unchanged."""
+    ep = f"hf-{model_short}-{DTYPE_TAG.get(dtype, dtype)}"
+    if attn:
+        ep += f"-attn{_slug(attn)}"
+    if device_map and str(device_map) != "auto":
+        ep += f"-dev{_slug(str(device_map))}"
+    return ep
+
+
+def _cell_serve(resolution: Any, dtype: str, *, attn: str | None = None,
+                device_map: str = "auto") -> dict[str, Any]:
     """A serve block mirroring the grid's, so report.best_deployment renders."""
+    extra = ["--dtype", dtype]
+    if attn:
+        extra += ["--attn-impl", attn]
+    if str(device_map) != "auto":
+        extra += ["--device-map", str(device_map)]
+    extra.append("(huggingface transformers.generate)")
     return {"engine": "huggingface", "dtype": dtype, "hf_source": resolution.hf_source,
             "tokenizer": None, "max_model_len": resolution.official_max_sequence_length,
-            "trust_remote_code": False, "attention_backend": None,
+            "trust_remote_code": False, "attention_backend": attn,
+            "device_map": device_map,
             "tensor_parallel_size": 1, "max_num_seqs": 1,
             "gpu_memory_utilization": None, "max_num_batched_tokens": None,
-            "extra_args": ["--dtype", dtype, "(huggingface transformers.generate)"]}
+            "extra_args": extra}
 
 
 def plan_cells(model_short: str, dtypes: list[str],
@@ -200,14 +267,21 @@ def plan_cells(model_short: str, dtypes: list[str],
 
 def run_hf_probe(orc: Any, resolution: Any, out_dir: Path, *, dtypes: list[str],
                  agp: str, ast: str, device_map: str, trust_remote_code: bool,
+                 attn_impls: list[str | None] | None = None,
+                 device_maps: list[str] | None = None,
+                 decodes: list[str] | None = None,
                  progress: bool = True) -> list[dict[str, Any]]:
-    """Sweep dtypes x request-variants: load the model once PER dtype, probe every
-    request variant, write cells.json + results/*.json. Returns all cell docs.
+    """Sweep (dtype x attn_impl x device_map) reload-recipes x (decode x request-
+    variant) cheap-variants: load the model once per reload-recipe, probe every
+    cheap variant, write cells.json + results/*.json. Returns all cell docs.
 
-    Each dtype is a separate full model load (unlike vLLM, where dtype is a cheap
-    serve-arg), so dtypes run sequentially and the previous model is freed before
-    the next loads — sweeping fp32,bf16,fp16 confirms fp32 matches and the reduced
-    precisions don't, from the HF side."""
+    dtype/attn_impl/device_map each change the fp32 FORWARD PASS, so each distinct
+    triple is a separate full model load (unlike vLLM, where these are cheap serve
+    args) and runs sequentially with the previous model freed first. These are the
+    knobs that move the greedy logits: sweeping them is how the HF probe finds the
+    recipe that reproduces a HuggingFaceClient official whose exact serving numerics
+    aren't recorded in run_spec.json (the OLMo-2 first-token divergence). decode
+    (helm vs greedy) is a cheap per-generate axis — no reload."""
     import gc
     try:
         import torch
@@ -225,43 +299,64 @@ def run_hf_probe(orc: Any, resolution: Any, out_dir: Path, *, dtypes: list[str],
     recipe = orc.recipe or {}
     max_new = int(recipe.get("max_tokens") or 512)
     stop = recipe.get("stop_sequences") or []
+    temperature = float(recipe.get("temperature") or 0.0)
+    top_p = recipe.get("top_p")
     sample = [{"instance_id": s.instance_id, "prompt": s.prompt} for s in orc.sample]
+
+    attn_list: list[str | None] = list(attn_impls) if attn_impls else [None]
+    dev_list: list[str] = list(device_maps) if device_maps else [device_map]
+    decode_list: list[str] = list(decodes) if decodes else ["helm"]
 
     cell_docs: list[dict[str, Any]] = []
     cells_index: list[dict[str, Any]] = []
     for dtype in dtypes:
-        endpoint = f"hf-{model_short}-{DTYPE_TAG.get(dtype, dtype)}"
-        _log(f"[hf-probe] loading {resolution.hf_source} (dtype={dtype}, device_map={device_map}) "
-             f"tokenizer={tokenizer_repo} …")
-        model, tok, device = load_model_and_tokenizer(
-            resolution.hf_source, tokenizer_repo, dtype=dtype, device_map=device_map,
-            trust_remote_code=trust_remote_code)
-        _log(f"[hf-probe] loaded on {device}; model dtype={next(model.parameters()).dtype}")
-        has_template = bool(getattr(tok, "chat_template", None))
-        generate_fn = make_generate_fn(model, tok, device, max_new_tokens=max_new, stop=stop)
-        serve = _cell_serve(resolution, dtype)
+        for attn in attn_list:
+            for dev in dev_list:
+                endpoint = _hf_endpoint(model_short, dtype, attn, dev)
+                _log(f"[hf-probe] loading {resolution.hf_source} (dtype={dtype}, "
+                     f"attn={attn or 'default'}, device_map={dev}) tokenizer={tokenizer_repo} …")
+                try:
+                    model, tok, device = load_model_and_tokenizer(
+                        resolution.hf_source, tokenizer_repo, dtype=dtype, device_map=dev,
+                        attn_implementation=attn, trust_remote_code=trust_remote_code)
+                except Exception as exc:  # noqa: BLE001
+                    # A recipe can be infeasible (flash-attn on fp32, OOM on single-GPU).
+                    # Skip it and keep sweeping — don't abort the whole run.
+                    _log(f"[hf-probe] LOAD FAILED for {endpoint} "
+                         f"({type(exc).__name__}: {exc}); skipping this recipe")
+                    continue
+                _log(f"[hf-probe] loaded on {device}; model dtype={next(model.parameters()).dtype}")
+                has_template = bool(getattr(tok, "chat_template", None))
+                serve = _cell_serve(resolution, dtype, attn=attn, device_map=dev)
 
-        for req in variants:
-            apply_ct = has_template and req["protocol"] == "chat"
-            agp_val = bool(req.get("add_generation_prompt")) if req.get("add_generation_prompt") is not None else True
-            cell_id = f"{endpoint}::{_variant_name(req)}"
-            _log(f"[hf-probe] {dtype} / {_variant_name(req)} (apply_chat_template={apply_ct}, "
-                 f"add_generation_prompt={agp_val}, add_special_tokens={req['add_special_tokens']})")
+                for decode in decode_list:
+                    generate_fn = make_generate_fn(
+                        model, tok, device, max_new_tokens=max_new, stop=stop,
+                        decode=decode, temperature=temperature, top_p=top_p)
+                    for req in variants:
+                        apply_ct = has_template and req["protocol"] == "chat"
+                        agp_val = bool(req.get("add_generation_prompt")) if req.get("add_generation_prompt") is not None else True
+                        cell_id = f"{endpoint}::{_variant_name(req)}-{decode}"
+                        req_out = {**req, "decode": decode}
+                        _log(f"[hf-probe] {dtype}/{attn or 'default'}/{dev}/{decode} / {_variant_name(req)} "
+                             f"(apply_chat_template={apply_ct}, add_generation_prompt={agp_val}, "
+                             f"add_special_tokens={req['add_special_tokens']})")
 
-            def render_fn(raw: str, _ct=apply_ct, _g=agp_val) -> str:
-                return render_prompt(tok, raw, apply_chat_template=_ct, add_generation_prompt=_g)
+                        def render_fn(raw: str, _ct=apply_ct, _g=agp_val) -> str:
+                            return render_prompt(tok, raw, apply_chat_template=_ct, add_generation_prompt=_g)
 
-            doc = probe_variant(sample, cell_id=cell_id, endpoint=endpoint, request=req,
-                                render_fn=render_fn, generate_fn=generate_fn, progress=progress)
-            (results_dir / f"{cell_id.replace('::', '__')}.json").write_text(json.dumps(doc, indent=2))
-            cell_docs.append(doc)
-            cells_index.append({"cell_id": cell_id, "endpoint": endpoint, "serve": serve, "request": req})
+                        doc = probe_variant(sample, cell_id=cell_id, endpoint=endpoint, request=req_out,
+                                            render_fn=render_fn, generate_fn=generate_fn, progress=progress)
+                        (results_dir / f"{cell_id.replace('::', '__')}.json").write_text(json.dumps(doc, indent=2))
+                        cell_docs.append(doc)
+                        cells_index.append({"cell_id": cell_id, "endpoint": endpoint,
+                                            "serve": serve, "request": req_out})
 
-        # Free this dtype's model before the next full load (don't hold two at once).
-        del model, tok, generate_fn
-        gc.collect()
-        if torch is not None and getattr(torch, "cuda", None) is not None and torch.cuda.is_available():
-            torch.cuda.empty_cache()
+                # Free this recipe's model before the next full load (don't hold two at once).
+                del model, tok, generate_fn
+                gc.collect()
+                if torch is not None and getattr(torch, "cuda", None) is not None and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
     (out_dir / "cells.json").write_text(json.dumps(cells_index, indent=2))
     return cell_docs
