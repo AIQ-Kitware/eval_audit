@@ -596,3 +596,26 @@ fp32-TP remains the confirmed 32B path).
   versions and re-sweep (version skew is the remaining suspect).
 - 32B: `single` is infeasible; if HF can't reproduce it under sharding, document that
   vLLM fp32-TP is the only confirmed 32B path (already the journal's standing result).
+
+### Follow-up (same session): overnight now sweeps every parameter for both engines
+
+Extended the sweep wiring from the 3 OLMo-2 runbooks to the OLMoE base runbook and
+the overnight batch (`run_all_hf_and_vllm_overnight.sh`, commit d6cc37f). The
+overnight previously ran the HF probe at fp32 with default attn/device_map only —
+the new forward-pass axes were dormant there. Now:
+
+- **HF (per model):** dtype{fp32,bf16,fp16} × attn{eager,sdpa} × device_map{auto,
+  single*} × decode{helm,greedy} × agp{T,F} × ast{T,F}. `*single` is per-model: the
+  32B runbook keeps `auto` (128 GB fp32 can't fit one card); OLMoE/7B/13B get
+  `auto,single`. Wired `DM_HF_ATTN/DEVMAPS/DECODE/AST/AGP` through all four runbooks.
+- **vLLM:** already maximal — hf-match sweeps backend × agp, the grid default sweeps
+  all dtypes × ast; kept full, scheduler determinism knobs stay pinned by design.
+- New `SWEEP=full|quick` selector; every axis still individually overridable;
+  device_map left per-model unless pinned globally.
+
+Verified the whole chain with a `PYTHON_BIN=echo` stub (no GPU): each model builds
+the exact `hf-probe`/`auto` command, 32B correctly drops `single`, quick narrows.
+Design note: I did NOT add a determinism-knob axis to vLLM (enforce-eager / chunked-
+prefill / prefix-cache) — those are confounder-removal for matching an HF official,
+not parameters of the model recipe, so sweeping them would muddy the comparison
+rather than widen it. "All parameters" means the recipe surface, not vLLM's scheduler.
