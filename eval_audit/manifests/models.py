@@ -70,6 +70,15 @@ class ManifestSpec:
     # path). When empty, the run-entry path (``run_entries``) is used unchanged.
     # See docs/historical/planning/run-from-relative-path-plan.md.
     run_spec_sources: list[dict[str, Any]] = field(default_factory=list)
+    # Era-pinned replay (pre-v0.5). When set to an era key from docker/eras.yaml
+    # (e.g. "helm-v0.2.4"), Stage 3 replays each run inside the era image via the
+    # era shim (``helm_era_shim.replay``) instead of magnet's from-spec CLI, and
+    # the bridge guards the pinned image's ``org.aiq.era`` label against this
+    # value. None (the default) is the modern era — existing image + magnet CLI,
+    # unchanged. Only valid with ``from_run_spec=True`` + exact-path
+    # ``run_spec_sources`` (era replay is verbatim, exact-path only).
+    # See docs/planning/era-pinned-helm-containers-plan.md.
+    era: str | None = None
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:

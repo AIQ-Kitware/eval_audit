@@ -179,6 +179,26 @@ def resolve_image_digest(image: str, runtime: str = "docker") -> ResolvedImage:
     )
 
 
+def image_label(image: str, key: str, runtime: str = "docker") -> str | None:
+    """Return the value of OCI label ``key`` on ``image``, or ``None`` if absent.
+
+    Best-effort: a runtime/inspect failure returns ``None`` rather than raising,
+    so callers decide how strict to be. Used by the era<->image guard to read
+    ``org.aiq.era`` off the resolved image at schedule time.
+    """
+    bin_ = _runtime_bin(runtime)
+    proc = _run(
+        [bin_, "image", "inspect", image, "--format", f"{{{{index .Config.Labels {key!r}}}}}"]
+    )
+    if proc.returncode != 0:
+        return None
+    value = proc.stdout.strip()
+    # Docker prints "<no value>" for a missing label key.
+    if not value or value == "<no value>":
+        return None
+    return value
+
+
 def write_container_provenance(dpath: str | Path, record: dict[str, Any]) -> Path:
     """Write ``container_provenance.json`` into ``dpath`` and return its path."""
     dpath = Path(dpath)
