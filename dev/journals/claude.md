@@ -748,3 +748,61 @@ editing.
 the doc; the import checker's KNOWN_BAD entries come out with findings 3/8);
 then walk `05_ladder_gate.sh` on a docker host and the GPU machine for both
 eras. Findings 1, 2, 5 surface at rung 3 if not fixed first.
+
+## 2026-07-10 19:37:00 -0400
+
+**User intent.** "Move the pre-0.5.0 testing gates to dev and make it mirror
+the e2e test runbook already in dev — a model run e2e testing all
+capabilities, all deployments/specs done, runnable with little user input."
+Mid-session redirect: produce a *detailed implementation plan an Opus-level
+agent can follow* rather than implementing it myself.
+
+**Model/config.** claude-fable-5 (Fable 5), Claude Code VSCode harness, 1M
+context; work done in a worktree at `/home/agent/worktrees/era-tests` on
+`impl/era-pinned-helm-containers` (the main checkout stays on
+`impl/run-from-run-spec` with the uncommitted phi-2 fp16 pin awaiting the
+user's grid rerun).
+
+**Deliverable.** `docs/planning/era-tests-dev-runbook-plan.md` — the
+migration plan for rebuilding `reproduce/classic_era_replay/` as
+`dev/era-tests/` in the `dev/e2e-tests` shape. Fact-finding that shaped it:
+
+- **Test subject**: `eleutherai/pythia-6.9b` is the only corpus model with a
+  full official packet at BOTH classic eras (74 runs each at v0.2.4 and
+  v0.3.0). Grid = 2 eras × {synthetic_reasoning_natural:easy (generation,
+  the ~20%-recovery flagship), mmlu:us_foreign_policy (multiple_choice_joint,
+  max_tokens=1/num_outputs=5 — the shim logprob path)}. Verified both run
+  dirs at both eras carry the six-key classic run_spec.
+- **The canonical `official_public_index.csv` has ZERO classic rows** (55748
+  rows, all modern tracks) — same desync family as the stale
+  filter_inventory.json. The plan adds a `25_index_official_classic.sh`
+  emitting runbook-scoped index+inventory under `indexes/era-tests/`, with a
+  loud warning to override `--out_fpath/--out_detail_fpath` (their defaults
+  clobber the curated `run_details.yaml`).
+- **The freeze path makes the old 20_make_manifest.sh redundant**:
+  `export-benchmark-bundle --freeze-rel-paths` (era from the preset via
+  `preset_cfg.get("era")`) bakes frozen `run_spec_sources` + `era:` into
+  directly runnable smoke/full manifests — so the era grid mirrors the e2e
+  vllm transport almost verbatim (gc → gateway bootstrap → export → run
+  --lease --container-image <era image>).
+- **Phase 0 is the findings doc**: findings 1/2/3/5 each independently break
+  this exact runbook path (2 names pythia-6.9b's dotted key), so the plan
+  makes fixing them a blocking prerequisite and warns the implementer that
+  post-fix, era export takes --base-url/--api-key-value like e2e.
+
+**Tradeoffs.** One preset per era carrying both scenarios (different logical
+keys → no packet pooling; e2e's per-scenario split exists only because its
+three variants share one scenario). Grid rows are eras, not scenarios (era =
+provenance unit). ladder.env dies in favor of e2e-style defaults+env. No
+auto-build in 06 (fail-with-remedy, matching e2e). Five open questions are
+flagged empirical-first (freeze disambiguation across classic suites,
+composer era-scoping, require_per_instance_stats vs per-instance-stats-less
+classic officials, era HF-fetch health, lease/network combo) rather than
+guessed at.
+
+**Loose ends.** An exploration subagent digesting the era CLI surface died
+mid-run (task id vanished); its scope was re-covered by direct reads. The
+e2e-conventions digest that fed the plan came from the other subagent and is
+reflected in the plan's "copy verbatim" tables. Next: an implementing agent
+executes the plan phases 0→3 on this branch, starting with the findings-doc
+fix order.
