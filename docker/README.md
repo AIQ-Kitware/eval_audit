@@ -15,8 +15,13 @@ This image is intentionally **independent** of the legacy
 | File | Purpose |
 |---|---|
 | `helm-runner.dockerfile` | Multi-stage (CUDA devel builder → CUDA runtime final) image; Python 3.11; `crfm-helm[all]` + `aiq-magnet` editable-installed into `/opt/venv` with `huggingface_hub==0.36.2` pinned. |
-| `entrypoint.sh` | Runs the wrapped command; on exit writes `container_provenance.json` and chowns the output dir back to the host user. |
-| `build.sh` | Stages pristine (committed) source via `git archive`, resolves provenance shas, builds with BuildKit, optionally pushes. |
+| `helm-runner-era.dockerfile` | **Era (pre-v0.5) variant.** CPU-only `ubuntu:22.04` image; uv-managed **Python 3.10**; era `crfm-helm[all]` at the pinned release commit + a frozen constraints file + the `helm_era_shim` package. No CUDA, no magnet, no eval_audit. |
+| `eras.yaml` | Declarative era registry keyed on `(public_track, suite_version)`: `helm_git_ref`, `python_version`, `constraints`, `image_name`, `matches`. Read by `build.sh` **and** `eval_audit/eras.py`. |
+| `eras/constraints-helm-*.txt` | Per-era pip constraints governing **instance selection** (pandas 2.0.x vs 2.2+ flips instance identity). Seeded, then frozen at build time (below). |
+| `era_shim/` | The `helm_era_shim` package: verbatim-replay CLI (`python -m helm_era_shim.replay`) + backported OpenAI-compatible completions client. Installed into the era image `--no-deps`. |
+| `read_eras.py` | Tiny PyYAML query tool over `eras.yaml` for `build.sh` (shell cannot parse YAML). |
+| `entrypoint.sh` | Runs the wrapped command; on exit writes `container_provenance.json` and chowns the output dir back to the host user. Reused verbatim by **both** dockerfiles. |
+| `build.sh` | Stages pristine (committed) source via `git archive`, resolves provenance shas, builds with BuildKit, optionally pushes. `ERA=<key>` switches to the era path. |
 | `helm-runner.dockerignore` | Build-context safety net (copied into the staging dir by `build.sh`). |
 
 ## Build
@@ -47,6 +52,48 @@ docker image inspect eval-audit-helm-runner:dev \
 > they *drop* uncommitted submodule edits — commit them first to include them.
 > For cross-machine runs, push the image and reference it **by digest** in the
 > manifest; the pipeline resolves and pins the digest at schedule time.
+
+## Era (pre-v0.5) images
+
+The audit corpus is ~59% pre-v0.5 (classic-track `v0.2.4` / `v0.3.0` runs). Those
+runs cannot be replayed by the modern image (it pins HELM 0.5.x + Python 3.11 and
+magnet imports v0.5+ module paths). Each era gets its own **CPU-only** image whose
+HELM harness is checked out at the era's release commit, with era Python and era
+dep pins — the measurement instrument frozen at the era, with model inference kept
+out-of-process on modern vLLM (infer_stack).
+
+```bash
+# Build the v0.3.0 era image (tag: helm-runner-era-v0-3-0:<eval-audit-short-sha>)
+ERA=helm-v0.3.0 ./docker/build.sh
+
+# Confirm the era stamp + shim + era RunSpec/registry resolve
+docker run --rm helm-runner-era-v0-3-0:dev python -m helm_era_shim.replay --help
+docker image inspect helm-runner-era-v0-3-0:dev \
+  --format '{{index .Config.Labels "org.aiq.era"}}'   # -> helm-v0.3.0
+```
+
+The era build stages HELM at `helm_git_ref` (from `eras.yaml`) via `git archive`,
+skips magnet + eval_audit, stages `docker/era_shim/` + the era constraints file,
+and stamps `org.aiq.era=<key>` (the label the kwdagger bridge checks against the
+manifest era at schedule time). `ERA` is rejected with `BUILD_FROM=worktree` — the
+era harness must be the committed release commit.
+
+### Era constraints freeze workflow
+
+`docker/eras/constraints-helm-*.txt` start as **seeds** (the tech-report-validated
+`pandas==2.0.3`, `numpy==1.23.5` that govern instance selection). To satisfy the
+frozen-at-build-time policy, freeze the full environment after a green build:
+
+```bash
+ERA=helm-v0.3.0 ./docker/build.sh                       # build with the seed pins
+docker run --rm helm-runner-era-v0-3-0:dev \
+  python -m pip freeze > docker/eras/constraints-helm-v0.3.0.txt   # capture the full freeze
+ERA=helm-v0.3.0 ./docker/build.sh                       # rebuild against the frozen file
+```
+
+The final stage spot-checks the `pandas==` / `numpy==` pins from the constraints
+file (build args `PANDAS_PIN` / `NUMPY_PIN`), so a pin drift fails the build loudly.
+Commit the frozen file; that commit is the era's reproducibility unit.
 
 ## Smoke test
 
