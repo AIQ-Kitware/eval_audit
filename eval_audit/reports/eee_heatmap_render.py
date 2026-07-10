@@ -672,20 +672,25 @@ def _render_diff_heatmap(
     subtitle: str | None = None,
     transpose: bool = False,
     benchmark_metric: dict[str, str] | None = None,
+    value_mode: str = "signed",
+    force_title: bool = False,
 ) -> Path:
     """Render an aggregate-score-difference heatmap.
 
     Sibling of :func:`_render_heatmap`, but the cell encoding is entirely
-    different:
+    different. ``value_mode`` selects what the color encodes:
 
-    * **Color** is the *signed* difference ``local − public`` (the
-      reproduced aggregate score minus the official one), mapped through a
-      diverging colorblind-safe colormap centered on zero — Wong blue for
-      "reproduced lower than public", near-white for "matches", Wong
-      orange for "reproduced higher". The scale is symmetric about zero so
-      the white midpoint always means "no drift".
-    * **Annotation** is the two actual aggregate scores: ``P`` = public
-      (official) on top, ``L`` = local (reproduced) below.
+    * ``"signed"`` (default) — the *signed* difference ``local − public``
+      on a diverging colorblind-safe colormap centered on zero (Wong blue
+      = reproduced lower, near-white = matches, Wong orange = higher).
+      Direction-preserving; used by the per-metric drill-downs.
+    * ``"squared"`` — the *squared error* ``(local − public)²`` on a
+      sequential white→red colormap (0 = light, larger = darker). Always
+      non-negative and quadratically emphasizes big deviations; used by
+      the holistic headline view.
+
+    Either way the **annotation** is the two actual aggregate scores:
+    ``P`` = public (official) on top, ``L`` = local (reproduced) below.
 
     ``cells`` is keyed ``(model, benchmark)``. In the per-metric wrapper
     every cell is the same metric; in the holistic "headline" view each
@@ -693,7 +698,9 @@ def _render_diff_heatmap(
     ``benchmark_metric`` (benchmark → metric name) so each benchmark's
     axis tick names the metric it used. ``transpose`` matches
     :func:`_render_heatmap`: rows=benchmarks/cols=models by default, or
-    rows=models/cols=benchmarks when True.
+    rows=models/cols=benchmarks when True. ``force_title`` keeps the
+    in-figure title/subtitle even in the transposed layout (which
+    otherwise suppresses them for paper-slim figures).
     """
     def _bench_label(bench: str) -> str:
         base = _BENCHMARK_DISPLAY.get(bench, bench)
@@ -716,43 +723,71 @@ def _render_diff_heatmap(
         fig_w = max(6.0, 2.4 * n_models + 2.0)
         fig_h = max(5.0, 0.55 * n_bench + 1.5)
 
-    # Symmetric diverging scale about zero: 0 → white midpoint always
-    # reads as "no drift". vmax defaults to the largest |diff| present so
-    # the gradient uses its full range; override with
-    # EVAL_AUDIT_DIFF_HEATMAP_VMAX to pin a common scale across metrics.
+    squared = value_mode == "squared"
+
+    # Per-cell scalar the color encodes: signed diff, or its square.
+    def _cell_value(cell: dict[str, Any]) -> float:
+        diff = cell["diff"]
+        return diff * diff if squared else diff
+
     present_diffs = [
         c["diff"] for c in cells.values()
         if c and c.get("status") == "present" and c.get("diff") is not None
     ]
     env_vmax = os.environ.get("EVAL_AUDIT_DIFF_HEATMAP_VMAX", "")
-    if env_vmax:
-        vmax = abs(float(env_vmax))
-    else:
-        vmax = max((abs(d) for d in present_diffs), default=0.0)
-    if vmax <= 0:
-        # Degenerate: every present cell has zero drift. Give the norm a
-        # valid width so all cells map to the white center.
-        vmax = 1.0
-    norm = mcolors.Normalize(vmin=-vmax, vmax=vmax)
-
     cmap_name = os.environ.get("EVAL_AUDIT_DIFF_HEATMAP_CMAP", "")
-    if cmap_name:
-        cmap = plt.get_cmap(cmap_name)
+    if squared:
+        # Sequential scale from 0 (no deviation) to the largest squared
+        # error present; a light→dark ramp makes bigger deviations pop.
+        present_values = [d * d for d in present_diffs]
+        vmax = abs(float(env_vmax)) if env_vmax else max(present_values, default=0.0)
+        if vmax <= 0:
+            vmax = 1.0
+        norm = mcolors.Normalize(vmin=0.0, vmax=vmax)
+        if cmap_name:
+            cmap = plt.get_cmap(cmap_name)
+        else:
+            # White (no deviation) → Wong orange → deep red (large
+            # deviation): a single-hue-family sequential ramp that stays
+            # ordered under the common CVD types.
+            cmap = mcolors.LinearSegmentedColormap.from_list(
+                "WhiteRed",
+                [
+                    (0.0, "#f7f7f7"),   # near-white (no deviation)
+                    (0.5, "#E69F00"),   # Wong orange (moderate)
+                    (1.0, "#8c1d04"),   # deep red    (large deviation)
+                ],
+                N=256,
+            )
     else:
-        # Wong blue (low / reproduced-below-public) → near-white (match) →
-        # Wong orange (reproduced-above-public). Deutera/protan/tritan all
-        # keep this blue↔orange separation, and the light midpoint is a
-        # genuine "neutral" cue here (unlike the agreement heatmap, where
-        # the midpoint is arbitrary), because zero drift is the goal.
-        cmap = mcolors.LinearSegmentedColormap.from_list(
-            "BlueWhiteOrange",
-            [
-                (0.0, "#0072B2"),   # Wong blue  (local << public)
-                (0.5, "#f7f7f7"),   # near-white (local == public)
-                (1.0, "#E69F00"),   # Wong orange(local >> public)
-            ],
-            N=256,
+        # Symmetric diverging scale about zero: 0 → white midpoint always
+        # reads as "no drift". vmax defaults to the largest |diff| present
+        # so the gradient uses its full range; override with
+        # EVAL_AUDIT_DIFF_HEATMAP_VMAX to pin a common scale across metrics.
+        vmax = abs(float(env_vmax)) if env_vmax else max(
+            (abs(d) for d in present_diffs), default=0.0
         )
+        if vmax <= 0:
+            # Degenerate: every present cell has zero drift. Give the norm
+            # a valid width so all cells map to the white center.
+            vmax = 1.0
+        norm = mcolors.Normalize(vmin=-vmax, vmax=vmax)
+        if cmap_name:
+            cmap = plt.get_cmap(cmap_name)
+        else:
+            # Wong blue (low / reproduced-below-public) → near-white (match)
+            # → Wong orange (reproduced-above-public). Deutera/protan/tritan
+            # all keep this blue↔orange separation, and the light midpoint
+            # is a genuine "neutral" cue because zero drift is the goal.
+            cmap = mcolors.LinearSegmentedColormap.from_list(
+                "BlueWhiteOrange",
+                [
+                    (0.0, "#0072B2"),   # Wong blue  (local << public)
+                    (0.5, "#f7f7f7"),   # near-white (local == public)
+                    (1.0, "#E69F00"),   # Wong orange(local >> public)
+                ],
+                N=256,
+            )
     scalar = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
 
     _MISSING_COLOR = "#bdbdbd"
@@ -771,8 +806,7 @@ def _render_diff_heatmap(
                 col, row = i_model, i_bench
             cell = cells.get((model, bench))
             if cell is not None and cell.get("status") == "present":
-                diff = cell["diff"]
-                cell_rgba = cmap(norm(diff))
+                cell_rgba = cmap(norm(_cell_value(cell)))
                 rect = plt.Rectangle(
                     (col - 0.5, row - 0.5), 1, 1,
                     facecolor=cell_rgba,
@@ -848,18 +882,28 @@ def _render_diff_heatmap(
         cbar = fig.colorbar(scalar, ax=ax, fraction=0.02, pad=0.01)
     else:
         cbar = fig.colorbar(scalar, ax=ax, fraction=0.03, pad=0.02)
-    cbar.set_label(
-        "Local $-$ Public (aggregate score)"
-        if plt.rcParams.get("text.usetex")
-        else "Local − Public (aggregate score)",
-        fontsize=10,
-    )
+    if squared:
+        cbar_label = (
+            "Squared error (Local $-$ Public)$^2$"
+            if plt.rcParams.get("text.usetex")
+            else "Squared error (Local − Public)²"
+        )
+    else:
+        cbar_label = (
+            "Local $-$ Public (aggregate score)"
+            if plt.rcParams.get("text.usetex")
+            else "Local − Public (aggregate score)"
+        )
+    cbar.set_label(cbar_label, fontsize=10)
     cbar.ax.tick_params(labelsize=9, length=0)
     cbar.outline.set_visible(False)
 
-    if not transpose:
+    if not transpose or force_title:
         if subtitle is None:
-            sub = "cell: P=public / L=local aggregate score; color = local − public"
+            if squared:
+                sub = "cell: P=public / L=local aggregate score; color = (local − public)²"
+            else:
+                sub = "cell: P=public / L=local aggregate score; color = local − public"
         else:
             sub = subtitle
         if title and sub:
@@ -1025,6 +1069,7 @@ def _render_headline_diff_text_table(
         "Headline aggregate score difference (one metric per benchmark)",
         "Per benchmark: public aggregate score vs local reproduction, at the",
         "benchmark's headline metric (HELM main_name; fallback if absent).",
+        "The heatmap colors each cell by squared error (local − public)².",
         "",
         "Cell legend:",
         "  0.82/0.79  public aggregate score / local (reproduced) score",
@@ -1068,7 +1113,6 @@ def _render_headline_diff(
     title: str,
     out_dir: Path,
     *,
-    transpose: bool = False,
     subtitle_override: str | None = None,
 ) -> dict[str, Any]:
     """Emit the holistic model × benchmark headline-metric diff heatmap.
@@ -1078,8 +1122,14 @@ def _render_headline_diff(
     :func:`eval_audit.reports.eee_heatmap_data._collect_headline_diff_cells`)
     and renders a single heatmap plus text/JSON sidecars, so every
     model × benchmark pair is visible in one figure. Each benchmark's axis
-    tick names the metric it used. Returns
-    ``{"png": Path|None, "txt": Path|None, "json": Path|None}``.
+    tick names the metric it used.
+
+    Orientation and color are fixed to make this the holistic overview:
+    **models on the left, benchmarks along the bottom** (mirroring the
+    coverage-matrix layout) and color = **squared error**
+    ``(local − public)²`` — non-negative, emphasizing the largest
+    deviations. Returns ``{"png": Path|None, "txt": Path|None,
+    "json": Path|None}``.
     """
     cells, benchmark_metric = _collect_headline_diff_cells(per_metric_cells)
     if not cells:
@@ -1101,6 +1151,7 @@ def _render_headline_diff(
             "model": m,
             "benchmark": b,
             "metric": benchmark_metric.get(b),
+            "squared_error": cells[(m, b)]["diff"] ** 2,
             **cells[(m, b)],
         }
         for b in benchmarks_present
@@ -1122,8 +1173,11 @@ def _render_headline_diff(
     else:
         subtitle = (
             "one headline metric per benchmark (named on each axis tick); "
-            "cell: P=public / L=local; color = local − public"
+            "cell: P=public / L=local; color = (local − public)²"
         )
+    # transpose=True → models on the left, benchmarks on the bottom;
+    # force_title keeps the title in that layout; value_mode="squared"
+    # colors by squared error on a sequential ramp.
     png_path = _render_diff_heatmap(
         cells,
         models,
@@ -1132,8 +1186,10 @@ def _render_headline_diff(
         out_dir,
         out_filename="aggregate_score_diff_headline.png",
         subtitle=subtitle,
-        transpose=transpose,
+        transpose=True,
         benchmark_metric=benchmark_metric,
+        value_mode="squared",
+        force_title=True,
     )
     return {"png": png_path, "txt": txt_path, "json": json_path}
 

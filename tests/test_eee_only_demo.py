@@ -344,6 +344,11 @@ def test_aggregate_summary_emits_headline_score_diff(demo_output: Path) -> None:
 
     # One cell per (model, benchmark) — no metric multiplicity.
     cells = {(c["model"], c["benchmark"]): c for c in payload["cells"]}
-    assert cells[("toy/m1-small", "imdb")]["diff"] == -1.0
+    imdb_m1 = cells[("toy/m1-small", "imdb")]
+    assert imdb_m1["diff"] == -1.0
+    # Squared error is what the holistic plot colors by: non-negative and
+    # emphasizing the largest deviations. diff -1.0 -> squared_error 1.0.
+    assert imdb_m1["squared_error"] == 1.0
+    assert all(c["squared_error"] >= 0 for c in payload["cells"])
     # Exactly 9 holistic cells (3 models × 3 benchmarks).
     assert len(payload["cells"]) == 9, len(payload["cells"])

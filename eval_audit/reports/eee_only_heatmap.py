@@ -410,7 +410,6 @@ def main(argv: list[str] | None = None) -> None:
                 headline = _render_headline_diff(
                     diff_cells, diff_models, diff_benchmarks,
                     f"{title} — headline metric per benchmark", out_dir,
-                    transpose=args.transpose,
                     subtitle_override=("" if args.no_subtitle else None),
                 )
                 if headline.get("png"):
