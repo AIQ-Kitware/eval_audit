@@ -341,3 +341,43 @@ benchmarks outside it (or with unusual main metrics like msmarco RR@10 /
 NDCG@10, code pass@1) rely on the priority fallback, which is exact-match-
 biased. If we start auditing those benchmarks, extend
 `HEADLINE_METRIC_BY_BENCHMARK` rather than trusting the fallback.
+
+## 2026-07-08 17:10:00 -0400
+
+**Model/config:** claude-opus-4-8[1m] (Claude Code, VSCode extension harness).
+
+**User intent:** Two fixes to the holistic headline aggregate-diff plot:
+(1) models on the left / benchmarks on the bottom (mirror the existing
+report plots, e.g. coverage matrix); (2) color by squared error
+(local − public)² instead of the signed diff — non-negative (a signed
+"deviation" is meaningless for this overview) and emphasizes big drifts.
+
+**Implementation.** Generalized `_render_diff_heatmap` with two orthogonal
+knobs rather than overloading `transpose`:
+- `value_mode` ∈ {"signed" (default, diverging Blue-White-Orange, current),
+  "squared" (sequential White→Wong-orange→deep-red, vmin=0)}.
+- `force_title` — keep the in-figure title/subtitle in the transposed
+  layout, which otherwise suppresses them for paper-slim figures.
+`_render_headline_diff` now fixes transpose=True (models-left) +
+value_mode="squared" + force_title=True. The per-metric drill-downs stay
+signed/diverging (direction is informative there); only the holistic view
+switched. Headline JSON gained a `squared_error` field.
+
+**Why decouple instead of reusing transpose.** `transpose` already
+conflated orientation with title-suppression (inherited from the agreement
+heatmap's paper mode). The headline needs the *transposed orientation* but
+*with* a title, so orientation and title-suppression had to become
+independent — `force_title` does that without disturbing the per-metric
+transpose behavior.
+
+**Scope decision.** Applied to the headline plot ONLY (the "new plot" the
+user referenced). Per-metric plots keep signed diff + their existing
+orientation — squared error there would lose the direction signal that
+makes a per-metric drill-down useful. If the user later wants the
+per-metric plots aligned too, flip them to value_mode="squared" and
+transpose in `_render_aggregate_diff_heatmaps`.
+
+**Verified.** Rendered demo: models rows / benchmarks cols; colorbar
+"Squared error (Local − Public)²" 0–1; imdb/m1 (sq 1.0) deep red, exact
+cells near-white; title retained. 36 tests green under `--run-slow`
+(headline test now also asserts squared_error). Committed 29fc76c.
