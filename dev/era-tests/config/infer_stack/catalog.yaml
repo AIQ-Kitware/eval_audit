@@ -1,0 +1,38 @@
+# infer-stack serving catalog for the classic-era (pre-v0.5) replay runbook.
+#
+# Mirrors dev/e2e-tests/config/infer_stack/catalog.yaml, but serves
+# EleutherAI/pythia-6.9b — the one audit-corpus model with a full official
+# packet at BOTH classic eras (v0.2.4 and v0.3.0). The era container is a
+# CPU-only HELM harness that talks to this vLLM endpoint over HTTP (it holds no
+# weights), so model inference stays on modern vLLM while the *measurement
+# instrument* is pinned to the era.
+#
+# Endpoint name == the era preset's `profile` field (era-pythia_6_9b-v0_2_4 /
+# -v0_3_0 in eval_audit/integrations/infer_stack/preset_configs.yaml) and the
+# ERA_TARGETS / 05_check_profiles.sh references. It also doubles as the served
+# name HELM's era shim client requests (C-3: served_model_name == endpoint name),
+# and the name a lease acquires + the LiteLLM gateway routes by.
+#
+# HELM-domain aliases live in the preset (authoritative), not here. The catalog
+# owns transport: the backing HF model + served context window + `protocol`.
+#
+# `protocol` MUST agree with the preset's `protocol_mode`: pythia-6.9b is a base
+# model served in completions mode (the era shim client speaks /v1/completions
+# ONLY), so the readiness probe must hit /completions, not /chat/completions —
+# otherwise `acquire` blocks until the TTL and the leased run hangs.
+models:
+  pythia-6.9b:
+    source: hf://EleutherAI/pythia-6.9b
+
+endpoints:
+  pythia69b-single:
+    engine: vllm
+    reclaim: stop                # free the GPU on release so the per-run lease queue can place the next run
+    model: pythia-6.9b
+    protocol: completions        # base model -> readiness probe must hit /completions
+    runtime:
+      max_model_len: 2048
+      gpu_memory_utilization: 0.8
+      max_num_batched_tokens: 2048
+      max_num_seqs: 16
+      enable_prefix_caching: true

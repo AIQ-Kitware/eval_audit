@@ -1,0 +1,33 @@
+schema_version: 1
+name: era-pythia-v024
+description: >
+  Classic-era (pre-v0.5) replay packet: eleutherai/pythia-6.9b @ helm-v0.2.4
+  (synthetic_reasoning_natural:easy + mmlu:us_foreign_policy), composed alone and
+  paired against the OFFICIAL classic v0.2.4 runs. same_deployment resolves
+  'unknown' for era pairs (a pre-v0.5 adapter_spec has no model_deployment field)
+  — expected, not a bug. Sibling per-era manifest: era-pythia-v030.
+
+scope:
+  models:
+    - "regex:^eleutherai/pythia-6\\.9b$"
+
+sources:
+  - kind: audit_index
+    fpath: /data/crfm-helm-audit-store/indexes/audit_results_index.csv
+    include_experiments:
+      - era-pythia_6_9b-v0_2_4-full
+
+  # Public comparison side, scoped to THIS era's suite. The canonical
+  # official_public_index.csv has ZERO classic-track rows, so the runbook's
+  # 25_index_official_classic.sh emits a per-era official index + filter
+  # inventory (eval-audit-index-historic --suite_pattern v0.2.4). Keeping it
+  # per-era avoids pairing a v0.2.4 local run against a v0.3.0 official (identical
+  # logical keys across suites otherwise).
+  - kind: official_public_index
+    fpath: /data/crfm-helm-audit-store/indexes/era-tests/v0.2.4/official_public_index.csv
+    pre_filter:
+      kind: helm_stage1
+      inventory_fpath: /data/crfm-helm-audit-store/analysis/era-tests/v0.2.4/filter_inventory.json
+
+output:
+  root: /data/crfm-helm-audit-store/virtual-experiments/era-pythia-v024
