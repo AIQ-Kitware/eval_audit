@@ -111,6 +111,7 @@ def _model_deployment_entry_era(
     *,
     helm_model_name: str,
     base_url: str | None = None,
+    api_key_value: str | None = None,
 ) -> dict[str, Any]:
     """Build an ERA-schema (pre-v0.5) ``model_deployments.yaml`` entry.
 
@@ -120,22 +121,41 @@ def _model_deployment_entry_era(
       run_spec.json's ``adapter_spec.model``). Era replay is verbatim by-name —
       there is no ``model_deployment`` field to rewrite — so the registered name
       must match the official model, not a synthesized local deployment name.
-    * ``client_spec.class_name`` is the era shim client; ``args`` carry only
-      ``base_url`` + ``openai_model_name`` (the served name). **No ``api_key``** —
-      the era ``credentials.conf`` (written by the shim) owns the per-deployment
-      key; v0.2.4's ``AutoClient`` reads it from there.
+    * ``client_spec.class_name`` is the era shim client; ``args`` carry
+      ``base_url`` + ``openai_model_name`` (the served name) + ``api_key``. The
+      key MUST live in args, NOT solely in the era ``credentials.conf``: pyhocon
+      path-splits dotted model names (``eleutherai/pythia-6.9b`` → path
+      ``eleutherai/pythia-6`` → ``9b``), so a credentials.conf lookup by the raw
+      model string is unreachable (Finding 2). At v0.3.0, ``api_key`` present in
+      args also stops ``inject_object_spec_args`` from firing the
+      ``provide_api_key`` provider (which would hit that broken lookup). The shim
+      still writes a nested-key credentials.conf entry for v0.2.4's eager
+      pre-construction credential check. ``"EMPTY"`` is the shim client's
+      unset sentinel (no ``Authorization`` header — correct for a direct vLLM
+      server); a real key is threaded for a gateway that authenticates.
     * All five cattrs-no-defaults keys are emitted explicitly
       (``model_name`` / ``tokenizer_name: null`` / ``max_sequence_length: null``)
       so ``cattrs.structure`` at the era succeeds. ``tokenizer_name: null`` lets
       the era WindowService (keyed on the official model name) reproduce official
       tokenization/windowing untouched.
+
+    Requires an explicit ``base_url`` (Finding 5): the era shim client cannot
+    authenticate at the LiteLLM gateway with the ``EMPTY`` sentinel — every
+    request would 401 — so it must never silently default there, mirroring the
+    modern ``vllm-direct`` guard.
     """
     if not helm_model_name:
         raise ValueError(
             "era model deployment requires helm_model_name (it must equal the "
             "official run_spec.json adapter_spec.model — era replay is by-name)."
         )
-    resolved_base_url = base_url or _default_gateway_base_url()
+    if not base_url:
+        raise ValueError(
+            f"era model deployment for {helm_model_name!r} requires an explicit "
+            "--base-url (the served vLLM/gateway address); it must not default to "
+            "the LiteLLM gateway, which the era shim client cannot authenticate "
+            "against with the EMPTY sentinel (every request would 401)."
+        )
     return {
         "name": helm_model_name,
         "model_name": helm_model_name,
@@ -145,9 +165,11 @@ def _model_deployment_entry_era(
         "client_spec": {
             "class_name": _ERA_CLIENT_CLASS,
             "args": {
-                "base_url": resolved_base_url,
+                "base_url": base_url,
                 # vLLM's served model name (what the /v1/completions call sends).
                 "openai_model_name": facts.served_model_name,
+                # In args, not credentials.conf — see the docstring (Finding 2).
+                "api_key": api_key_value or "EMPTY",
             },
         },
     }
@@ -424,6 +446,16 @@ def materialize_benchmark_bundle(
                 f"{preset!r}) must be 'chat' or 'completions', got "
                 f"{resolved_protocol_mode!r}."
             )
+        # The era shim client implements /v1/completions ONLY. Rather than let
+        # protocol_mode be required-but-dead on the era fork, assert it is
+        # 'completions' so a mis-declared era preset fails loud at export time.
+        if resolved_era is not None and resolved_protocol_mode != "completions":
+            raise ValueError(
+                f"era replay only supports protocol_mode 'completions' (the era "
+                f"shim client speaks /v1/completions only), but profile "
+                f"{spec.get('profile')!r} (preset {preset!r}) declares "
+                f"{resolved_protocol_mode!r}."
+            )
         # The generated model_deployments.yaml binds the bundle's NATIVE local
         # deployment name on BOTH paths (run-entry and from-spec). Under from-spec
         # the manifest's `model_deployment` field (set below) names this same entry
@@ -442,6 +474,7 @@ def materialize_benchmark_bundle(
                     fact,
                     helm_model_name=spec.get("helm_model_name"),
                     base_url=base_url,
+                    api_key_value=api_key_value,
                 )
             )
         else:

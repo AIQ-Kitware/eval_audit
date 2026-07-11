@@ -53,8 +53,10 @@ def _freeze_run_spec_sources(
     ``omit_model_deployment=True`` (the **era** path): a pre-v0.5 ``adapter_spec``
     has no ``model_deployment`` field, so replay is verbatim (by-name via the era
     deployment registry). Each source omits ``model_deployment`` entirely — the
-    materializer would reject a rewrite anyway — and the lease endpoint comes from
-    the manifest scalar (no per-deployment rewrite target to key a map on).
+    materializer would reject a rewrite anyway. The lease endpoint comes from the
+    scalar for a single-endpoint bundle, or from the ``lease_endpoints`` map keyed
+    on the run-entry's ``model=`` token (which equals the era deployment name) for
+    a multi-endpoint bundle.
     """
     from eval_audit.integrations.infer_stack import discovery as dc
 
@@ -89,10 +91,31 @@ def _freeze_run_spec_sources(
         }
         if not omit_model_deployment:
             source["model_deployment"] = deployment
-        # Era: no rewrite target to key the lease map on, so use the scalar only.
-        endpoint = lease_scalar if omit_model_deployment else (
-            lease_scalar or lease_map.get(deployment)
-        )
+        if omit_model_deployment:
+            # Era: there is no local rewrite target, but the era deployment name
+            # IS the official model name (entry["name"]), so a MULTI-endpoint era
+            # bundle keys the lease map on the run-entry's model= token. Finding
+            # 10: previously era used the scalar only, so a multi-endpoint bundle
+            # froze NO lease_endpoint and the vLLM endpoint was never acquired.
+            endpoint = lease_scalar
+            if endpoint is None and lease_map:
+                from eval_audit.helm.run_entries import parse_run_name_to_kv
+
+                _, kv = parse_run_name_to_kv(run_entry)
+                model = kv.get("model")
+                endpoint = lease_map.get(model)
+                if endpoint is None and len(lease_map) == 1:
+                    endpoint = next(iter(lease_map.values()))
+                if endpoint is None:
+                    raise ValueError(
+                        f"cannot freeze a lease endpoint for era run-entry "
+                        f"{run_entry!r}: its model={model!r} is not in the bundle's "
+                        f"lease_endpoints map {sorted(lease_map)!r}. Every era run "
+                        "must map to a served endpoint (the era deployment name "
+                        "equals the official model name)."
+                    )
+        else:
+            endpoint = lease_scalar or lease_map.get(deployment)
         if endpoint:
             source["lease_endpoint"] = endpoint
         sources.append(source)

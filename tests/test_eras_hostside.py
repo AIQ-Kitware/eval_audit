@@ -91,11 +91,40 @@ def test_era_deployment_entry_schema():
     # cattrs-no-defaults: the null keys are present explicitly.
     assert entry["tokenizer_name"] is None
     assert entry["max_sequence_length"] is None
-    # Era shim client; NO api_key (credentials.conf owns it).
     assert entry["client_spec"]["class_name"] == _ERA_CLIENT
     assert entry["client_spec"]["args"]["base_url"] == "http://localhost:8000/v1"
     assert entry["client_spec"]["args"]["openai_model_name"] == "pythia-6.9b"
-    assert "api_key" not in entry["client_spec"]["args"]
+    # Finding 2: api_key lives in args (credentials.conf can't address dotted
+    # model names); the EMPTY sentinel means "unset" to the shim client.
+    assert entry["client_spec"]["args"]["api_key"] == "EMPTY"
+
+
+def test_era_deployment_entry_threads_api_key():
+    """Finding 2: a real key (e.g. the LiteLLM master key) rides in client args."""
+    facts = ServingFacts(
+        endpoint="pythia-6-9b",
+        served_model_name="pythia-6.9b",
+        hf_model_id="EleutherAI/pythia-6.9b",
+        max_model_len=2048,
+    )
+    entry = _model_deployment_entry_era(
+        facts,
+        helm_model_name="eleutherai/pythia-6.9b",
+        base_url="http://localhost:14042/v1",
+        api_key_value="sk-litellm-master",
+    )
+    assert entry["client_spec"]["args"]["api_key"] == "sk-litellm-master"
+
+
+def test_era_deployment_entry_requires_base_url():
+    """Finding 5: era must not silently default to the auth-protected gateway."""
+    facts = ServingFacts(
+        endpoint="e", served_model_name="m", hf_model_id="org/m", max_model_len=1
+    )
+    with pytest.raises(ValueError, match="requires an explicit --base-url"):
+        _model_deployment_entry_era(
+            facts, helm_model_name="eleutherai/pythia-6.9b", base_url=None
+        )
 
 
 def test_era_deployment_entry_requires_helm_model_name():
