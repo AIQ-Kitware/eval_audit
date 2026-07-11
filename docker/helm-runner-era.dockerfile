@@ -127,8 +127,16 @@ set -eux
 apt-get update -q
 apt-get install -q -y --no-install-recommends \
     ca-certificates \
-    git
+    git \
+    wget \
+    unzip
 EOF
+# wget/unzip: HELM's ensure_file_downloaded() shells out to `wget` for non-HF
+# scenario data (e.g. entity_matching's codalab fixed-random-state bundle) and to
+# `unzip` (plus tar/gzip, already in the base image) to unpack archives. Without
+# wget, get_instances() raises FileNotFoundError: 'wget' at scenario construction.
+# gdown (Google-Drive sources) and zstd are Python-side / rarer; add only if a
+# scenario surfaces them.
 
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /opt/src /opt/src
