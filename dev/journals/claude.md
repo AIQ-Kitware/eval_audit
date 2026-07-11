@@ -682,3 +682,64 @@ preset bugs; 10/15 supply the base-url + run in the initialized main tree.
 `./08` (freeze against corpus), then `./10`/`./15` for the real batch; watch the CoT
 rows for the null-content crash and fall back to completions if it fires. Committed
 onto `impl/run-from-run-spec` (not pushed).
+
+## 2026-07-11 20:30:00 -0400
+
+**Model / harness.** claude-opus-4-8[1m], Claude Code (VSCode), in the
+`impl/run-from-run-spec` worktree at `/home/agent/eval_audit-gptoss-fromspec`.
+
+**User intent.** Implement `docs/planning/qwen-models-combined-fanout-plan.md` — the
+eight public HELM Qwen text models as ONE `qwen-combined` multi-deployment from-spec
+fan-out (the `allenai-olmo-combined` analogue), on `impl/run-from-run-spec` in a
+worktree.
+
+**What landed (3 commits).**
+1. `feat(qwen-fanout)` — generalized the OLMo-specific combined helpers into
+   `_combined_run_entries(keys, mode)` + `_build_combined_preset(name, keys, ...)`
+   and built BOTH `allenai-olmo-combined` (unchanged: 73 entries / 5 profiles) and
+   the new `qwen-combined` through it (§4.2B option B). 8 member from-spec presets in
+   `preset_configs.yaml`, run_entries GENERATED from `official_public_index.csv`.
+   `adapter.py` re-export updated. `tests/test_qwen_from_spec.py` mirrors the OLMo
+   combined tests.
+2. `feat(reproduce)` — `reproduce/qwen_models_combined/` (runbook port + shipped
+   infer-stack catalog/settings) + `configs/virtual-experiments/qwen-models-combined.yaml`.
+3. `docs(planning)` — flipped the plan status to implemented.
+
+**Key findings / decisions.**
+- **The whitelist (§4.3) is the real work, and it's exactly reconstructible.** Filter
+  `official_public_index.csv` to classic-core + capabilities and it lands on the
+  plan's per-model counts to the row: 85×5 + 86 + 132×2 = **775**. The two non-obvious
+  exclusions that make 86/132 (not 87/133) land are **banking77** and **bigcodebench**.
+  gpqa (gated) only on the two turbo models.
+- **T1 protocol was answerable, not "to confirm."** HELM's own `model_deployments.yaml`
+  (read from the installed wheel, not the un-checked-out submodule) says base Qwen1.5
+  7b/14b/32b/72b = `TogetherClient` (completions), and 110b-chat / qwen2-72b-instruct /
+  the qwen2.5 turbo pair = `TogetherChatClient` (chat). Tokenizers too (qwen1.5 family
+  all share the `qwen/qwen1.5-7b` tokenizer entry; both turbos share `qwen/qwen2.5-7b-instruct`).
+- **No member splits.** A pure-Python ambiguity pre-check (775 distinct run-dir
+  basenames, 0 shared across suite trees, all present on disk) predicts every member
+  freezes 1:1 under the shared parent root ⇒ `QWEN_COMBINED_EXTRA_PRESETS` stays empty.
+  The split-out machinery is still wired for a future corpus refresh (the olmo-7b path).
+
+**Environment gotcha.** Every venv in this checkout throws `OSError: [Errno 9] Bad
+file descriptor` reading `pyvenv.cfg` (the FD-exhaustion family CLAUDE.md warns
+about). I did NOT fight it. Validated with a clean `env -i /usr/bin/python3` + a
+`kwutil` stub (only used at call time) + PYTHONPATH: V1 (preset loads, correct
+shape), V4 (yaml/bash/py_compile), endpoint↔profile cross-check all pass. The
+corpus-gated freeze (V2/V3, `08_check_discovery.sh`) additionally needs the `magnet`
+backend, which isn't checked out here — genuinely deferred, as the plan stages it.
+
+**Reusable insights.**
+1. When a "confirm this" task item names a HELM fact (protocol/tokenizer/max_seq),
+   the installed `helm/config/*.yaml` wheel is the authoritative source — no need to
+   check out the submodule or hit HF Hub.
+2. The plan's stated counts are a spec, not decoration: reverse-engineering the
+   keep-set to hit them exactly (banking77/bigcodebench) removes the guesswork the
+   plan flagged as "the real work."
+3. Generalizing a one-off combined-preset builder is safe here precisely because the
+   OLMo combined tests pin the old output — regenerate, diff the entry count, done.
+
+**Status / next steps.** WIRED + analysis-host-validated, not yet GPU-run. On a
+serving host with the full install: `./08` (corpus freeze — the authoritative
+0-NO_MATCH/0-AMBIGUOUS gate), then `./10`/`./15`. Verify T2 HF weight ids on the Hub
+first. Committed onto `impl/run-from-run-spec` (not pushed).
