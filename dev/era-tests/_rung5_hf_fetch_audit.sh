@@ -8,36 +8,22 @@
 # filter reason (pre-warm or mount-vendor its data; never patch the image at
 # run time), not a reproducibility failure.
 #
-# Needs: docker, the built era image, the corpus, network (or a warmed cache).
-# Env (see ladder.env.example):
-#   ERA, PRECOMPUTED_ROOT      [required]
-#   ERA_IMAGE                  (default <image_name>:dev)
-#   HF_CACHE_DIR               HF cache to mount (default ./ladder-out/hf-cache)
-#   CANONICAL_CORPUS_PREFIX    (default /data/crfm-helm-public)
-#   LADDER_OUT                 (default ./ladder-out)
+# Helper invoked by 07_run_gate.sh (per era). Needs: docker, the built era image,
+# the corpus, network (or a warmed cache). Inputs (env; _lib.sh supplies defaults):
+#   ERA, PRECOMPUTED_ROOT      [ERA required; PRECOMPUTED_ROOT default classic]
+#   ERA_IMAGE                  (default: era_image "$ERA")
+#   HF_CACHE_DIR               HF cache to mount (default ERA_OUT/hf-cache)
 #   LADDER_FETCH_CAP           adaptation cap for speed (default 10; fetch +
 #                              get_instances still run on the full dataset)
 set -uo pipefail
-
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
-[[ -f reproduce/classic_era_replay/ladder.env ]] && . reproduce/classic_era_replay/ladder.env
 
 : "${ERA:?set ERA (e.g. helm-v0.3.0)}"
 : "${PRECOMPUTED_ROOT:?set PRECOMPUTED_ROOT (public corpus mirror)}"
-: "${CANONICAL_CORPUS_PREFIX:=/data/crfm-helm-public}"
-: "${LADDER_OUT:=${ROOT}/ladder-out}"
 : "${LADDER_FETCH_CAP:=10}"
-SUITE_VERSION="${ERA#helm-}"
-
-if [[ -z "${ERA_IMAGE:-}" ]]; then
-    for py in python3 "${ROOT}/.venv/bin/python"; do
-        command -v "$py" >/dev/null 2>&1 || continue
-        NAME="$("$py" "${ROOT}/docker/read_eras.py" "${ROOT}/docker/eras.yaml" "${ERA}" image_name 2>/dev/null)" && break
-    done
-    [[ -n "${NAME:-}" ]] || { echo "cannot resolve image_name for ${ERA}; set ERA_IMAGE"; exit 1; }
-    ERA_IMAGE="${NAME}:dev"
-fi
+SUITE_VERSION="$(era_suite_version "$ERA")"
+ERA_IMAGE="${ERA_IMAGE:-$(era_image "$ERA")}"
 
 # One representative run per scenario family at this era: pair each record's
 # run_dir + scenario_class from configs/run_details.yaml (records are 5-line
@@ -50,9 +36,9 @@ mapfile -t family_runs < <(awk -v ver="/runs/${SUITE_VERSION}/" '
 ' configs/run_details.yaml)
 [[ ${#family_runs[@]} -gt 0 ]] || { echo "no ${SUITE_VERSION} runs in configs/run_details.yaml"; exit 1; }
 
-HF_MOUNT="${HF_CACHE_DIR:-${LADDER_OUT}/hf-cache}"
+HF_MOUNT="${HF_CACHE_DIR:-${ERA_OUT}/hf-cache}"
 mkdir -p "$HF_MOUNT"
-DRIVERS="${ROOT}/reproduce/classic_era_replay/drivers"
+DRIVERS="${ERA_DIR}/drivers"
 
 echo "[hf-fetch] ${ERA}: auditing ${#family_runs[@]} scenario families (cap=${LADDER_FETCH_CAP})"
 pass=0; fail=0; failed_families=()
@@ -61,7 +47,7 @@ for row in "${family_runs[@]}"; do
     rel="${dir#"${CANONICAL_CORPUS_PREFIX}"/}"
     spec="${PRECOMPUTED_ROOT}/${rel}/run_spec.json"
     short="${cls##*.}"
-    out="${LADDER_OUT}/hf-fetch/${ERA}/${short}"
+    out="${ERA_OUT}/hf-fetch/${ERA}/${short}"
     rm -rf "$out"; mkdir -p "$out"
 
     if [[ ! -f "$spec" ]]; then echo "FAIL  ${short}: run_spec.json missing at ${spec}"; ((fail++)); failed_families+=("$short"); continue; fi

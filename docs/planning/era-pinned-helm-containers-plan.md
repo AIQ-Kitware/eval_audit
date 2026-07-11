@@ -5,7 +5,11 @@
 > era image build (`docker/build.sh` `ERA=` mode, `docker/helm-runner-era.dockerfile`);
 > the `helm_era_shim` package (`docker/era_shim/`); host-side era yaml +
 > materializer guard; manifest/pipeline/bridge threading with the era↔image
-> label guard; and the runbook (`reproduce/classic_era_replay/`) + docs. Unit
+> label guard; and the runbook (now `dev/era-tests/`, restructured from the
+> original `reproduce/classic_era_replay/` to mirror `dev/e2e-tests/` — see
+> `docs/planning/era-tests-dev-runbook-plan.md`) + docs. The 2026-07-10 code
+> review's ten findings are all fixed (`docs/planning/era-pinned-review-findings-2026-07-10.md`).
+> Unit
 > tests: `tests/test_eras*.py`. What remains is **empirical validation on a GPU
 > host** — the validation ladder below (build the era images, freeze the
 > constraints, run instrument-fidelity + end-to-end) has not been executed; the
@@ -71,7 +75,7 @@ Facts established by exploration (verified against git history of submodules/hel
 
 ### 6. Analysis surfacing + runbook + docs
 - Era + era-image digest into local-side manifest/job provenance (rides the existing manifest-recording path into the index extras / `recipe_facts.extra`). Official side already derivable from `public_track` + `suite_version`. `same_deployment` for era pairs correctly resolves `unknown` (both sides lack the field) — no Stage 5/6 changes.
-- **New runbook `reproduce/classic_era_replay/`** (scripts per validation-ladder step below), docs updates: `docs/container-execution.md` era section; `docs/helm-gotchas.md` cross-ref to G10 (era keyed on suite_version is a *suite*-era, `run_spec_hash` detects recipe-identical duplicates).
+- **Runbook `dev/era-tests/`** (restructured from `reproduce/classic_era_replay/` to mirror `dev/e2e-tests/`; validation-ladder gates live in `07_run_gate.sh`, the end-to-end path is a turnkey grid — see `docs/planning/era-tests-dev-runbook-plan.md`), docs updates: `docs/container-execution.md` era section; `docs/helm-gotchas.md` cross-ref to G10 (era keyed on suite_version is a *suite*-era, `run_spec_hash` detects recipe-identical duplicates).
 
 ## Verification (the validation ladder)
 
