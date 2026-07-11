@@ -11,8 +11,10 @@ from __future__ import annotations
 from eval_audit.integrations.infer_stack.presets import (  # noqa: F401
     PRESET_CONFIGS,
     _OLMO_COMBINED_PRESET_KEYS,
+    _QWEN_COMBINED_PRESET_KEYS,
+    _build_combined_preset,
+    _combined_run_entries,
     _inline_local_deployment,
-    _olmo_combined_run_entries,
 )
 from eval_audit.integrations.infer_stack.serving_facts import (  # noqa: F401
     DEFAULT_GATEWAY_PORT,
