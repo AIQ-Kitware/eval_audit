@@ -145,6 +145,14 @@ ENV VIRTUAL_ENV=/opt/venv \
 # (the builder's own check can pass while the shipped image is broken).
 ARG ERA_KEY=""
 ARG ERA_HELM_REF=""
+# Finding 6: persist the era identity into the RUNTIME environment. An ARG is
+# build-only and does NOT survive `docker run`; helm_era_shim.replay reads these
+# for the per-run adapter_manifest.json `replay: {era, helm_git_ref}` block and
+# process_context. Without the ENV, every era run recorded replay.era=null /
+# helm_git_ref=null (era identity survived only via the image label). The docker
+# node already forwards EVAL_AUDIT_ERA_API_KEY; these two ride the image.
+ENV EVAL_AUDIT_ERA_KEY=$ERA_KEY \
+    EVAL_AUDIT_ERA_HELM_REF=$ERA_HELM_REF
 ARG PANDAS_PIN=""
 ARG NUMPY_PIN=""
 RUN <<'EOF'
@@ -164,6 +172,12 @@ from helm_era_shim.openai_compat_client import OpenAICompatCompletionsClient  # 
 # Interpreter era.
 import sys
 assert sys.version_info[:2] == (3, 10), f'expected Python 3.10, got {sys.version_info[:3]}'
+
+# Finding 6: the era identity must be in the RUNTIME env (ENV, not just ARG), so
+# replay.py can stamp it into adapter_manifest.json. build.sh always passes
+# ERA_KEY/ERA_HELM_REF for an era build, so assert they are present.
+assert os.environ.get('EVAL_AUDIT_ERA_KEY'), 'EVAL_AUDIT_ERA_KEY not set in image env (ENV missing? ERA_KEY build-arg empty?)'
+assert os.environ.get('EVAL_AUDIT_ERA_HELM_REF'), 'EVAL_AUDIT_ERA_HELM_REF not set in image env'
 
 # Frozen instance-selection pins (spot-check when the build passes them in).
 pandas_pin = os.environ.get('PANDAS_PIN') or ''
