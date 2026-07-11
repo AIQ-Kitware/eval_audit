@@ -1,6 +1,22 @@
 # Qwen text-family combined fan-out — implementation plan
 
-**Status:** proposed (not started). **Author:** design session 2026-07-11.
+**Status:** implemented (analysis-host artifacts landed 2026-07-11; GPU
+end-to-end validation pending). **Author:** design session 2026-07-11.
+
+> **Implementation note (2026-07-11).** All artifacts in §3 are built on this
+> branch: the 8 member presets + `qwen-combined` (via a generalized
+> `_build_combined_preset`), `reproduce/qwen_models_combined/` (runbook + shipped
+> infer-stack catalog/settings), the virtual experiment, and
+> `tests/test_qwen_from_spec.py`. **T1 protocol is confirmed** from HELM's
+> `model_deployments.yaml` (base Qwen1.5 = `TogetherClient` completions; the rest =
+> `TogetherChatClient` chat) — no longer a guess. The whitelist (§4.3) resolves to
+> exactly 775 rows (85×5 + 86 + 132×2), all dirs present on disk, 0 ambiguous
+> basenames across suite trees ⇒ **no member splits** (`QWEN_COMBINED_EXTRA_PRESETS`
+> empty). Passed here: V1 (preset loads, valid from-spec shape), V4 (yaml/bash),
+> endpoint↔profile cross-check. **Deferred to a healthy env:** V2/V3 (the corpus
+> freeze in `08_check_discovery.sh` — needs the `magnet` backend) and V5/V6 (GPU
+> smoke/full). **T2** (HF weight ids in the catalog) still carries a `# verify`
+> caveat.
 **Prereq branch:** `impl/run-from-run-spec` (from-spec exporter + freeze; the
 `allenai-olmo-combined` reference and the `openai-gpt-oss-20b` single-model
 from-spec preset both live here).
