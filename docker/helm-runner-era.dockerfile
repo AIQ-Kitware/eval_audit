@@ -163,9 +163,12 @@ import os
 import pandas, numpy
 
 # Era API surface the shim + host era yaml rely on. These live at v0.2.4/v0.3.0;
-# their absence means the image was built against the wrong helm ref.
+# their absence means the image was built against the wrong helm ref. NB the
+# module split the shim depends on: RunSpec is in helm.benchmark.runner, but
+# run_benchmarking is in helm.benchmark.run (see replay.py :: _replay_run_spec).
 from helm.benchmark.model_deployment_registry import register_model_deployments_from_path  # noqa: F401
-from helm.benchmark.runner import RunSpec, run_benchmarking  # noqa: F401
+from helm.benchmark.runner import RunSpec  # noqa: F401
+from helm.benchmark.run import run_benchmarking  # noqa: F401
 import helm_era_shim.replay  # noqa: F401  -- the docker node's inner executable
 from helm_era_shim.openai_compat_client import OpenAICompatCompletionsClient  # noqa: F401
 

@@ -997,3 +997,20 @@ reader.
 card, watch the first vLLM load — if it OOMs, drop `gpu_memory_utilization` to
 0.80 in the catalog (noted inline). The phi-2 wip stash on `run-from-run-spec`
 (`git stash list`) is untouched and waiting for that branch.
+
+### Addendum (same session): first era image build surfaced a smoke-test bug
+
+The user ran `ERA=<key> ./docker/build.sh` for the first time and the final-stage
+import check failed (exit 1). Root cause: the dockerfile smoke test did
+`from helm.benchmark.runner import RunSpec, run_benchmarking`, but at BOTH era
+refs (626d8609, 8ea285f7) `run_benchmarking` lives in `helm.benchmark.run`, not
+`.runner` (only `RunSpec` is in `.runner`). The shim itself is correct
+(`replay.py :: _replay_run_spec` does `from helm.benchmark.run import
+run_benchmarking`); only the build-time assertion had the wrong module. Split the
+import into two lines to match the real era API. Verified all three imported
+symbols resolve at both refs (register_model_deployments_from_path, RunSpec,
+run_benchmarking). Unrelated to the redpajama swap — a pre-existing build-path bug
+that could only surface at first real image build (no docker in the sandbox).
+Insight: import-surface smoke tests must be validated against the *actual* pinned
+source, not from memory of the modern API — the module a symbol lives in drifts
+across releases just as often as the symbol itself.
