@@ -1,0 +1,46 @@
+schema_version: 1
+name: qwen-models-combined
+description: >
+  Combined multi-model Qwen text-family full-reproduction batch grouped into one
+  virtual experiment covering all EIGHT public HELM Qwen text models (Qwen1.5
+  7b/14b/32b/72b/110b-chat, Qwen2-72B-Instruct, and the Qwen2.5 7B/72B
+  instruct-turbo pair). They come from the qwen-combined fan-out preset as one
+  experiment (audit-qwen-combined-full); every member replayed from its official
+  run_spec.json via exact-path freeze under the shared parent root
+  /data/crfm-helm-public (0 AMBIGUOUS — none splits out). The per-model /
+  per-recipe packets fall out of the core-report planner's pairing by logical run
+  key, so the report reads like the single-model grouping — just produced by the
+  fan-out runbook. Comparison against public HELM is ON (the official_public_index
+  source below): each local run is paired with its official counterpart by logical
+  run key. Comment that source out to make the report local-only (comparisons then
+  disable with missing_official_component).
+
+scope:
+  # Matches qwen1.5 / qwen2 / qwen2.5 served-model names. The include_experiments
+  # list below is the hard bound; this regex is a second, defensive narrowing on
+  # the model axis.
+  models:
+    - "regex:^qwen/"
+
+sources:
+  - kind: audit_index
+    fpath: /data/crfm-helm-audit-store/indexes/audit_results_index.csv
+    include_experiments:
+      # All eight models from the combined fan-out bundle. If a future corpus
+      # refresh makes a member ambiguous under the shared root, 08_check_discovery.sh
+      # hard-fails; that member then rides as its own single-model suite
+      # (audit-qwen-<key>-<suite>-full) added both here and to
+      # QWEN_COMBINED_EXTRA_PRESETS in _lib.sh (the olmo-7b pattern).
+      - audit-qwen-combined-full
+
+  # Comparison side: pair each local run with its official public-HELM run by
+  # logical run key. Comment out to make the report local-only (40_build_summary.sh
+  # then falls back to --no-filter-inventory since compose writes no scoped inventory).
+  - kind: official_public_index
+    fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
+    pre_filter:
+      kind: helm_stage1
+      inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
+
+output:
+  root: /data/crfm-helm-audit-store/virtual-experiments/qwen-models-combined

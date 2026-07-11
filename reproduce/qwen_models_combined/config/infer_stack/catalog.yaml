@@ -1,0 +1,153 @@
+# infer-stack serving catalog for the eight Qwen text models.
+#
+# A catalog declares `models` (what can be served) and `endpoints` (the served
+# API names). `infer-stack acquire <endpoint>` leases + brings one up; the combined
+# fan-out grid (10/15) drives N concurrent per-run leases via
+# `eval-audit-run --lease --tmux-workers N`, and infer-stack co-hosts what fits on
+# INFER_STACK_ALLOWED_GPUS / serializes the rest.
+#
+# Endpoint names == the `<preset>-single` profile names in the eval_audit qwen
+# presets (adapter.PRESET_CONFIGS) on purpose: each doubles as the LiteLLM
+# model_name HELM requests, and matches the preset's `profile` field +
+# QWEN_COMBINED_ENDPOINTS + 05_check_profiles.sh.
+#
+# HELM-domain aliases (the case-sensitive model/tokenizer names) live in the
+# eval_audit qwen presets (helm_model_name / helm_tokenizer_name) — they never
+# belonged in a serving layer. The catalog owns transport: the backing HF model +
+# the served context window + `protocol`.
+#
+# ⚠️ `protocol` MUST agree with each preset's `protocol_mode`. Confirmed from HELM
+# model_deployments.yaml (T1): the base Qwen1.5 models (7b/14b/32b/72b) were served
+# by TogetherClient (completions) — so their endpoints set `protocol: completions`
+# or infer-stack's generation-gated readiness probe defaults to /chat/completions,
+# which a completions-only serve never answers, blocking `acquire` until the TTL.
+# qwen1.5-110b-chat, qwen2-72b-instruct, and the qwen2.5 *-instruct-turbo pair were
+# served by TogetherChatClient (chat) and use the default (`protocol: chat`).
+#
+# ⚠️ hf_model_id (`source`) verification (T2): confirm each repo on the HF Hub
+# before a real run. The base-vs-chat (Qwen1.5) and local-Instruct-vs-Together-turbo
+# (Qwen2.5) pairs are the easy places to pick the wrong repo. The two `*-instruct-
+# turbo` models are Together's fp8 serve of the standard Qwen2.5-*-Instruct weights,
+# so we serve the plain -Instruct HF repos locally.
+#
+# `tensor_parallel_size` is load-bearing static state: the 72Bs need tp=2 and the
+# 110B needs tp=4 or they OOM. The 32B rides tp=2 (safe on <80GB cards; drop to 1
+# on >=80GB to gain a co-host slot). max_model_len / gpu_memory_utilization mirror
+# the OLMo catalog's per-model tuning (served ceiling 4096; presets reserve 4064).
+
+models:
+  qwen-1-5-7b:
+    source: hf://Qwen/Qwen1.5-7B                    # verify (base, non-chat)
+  qwen-1-5-14b:
+    source: hf://Qwen/Qwen1.5-14B                   # verify (base, non-chat)
+  qwen-1-5-32b:
+    source: hf://Qwen/Qwen1.5-32B                   # verify (base, non-chat)
+  qwen-1-5-72b:
+    source: hf://Qwen/Qwen1.5-72B                   # verify (base, non-chat)
+  qwen-1-5-110b-chat:
+    source: hf://Qwen/Qwen1.5-110B-Chat             # verify (-Chat variant)
+  qwen-2-72b-instruct:
+    source: hf://Qwen/Qwen2-72B-Instruct            # verify
+  qwen-2-5-7b-instruct-turbo:
+    source: hf://Qwen/Qwen2.5-7B-Instruct           # verify (Together turbo == fp8 of -Instruct)
+  qwen-2-5-72b-instruct-turbo:
+    source: hf://Qwen/Qwen2.5-72B-Instruct          # verify (Together turbo == fp8 of -Instruct)
+
+endpoints:
+  qwen-1-5-7b-single:
+    engine: vllm
+    reclaim: stop                # free the GPU on release so the per-run lease queue can place the next model
+    model: qwen-1-5-7b
+    protocol: completions        # base model (preset protocol_mode: completions) -> probe /completions
+    runtime:
+      max_model_len: 4096
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+      enable_prefix_caching: true
+
+  qwen-1-5-14b-single:
+    engine: vllm
+    reclaim: stop
+    model: qwen-1-5-14b
+    protocol: completions
+    runtime:
+      max_model_len: 4096
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+      enable_prefix_caching: true
+
+  qwen-1-5-32b-single:
+    engine: vllm
+    reclaim: stop
+    model: qwen-1-5-32b
+    protocol: completions
+    runtime:
+      tensor_parallel_size: 2      # safe on <80GB cards; drop to 1 on >=80GB to free a co-host slot
+      max_model_len: 4096
+      gpu_memory_utilization: 0.9
+      max_num_batched_tokens: 4096
+      max_num_seqs: 8
+      enable_prefix_caching: true
+
+  qwen-1-5-72b-single:
+    engine: vllm
+    reclaim: stop
+    model: qwen-1-5-72b
+    protocol: completions
+    runtime:
+      tensor_parallel_size: 2      # 72B weights need >=2 cards
+      max_model_len: 4096
+      gpu_memory_utilization: 0.9
+      max_num_batched_tokens: 4096
+      max_num_seqs: 8
+      enable_prefix_caching: true
+
+  qwen-1-5-110b-chat-single:
+    engine: vllm
+    reclaim: stop
+    model: qwen-1-5-110b-chat
+    # chat model (preset protocol_mode: chat) -> default /chat/completions probe, no override
+    runtime:
+      tensor_parallel_size: 4      # 110B blocks the whole 4-card node while it runs; schedule first or last
+      max_model_len: 4096
+      gpu_memory_utilization: 0.9
+      max_num_batched_tokens: 4096
+      max_num_seqs: 8
+      enable_prefix_caching: true
+
+  qwen-2-72b-instruct-single:
+    engine: vllm
+    reclaim: stop
+    model: qwen-2-72b-instruct
+    runtime:
+      tensor_parallel_size: 2
+      max_model_len: 4096
+      gpu_memory_utilization: 0.9
+      max_num_batched_tokens: 4096
+      max_num_seqs: 8
+      enable_prefix_caching: true
+
+  qwen-2-5-7b-instruct-turbo-single:
+    engine: vllm
+    reclaim: stop
+    model: qwen-2-5-7b-instruct-turbo
+    runtime:
+      max_model_len: 4096
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+      enable_prefix_caching: true
+
+  qwen-2-5-72b-instruct-turbo-single:
+    engine: vllm
+    reclaim: stop
+    model: qwen-2-5-72b-instruct-turbo
+    runtime:
+      tensor_parallel_size: 2
+      max_model_len: 4096
+      gpu_memory_utilization: 0.9
+      max_num_batched_tokens: 4096
+      max_num_seqs: 8
+      enable_prefix_caching: true
