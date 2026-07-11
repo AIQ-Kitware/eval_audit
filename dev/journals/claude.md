@@ -1014,3 +1014,29 @@ that could only surface at first real image build (no docker in the sandbox).
 Insight: import-surface smoke tests must be validated against the *actual* pinned
 source, not from memory of the modern API — the module a symbol lives in drifts
 across releases just as often as the symbol itself.
+
+### Addendum 2: adopt the era's frozen requirements.txt as constraints (enriched seed)
+
+After the pyarrow drift, the user asked whether we could "just use the era's
+frozen requirements.txt" instead of pinning drift one at a time. Answer: yes, but
+not verbatim — two blockers. (1) The era freeze pins torch/torchvision to
+`+cu113` (CUDA) on linux; the era image is CPU-only and the dockerfile asserts a
+CPU build, so those won't install (not on the CPU wheel index). (2) It pins
+`pandas==1.5.0`/`numpy==1.23.3`, which would revert the tech-report-validated
+instance-selection pins (2.0.3/1.23.5). User chose the enriched-seed path.
+Generated both era constraints from each ref's requirements.txt (193/192 pins)
+with exactly those two deviations: keep validated pandas/numpy, rewrite
+torch/torchvision to CPU (`torch==1.12.1`/`torchvision==0.13.1`; CPU index serves
++cpu). Key realization: pinning torch to the era 1.12.1 is what makes the WHOLE
+tree internally consistent — the era's old typing_extensions==4.4.0 / sympy /
+networkx pins agree with torch 1.12, whereas the prior seed-only build let torch
+float to 2.x whose modern deps would fight those pins. Bonus fidelity: era
+tokenizers==0.13.3 / transformers==4.28.1/4.33.1 reproduce official tokenization
+(the era WindowService does it) better than a modern resolve. Residual risk to
+watch at RUNTIME (not build): pandas 2.0.3 against era datasets==2.5.2 (datasets
+2.5 predates pandas 2.0; if a scenario hits a removed pandas API it'll surface
+then) — the two probe scenarios (synthetic_reasoning, mmlu) are light on
+pandas/datasets so likely fine. Close-out remains the pip-freeze workflow once
+green. Insight: a CI-era requirements.txt is a coherent lock EXCEPT where the
+target environment differs on axes the freeze encodes (GPU vs CPU) or where a
+validated override supersedes it — reconcile exactly those axes, adopt the rest.
