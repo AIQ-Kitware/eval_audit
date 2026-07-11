@@ -877,3 +877,53 @@ generated manifests set `require_per_instance_stats: true` and `_locate_run_dir`
 depends on it, but the official classic runs ship none, so the LOCAL side must
 produce it. First thing to check on a GPU host; if it doesn't, add an era carve-out
 in `_manifest_doc`, not a hand-edit.
+
+## 2026-07-11 11:05:00 -0400
+
+**User intent.** Review the Opus implementation of the era-tests plan for
+correctness and elegance, then apply the fixes.
+
+**Model/config.** claude-fable-5 (Fable 5) reviewing claude-opus-4-8's ten
+commits (`0c58ee9..3046c8e`), verifying against the era HELM sources
+(`git -C submodules/helm show 626d8609/8ea285f7`) and empirically, per the
+method of era-pinned-review-findings-2026-07-10.md.
+
+**Verdict.** The Phase-0 era-machinery fixes all check out (registration
+placement, nested-HOCON `in`+getitem, create_object dict-merge — no duplicate
+kwarg, guard run_ref/pull semantics, Finding-9 blast radius contained to the
+manifest builder, corpus-view symlinks never dereferenced in-container since
+the exact-path branch mounts no precomputed_root). Two CONFIRMED integration
+bugs in the new runbook, both fixed in this commit:
+
+1. **v0.2.4 master-key clobber (would 401 every request).** v0.2.4's AutoClient
+   constructs the client with `additional_args={"api_key": <credentials.conf>}`
+   and era `create_object` merges additional_args LAST — so the credentials
+   value (`EVAL_AUDIT_ERA_API_KEY`, default EMPTY = no Authorization header)
+   overrides the master key the export baked into client_spec.args. v0.3.0 is
+   unaffected (inject_object_spec_args fills only MISSING params). Fix: the
+   grids export `EVAL_AUDIT_ERA_API_KEY="${LEASE_MASTER_KEY:-…}"` before
+   eval-audit-run; the shim chmods 600 the prod_env credentials.conf + the
+   deployments-yaml copy (both now carry the live key and persist in out_dpath).
+2. **Double-`classic` path join broke gate tier 1.** `_lib.sh` repointed
+   `PRECOMPUTED_ROOT` at the TRACK root, but the moved rung 2/5 helpers still
+   joined `$PRECOMPUTED_ROOT/$(rel stripped against the MIRROR root)` →
+   `.../classic/classic/...` → every pick missing → rung 2 exits 1 → gate FAIL.
+   Fix: `era_mirror_root` in _lib.sh (detects track-root vs mirror-root
+   conventions by probing for `benchmark_output/`; `ERA_MIRROR_ROOT` overrides)
+   and both rungs join + mount against it. Verified the join resolves a real
+   official run dir under both conventions.
+
+Minor: the pyhocon test now asserts `model in deps` too (v0.2.4 checks
+membership BEFORE getitem — the shipped test only covered getitem; verified
+`in` resolves for the nested layout); removed the dead
+`EVAL_AUDIT_ERA_HF_CACHE_DIR` export. Noted, not changed: `era_image`'s single
+`$PYTHON_BIN` dependency for read_eras.py (consistent with the e2e convention),
+07's slightly-off SKIP wording when era_image itself fails, and the deliberate
+10/15 grid duplication (mirrors e2e). 88 era-suite tests green post-fix.
+
+**Design insight.** Two of the three bugs came from a *meaning shift* in a
+shared variable (`PRECOMPUTED_ROOT`: mirror root → track root) and a *merge
+order* the modern path doesn't have (additional_args wins at v0.2.4). Both are
+invisible to host tests and would only fire on the GPU host at rung 3 / tier 1
+— exactly the class of bug the gate exists to catch early, which is an argument
+for running 07 before every grid invocation, not just once.

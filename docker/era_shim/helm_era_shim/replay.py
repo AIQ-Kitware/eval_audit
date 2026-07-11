@@ -388,6 +388,16 @@ def _prepare_local_helm_config(
     (prepared / "credentials.conf").write_text(
         _render_credentials_conf(model_name, api_key)
     )
+    # Both files can carry a live gateway key (the exported yaml embeds it in
+    # client_spec.args; credentials.conf mirrors it for v0.2.4's eager lookup) and
+    # prod_env persists inside the run's output dir — tighten to owner-only, the
+    # same posture the exporter applies to the bundle yaml. Best-effort: chmod can
+    # fail on some mounts, and a perms failure must not kill the replay.
+    for sensitive in ("model_deployments.yaml", "credentials.conf"):
+        try:
+            os.chmod(prepared / sensitive, 0o600)
+        except OSError:
+            pass
     return prepared
 
 

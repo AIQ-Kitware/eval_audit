@@ -102,8 +102,6 @@ ERA_TARGETS=(
 # overridden — e.g. LADDER_ERAS="helm-v0.3.0" to gate a single era).
 _era_keys_from_targets() { local t; for t in "${ERA_TARGETS[@]}"; do era_key "$t"; done; }
 
-export EVAL_AUDIT_ERA_HF_CACHE_DIR="${EVAL_AUDIT_ERA_HF_CACHE_DIR:-$HOME/.cache/eval-audit-hf}"
-
 era_name()             { printf '%s\n' "${1%%:*}"; }
 era_key()              { local rest="${1#*:}"; printf '%s\n' "${rest%%:*}"; }
 era_endpoint()         { printf '%s\n' "${1##*:}"; }
@@ -127,6 +125,28 @@ era_image() {
 
 # The suite_version dir name for an era key (helm-v0.2.4 -> v0.2.4).
 era_suite_version() { printf '%s\n' "${1#helm-}"; }
+
+# The corpus MIRROR root (the parent of the track dirs, e.g.
+# /data/crfm-helm-public) — the root that configs/run_details.yaml run_dir paths
+# are relative to once CANONICAL_CORPUS_PREFIX is stripped. Distinct from
+# PRECOMPUTED_ROOT, which this runbook points at the TRACK root
+# (.../classic) for the grid's freeze/discovery: joining a
+# classic/benchmark_output/... rel against the track root would double the
+# 'classic' component. Detect which convention PRECOMPUTED_ROOT follows so an
+# operator using the old mirror-root convention still resolves correctly;
+# ERA_MIRROR_ROOT overrides.
+era_mirror_root() {
+  if [[ -n "${ERA_MIRROR_ROOT:-}" ]]; then
+    printf '%s\n' "$ERA_MIRROR_ROOT"
+  elif [[ -d "$PRECOMPUTED_ROOT/benchmark_output" ]]; then
+    # Track root (the runbook default): the mirror is its parent.
+    dirname "$PRECOMPUTED_ROOT"
+  else
+    # Already a mirror root (tracks underneath), or unknown — use it as-is; the
+    # rungs' per-run existence checks surface a wrong guess loudly.
+    printf '%s\n' "$PRECOMPUTED_ROOT"
+  fi
+}
 
 # Build (idempotently) a per-era suite-scoped VIEW of the corpus and echo its
 # path, for use as --precomputed-root. Why: pythia-6.9b's runs exist under BOTH

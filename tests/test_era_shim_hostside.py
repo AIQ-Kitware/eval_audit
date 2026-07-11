@@ -53,9 +53,12 @@ replay = _load_replay()
 )
 def test_credentials_conf_is_pyhocon_addressable(model):
     """HELM's AutoClient looks up deployments[model] with the raw model string;
-    pyhocon path-splits on '.', so the written text must resolve that path."""
+    pyhocon path-splits on '.', so the written text must resolve that path.
+    v0.2.4 checks membership BEFORE getitem (`if model not in deployment_api_keys:
+    raise AuthenticationError`), so `in` must resolve too, not just getitem."""
     text = replay._render_credentials_conf(model, "EMPTY")
     deps = ConfigFactory.parse_string(text)["deployments"]
+    assert model in deps
     assert deps[model] == "EMPTY"
 
 

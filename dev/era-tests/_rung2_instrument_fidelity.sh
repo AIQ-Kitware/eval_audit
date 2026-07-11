@@ -10,11 +10,12 @@
 # Helper invoked by 07_run_gate.sh (per era). Needs: docker, the built era image,
 # the public corpus on disk. No GPU/vLLM. Inputs (env; _lib.sh supplies defaults):
 #   ERA                      era key (e.g. helm-v0.3.0)             [required]
-#   PRECOMPUTED_ROOT         public corpus mirror  (default classic root)
+#   PRECOMPUTED_ROOT         corpus root (default classic TRACK root; the mirror
+#                            root is derived — see era_mirror_root / ERA_MIRROR_ROOT)
 #   ERA_IMAGE                image ref (default: era_image "$ERA")
 #   HF_CACHE_DIR             HF cache to mount (default: ERA_OUT/hf-cache)
-#   LADDER_FIDELITY_RUNS     comma-separated run dirs RELATIVE to
-#                            PRECOMPUTED_ROOT (overrides the default picks)
+#   LADDER_FIDELITY_RUNS     comma-separated run dirs RELATIVE to the MIRROR
+#                            root (overrides the default picks)
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
@@ -23,6 +24,11 @@ cd "$ROOT"
 : "${PRECOMPUTED_ROOT:?set PRECOMPUTED_ROOT (public corpus mirror)}"
 SUITE_VERSION="$(era_suite_version "$ERA")"
 ERA_IMAGE="${ERA_IMAGE:-$(era_image "$ERA")}"
+# Officials are addressed as <mirror>/<track>/benchmark_output/... — the rel
+# paths below are stripped against CANONICAL_CORPUS_PREFIX (the mirror), so
+# join them against the mirror root, NOT the track-level PRECOMPUTED_ROOT
+# (that would double the 'classic' component).
+MIRROR_ROOT="$(era_mirror_root)"
 
 # Default fidelity picks: first corpus run per pandas-sensitive family at this era.
 if [[ -z "${LADDER_FIDELITY_RUNS:-}" ]]; then
@@ -44,7 +50,7 @@ DRIVERS="${ERA_DIR}/drivers"
 
 pass=0; fail=0; skip=0
 for rel in "${picks[@]}"; do
-    official_dir="${PRECOMPUTED_ROOT}/${rel}"
+    official_dir="${MIRROR_ROOT}/${rel}"
     official_state="${official_dir}/scenario_state.json"
     spec="${official_dir}/run_spec.json"
     name="$(basename "$rel")"
@@ -57,7 +63,7 @@ for rel in "${picks[@]}"; do
     echo "[fidelity] ${ERA} ${name}"
     if ! docker run --rm \
         -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
-        -v "${PRECOMPUTED_ROOT}:${PRECOMPUTED_ROOT}:ro" \
+        -v "${MIRROR_ROOT}:${MIRROR_ROOT}:ro" \
         -v "${HF_MOUNT}:/hf-cache" \
         -v "${DRIVERS}:/ladder:ro" \
         -v "${out}:${out}" \

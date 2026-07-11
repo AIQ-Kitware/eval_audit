@@ -24,6 +24,10 @@ cd "$ROOT"
 : "${LADDER_FETCH_CAP:=10}"
 SUITE_VERSION="$(era_suite_version "$ERA")"
 ERA_IMAGE="${ERA_IMAGE:-$(era_image "$ERA")}"
+# Join officials against the MIRROR root (rel paths are stripped against
+# CANONICAL_CORPUS_PREFIX) — not the track-level PRECOMPUTED_ROOT, which would
+# double the 'classic' component. See _lib.sh :: era_mirror_root.
+MIRROR_ROOT="$(era_mirror_root)"
 
 # One representative run per scenario family at this era: pair each record's
 # run_dir + scenario_class from configs/run_details.yaml (records are 5-line
@@ -45,7 +49,7 @@ pass=0; fail=0; failed_families=()
 for row in "${family_runs[@]}"; do
     cls="${row%%$'\t'*}"; dir="${row#*$'\t'}"
     rel="${dir#"${CANONICAL_CORPUS_PREFIX}"/}"
-    spec="${PRECOMPUTED_ROOT}/${rel}/run_spec.json"
+    spec="${MIRROR_ROOT}/${rel}/run_spec.json"
     short="${cls##*.}"
     out="${ERA_OUT}/hf-fetch/${ERA}/${short}"
     rm -rf "$out"; mkdir -p "$out"
@@ -54,7 +58,7 @@ for row in "${family_runs[@]}"; do
     if docker run --rm \
         -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
         -e HF_TOKEN -e HUGGING_FACE_HUB_TOKEN \
-        -v "${PRECOMPUTED_ROOT}:${PRECOMPUTED_ROOT}:ro" \
+        -v "${MIRROR_ROOT}:${MIRROR_ROOT}:ro" \
         -v "${HF_MOUNT}:/hf-cache" \
         -v "${DRIVERS}:/ladder:ro" \
         -v "${out}:${out}" \

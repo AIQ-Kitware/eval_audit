@@ -59,6 +59,10 @@ run_one() {
 
   era_clear_results "$experiment"
 
+  # Master key via EVAL_AUDIT_ERA_API_KEY too — at v0.2.4 the credentials.conf
+  # value OVERRIDES the exported client_spec.args api_key (see 10_run_smoke_grid).
+  export EVAL_AUDIT_ERA_API_KEY="${LEASE_MASTER_KEY:-$EVAL_AUDIT_ERA_API_KEY}"
+
   eval-audit-run "$manifest" --lease --run=1 --container-image "$image"
 }
 

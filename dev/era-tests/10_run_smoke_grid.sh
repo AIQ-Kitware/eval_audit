@@ -84,8 +84,17 @@ run_one() {
   # Always clear prior results so kwdagger's skip_existing can't no-op the rerun.
   era_clear_results "$experiment"
 
+  # The master key must ALSO ride EVAL_AUDIT_ERA_API_KEY (forwarded into the
+  # container -> the shim's credentials.conf): at v0.2.4, AutoClient constructs
+  # the client with additional_args={"api_key": <credentials.conf value>}, which
+  # OVERRIDES the client_spec.args api_key the export baked in — so with the
+  # default EMPTY the v0.2.4 client would send no Authorization header and every
+  # gateway request would 401. v0.3.0 is unaffected (api_key-in-args wins there),
+  # so setting it for both eras is harmless.
+  export EVAL_AUDIT_ERA_API_KEY="${LEASE_MASTER_KEY:-$EVAL_AUDIT_ERA_API_KEY}"
+
   # Run inside the ERA image (the bridge guards org.aiq.era against the manifest
-  # era), leased per run. EVAL_AUDIT_ERA_API_KEY is forwarded into the container.
+  # era), leased per run.
   eval-audit-run "$manifest" --lease --run=1 --container-image "$image"
 }
 
