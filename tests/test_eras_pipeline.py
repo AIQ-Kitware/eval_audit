@@ -25,6 +25,14 @@ _FAKE_IMAGE = ResolvedImage(
     pinned=True,
 )
 
+_FAKE_IMAGE_UNPINNED = ResolvedImage(
+    requested="modern-img:dev",
+    run_ref="sha256:" + "b" * 64,  # local image id (no registry digest)
+    digest="sha256:" + "b" * 64,
+    digest_kind="image_id",
+    pinned=False,
+)
+
 
 def _era_manifest():
     return {
@@ -101,7 +109,14 @@ def test_unknown_era_key_rejected():
 
 
 def test_era_image_guard_matches(monkeypatch):
-    monkeypatch.setattr(kb, "image_label", lambda *a, **k: "helm-v0.2.4")
+    seen = {}
+
+    def fake_label(image, key, **k):
+        seen["image"] = image
+        seen["pull_if_missing"] = k.get("pull_if_missing")
+        return "helm-v0.2.4"
+
+    monkeypatch.setattr(kb, "image_label", fake_label)
     monkeypatch.setattr(kb, "resolve_image_digest", lambda *a, **k: _FAKE_IMAGE)
     monkeypatch.setattr(kb, "runtime_version", lambda *a, **k: "test")
     manifest = {"container_image": "era-img:dev", "era": "helm-v0.2.4"}
@@ -109,6 +124,10 @@ def test_era_image_guard_matches(monkeypatch):
     assert resolved is _FAKE_IMAGE
     assert prov["era"] == "helm-v0.2.4"
     assert prov["image_era_label"] == "helm-v0.2.4"
+    # Finding 4: label is read from the immutable run_ref, and the era path pulls
+    # a not-present (digest-pinned) image before deciding.
+    assert seen["image"] == _FAKE_IMAGE.run_ref
+    assert seen["pull_if_missing"] is True
 
 
 def test_era_image_guard_mismatch_raises(monkeypatch):
@@ -120,10 +139,42 @@ def test_era_image_guard_mismatch_raises(monkeypatch):
         kb._prepare_container_execution(manifest, "era-exp")
 
 
-def test_modern_manifest_on_era_image_raises(monkeypatch):
-    monkeypatch.setattr(kb, "image_label", lambda *a, **k: "helm-v0.2.4")
+def test_era_image_not_present_errors_actionably(monkeypatch):
+    """Finding 4: an era image that can't be inspected surfaces image_label's
+    actionable RuntimeError, NOT a misleading 'carries org.aiq.era=None' mismatch."""
+    def boom(*a, **k):
+        raise RuntimeError("cannot inspect image ... not present locally")
+
+    monkeypatch.setattr(kb, "image_label", boom)
     monkeypatch.setattr(kb, "resolve_image_digest", lambda *a, **k: _FAKE_IMAGE)
     monkeypatch.setattr(kb, "runtime_version", lambda *a, **k: "test")
-    manifest = {"container_image": "era-img:dev"}  # no era
+    manifest = {"container_image": "era-img:dev", "era": "helm-v0.2.4"}
+    with pytest.raises(RuntimeError, match="not present locally"):
+        kb._prepare_container_execution(manifest, "era-exp")
+
+
+def test_modern_manifest_on_era_image_raises(monkeypatch):
+    """A modern manifest on an UNPINNED image still gets the guard (the image is
+    local post-resolve, so the label read is cheap)."""
+    monkeypatch.setattr(kb, "image_label", lambda *a, **k: "helm-v0.2.4")
+    monkeypatch.setattr(kb, "resolve_image_digest", lambda *a, **k: _FAKE_IMAGE_UNPINNED)
+    monkeypatch.setattr(kb, "runtime_version", lambda *a, **k: "test")
+    manifest = {"container_image": "modern-img:dev"}  # no era
     with pytest.raises(ValueError, match="era<->image mismatch"):
         kb._prepare_container_execution(manifest, "modern-exp")
+
+
+def test_modern_pinned_manifest_skips_label_read(monkeypatch):
+    """Finding 4: a pinned MODERN manifest performs NO label read — preserving the
+    old no-runtime-needed behavior for an already-pinned image (which may not be
+    present locally)."""
+    def fail_if_called(*a, **k):
+        raise AssertionError("image_label must not be called for a pinned modern manifest")
+
+    monkeypatch.setattr(kb, "image_label", fail_if_called)
+    monkeypatch.setattr(kb, "resolve_image_digest", lambda *a, **k: _FAKE_IMAGE)
+    monkeypatch.setattr(kb, "runtime_version", lambda *a, **k: "test")
+    manifest = {"container_image": "modern-img@sha256:" + "c" * 64}  # no era, pinned
+    resolved, prov = kb._prepare_container_execution(manifest, "modern-exp")
+    assert prov["era"] is None
+    assert prov["image_era_label"] is None

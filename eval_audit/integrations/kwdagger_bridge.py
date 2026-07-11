@@ -614,22 +614,39 @@ def _prepare_container_execution(
     # (and be ABSENT for a modern manifest). This catches a mismatched image at
     # SCHEDULE time (host) rather than GPU time — e.g. a modern image pinned for an
     # era manifest (magnet's v0.5+ CLI would crash mid-run) or an era image pinned
-    # for a modern manifest (no magnet CLI). Read from the requested ref (labels
-    # travel with the image regardless of digest form).
+    # for a modern manifest (no magnet CLI).
+    #
+    # Finding 4: read the label from the immutable ``run_ref`` (a mutable tag could
+    # be retagged between resolve and inspect); and SKIP the read entirely for a
+    # pinned MODERN manifest — the pre-era code path never touched the runtime for
+    # an already-pinned image, and a digest-pinned modern image may not be present
+    # locally (inspecting it would raise on a docker-less host). An era manifest,
+    # or any unpinned ref (local post-resolve), still gets the guard. For a
+    # digest-pinned era image, resolve_image_digest short-circuited without pulling,
+    # so pull_if_missing lets the label read see the real image instead of
+    # false-failing.
     manifest_era = manifest.get("era")
-    image_era = image_label(str(container_image), "org.aiq.era", runtime=runtime_name)
+    image_era = None
+    if manifest_era or not resolved_image.pinned:
+        image_era = image_label(
+            resolved_image.run_ref,
+            "org.aiq.era",
+            runtime=runtime_name,
+            pull_if_missing=True,
+        )
     if manifest_era:
         if image_era != str(manifest_era):
             raise ValueError(
                 f"era<->image mismatch: manifest pins era {manifest_era!r} but the "
-                f"container image {container_image!r} carries org.aiq.era={image_era!r}. "
+                f"container image {resolved_image.run_ref!r} carries "
+                f"org.aiq.era={image_era!r}. "
                 f"Build/pin the era image (ERA={manifest_era} ./docker/build.sh)."
             )
     elif image_era:
         raise ValueError(
             f"era<->image mismatch: a modern manifest (no era) was pinned to an era "
-            f"image {container_image!r} (org.aiq.era={image_era!r}). Use the modern "
-            "helm-runner image, or set the manifest era to match."
+            f"image {resolved_image.run_ref!r} (org.aiq.era={image_era!r}). Use the "
+            "modern helm-runner image, or set the manifest era to match."
         )
 
     provenance = {

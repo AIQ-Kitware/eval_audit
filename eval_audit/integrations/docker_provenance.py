@@ -179,18 +179,41 @@ def resolve_image_digest(image: str, runtime: str = "docker") -> ResolvedImage:
     )
 
 
-def image_label(image: str, key: str, runtime: str = "docker") -> str | None:
+def image_label(
+    image: str, key: str, runtime: str = "docker", *, pull_if_missing: bool = False
+) -> str | None:
     """Return the value of OCI label ``key`` on ``image``, or ``None`` if absent.
 
-    Best-effort: a runtime/inspect failure returns ``None`` rather than raising,
-    so callers decide how strict to be. Used by the era<->image guard to read
-    ``org.aiq.era`` off the resolved image at schedule time.
+    ``None`` means the image is inspectable but the label is genuinely absent —
+    a real signal the caller can act on (e.g. "modern image, no era label").
+
+    An image that cannot be inspected is NOT "label absent": conflating the two
+    false-fails the era<->image guard for a digest-pinned era image that
+    :func:`resolve_image_digest` short-circuited without pulling (it would read
+    ``None`` and report a bogus "carries org.aiq.era=None" mismatch). So when
+    ``pull_if_missing`` is set and the first inspect fails, attempt a best-effort
+    pull and re-inspect; if the image still cannot be inspected, raise
+    ``RuntimeError`` with an actionable "image not present" message. With
+    ``pull_if_missing`` unset the old best-effort contract holds (inspect failure
+    → ``None``).
     """
     bin_ = _runtime_bin(runtime)
-    proc = _run(
-        [bin_, "image", "inspect", image, "--format", f"{{{{index .Config.Labels {key!r}}}}}"]
-    )
+    fmt = f"{{{{index .Config.Labels {key!r}}}}}"
+
+    def _inspect():
+        return _run([bin_, "image", "inspect", image, "--format", fmt])
+
+    proc = _inspect()
+    if proc.returncode != 0 and pull_if_missing:
+        _run([bin_, "pull", image])  # best effort; the re-inspect is the decider
+        proc = _inspect()
     if proc.returncode != 0:
+        if pull_if_missing:
+            raise RuntimeError(
+                f"cannot inspect image {image!r} to read label {key!r}: it is not "
+                "present locally and could not be pulled. Build or pull the image "
+                f"before scheduling.\n{proc.stderr.strip()}"
+            )
         return None
     value = proc.stdout.strip()
     # Docker prints "<no value>" for a missing label key.
