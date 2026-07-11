@@ -3,16 +3,16 @@
 #
 # Each era runs its replay inside its OWN era-pinned CPU-only image (the bridge
 # selects the era shim pipeline and guards the image's org.aiq.era label). Model
-# inference is served on the host by modern vLLM (pythia69b-single behind
+# inference is served on the host by modern vLLM (redpajama3b-single behind
 # LiteLLM); the era container is an HTTP client (container_gpus: none,
-# --network host) that self-acquires pythia-6.9b's GPU lease per run
+# --network host) that self-acquires redpajama-3b's GPU lease per run
 # (eval-audit-run --lease).
 #
 # Unlike the phi-2 e2e, there is NO from-spec CLI flag to pass and no separate
 # make-manifest step: export-benchmark-bundle --freeze-rel-paths bakes
 # from_run_spec + the frozen run_spec_sources + era: into directly runnable
 # smoke/full manifests (era replay is exact-path only; the preset declares the
-# era). The broad classic root is AMBIGUOUS for pythia-6.9b (its runs exist at
+# era). The broad classic root is AMBIGUOUS for redpajama-3b (its runs exist at
 # both v0.2.4 and v0.3.0 with identical names), so we override --precomputed-root
 # with a per-era suite-scoped VIEW (era_corpus_view) that exposes exactly this
 # era's suite while preserving the classic/benchmark_output/... layout era

@@ -927,73 +927,73 @@
 # docs/planning/era-pinned-helm-containers-plan.md.
 #
 # IMPORTANT: `precomputed_root` below is the broad classic root, which is
-# AMBIGUOUS for pythia-6.9b (its runs exist under BOTH v0.2.4 and v0.3.0 with
+# AMBIGUOUS for redpajama-incite-base-3b-v1 (its runs exist under BOTH v0.2.4 and v0.3.0 with
 # identical run-dir names, so --freeze-rel-paths would fail AMBIGUOUS). The
 # runbook OVERRIDES it with `--precomputed-root <per-era suite-scoped view>`
 # (dev/era-tests/_lib.sh :: era_corpus_view) so each era freezes exactly its own
 # suite. The default is left broad (not a bogus per-era path) so a bare export
 # fails loud (AMBIGUOUS) rather than silently pinning the wrong suite.
-'era-pythia_6_9b-v0_2_4':
-  'profile': 'pythia69b-single'
-  'bundle_name': 'era-pythia_6_9b-v0_2_4'
+'era-redpajama_3b-v0_2_4':
+  'profile': 'redpajama3b-single'
+  'bundle_name': 'era-redpajama_3b-v0_2_4'
   'access_kind': 'openai-compatible'
   'era': 'helm-v0.2.4'
   'profiles':
-  - 'profile': 'pythia69b-single'
-    'helm_model_name': 'eleutherai/pythia-6.9b'
+  - 'profile': 'redpajama3b-single'
+    'helm_model_name': 'together/redpajama-incite-base-3b-v1'
     'protocol_mode': 'completions'
   'smoke_manifest':
-    'experiment_name': 'era-pythia_6_9b-v0_2_4-smoke'
-    'description': 'Classic-era (v0.2.4) smoke: pythia-6.9b, 5 instances/run.'
+    'experiment_name': 'era-redpajama_3b-v0_2_4-smoke'
+    'description': 'Classic-era (v0.2.4) smoke: redpajama-incite-base-3b-v1, 5 instances/run.'
     'run_entries':
-    - 'synthetic_reasoning_natural:difficulty=easy,model=eleutherai/pythia-6.9b'
-    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=eleutherai/pythia-6.9b,data_augmentation=canonical'
-    'suite': 'era-pythia_6_9b-v0_2_4-smoke'
+    - 'synthetic_reasoning_natural:difficulty=easy,model=together/redpajama-incite-base-3b-v1'
+    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=together/redpajama-incite-base-3b-v1,data_augmentation=canonical'
+    'suite': 'era-redpajama_3b-v0_2_4-smoke'
     'max_eval_instances': 5
     'precomputed_root': '/data/crfm-helm-public/classic'
     'container_network': 'host'
     'hf_cache_dir': '~/.cache/eval-audit-hf'
     'container_gpus': 'none'
   'full_manifest':
-    'experiment_name': 'era-pythia_6_9b-v0_2_4-full'
-    'description': 'Classic-era (v0.2.4) full: pythia-6.9b (official 1000-cap).'
+    'experiment_name': 'era-redpajama_3b-v0_2_4-full'
+    'description': 'Classic-era (v0.2.4) full: redpajama-incite-base-3b-v1 (official 1000-cap).'
     'run_entries':
-    - 'synthetic_reasoning_natural:difficulty=easy,model=eleutherai/pythia-6.9b'
-    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=eleutherai/pythia-6.9b,data_augmentation=canonical'
-    'suite': 'era-pythia_6_9b-v0_2_4-full'
+    - 'synthetic_reasoning_natural:difficulty=easy,model=together/redpajama-incite-base-3b-v1'
+    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=together/redpajama-incite-base-3b-v1,data_augmentation=canonical'
+    'suite': 'era-redpajama_3b-v0_2_4-full'
     'max_eval_instances': 1000
     'precomputed_root': '/data/crfm-helm-public/classic'
     'container_network': 'host'
     'hf_cache_dir': '~/.cache/eval-audit-hf'
     'container_gpus': 'none'
-'era-pythia_6_9b-v0_3_0':
-  'profile': 'pythia69b-single'
-  'bundle_name': 'era-pythia_6_9b-v0_3_0'
+'era-redpajama_3b-v0_3_0':
+  'profile': 'redpajama3b-single'
+  'bundle_name': 'era-redpajama_3b-v0_3_0'
   'access_kind': 'openai-compatible'
   'era': 'helm-v0.3.0'
   'profiles':
-  - 'profile': 'pythia69b-single'
-    'helm_model_name': 'eleutherai/pythia-6.9b'
+  - 'profile': 'redpajama3b-single'
+    'helm_model_name': 'together/redpajama-incite-base-3b-v1'
     'protocol_mode': 'completions'
   'smoke_manifest':
-    'experiment_name': 'era-pythia_6_9b-v0_3_0-smoke'
-    'description': 'Classic-era (v0.3.0) smoke: pythia-6.9b, 5 instances/run.'
+    'experiment_name': 'era-redpajama_3b-v0_3_0-smoke'
+    'description': 'Classic-era (v0.3.0) smoke: redpajama-incite-base-3b-v1, 5 instances/run.'
     'run_entries':
-    - 'synthetic_reasoning_natural:difficulty=easy,model=eleutherai/pythia-6.9b'
-    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=eleutherai/pythia-6.9b,data_augmentation=canonical'
-    'suite': 'era-pythia_6_9b-v0_3_0-smoke'
+    - 'synthetic_reasoning_natural:difficulty=easy,model=together/redpajama-incite-base-3b-v1'
+    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=together/redpajama-incite-base-3b-v1,data_augmentation=canonical'
+    'suite': 'era-redpajama_3b-v0_3_0-smoke'
     'max_eval_instances': 5
     'precomputed_root': '/data/crfm-helm-public/classic'
     'container_network': 'host'
     'hf_cache_dir': '~/.cache/eval-audit-hf'
     'container_gpus': 'none'
   'full_manifest':
-    'experiment_name': 'era-pythia_6_9b-v0_3_0-full'
-    'description': 'Classic-era (v0.3.0) full: pythia-6.9b (official 1000-cap).'
+    'experiment_name': 'era-redpajama_3b-v0_3_0-full'
+    'description': 'Classic-era (v0.3.0) full: redpajama-incite-base-3b-v1 (official 1000-cap).'
     'run_entries':
-    - 'synthetic_reasoning_natural:difficulty=easy,model=eleutherai/pythia-6.9b'
-    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=eleutherai/pythia-6.9b,data_augmentation=canonical'
-    'suite': 'era-pythia_6_9b-v0_3_0-full'
+    - 'synthetic_reasoning_natural:difficulty=easy,model=together/redpajama-incite-base-3b-v1'
+    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=together/redpajama-incite-base-3b-v1,data_augmentation=canonical'
+    'suite': 'era-redpajama_3b-v0_3_0-full'
     'max_eval_instances': 1000
     'precomputed_root': '/data/crfm-helm-public/classic'
     'container_network': 'host'

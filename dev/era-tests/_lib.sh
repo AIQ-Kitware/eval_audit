@@ -6,9 +6,11 @@
 # root, store/results roots, the INFER_STACK_DATA_DIR resolution, the
 # SKIP_LOCAL_REPEAT/GROUP_STRIP exports, and the per-scenario compose/summary
 # grouping — is carried over verbatim. What differs is the SUBJECT: this runbook
-# replays eleutherai/pythia-6.9b through BOTH classic eras (helm-v0.2.4 and
-# helm-v0.3.0), each inside its own era-pinned CPU-only HELM image, with model
-# inference served out-of-process on modern vLLM. See
+# replays together/redpajama-incite-base-3b-v1 through BOTH classic eras
+# (helm-v0.2.4 and helm-v0.3.0), each inside its own era-pinned CPU-only HELM
+# image, with model inference served out-of-process on modern vLLM. Redpajama-3b
+# is the smallest corpus model with a full official packet at both eras — small
+# enough (~5.6 GB fp16) to serve on a single 8 GB GPU. See
 # docs/planning/era-tests-dev-runbook-plan.md and
 # docs/planning/era-pinned-helm-containers-plan.md.
 
@@ -34,7 +36,7 @@ CANONICAL_CORPUS_PREFIX="${CANONICAL_CORPUS_PREFIX:-/data/crfm-helm-public}"
 # Output root for gate/ladder artifacts (per-rung logs, corpus views, bundles).
 ERA_OUT="${ERA_OUT:-$ROOT/ladder-out}"
 
-# infer-stack catalog providing the pythia-6.9b model + the pythia69b-single
+# infer-stack catalog providing the redpajama-3b model + the redpajama3b-single
 # endpoint. Defaults to the config dir shipped alongside this runbook.
 export INFER_STACK_CONFIG_DIR="${INFER_STACK_CONFIG_DIR:-$ERA_DIR/config/infer_stack}"
 
@@ -89,13 +91,13 @@ export EVAL_AUDIT_ERA_API_KEY="${EVAL_AUDIT_ERA_API_KEY:-EMPTY}"
 #   * era      — the docker/eras.yaml key. Selects the era image + shim pipeline;
 #                the bridge guards the image's org.aiq.era label against it.
 #   * endpoint — the infer-stack catalog endpoint the run leases (same served
-#                pythia-6.9b vLLM backend for both eras).
+#                redpajama-3b vLLM backend for both eras).
 # The grid loops one row per ERA (not per scenario): each per-era preset carries
 # BOTH scenarios (synthetic_reasoning_natural + mmlu), which have distinct logical
 # run keys, so a single per-era experiment composes cleanly.
 ERA_TARGETS=(
-  "era-pythia_6_9b-v0_2_4:helm-v0.2.4:pythia69b-single"
-  "era-pythia_6_9b-v0_3_0:helm-v0.3.0:pythia69b-single"
+  "era-redpajama_3b-v0_2_4:helm-v0.2.4:redpajama3b-single"
+  "era-redpajama_3b-v0_3_0:helm-v0.3.0:redpajama3b-single"
 )
 
 # Space-separated era keys the gate validates (derived from ERA_TARGETS unless
@@ -149,7 +151,7 @@ era_mirror_root() {
 }
 
 # Build (idempotently) a per-era suite-scoped VIEW of the corpus and echo its
-# path, for use as --precomputed-root. Why: pythia-6.9b's runs exist under BOTH
+# path, for use as --precomputed-root. Why: redpajama-3b's runs exist under BOTH
 # v0.2.4 and v0.3.0 with identical run-dir names, so freezing against the broad
 # classic root is AMBIGUOUS. The view is a real <view>/classic/benchmark_output/
 # runs/ dir whose only suite is a symlink to this era's suite — so discovery sees
@@ -183,8 +185,8 @@ era_clear_results() {
 era_vexp_manifest() {
   local d="$ROOT/configs/virtual-experiments"
   case "$(era_name "$1")" in
-    era-pythia_6_9b-v0_2_4) printf '%s\n' "$d/era-pythia-v024.yaml" ;;
-    era-pythia_6_9b-v0_3_0) printf '%s\n' "$d/era-pythia-v030.yaml" ;;
+    era-redpajama_3b-v0_2_4) printf '%s\n' "$d/era-redpajama-v024.yaml" ;;
+    era-redpajama_3b-v0_3_0) printf '%s\n' "$d/era-redpajama-v030.yaml" ;;
     *) echo "era_vexp_manifest: no manifest mapped for '$(era_name "$1")'" >&2; return 1 ;;
   esac
 }

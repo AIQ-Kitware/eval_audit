@@ -927,3 +927,73 @@ order* the modern path doesn't have (additional_args wins at v0.2.4). Both are
 invisible to host tests and would only fire on the GPU host at rung 3 / tier 1
 — exactly the class of bug the gate exists to catch early, which is an argument
 for running 07 before every grid invocation, not just once.
+
+## 2026-07-11 14:20:00 -0400
+
+**Model**: claude-opus-4-8 (Claude Code, VSCode extension). **Branch**:
+`impl/era-pinned-helm-containers`.
+
+**User intent**: "Can the new era-tests runbook be run locally on an 8 GB GPU?"
+→ then "check if there are two separate smaller models, one for 0.2.4 and one
+for 0.3.0" → then "check out to the correct branch and swap out the model" with
+option (a) (make the swap as a new commit).
+
+**What I found.** The runbook's containers are CPU-only (`container_gpus: none`);
+the entire GPU load is the out-of-process vLLM backend serving the subject. The
+prior subject, `eleutherai/pythia-6.9b` (~14 GB fp16), does not fit 8 GB. I swept
+the classic corpus (`/data/crfm-helm-public/classic/benchmark_output/runs/{v0.2.4,
+v0.3.0}`) for small open-weight models with full official packets. Result: the
+"two separate models" framing is unnecessary — `together/redpajama-incite-base-3b-v1`
+has the **same full 74-run packet at BOTH eras** (identical coverage to pythia-6.9b)
+AND fits 8 GB (~2.8B params, ~5.6 GB fp16). The distinct-per-era small candidates
+are all partial (pythia-2.8b: 7 runs @ v0.2.4, 0 @ v0.3.0; pythia-1b: 4/4;
+falcon-7b: 0/74 and too big anyway), so splitting subjects would cost packet
+completeness for no benefit. Both probe scenarios
+(`synthetic_reasoning_natural:easy`, `mmlu:us_foreign_policy`) exist for redpajama-3b
+at both eras. `adapter_spec.model` in the official run_spec is
+`together/redpajama-incite-base-3b-v1` (model_deployment None — pre-v0.5, expected).
+
+**The swap (pure subject substitution, structure unchanged).** Renamed
+`era-pythia_6_9b-*` → `era-redpajama_3b-*`, `pythia69b-single` →
+`redpajama3b-single`, `eleutherai/pythia-6.9b` → `together/redpajama-incite-base-3b-v1`
+across the runbook scope only: the two era presets in
+`eval_audit/integrations/infer_stack/preset_configs.yaml`, the serving catalog
+`dev/era-tests/config/infer_stack/catalog.yaml` (HF source
+`togethercomputer/RedPajama-INCITE-Base-3B-v1`, runtime retuned for 8 GB —
+`gpu_memory_utilization` 0.8→0.85, `max_num_seqs` 16→8), `dev/era-tests/_lib.sh`
+(ERA_TARGETS + era_vexp_manifest map + comments), the numbered scripts' comments,
+the README, and the two vexp configs (git-mv'd to `era-redpajama-v{024,030}.yaml`,
+scope regex `^together/redpajama-incite-base-3b-v1$`). Added a subject-change
+banner to the plan doc rather than rewriting its 28 references — the plan's every
+structural decision (per-era presets, per-era corpus view for the cross-suite
+name collision, per-era official index, verbatim by-name replay) holds verbatim
+because redpajama-3b's runs collide across suites exactly as pythia-6.9b's did.
+
+**Deliberately NOT touched.** The era *test* fixtures (test_eras*, test_era_shim*,
+test_exporter_freeze) use pythia-6.9b as a generic sample model to exercise the
+era machinery (dotted-name HOCON nesting `"eleutherai/pythia-6" { "9b" = … }`,
+freeze lease-map keying, discovery) — they don't reference the runbook presets, so
+they stay. All the other pythia-6.9b references tree-wide (run_details.yaml,
+run_specs.yaml, virtual-experiment tests, historical docs) are unrelated
+pythia-6.9b work outside this runbook.
+
+**Validation.** YAML parses + preset/catalog invariants (new keys present, old
+keys absent, run_entries carry the new model token); `bash -n` on all scripts;
+sourced `_lib.sh` resolves both targets → renamed manifests that exist on disk;
+`bash -n` clean; the full era pytest suite (88 tests) passes. Not run (needs
+docker+GPU the sandbox lacks): the actual grid — that's the user's GPU-host pass.
+
+**Reusable insight.** When a runbook's subject is chosen for a corpus property
+("full packet at both eras"), re-query the corpus before assuming the subject is
+forced — the constraint (full packet ∩ both eras) had a second solution that also
+satisfied an orthogonal constraint (fits 8 GB). The 8 GB question dissolved into a
+one-model swap because the corpus happened to contain a 3B model with identical
+coverage. Also: keep the swap a *rename*, not a *value edit* — leaving
+`pythia_6_9b` identifiers on a redpajama model would be a landmine for the next
+reader.
+
+**Next steps.** User's GPU-host pass is unchanged in shape: build era images
+(`ERA=<key> ./docker/build.sh`), 06 → 07 → 10/15 grids → 20/25/30/40. On the 8 GB
+card, watch the first vLLM load — if it OOMs, drop `gpu_memory_utilization` to
+0.80 in the catalog (noted inline). The phi-2 wip stash on `run-from-run-spec`
+(`git stash list`) is untouched and waiting for that branch.

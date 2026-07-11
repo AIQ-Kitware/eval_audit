@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Compose each era as its OWN virtual experiment, using the per-era manifest
-# (configs/virtual-experiments/era-pythia-v{024,030}.yaml). One local recipe per
+# (configs/virtual-experiments/era-redpajama-v{024,030}.yaml). One local recipe per
 # report, paired against that era's official runs. Requires the local index
 # (20_index_local.sh) and the per-era official index + inventory
 # (25_index_official_classic.sh). Mirrors dev/e2e-tests/30_compose.sh.

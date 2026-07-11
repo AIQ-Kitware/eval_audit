@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Preflight: confirm the infer-stack serving endpoint the era targets lease
-# exists before the grid tries to serve it. Both eras share the pythia69b-single
+# exists before the grid tries to serve it. Both eras share the redpajama3b-single
 # endpoint (shipped here in config/infer_stack/catalog.yaml). Fails fast with
 # guidance if it is missing, rather than letting `infer-stack acquire` error
 # mid-grid. Mirrors dev/e2e-tests/05_check_profiles.sh.

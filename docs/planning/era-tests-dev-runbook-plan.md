@@ -1,5 +1,18 @@
 # dev/era-tests: the pre-v0.5 validation gates as a turnkey dev runbook
 
+> **Subject changed after implementation (2026-07-11).** This plan was written
+> for `eleutherai/pythia-6.9b`, but the shipped runbook uses
+> `together/redpajama-incite-base-3b-v1` instead — the *smallest* corpus model
+> with a full official packet at **both** classic eras (74 runs each), and small
+> enough (~2.8B params, ~5.6 GB fp16) to serve on a single 8 GB GPU (pythia-6.9b
+> needs ~14 GB). The swap is a pure subject substitution: everywhere below, read
+> `era-pythia_6_9b-*` → `era-redpajama_3b-*`, `pythia69b-single` →
+> `redpajama3b-single`, `era-pythia-v{024,030}.yaml` → `era-redpajama-v{024,030}.yaml`,
+> and `eleutherai/pythia-6.9b` → `together/redpajama-incite-base-3b-v1`. Every
+> structural decision (per-era presets, per-era corpus view, per-era official
+> index, verbatim by-name replay) is unchanged — redpajama-3b's runs collide
+> across v0.2.4/v0.3.0 exactly as pythia-6.9b's did.
+
 **Status**: plan, ready to implement.
 **Branch**: implement on `impl/era-pinned-helm-containers` (all era code lives
 there; it descends from `impl/run-from-run-spec` @ `6092144`).

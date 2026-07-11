@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the aggregate publication surface for EACH per-era virtual experiment
-# composed by 30_compose.sh — one report per era, each pairing pythia-6.9b's
+# composed by 30_compose.sh — one report per era, each pairing redpajama-3b's
 # local replay against that era's official runs (same_deployment resolves
 # 'unknown' for era pairs). Mirrors dev/e2e-tests/40_build_summary.sh.
 #
