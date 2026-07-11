@@ -806,3 +806,74 @@ e2e-conventions digest that fed the plan came from the other subagent and is
 reflected in the plan's "copy verbatim" tables. Next: an implementing agent
 executes the plan phases 0→3 on this branch, starting with the findings-doc
 fix order.
+
+## 2026-07-11 10:40:00 -0400
+
+**User intent.** "Implement the full plan with all bug fixes" — execute
+docs/planning/era-tests-dev-runbook-plan.md end to end: fix ALL ten era-path
+review findings, then build the turnkey dev/era-tests runbook.
+
+**Model/config.** claude-opus-4-8[1m], Claude Code VSCode harness; worked in a
+git worktree at /home/agent/worktrees/era-tests on
+`impl/era-pinned-helm-containers` (the main checkout stays on
+`impl/run-from-run-spec`, untouched). Ran python via the main checkout's
+`.venv/bin/python` with `PYTHONPATH` pointed at the worktree so worktree code
+shadows the editable install; the helm submodule isn't populated in a worktree,
+so the tier-0 static import checker was validated by symlinking the main
+checkout's populated submodule in (removed afterward).
+
+**What landed (10 commits).**
+- Phase 0 (6 commits, `0c58ee9`..`0486bb7` + resolution doc): every finding in
+  era-pinned-review-findings-2026-07-10.md fixed, with host-importable tests for
+  each one that can be exercised without an era image. Notables: Finding 2 (the
+  pyhocon dot-split that breaks `eleutherai/pythia-6.9b`'s credential lookup at
+  BOTH eras) — fixed on both sides (shim writes a nested-key credentials.conf via
+  `_hocon_nested_deployment_key`, verified empirically against pyhocon; export
+  puts `api_key` in client_spec args); Finding 1 (v0.2.4 silent Together routing)
+  — explicit `register_model_deployments_from_path`; Finding 3 (v0.2.4 image
+  couldn't build) — version-tolerant `wrap_request_time` import. Also taught the
+  static import checker to exempt except-ImportError handler bodies (its
+  documented try/except pattern only exempted the try body — my fixes were the
+  first to use the pattern and exposed the gap).
+- Phase 1 (`67c0b53`): era-tests infer-stack catalog/settings, two per-era
+  presets (era-pythia_6_9b-v0_2_4 / -v0_3_0), two per-era vexp manifests.
+- Phase 2 (`99ff4df`): dev/era-tests/ runbook mirroring dev/e2e-tests, git mv'ing
+  the ladder rungs + drivers and deleting the superseded build/export/
+  make-manifest/run scripts.
+
+**Design decisions + empirically-resolved open questions.**
+- *Freeze ambiguity (plan OQ1) → per-era corpus VIEW.* pythia-6.9b's runs exist
+  at v0.2.4 AND v0.3.0 with identical run-dir names, so `--freeze-rel-paths`
+  against the broad classic root is AMBIGUOUS (confirmed: `_classify` returns
+  AMBIGUOUS). Narrowing `--precomputed-root` to `runs/<suite>` breaks discovery
+  (it walks for a dir literally named `benchmark_output`). Solution: `_lib.sh ::
+  era_corpus_view` builds `<view>/classic/benchmark_output/runs/<suite> ->` real
+  suite (one symlink/era), preserving the `classic/benchmark_output/...` layout
+  era resolution needs. Verified end-to-end: both entries RESOLVE, era resolves
+  to the right key, and a live export produces correctly suite-scoped frozen
+  sources for both eras.
+- *Cross-suite pairing (plan OQ2) → per-era scoped official indexes.* The
+  canonical official_public_index.csv has ZERO classic rows; step 25 runs
+  eval-audit-index-historic once per era with `--suite_pattern <suite>` into
+  indexes/era-tests/<suite>/, and redirects `--out_fpath/--out_detail_fpath` to
+  scratch so the curated run_details.yaml is never clobbered. Per-suite (not one
+  combined index) so a v0.2.4 local run can't pair against a v0.3.0 official
+  (identical logical keys across suites).
+- One preset PER ERA carrying both scenarios (distinct logical keys → clean
+  compose); grid rows are eras (the provenance unit); 06 fails-with-remedy rather
+  than auto-building; ladder.env retired for e2e-style defaults+env.
+
+**Validation done (sandbox).** 120 pytest green (era + touched-area suites);
+bash -n all 13 scripts; _lib.sh helpers exercised; live `--freeze-rel-paths`
+export for BOTH eras (correct era schema, api_key in args, explicit base_url,
+era: stamp, per-source lease); both vexp manifests load through the real
+`virtual.manifest.load_manifest`; drivers py_compile.
+
+**What remains (needs docker + GPU + built era images — cannot run here).**
+Build both era images (`ERA=<key> ./docker/build.sh`); 06 image probes; 07 rungs
+2/5; the 10/15 grids; step 25's actual index build; 30/40. **Plan OQ3 is still
+open:** whether era `run_benchmarking` emits `per_instance_stats.json` — the
+generated manifests set `require_per_instance_stats: true` and `_locate_run_dir`
+depends on it, but the official classic runs ship none, so the LOCAL side must
+produce it. First thing to check on a GPU host; if it doesn't, add an era carve-out
+in `_manifest_doc`, not a hand-edit.
