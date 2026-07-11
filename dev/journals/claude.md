@@ -1040,3 +1040,27 @@ pandas/datasets so likely fine. Close-out remains the pip-freeze workflow once
 green. Insight: a CI-era requirements.txt is a coherent lock EXCEPT where the
 target environment differs on axes the freeze encodes (GPU vs CPU) or where a
 validated override supersedes it — reconcile exactly those axes, adopt the rest.
+
+### Addendum 3: enriched freeze REVERTED — setup.cfg ~= ranges already era-pin
+
+The enriched-freeze build failed at the uv resolve: `crfm-helm==0.2.4 depends on
+spacy>=3.5.3,<3.6 and spacy==3.2.4 -> unsatisfiable`. Root cause: the era
+requirements.txt is STALE relative to the era setup.cfg — setup.cfg was bumped to
+`spacy~=3.5.3` after the requirements.txt froze `spacy==3.2.4`. Hard-pinning the
+stale freeze fights setup.cfg (authoritative) and would cascade through spaCy's
+subtree (thinc/blis/pydantic/...). More important: the freeze was UNNECESSARY.
+setup.cfg already era-pins every fidelity-critical dep via `~=` (compatible
+release): transformers~=4.28.1, tokenizers~=0.13.3, datasets~=2.5.2, numpy~=1.23.3,
+scipy, scikit-learn, sympy — each floats only within its era minor series. The
+ONLY open-upper-bound dep in the whole setup.cfg is `pyarrow>=11.0.0` — the exact
+one that drifted to 15 and broke datasets. So the minimal correct fix is: validated
+pandas/numpy (pandas is a transitive via datasets, unpinned by setup.cfg; numpy
+~=1.23.3 admits 1.23.5) + pyarrow==11.0.0. Reverted constraints to that (the
+2e8338f state). The seed-only resolve had already SUCCEEDED at the builder stage
+in the very first build (the #21 layer was CACHED), so seed+pyarrow is known-good.
+Kept the enriched-freeze commit in history + this note as the learning trail.
+Insight: before hard-pinning a lockfile, check the package's OWN dependency
+declaration — if it uses compatible-release (`~=`) ranges, it already pins the
+minor series; you only need to constrain the deps it leaves open-ended (or pure
+transitives it never names, like pandas here). A CI requirements.txt can also be
+stale vs the setup.cfg in the same commit; setup.cfg wins.
