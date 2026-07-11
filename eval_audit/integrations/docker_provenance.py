@@ -198,7 +198,10 @@ def image_label(
     → ``None``).
     """
     bin_ = _runtime_bin(runtime)
-    fmt = f"{{{{index .Config.Labels {key!r}}}}}"
+    # Go templates (docker --format) take DOUBLE-quoted string literals; Python's
+    # {key!r} emits single quotes, which Go parses as a (multi-rune) character
+    # constant -> "malformed character constant". Quote the label key explicitly.
+    fmt = f'{{{{index .Config.Labels "{key}"}}}}'
 
     def _inspect():
         return _run([bin_, "image", "inspect", image, "--format", fmt])
