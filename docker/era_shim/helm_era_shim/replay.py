@@ -231,6 +231,7 @@ def main(argv: Optional[List[str]] = None) -> Dict[str, Any]:
     except BaseException:
         tb = traceback.format_exc()
         _persist_stderr(out_dpath, tb)
+        _stamp_process_context_stop(out_dpath, process_context)
         manifest["status"] = "error"
         manifest["error"] = tb.strip().splitlines()[-1] if tb.strip() else None
         manifest_fpath.write_text(json.dumps(manifest, indent=2))
@@ -251,6 +252,7 @@ def main(argv: Optional[List[str]] = None) -> Dict[str, Any]:
             f"be located under {output_path}"
         )
 
+    _stamp_process_context_stop(out_dpath, process_context)
     manifest["status"] = "replayed"
     manifest["replay"].update(
         {
@@ -605,6 +607,31 @@ def _capture_process_context(
     except Exception:
         pass
     return ctx
+
+
+def _stamp_process_context_stop(
+    out_dpath: Path, process_context: Dict[str, Any]
+) -> None:
+    """Fill ``stop_timestamp`` / ``duration`` into process_context.json.
+
+    ``_capture_process_context`` runs before the replay, so it can only record
+    ``start_timestamp``; the Stage-4 indexer also reads
+    ``properties.{stop_timestamp,duration}`` (``index_results.py``). Re-write the
+    file after the replay (success or error) so era rows carry the same timing
+    the modern kwutil ProcessContext provides. Best-effort — never raises.
+    """
+    props = process_context.get("properties") if isinstance(process_context, dict) else None
+    if not isinstance(props, dict):
+        return
+    stop = time.time()
+    props["stop_timestamp"] = stop
+    start = props.get("start_timestamp")
+    if isinstance(start, (int, float)):
+        props["duration"] = stop - start
+    try:
+        (out_dpath / "process_context.json").write_text(json.dumps(process_context, indent=2))
+    except Exception:
+        pass
 
 
 def _safe(fn: Any) -> Optional[str]:

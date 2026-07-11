@@ -105,6 +105,10 @@ class OpenAICompatCompletionsClient(Client):
             os.environ.get("EVAL_AUDIT_ERA_HTTP_TIMEOUT", "600")
         )
         self.endpoint = _completions_endpoint(self.base_url)
+        # Reused across a whole run's completions (a 1000-instance run would
+        # otherwise open a fresh TCP/TLS connection per request). Lazily created
+        # in _post_completions so the module has no import-time requests dep.
+        self._session: Any = None
 
     # --- abstract surface the era Client base requires ------------------------
     def tokenize(self, request):  # type: ignore[override]
@@ -176,10 +180,12 @@ class OpenAICompatCompletionsClient(Client):
     def _post_completions(self, raw_request: Dict[str, Any]) -> Dict[str, Any]:
         import requests
 
+        if self._session is None:
+            self._session = requests.Session()
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        resp = requests.post(
+        resp = self._session.post(
             self.endpoint, json=raw_request, headers=headers, timeout=self.timeout
         )
         resp.raise_for_status()

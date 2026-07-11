@@ -10,6 +10,7 @@ only *inside* functions, so it loads cleanly on the host via
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 
@@ -174,3 +175,20 @@ def test_locate_run_dir_missing_suite_dir_returns_none(tmp_path):
         )
         is None
     )
+
+
+# --- cleanup: process_context stop/duration (Stage-4 indexer reads them) ------
+def test_stamp_process_context_stop_fills_timing(tmp_path):
+    ctx = {"name": "helm_era_shim.replay", "properties": {"start_timestamp": 100.0}}
+    replay._stamp_process_context_stop(tmp_path, ctx)
+    props = ctx["properties"]
+    assert props["stop_timestamp"] >= 100.0
+    assert props["duration"] == props["stop_timestamp"] - 100.0
+    # It also (re)writes process_context.json for the indexer to read.
+    written = json.loads((tmp_path / "process_context.json").read_text())
+    assert written["properties"]["stop_timestamp"] == props["stop_timestamp"]
+
+
+def test_stamp_process_context_stop_tolerates_missing_props(tmp_path):
+    # No 'properties' -> no crash, no duration invented.
+    replay._stamp_process_context_stop(tmp_path, {"name": "x"})

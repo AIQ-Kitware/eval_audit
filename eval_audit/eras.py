@@ -250,7 +250,7 @@ def resolve_era_for_sources(
         if not rel_path:
             # Non-exact-path source (run-entry label only): cannot resolve an
             # era from a path. Treat as modern; mixing is caught below.
-            seen[None] = seen.get(None, None)
+            seen.setdefault(None, None)
             continue
         era = era_for_run_dir(root / str(rel_path), registry=reg)
         seen[era.key if era else None] = era
