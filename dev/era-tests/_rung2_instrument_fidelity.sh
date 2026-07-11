@@ -73,8 +73,12 @@ for rel in "${picks[@]}"; do
     if [[ ! -f "$official_reqs" ]]; then echo "SKIP  ${name}: official display_requests.json missing"; ((skip++)); continue; fi
 
     echo "[fidelity] ${ERA} ${name}"
+    # Forward HF auth (like rung 5): script-based datasets (e.g. math's
+    # competition_math) need a token to fetch their loader from the 2026 Hub —
+    # without it get_instances() dies with "Unauthorized ... competition_math.py".
     if ! docker run --rm \
         -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+        -e HF_TOKEN -e HUGGING_FACE_HUB_TOKEN \
         -v "${MIRROR_ROOT}:${MIRROR_ROOT}:ro" \
         -v "${HF_MOUNT}:/hf-cache" \
         -v "${DRIVERS}:/ladder:ro" \
