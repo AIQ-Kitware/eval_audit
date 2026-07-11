@@ -1095,3 +1095,26 @@ can't tell without docker. Insight: a fidelity check is only as good as the
 artifact it diffs — validate the comparison target EXISTS in the corpus before
 diffing against it; the richest published signal (the prompt) beat the schema-pure
 one (input+references) that wasn't published.
+
+### Addendum 5: rung-2 must filter unfetchable-data probes, not fail on them
+
+After wget/unzip + fsspec fixes, rung-2 v0.2.4 = entity_matching PASS
+(INSTANCES_MATCH 1000), raft PASS (115), math FAIL. math's crash is
+`ConnectionError: Unauthorized ... competition_math.py ... use_auth_token` — MATH
+is a SCRIPT-based dataset the 2026 HF Hub blocks (401 on the .py loader). My prior
+inference "rung 5 forwards the token and passed, so forwarding it fixes math" was
+WRONG on two counts: (1) HF_TOKEN is NOT set in the shell (nothing to forward),
+and (2) rung 5 is an AUDIT that passes at 17/20 and itself lists MATHScenario
+(+BabiQA, TruthfulQA) under "failing families — pre-warm or mount-vendor". So MATH
+is a genuine ENVIRONMENT/RECIPE filter, exactly the CLAUDE.md distinction:
+data-unavailable = a filtering reason, NOT a reproducibility/instrument failure.
+Fix: rung-2 now classifies a dry-run crash whose log carries data-fetch/auth
+signatures (Unauthorized/Couldn't reach/ConnectionError/use_auth_token/GatedRepo/
+401/403/DNS) as SKIP (environment filter), not FAIL — so the gate passes on the
+families whose data actually loads (entity_matching, raft) and filters the rest.
+Kept the HF_TOKEN/HUGGING_FACE_HUB_TOKEN forward (harmless; helps if a token is
+ever set). The runbook's own two scenarios (synthetic_reasoning, mmlu) both PASS
+rung-5 fetch with no token, so the main grid path needs none. Insight: a gate over
+historical data must separate "the instrument is wrong" from "the data is no
+longer reachable" — conflating them turns Hub drift into a false reproducibility
+failure. rung 5 already had the taxonomy; rung 2 now matches it.

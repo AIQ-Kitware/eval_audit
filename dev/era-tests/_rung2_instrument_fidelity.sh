@@ -87,6 +87,15 @@ for rel in "${picks[@]}"; do
         "${ERA_IMAGE}" \
         python /ladder/dryrun_driver.py "$spec" "ladder-fidelity" "$out" \
         > "${out}/dryrun.log" 2>&1; then
+        # Distinguish an ENVIRONMENT/RECIPE filter (scenario data no longer
+        # fetchable from the 2026 Hub — e.g. MATH's script-based competition_math,
+        # which returns 401 without auth and is being deprecated Hub-side) from a
+        # genuine instrument crash. A family whose data can't be fetched is a
+        # filter reason, NOT an instrument-fidelity failure (same taxonomy rung 5
+        # applies), so SKIP it rather than failing the gate.
+        if grep -qiE "Unauthorized|Couldn't reach|ConnectionError|use_auth_token|GatedRepo|RepositoryNotFound|401 Client|403 Client|Connection refused|Temporary failure in name resolution|Name or service not known" "${out}/dryrun.log"; then
+            echo "SKIP  ${name}: scenario data not fetchable from the 2026 Hub (environment/recipe filter; see ${out}/dryrun.log)"; ((skip++)); continue
+        fi
         echo "FAIL  ${name}: dry-run crashed (see ${out}/dryrun.log)"; ((fail++)); continue
     fi
 
