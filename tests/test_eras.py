@@ -75,6 +75,27 @@ def test_resolve_era_hits_and_misses(tmp_path):
     assert resolve_era(None, None, registry=reg) is None
 
 
+def test_resolve_era_track_less_era_suite_fails_loud(tmp_path):
+    """Finding 9: public_track undecidable (None) but suite_version names an era
+    => fail loud instead of silently resolving to modern (a track-rooted mirror)."""
+    reg = load_era_registry(_write_registry(tmp_path, TWO_ERA_REGISTRY))
+    with pytest.raises(ValueError, match="cannot derive public_track"):
+        resolve_era(None, "v0.2.4", registry=reg)
+    # A suite_version that names NO era with public_track None is genuinely modern.
+    assert resolve_era(None, "v0.5.14", registry=reg) is None
+
+
+def test_era_for_run_dir_track_rooted_mirror_fails_loud(tmp_path):
+    """A rel_path rooted at benchmark_output (no track component) resolves
+    public_track=None; an era suite_version there must fail loud, not go modern."""
+    from eval_audit.eras import era_for_run_dir
+
+    reg = load_era_registry(_write_registry(tmp_path, TWO_ERA_REGISTRY))
+    track_rooted = Path("benchmark_output/runs/v0.2.4/babi_qa:task=15,model=eleutherai_pythia-6.9b")
+    with pytest.raises(ValueError, match="cannot derive public_track"):
+        era_for_run_dir(track_rooted, registry=reg)
+
+
 def test_resolve_era_ambiguous_registry_raises(tmp_path):
     reg = load_era_registry(
         _write_registry(

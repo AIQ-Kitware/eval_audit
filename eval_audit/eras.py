@@ -152,7 +152,10 @@ def resolve_era(
 
     Raises ``ValueError`` if more than one era claims the signal (an
     ambiguous registry is a config bug that would silently pick an arbitrary
-    instrument).
+    instrument), or if ``public_track`` is undecidable (``None``) while
+    ``suite_version`` alone names a registered era (Finding 9 — a track-rooted
+    mirror that would otherwise silently resolve to the *modern* image and run a
+    pre-v0.5 spec under the 0.5.x harness).
     """
     reg = registry if registry is not None else load_era_registry()
     hits = [
@@ -166,7 +169,29 @@ def resolve_era(
             f"ambiguous era registry: ({public_track!r}, {suite_version!r}) "
             f"matched multiple eras: {keys}"
         )
-    return hits[0] if hits else None
+    if hits:
+        return hits[0]
+    # Finding 9: no full match. If the track was undecidable (None) but the
+    # suite_version alone names a registered era, this is almost certainly a
+    # track-rooted mirror whose path lacks the public_track component. Silently
+    # returning modern would run a pre-v0.5 spec under the modern image with the
+    # era<->image guard none the wiser (manifest era stays None). Fail loud.
+    if public_track is None and suite_version is not None:
+        suite_only = sorted(
+            era.key
+            for era in reg.values()
+            if any(m.suite_version == suite_version for m in era.matches)
+        )
+        if suite_only:
+            raise ValueError(
+                f"cannot derive public_track (got None) but suite_version "
+                f"{suite_version!r} matches era(s) {', '.join(suite_only)}. This is "
+                "likely a track-rooted mirror whose --precomputed-root is the track "
+                "dir itself; pass --era <key> explicitly, or point --precomputed-root "
+                "one level up so the <track>/benchmark_output/... component is in the "
+                "path."
+            )
+    return None
 
 
 def parse_public_signal_from_run_dir(run_dir: Path | str) -> tuple[str | None, str | None]:
