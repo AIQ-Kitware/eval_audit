@@ -1,0 +1,19 @@
+# infer-stack durable settings (leasing world) for the gpt-oss-20b from-spec runbook.
+#
+# The leasing CLI reads these top-level keys; _lib.sh points
+# INFER_STACK_CONFIG_DIR at this dir so the catalog.yaml beside this file resolves.
+#
+# Pin `litellm: true` (HELM routes through the LiteLLM gateway) and `ui: false`
+# (no Open WebUI for a benchmark run).
+#
+# `data_dir` is BIND-MOUNTED into the vLLM/LiteLLM containers (HF weight cache +
+# gateway route table), so it must live on a docker-mountable big disk — never an
+# NFS $HOME, which silently breaks the mounts and 500s every HELM request.
+# Override per host via INFER_STACK_DATA_DIR (or relocate just the parent via
+# INFER_STACK_DATA_ROOT) when /data/service isn't the local big disk.
+backend: compose
+litellm: true
+ui: false
+skip_display_gpus: false
+reverse_proxy: false
+data_dir: /data/service/infer-stack

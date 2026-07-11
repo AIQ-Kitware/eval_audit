@@ -38,6 +38,7 @@ before relying on a claim.
 | `extend_grid_falcon_7b/` | local Falcon-7B reproduction across the heatmap's 14 benchmarks (HELM HF backend, single GPU) | **WORKING** (2026-05, execution side) |
 | `finish_qwen25_gptoss/` | close the Qwen 2.5 7B + gpt-oss audit gaps surfaced by Case Study 3 (re-run public run_specs with prompt prefix intact) | **WORKING** (2026-05, gated-dataset caveats) |
 | `gpt_oss_20b_core_grid/` | run `openai/gpt-oss-20b` on the 14 core reproducibility benchmarks for a cross-model comparison (TMLR paper context) | status unrecorded |
+| `gpt_oss_20b_from_spec/` | faithful **from-spec** replay of the 4 ungated-judge public gpt-oss-20b rows (bbq, ifeval, mmlu_pro, gpqa); single-model analogue of `olmo_models_combined/` | **WIRED** (2026-07; discovery 4/4 RESOLVED, GPU run pending) |
 | `gpt_oss_20b_vllm/` | LiteLLM-fronted vLLM smoke + overnight batch for `openai/gpt-oss-20b` | **UNSURE** (vLLM/LiteLLM-side) |
 | `historic_grid/` | regenerate a historic public-run manifest grid and rebuild reports | **UNSURE** |
 | `inspectai_helm_eee_compare/` | EEE-only comparability stress: HELM-shaped + InspectAI-shaped artifacts in one bundle; probes what the planner can conclude | **WORKING** (2026-05) |

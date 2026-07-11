@@ -619,3 +619,66 @@ Design note: I did NOT add a determinism-knob axis to vLLM (enforce-eager / chun
 prefill / prefix-cache) — those are confounder-removal for matching an HF official,
 not parameters of the model recipe, so sweeping them would muddy the comparison
 rather than widen it. "All parameters" means the recipe surface, not vLLM's scheduler.
+
+## 2026-07-11 16:59:16 -0400
+
+**Model/harness:** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude Code.
+
+**User intent.** After establishing which public gpt-oss-20b rows exist (11) and
+which need closed judges / gated data, the user asked for a runbook "like the olmo
+one" for gpt-oss-20b covering **bbq, ifeval, mmlu_pro, gpqa**, authored **in a git
+worktree checking out the `impl/run-from-run-spec` branch**. Explicit steer: the
+older gpt-oss presets (`gpt_oss_20b_vllm`, `finish_qwen25_gptoss`) are stale/pre-
+refactor — model the new work on `olmo_models_combined/`, the accurate from-spec
+reference.
+
+**What I built** (worktree at `/home/agent/eval_audit-gptoss-fromspec`, since the
+repo parent is root-owned and a sibling worktree couldn't be created):
+- New single-model **from-spec** preset `openai-gpt-oss-20b` in
+  `preset_configs.yaml`, cloned from the `allenai-olmo-2-1124-7b-instruct` shape
+  (top-level profile facts; `precomputed_root: /data/crfm-helm-public` per manifest;
+  run_entries with NO inline `model_deployment=` token — the exporter injects
+  `vllm/openai-gpt-oss-20b` as the from-spec rewrite target).
+- `reproduce/gpt_oss_20b_from_spec/` — `_lib.sh`, `00`–`40` step scripts, shipped
+  `config/infer_stack/{catalog,settings}.yaml` (the `gpt-oss-20b-single` endpoint),
+  and a README. Direct single-model port of the olmo combined runbook minus the
+  fan-out/extra-preset machinery.
+- `configs/virtual-experiments/gpt-oss-20b-from-spec.yaml` (scope = the one model;
+  official_public_index comparison ON).
+
+**Central design decision — protocol.** The official rows were served via
+`together/gpt-oss-20b`, a chat (harmony) client — discovery confirmed
+`deploy(official)=together/gpt-oss-20b` for all four. So the faithful replay serves
+**chat**, not the frozen `gpt_oss_20b_vllm` preset's completions workaround. The
+trade-off: gpt-oss is a reasoning model and chat can return `message.content=null`
+(reasoning-only, finish_reason=length), which un-patched HELM crashes on
+(`docs/helm-null-completion-text-patch-proposal.md`, still a *proposal* — submodule
+not vendored to confirm a merge). Risk is concentrated on the CoT rows
+(mmlu_pro, gpqa); documented prominently in the README with the completions fallback
+as a liveness escape hatch, treated the way olmo treats gpqa gating.
+
+**Validation (as far as possible without GPUs/serving).** All four target YAMLs
+parse; the preset loads through the real `_load_preset_catalog`; `bash -n` clean on
+all scripts. Decisive: ran the actual discovery gate
+(`check_precomputed_discovery --preset openai-gpt-oss-20b`) against the real
+`/data/crfm-helm-public` (84,966 run dirs) — **smoke 2/2 and full 4/4 RESOLVED,
+0 NO_MATCH, 0 AMBIGUOUS**. All four official run dirs carry `run_spec.json`. The
+export's later materialize steps error only on worktree-absent submodules
+(infer_stack catalog path, helm `model_metadata.yaml`) — invocation artifacts, not
+preset bugs; 10/15 supply the base-url + run in the initialized main tree.
+
+**Reusable insights.**
+1. A single-model from-spec preset = the OLMo-2 single shape verbatim; the only
+   real choices are the serving endpoint + `protocol_mode`, and `protocol_mode`
+   should match the *official* deployment's client (discovery prints it).
+2. `check_precomputed_discovery --preset` is the right cheap proof that run_entries
+   resolve 1:1 — it needs neither the helm submodule nor serving, unlike the full
+   `export-benchmark-bundle` materialize path.
+3. Discovery tolerated `mmlu_pro:subject=all` resolving to the official `subset=all`
+   dir (kept, matching the olmo pattern) — the freeze replays the official
+   run_spec.json regardless, so the run_entry is only a locator.
+
+**Status / next steps.** WIRED, not yet GPU-run. Remaining: on a serving host,
+`./08` (freeze against corpus), then `./10`/`./15` for the real batch; watch the CoT
+rows for the null-content crash and fall back to completions if it fires. Committed
+onto `impl/run-from-run-spec` (not pushed).

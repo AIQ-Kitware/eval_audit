@@ -1,0 +1,43 @@
+# infer-stack serving catalog (new schema) for the single gpt-oss-20b endpoint.
+#
+# A catalog declares `models` (what can be served) and `endpoints` (the served
+# API names). `infer-stack acquire gpt-oss-20b-single` leases + brings it up.
+#
+# The endpoint name == the preset's `profile` field
+# (preset_configs.yaml 'openai-gpt-oss-20b') and doubles as the LiteLLM
+# model_name HELM requests (C-3). HELM-domain aliases (the case-sensitive
+# model/tokenizer names) live in the eval_audit preset (G1/G2), not here — the
+# catalog owns transport: the backing HF model + the served context window +
+# `protocol`.
+#
+# PROTOCOL: gpt-oss is an instruct/reasoning model and the preset serves chat
+# (protocol_mode: chat, matching the official together/gpt-oss-20b chat client),
+# so the endpoint uses the default `protocol: chat` — infer-stack's readiness
+# probe hits /chat/completions, which the harmony chat template answers. No
+# `protocol:` override needed (unlike the OLMo base models).
+#
+# hf_model_id (`source`): openai/gpt-oss-20b ships mxfp4-quantized weights
+# natively — vLLM reads the checkpoint dtype, so NO `dtype` override is set
+# (forcing bf16 would both bloat memory and diverge from the native recipe).
+
+models:
+  gpt-oss-20b:
+    source: hf://openai/gpt-oss-20b        # gates-free public weights; mxfp4 native
+
+endpoints:
+  gpt-oss-20b-single:
+    engine: vllm
+    reclaim: stop                # free the GPU on release so the lease queue can place the next job
+    model: gpt-oss-20b
+    runtime:
+      # gpt-oss is a reasoning model: mmlu_pro / gpqa run under CoT and emit long
+      # traces, so keep the context window generous. mxfp4 weights (~12-16 GiB)
+      # leave ample KV headroom on a single >=40 GiB card.
+      max_model_len: 16384
+      gpu_memory_utilization: 0.9
+      max_num_batched_tokens: 16384
+      max_num_seqs: 16
+      enable_prefix_caching: true
+      # On <40 GiB-class cards gpt-oss-20b will not fit at this context; add
+      #   tensor_parallel_size: 2
+      # here (and give the lease >=2 free GPUs). See the runbook README.

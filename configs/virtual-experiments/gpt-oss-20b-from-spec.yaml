@@ -1,0 +1,42 @@
+schema_version: 1
+name: gpt-oss-20b-from-spec
+description: >
+  From-spec reproduction of the four ungated-judge public HELM gpt-oss-20b rows
+  (bbq, ifeval, mmlu_pro, gpqa), grouped into one virtual experiment. The local
+  side is the single audit-openai-gpt-oss-20b-from-spec-full experiment produced
+  by the reproduce/gpt_oss_20b_from_spec/ runbook, which replays each official
+  run_spec.json verbatim (exact-path freeze) against the local vLLM service.
+  Comparison against public HELM is ON (the official_public_index source below):
+  each local run pairs with its official counterpart by logical run key. Comment
+  that source out to make the report local-only.
+  NOTE: the official gpt-oss-20b corpus has 11 rows; this runbook reproduces the
+  4 that need neither a closed (GPT-4o) judge nor a co-hosted local judge. The
+  other 7 (air_bench_2024 + the six GPT-4o/Llama-405B safety+capabilities rows)
+  surface as unpaired official rows in the report — that is the correct
+  recipe/environment filtering story, not a reproducibility failure.
+
+scope:
+  # Single model. The include_experiments list below is the hard bound on the
+  # local side; this regex is a second, defensive narrowing on the model axis.
+  # benchmarks: deliberately unset — the from-spec experiment only ran the four
+  # target benchmarks, so the local axis is already bounded by include_experiments.
+  models:
+    - "regex:^openai/gpt-oss-20b$"
+
+sources:
+  - kind: audit_index
+    fpath: /data/crfm-helm-audit-store/indexes/audit_results_index.csv
+    include_experiments:
+      - audit-openai-gpt-oss-20b-from-spec-full
+
+  # Comparison side: pair each local run with its official public-HELM run by
+  # logical run key. Comment out to make the report local-only (40_build_summary.sh
+  # then falls back to --no-filter-inventory since compose writes no scoped inventory).
+  - kind: official_public_index
+    fpath: /data/crfm-helm-audit-store/indexes/official_public_index.csv
+    pre_filter:
+      kind: helm_stage1
+      inventory_fpath: /data/crfm-helm-audit-store/analysis/filter_inventory.json
+
+output:
+  root: /data/crfm-helm-audit-store/virtual-experiments/gpt-oss-20b-from-spec

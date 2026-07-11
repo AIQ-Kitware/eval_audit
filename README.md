@@ -150,6 +150,7 @@ update its README before claiming it's still good.
 | `reproduce/qwen35_vllm/` | local vLLM smoke for `qwen/qwen3.5-9b` | **UNSURE** (vLLM-side) |
 | `reproduce/qwen2_72b_vllm/` | vLLM smoke + EWOK historic grid for qwen2-72b | **UNSURE** (vLLM-side) |
 | `reproduce/gpt_oss_20b_vllm/` | LiteLLM-fronted vLLM batch for gpt-oss-20b | **UNSURE** (vLLM/LiteLLM-side) |
+| `reproduce/gpt_oss_20b_from_spec/` | from-spec replay of the 4 ungated-judge public gpt-oss-20b rows (bbq, ifeval, mmlu_pro, gpqa) | **WIRED** (2026-07; discovery 4/4 RESOLVED, GPU run pending) |
 | `reproduce/small_models_kubeai/` | KubeAI overnight batch (qwen2.5-7b + vicuna-7b) | **UNSURE** (KubeAI-side) |
 | `reproduce/setup/` | one-time host setup scripts | **UNSURE** but harmless |
 

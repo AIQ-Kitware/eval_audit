@@ -913,3 +913,67 @@
     'container_network': 'host'
     'hf_cache_dir': '~/.cache/eval-audit-hf'
     'container_gpus': 'none'
+# --- openai/gpt-oss-20b: single-model FROM-SPEC preset -------------------------
+# Faithful from-spec replay of the four ungated-judge public HELM gpt-oss-20b
+# rows: bbq, ifeval, mmlu_pro, gpqa. Same single-model shape as the OLMo-2 /
+# OLMoE instruct presets above (top-level profile facts; precomputed_root inside
+# each manifest block; run_entries carry NO inline model_deployment= token — the
+# exporter injects vllm/openai-gpt-oss-20b as the from-spec rewrite target).
+#
+# PROTOCOL: chat, NOT the frozen `gpt_oss_20b_vllm` preset's completions
+# workaround. The official public rows used together/gpt-oss-20b — a
+# TogetherChatClient (chat) that applies the harmony template — so a faithful
+# replay serves chat. The trade-off: gpt-oss is a reasoning model and the chat
+# path can return message.content=null (reasoning-only, finish_reason=length),
+# which un-patched HELM crashes on (docs/helm-null-completion-text-patch-proposal.md).
+# The risk is concentrated on the CoT rows (mmlu_pro, gpqa). See the runbook
+# README (reproduce/gpt_oss_20b_from_spec/) for the completions fallback.
+'openai-gpt-oss-20b':
+  'profile': 'gpt-oss-20b-single'
+  'bundle_name': 'openai-gpt-oss-20b'
+  'access_kind': 'vllm-direct'
+  'model_deployment_name': 'vllm/openai-gpt-oss-20b'
+  # G1: HELM aliases. gpt-oss ships the harmony chat template.
+  'helm_model_name': 'openai/gpt-oss-20b'
+  'helm_tokenizer_name': 'openai/o200k_harmony'
+  'protocol_mode': 'chat'
+  # Ceiling below the served max_model_len (config/infer_stack/catalog.yaml =
+  # 16384). Reasoning traces on the CoT rows are long; keep it generous. The
+  # from-spec replay uses the official run_spec.json's own max_tokens — this is
+  # only the serving ceiling. Validate against the official spec before publish.
+  'helm_max_sequence_and_generated_tokens_length': 16320
+  'smoke_manifest':
+    'experiment_name': 'audit-openai-gpt-oss-20b-from-spec-smoke'
+    'description': 'Smoke-test from-spec replay for openai/gpt-oss-20b via the local vLLM service (chat/harmony).'
+    'run_entries':
+    # ifeval is the langdetect/[metrics] container canary (a [heim]-built runner
+    # image dies on its metric import). bbq is multiple_choice_joint. Both are
+    # LOW-risk for the null-content path (no long CoT); the CoT rows land in full.
+    - 'ifeval:model=openai/gpt-oss-20b'
+    - 'bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=openai/gpt-oss-20b'
+    'suite': 'audit-openai-gpt-oss-20b-from-spec-smoke'
+    'precomputed_root': '/data/crfm-helm-public'
+    'max_eval_instances': 5
+    # Containerized HELM ("docker pipeline") is mandatory; the grid passes
+    # `eval-audit-run --container-image "$GPTOSS_CONTAINER_IMAGE"`.
+    # network=host so the in-container HELM client reaches the host-served model
+    # (vLLM behind LiteLLM); gpus=none keeps HELM off the serving GPU (these
+    # metric / MC / exact-match rows have no local-HF judge model).
+    'container_network': 'host'
+    'hf_cache_dir': '~/.cache/eval-audit-hf'
+    'container_gpus': 'none'
+  'full_manifest':
+    'experiment_name': 'audit-openai-gpt-oss-20b-from-spec-full'
+    'description': 'Full from-spec reproduction for openai/gpt-oss-20b: bbq, ifeval, mmlu_pro, gpqa. Includes 1 gated-dataset run (gpqa -> Idavidrein/gpqa, requires HuggingFace auth).'
+    'run_entries':
+    - 'bbq:subject=all,method=multiple_choice_joint,max_train_instances=0,model=openai/gpt-oss-20b'
+    - 'ifeval:model=openai/gpt-oss-20b'
+    - 'mmlu_pro:subject=all,use_chain_of_thought=true,use_few_shot=false,model=openai/gpt-oss-20b'
+    - 'gpqa:subset=gpqa_main,use_chain_of_thought=true,use_few_shot=false,model=openai/gpt-oss-20b'
+    'suite': 'audit-openai-gpt-oss-20b-from-spec-full'
+    'precomputed_root': '/data/crfm-helm-public'
+    'max_eval_instances': 1000
+    # Containerized HELM ("docker pipeline") is mandatory; see the smoke block.
+    'container_network': 'host'
+    'hf_cache_dir': '~/.cache/eval-audit-hf'
+    'container_gpus': 'none'
