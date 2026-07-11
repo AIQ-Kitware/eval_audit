@@ -62,7 +62,11 @@ for rel in "${picks[@]}"; do
     official_reqs="${official_dir}/display_requests.json"
     spec="${official_dir}/run_spec.json"
     name="$(basename "$rel")"
-    out="${ERA_OUT}/fidelity/${ERA}/${name}"
+    # docker -v parses ':' as the host:container:opts delimiter, and HELM run
+    # names contain them (entity_matching:dataset=...), so the mount/workdir path
+    # must be colon-free. Sanitize for the dir; keep $name for the log lines.
+    safe_name="${name//:/_}"
+    out="${ERA_OUT}/fidelity/${ERA}/${safe_name}"
     rm -rf "$out"; mkdir -p "$out"
 
     if [[ ! -f "$spec" ]]; then echo "SKIP  ${name}: no run_spec.json at ${spec}"; ((skip++)); continue; fi
