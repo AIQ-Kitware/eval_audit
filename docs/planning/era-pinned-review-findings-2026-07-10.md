@@ -1,5 +1,23 @@
 # Era-Pinned HELM Containers — Code-Review Findings (2026-07-10)
 
+> **Resolution (2026-07-11).** All ten findings are fixed on
+> `impl/era-pinned-helm-containers`, with host-importable tests for every one
+> that could be exercised without an era image (Findings 3/8 verify at build
+> time; 6 at build + run time):
+>
+> - `0c58ee9` — Findings 1, 2 (shim), 3, 7, 8 (`docker/era_shim/`)
+> - `befd490` — Findings 2 (bundle), 5, 10 + era `protocol_mode` assert
+> - `f549943` — Finding 4 (digest-pinned era<->image guard)
+> - `9bf2228` — Finding 6 (dockerfile ENV)
+> - `f09051b` — Finding 9 (fail loud on track-less era-suite paths)
+> - `0486bb7` — below-the-cap cleanups: process-context timing, requests.Session
+>   reuse, `setdefault`
+>
+> **Deferred below-the-cap cleanups** (not exercisable in the sandbox; each is a
+> pure refactor with no correctness impact): the shared `benchmark_output` path
+> parser extraction (`eras.py` vs `compare_batch.py`), `docker/read_eras.py`
+> default dedup, and the `build.sh` era/modern build-invocation dedup.
+
 **Scope.** The six era commits on `impl/era-pinned-helm-containers`
 (`25b00db..a520062`, i.e. `git diff 6092144..HEAD`), implementing
 `docs/planning/era-pinned-helm-containers-plan.md`.
