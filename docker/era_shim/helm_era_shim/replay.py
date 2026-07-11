@@ -191,14 +191,26 @@ def main(argv: Optional[List[str]] = None) -> Dict[str, Any]:
     manifest["replay"]["applied_max_eval_instances"] = applied_cap
 
     # 3) Prepare the local HELM config (prod_env): era deployments yaml +
-    #    synthesized credentials.conf. ServerService auto-registers deployments
-    #    from this base path at run_benchmarking time.
+    #    synthesized credentials.conf.
     prepared_local_path = _prepare_local_helm_config(
         out_dpath=out_dpath,
         local_path=local_path,
         model_deployments_fpath=model_deployments_fpath,
         model_name=run_spec.adapter_spec.model,
     )
+
+    # 3b) Explicitly register the era deployments yaml. v0.2.4 has NO base-path
+    #     auto-registration (that arrived at v0.3.0 via ServerService's
+    #     maybe_register_model_deployments_from_base_path); the only era caller of
+    #     register_model_deployments_from_path is run.py's --model-deployment-paths
+    #     handling, which run_benchmarking() bypasses. Without this, at v0.2.4 the
+    #     registry stays empty, get_model_deployment(model) returns None, and
+    #     AutoClient falls through to the hardcoded org dispatch (eleutherai/lmsys/
+    #     meta/... -> TogetherClient), silently routing every request to
+    #     api.together.xyz — the exact deployment artifact the audit exists to
+    #     eliminate. Registering explicitly is idempotent at v0.3.0 (ServerService
+    #     re-registers the same entries).
+    _register_era_deployments(prepared_local_path)
 
     # 4) Optional HF model registration (mirrors the era helm-run preamble).
     _register_optional_hf_models(args)
@@ -371,34 +383,93 @@ def _prepare_local_helm_config(
         (prepared / "model_deployments.yaml").write_text(src.read_text())
 
     api_key = os.environ.get(_ERA_API_KEY_ENV, "EMPTY")
-    # HOCON: quote the slash-bearing deployment name and the value.
-    credentials = (
-        "deployments: {\n"
-        f'  "{model_name}": "{api_key}"\n'
-        "}\n"
+    (prepared / "credentials.conf").write_text(
+        _render_credentials_conf(model_name, api_key)
     )
-    (prepared / "credentials.conf").write_text(credentials)
     return prepared
 
 
+def _hocon_nested_deployment_key(model: str, value: str) -> str:
+    """Render one ``deployments`` entry so pyhocon's dotted-path lookup resolves it.
+
+    pyhocon's ``ConfigTree`` path-splits lookup keys on ``.`` even when the key
+    was written quoted, so a flat ``"eleutherai/pythia-6.9b": "EMPTY"`` entry is
+    unreachable: HELM's ``AutoClient`` looks the credential up with the raw model
+    string, pyhocon resolves the *path* ``eleutherai/pythia-6`` -> ``9b``, and the
+    lookup raises ``ConfigMissingException``. Nest the entry along the dot-split
+    path so the path lookup lands on the value::
+
+        "eleutherai/pythia-6" { "9b" = "EMPTY" }
+
+    A model with no dot stays flat (``"together/gpt2" = "EMPTY"``). Slashes are not
+    path separators in HOCON, so the quoted segments keep them verbatim. Returns
+    the entry text only (no ``deployments`` wrapper) so it is unit-testable.
+    """
+    segments = model.split(".")
+    entry = f'"{segments[-1]}" = "{value}"'
+    for segment in reversed(segments[:-1]):
+        entry = f'"{segment}" {{ {entry} }}'
+    return entry
+
+
+def _render_credentials_conf(model_name: str, api_key: str) -> str:
+    """The full credentials.conf text with a pyhocon-addressable deployment key."""
+    return "deployments {\n  " + _hocon_nested_deployment_key(model_name, api_key) + "\n}\n"
+
+
+def _register_era_deployments(prepared_local_path: Path) -> None:
+    """Register the era ``model_deployments.yaml`` at the era deployment registry.
+
+    Required at v0.2.4 (no base-path auto-registration) and idempotent at v0.3.0;
+    see the step-3b comment in ``main`` for why silent Together routing results
+    without it. Uses ``register_model_deployments_from_path`` — it exists
+    identically at both eras.
+    """
+    deployments_yaml = prepared_local_path / "model_deployments.yaml"
+    if not deployments_yaml.exists():
+        return
+    from helm.benchmark.model_deployment_registry import (
+        register_model_deployments_from_path,
+    )
+
+    register_model_deployments_from_path(os.fspath(deployments_yaml))
+
+
 def _register_optional_hf_models(args: argparse.Namespace) -> None:
-    """Register HF hub / local models if the flags carry any (usually empty)."""
+    """Register HF hub / local models if the flags carry any (usually empty).
+
+    The registration API moved between eras: at v0.3.0+ it lives in
+    ``helm.benchmark.huggingface_registration``
+    (``register_huggingface_{hub,local}_model_from_flag_value``); at v0.2.4 it is
+    ``helm.proxy.clients.huggingface_model_registry``
+    (``register_huggingface_{hub,local}_model_config``). Version-dispatch so a
+    v0.2.4 replay with non-empty enable flags does not ModuleNotFoundError
+    mid-run. The empty-flag era path (the standard case) never reaches the import.
+    """
     hub = _coerce_str_list(args.enable_huggingface_models)
     local = _coerce_str_list(args.enable_local_huggingface_models)
     if hub:
-        from helm.benchmark.huggingface_registration import (
-            register_huggingface_hub_model_from_flag_value,
-        )
-
+        try:  # v0.3.0+
+            from helm.benchmark.huggingface_registration import (
+                register_huggingface_hub_model_from_flag_value as _reg_hub,
+            )
+        except ImportError:  # v0.2.4
+            from helm.proxy.clients.huggingface_model_registry import (
+                register_huggingface_hub_model_config as _reg_hub,
+            )
         for name in hub:
-            register_huggingface_hub_model_from_flag_value(str(name))
+            _reg_hub(str(name))
     if local:
-        from helm.benchmark.huggingface_registration import (
-            register_huggingface_local_model_from_flag_value,
-        )
-
+        try:  # v0.3.0+
+            from helm.benchmark.huggingface_registration import (
+                register_huggingface_local_model_from_flag_value as _reg_local,
+            )
+        except ImportError:  # v0.2.4
+            from helm.proxy.clients.huggingface_model_registry import (
+                register_huggingface_local_model_config as _reg_local,
+            )
         for path in local:
-            register_huggingface_local_model_from_flag_value(str(path))
+            _reg_local(str(path))
 
 
 def _coerce_str_list(value: Optional[str]) -> List[str]:
@@ -465,8 +536,11 @@ def _locate_run_dir(
     """Locate the produced run dir under ``benchmark_output/runs/<suite>/``.
 
     HELM names the run dir after ``run_spec.name`` (os.sep replaced by ``_``);
-    prefer that exact match, then fall back to scanning the suite dir for a run
-    dir carrying the expected artifacts.
+    prefer that exact match, then fall back to a *unique* run dir carrying the
+    expected artifacts. If the suite dir holds more than one valid run dir (a
+    reused / mounted output_path), return None so the caller raises loudly rather
+    than recording ``computed_run_dir`` for an unrelated run — a silent-provenance
+    corruption.
     """
     suite_dir = output_path / "runs" / suite
     if not suite_dir.is_dir():
@@ -483,13 +557,11 @@ def _locate_run_dir(
     exact = suite_dir / sanitized
     if _ok(exact):
         return exact
+    # Exact-name lookup failed; auto-pick only when the suite dir is unambiguous.
     candidates = [d for d in sorted(suite_dir.iterdir()) if _ok(d)]
     if len(candidates) == 1:
         return candidates[0]
-    for d in candidates:
-        if d.name == sanitized:
-            return d
-    return candidates[0] if candidates else None
+    return None
 
 
 # ---------------------------------------------------------------------------

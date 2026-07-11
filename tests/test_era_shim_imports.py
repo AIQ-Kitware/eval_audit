@@ -34,27 +34,25 @@ _SHIM_DIR = Path(__file__).resolve().parent.parent / "docker" / "era_shim" / "he
 _HELM_SUBMODULE = Path(__file__).resolve().parent.parent / "submodules" / "helm"
 
 #: (module, symbol, era_key) -> reason. Review findings awaiting fixes.
-KNOWN_BAD: dict[tuple[str, str, str], str] = {
-    ("helm.common.request", "wrap_request_time", "helm-v0.2.4"): (
-        "Finding 3: wrap_request_time lives in helm.proxy.clients.client at "
-        "v0.2.4; needs a try/except import fallback"
-    ),
-    ("helm.benchmark.huggingface_registration", "register_huggingface_hub_model_from_flag_value", "helm-v0.2.4"): (
-        "Finding 8: module absent at v0.2.4 (helm.proxy.clients."
-        "huggingface_model_registry there); needs version dispatch"
-    ),
-    ("helm.benchmark.huggingface_registration", "register_huggingface_local_model_from_flag_value", "helm-v0.2.4"): (
-        "Finding 8: module absent at v0.2.4; needs version dispatch"
-    ),
-}
+#: Empty: Findings 3 + 8 (wrap_request_time / huggingface_registration) are fixed
+#: — their imports are now try/except-guarded, so they drop from collection. Add
+#: an entry here only to xfail a NEW era-incompatible import pending its fix.
+KNOWN_BAD: dict[tuple[str, str, str], str] = {}
 
 
 def _guarded_line_ranges(tree: ast.AST) -> list[tuple[int, int]]:
-    """Line ranges of try-bodies whose handlers catch ImportError-ish types."""
+    """Line ranges of try/except blocks whose handlers catch ImportError-ish types.
+
+    Exempts BOTH the try body and each import-catching handler body: the fallback
+    import in an ``except ImportError:`` clause is the sanctioned era-alternative
+    (it is *expected* to be absent at the era where the primary import succeeds),
+    so it must not be checked against every era like an unguarded import.
+    """
     ranges: list[tuple[int, int]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Try):
             continue
+        import_handlers: list[ast.ExceptHandler] = []
         for handler in node.handlers:
             names: set[str] = set()
             t = handler.type
@@ -65,9 +63,15 @@ def _guarded_line_ranges(tree: ast.AST) -> list[tuple[int, int]]:
             elif isinstance(t, ast.Tuple):
                 names.update(e.id for e in t.elts if isinstance(e, ast.Name))
             if names & {"ImportError", "ModuleNotFoundError", "Exception", "BaseException"}:
-                end = max(getattr(stmt, "end_lineno", stmt.lineno) for stmt in node.body)
-                ranges.append((node.lineno, end))
-                break
+                import_handlers.append(handler)
+        if not import_handlers:
+            continue
+        stmts: list[ast.stmt] = list(node.body)
+        for handler in import_handlers:
+            stmts.extend(handler.body)
+        lo = min(stmt.lineno for stmt in stmts)
+        hi = max(getattr(stmt, "end_lineno", stmt.lineno) for stmt in stmts)
+        ranges.append((lo, hi))
     return ranges
 
 

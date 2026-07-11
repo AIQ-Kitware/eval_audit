@@ -38,13 +38,12 @@ from typing import Any, Dict, List, Optional
 
 # Era imports — resolve only inside the era image (both v0.2.4 and v0.3.0).
 from helm.common.cache import Cache, CacheConfig
-from helm.common.request import (
-    Request,
-    RequestResult,
-    Sequence,
-    Token,
-    wrap_request_time,
-)
+from helm.common.request import Request, RequestResult, Sequence, Token
+
+try:  # v0.3.0+: wrap_request_time lives in helm.common.request
+    from helm.common.request import wrap_request_time
+except ImportError:  # v0.2.4: it lives in helm.proxy.clients.client
+    from helm.proxy.clients.client import wrap_request_time
 from helm.proxy.clients.client import Client, truncate_sequence
 
 #: End-of-text marker to strip, mirroring the era ``OpenAIClient``.
