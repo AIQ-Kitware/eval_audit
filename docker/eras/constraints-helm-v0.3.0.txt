@@ -7,3 +7,8 @@
 # this file (see docker/README.md :: "Era constraints freeze workflow").
 pandas==2.0.3
 numpy==1.23.5
+# Era crfm-helm's setup.cfg declares `pyarrow>=11.0.0` (open upper bound), so a
+# fresh resolve pulls modern pyarrow (>=15), which REMOVED `pa.PyExtensionType`
+# and breaks the era-pinned `datasets==2.5.2` (features.py uses it) at import.
+# Pin to the era's own frozen requirements.txt value to restore the era env.
+pyarrow==11.0.0
