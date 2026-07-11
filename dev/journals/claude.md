@@ -1064,3 +1064,34 @@ declaration — if it uses compatible-release (`~=`) ranges, it already pins the
 minor series; you only need to constrain the deps it leaves open-ended (or pure
 transitives it never names, like pandas here). A CI requirements.txt can also be
 stale vs the setup.cfg in the same commit; setup.cfg wins.
+
+### Addendum 4: rung-2 fidelity diffed a file the public corpus never ships
+
+First real 07 gate run: tier0 + rung5 PASS, rung2 FAIL for both eras — but as "0
+pass, 0 fail, 3 skipped" (all SKIP "official scenario_state.json missing"). Root
+cause: rung-2 (instance_diff.py) compared the produced dry-run scenario_state.json
+against an OFFICIAL scenario_state.json — which the public HELM corpus NEVER ships
+(0 across ~8000 run dirs/suite). scenario.json is metadata-only (no instances)
+too. The only published per-instance record is display_requests.json /
+display_predictions.json (keyed by instance_id, with the full request prompt).
+Pre-existing design flaw, surfaced at first real run (like the dockerfile import
+and pyarrow bugs) — orthogonal to the redpajama swap. Fix: rung-2 now compares
+identity as (instance_id, train_trial_index, prompt) — official from
+display_requests.json, produced from the dry-run scenario_state.json;
+instance_diff.py is shape-detecting (list => display records, dict => scenario
+state). The prompt is a strict superset of the old input+references key (it embeds
+them + few-shot examples + formatting after model-window truncation), so it's a
+STRONGER fidelity signal AND the only one the corpus supports. Verified: era
+dry_run writes scenario_state.json unconditionally (runner.py:290; request_states
+come from adapter.adapt() at :244 before execute), and the two shape-branches
+produce identical keys (synthesized-scenario_state vs real display_requests →
+INSTANCES_MATCH 1000). Kept the pythia/vicuna picks: instance selection + prompt
+construction are what the rung tests, and the dry-run uses the picked run's own
+run_spec (same model), so prompts truncate identically — rung-2 validates the ERA
+INSTRUMENT, not the runbook subject (redpajama is tested by the 10/15 grid). All
+6 picks have run_spec.json + display_requests.json, so none skip now. Whether they
+PASS the diff is the actual research question (byte-for-byte prompt fidelity);
+can't tell without docker. Insight: a fidelity check is only as good as the
+artifact it diffs — validate the comparison target EXISTS in the corpus before
+diffing against it; the richest published signal (the prompt) beat the schema-pure
+one (input+references) that wasn't published.

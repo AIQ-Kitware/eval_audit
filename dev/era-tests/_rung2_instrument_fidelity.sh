@@ -7,6 +7,14 @@
 # demonstrated pandas 2.0.x vs 2.2+ flips instance selection; this rung proves
 # the era pins reproduce the official selection byte-for-byte.
 #
+# Identity is compared as (instance_id, train_trial_index, prompt): the public
+# corpus does NOT ship scenario_state.json (nor instance input/references —
+# scenario.json is metadata-only), so the official side is display_requests.json
+# and the produced side is the dry-run scenario_state.json. The request prompt is
+# a strict superset of instance input + few-shot examples + formatting after
+# model-window truncation, so prompt equality proves selection AND construction
+# fidelity. See drivers/instance_diff.py.
+#
 # Helper invoked by 07_run_gate.sh (per era). Needs: docker, the built era image,
 # the public corpus on disk. No GPU/vLLM. Inputs (env; _lib.sh supplies defaults):
 #   ERA                      era key (e.g. helm-v0.3.0)             [required]
@@ -51,14 +59,14 @@ DRIVERS="${ERA_DIR}/drivers"
 pass=0; fail=0; skip=0
 for rel in "${picks[@]}"; do
     official_dir="${MIRROR_ROOT}/${rel}"
-    official_state="${official_dir}/scenario_state.json"
+    official_reqs="${official_dir}/display_requests.json"
     spec="${official_dir}/run_spec.json"
     name="$(basename "$rel")"
     out="${ERA_OUT}/fidelity/${ERA}/${name}"
     rm -rf "$out"; mkdir -p "$out"
 
     if [[ ! -f "$spec" ]]; then echo "SKIP  ${name}: no run_spec.json at ${spec}"; ((skip++)); continue; fi
-    if [[ ! -f "$official_state" ]]; then echo "SKIP  ${name}: official scenario_state.json missing"; ((skip++)); continue; fi
+    if [[ ! -f "$official_reqs" ]]; then echo "SKIP  ${name}: official display_requests.json missing"; ((skip++)); continue; fi
 
     echo "[fidelity] ${ERA} ${name}"
     if ! docker run --rm \
@@ -78,7 +86,7 @@ for rel in "${picks[@]}"; do
     if [[ -z "$produced_state" ]]; then
         echo "FAIL  ${name}: dry-run produced no scenario_state.json"; ((fail++)); continue
     fi
-    if python3 "${DRIVERS}/instance_diff.py" "$official_state" "$produced_state" > "${out}/instance_diff.txt" 2>&1; then
+    if python3 "${DRIVERS}/instance_diff.py" "$official_reqs" "$produced_state" > "${out}/instance_diff.txt" 2>&1; then
         echo "PASS  ${name}: $(head -1 "${out}/instance_diff.txt")"; ((pass++))
     else
         echo "FAIL  ${name}: instance identity diverged (see ${out}/instance_diff.txt)"; ((fail++))
