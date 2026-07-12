@@ -117,6 +117,8 @@ from eval_audit.reports.summary.breakdown import (  # noqa: F401
     _analyzed_dimension_values,
     _build_prioritized_breakdown_summary,
     _format_prioritized_breakdown_summary_text,
+)
+from eval_audit.reports.summary.publish import (  # noqa: F401
     _iter_prioritized_example_rows,
     _prioritized_example_artifact_names,
     _report_artifact_is_usable,

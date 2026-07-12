@@ -14,10 +14,12 @@ from eval_audit.reports.summary.multiplicity import (
     _format_run_multiplicity_summary_text,
     _format_off_story_summary_text,
 )
+from eval_audit.reports.summary.publish import (
+    _publish_prioritized_examples_tree,
+    _repair_prioritized_example_reports,
+)
 from eval_audit.reports.summary.breakdown import (
     _format_prioritized_breakdown_summary_text,
-    _repair_prioritized_example_reports,
-    _publish_prioritized_examples_tree,
 )
 from eval_audit.reports.summary.publish import (
     _write_table_artifacts,
