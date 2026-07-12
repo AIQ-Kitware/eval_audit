@@ -43,6 +43,42 @@ def latest_index_csv(index_dpath: Path) -> Path:
     return cands[0]
 
 
+def latest_official_index_csv(index_dpath: Path) -> Path:
+    """Resolve the current official public index CSV in ``index_dpath``.
+
+    Prefers the unstamped ``official_public_index.csv`` alias; falls back to
+    the newest stamped ``official_public_index_*.csv``. Moved here from
+    ``workflows.rebuild_core_report`` (D1) so both index resolvers live in
+    one module; the old import path re-exports.
+    """
+    latest_alias = Path(index_dpath) / "official_public_index.csv"
+    if latest_alias.exists():
+        return latest_alias.resolve()
+    cands = sorted(Path(index_dpath).glob("official_public_index_*.csv"), reverse=True)
+    if not cands:
+        raise FileNotFoundError(f"No official public index csv files found in {index_dpath}")
+    return cands[0]
+
+
+def resolve_index_fpath(
+    explicit: str | Path | None,
+    index_dpath: str | Path,
+    *,
+    latest_fn=latest_index_csv,
+) -> Path:
+    """The shared CLI-arg idiom: explicit ``--*-fpath`` wins, else the
+    newest index in ``--*-dpath``.
+
+    Previously copy-pasted (``Path(x).expanduser().resolve() if x else
+    latest_*(Path(d).expanduser().resolve())``) across
+    ``analyze_experiment``, ``rebuild_core_report``, and
+    ``build_reports_summary`` (D1).
+    """
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    return latest_fn(Path(index_dpath).expanduser().resolve())
+
+
 def load_rows(index_fpath: Path) -> list[dict[str, Any]]:
     with Path(index_fpath).open(newline="") as file:
         return [

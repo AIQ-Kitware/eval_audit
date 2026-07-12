@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
-import shlex
 from pathlib import Path
 from typing import Any
 
@@ -15,8 +13,7 @@ from eval_audit.infra.logging import rich_link, setup_cli_logging
 from eval_audit.infra.paths import official_public_index_dpath
 from eval_audit.infra.report_layout import (
     experiments_analysis_root,
-    portable_repo_root_lines,
-    write_reproduce_script,
+    write_python_reproduce_script,
 )
 from eval_audit.planning.core_report_planner import (
     build_planning_artifact,
@@ -36,20 +33,15 @@ from eval_audit.reports.core_packet import (
 from eval_audit.infra.profiling import profile
 
 
-# P0-2 / R-6: single source of truth for local-index resolution + loading.
+# P0-2 / R-6 / D1: single source of truth for index resolution + loading.
 # Re-exported here so existing `from ...rebuild_core_report import
 # latest_index_csv` call sites (analyze_experiment) keep working.
-from eval_audit.infra.index_io import latest_index_csv, load_rows  # noqa: F401
-
-
-def latest_official_index_csv(index_dpath: Path) -> Path:
-    latest_alias = index_dpath / "official_public_index.csv"
-    if latest_alias.exists():
-        return latest_alias.resolve()
-    cands = sorted(index_dpath.glob("official_public_index_*.csv"), reverse=True)
-    if not cands:
-        raise FileNotFoundError(f"No official public index csv files found in {index_dpath}")
-    return cands[0]
+from eval_audit.infra.index_io import (  # noqa: F401
+    latest_index_csv,
+    latest_official_index_csv,
+    load_rows,
+    resolve_index_fpath,
+)
 
 
 def _maybe_latest_local_index_csv(index_dpath: Path) -> str | None:
@@ -368,12 +360,15 @@ def main(argv: list[str] | None = None) -> None:
         packet_id=args.packet_id,
         planner_artifact_fpath=args.planner_artifact_fpath,
         local_index_fpath=(
-            str(Path(args.index_fpath).expanduser().resolve())
+            str(resolve_index_fpath(args.index_fpath, args.index_dpath))
             if args.index_fpath else
             _maybe_latest_local_index_csv(Path(args.index_dpath).expanduser().resolve())
         ),
         official_index_fpath=(
-            str(Path(args.official_index_fpath).expanduser().resolve())
+            str(resolve_index_fpath(
+                args.official_index_fpath, args.official_index_dpath,
+                latest_fn=latest_official_index_csv,
+            ))
             if args.official_index_fpath else
             _maybe_latest_official_index_csv(Path(args.official_index_dpath).expanduser().resolve())
         ),
@@ -384,15 +379,12 @@ def main(argv: list[str] | None = None) -> None:
     local_index_fpath = planner_meta.get("local_index_fpath")
     official_index_fpath = planner_meta.get("official_index_fpath")
     if packet is not None and planner_meta.get("planner_artifact_fpath") is None and local_index_fpath is None:
-        if args.index_fpath:
-            local_index_fpath = str(Path(args.index_fpath).expanduser().resolve())
-        else:
-            local_index_fpath = str(latest_index_csv(Path(args.index_dpath).expanduser().resolve()))
+        local_index_fpath = str(resolve_index_fpath(args.index_fpath, args.index_dpath))
     if packet is not None and planner_meta.get("planner_artifact_fpath") is None and official_index_fpath is None:
-        if args.official_index_fpath:
-            official_index_fpath = str(Path(args.official_index_fpath).expanduser().resolve())
-        else:
-            official_index_fpath = str(latest_official_index_csv(Path(args.official_index_dpath).expanduser().resolve()))
+        official_index_fpath = str(resolve_index_fpath(
+            args.official_index_fpath, args.official_index_dpath,
+            latest_fn=latest_official_index_csv,
+        ))
     # D-3: the informational single-run notice is unconditional. The old
     # --allow-single-repeat flag gated nothing (both branches rendered); it
     # only silenced this log line, so it was deleted along with its plumbing.
@@ -502,19 +494,13 @@ def main(argv: list[str] | None = None) -> None:
         str(report_dpath / "comparisons_manifest.json"),
         "--render-heavy-pairwise-plots",
     ]
-    heavy_plots_render_fpath = write_reproduce_script(
+    heavy_plots_render_fpath = write_python_reproduce_script(
         report_dpath / "render_heavy_pairwise_plots.sh",
-        [
-            "#!/usr/bin/env bash",
-            "set -euo pipefail",
+        heavy_plots_cmd_parts,
+        comment_lines=(
             "# Renders heavy per-pair PNG plots on demand (histograms, ECDFs, per-metric agreement curves).",
             "# Canonical lightweight outputs are already present in this directory.",
-            *portable_repo_root_lines(),
-            'cd "$REPO_ROOT"',
-            'PYTHONPATH="$REPO_ROOT" "$PYTHON_BIN" '
-            + " ".join(shlex.quote(part) for part in heavy_plots_cmd_parts)
-            + ' "$@"',
-        ],
+        ),
     )
 
     # Narrow tweak script: redraw plots in place using the cached manifests,
@@ -523,20 +509,14 @@ def main(argv: list[str] | None = None) -> None:
     # it skips the report-writing path so the canonical artifacts stay stable
     # while you re-render figures.
     redraw_plots_cmd_parts = [*heavy_plots_cmd_parts, "--plots-only"]
-    redraw_plots_fpath = write_reproduce_script(
+    redraw_plots_fpath = write_python_reproduce_script(
         report_dpath / "redraw_plots.sh",
-        [
-            "#!/usr/bin/env bash",
-            "set -euo pipefail",
+        redraw_plots_cmd_parts,
+        comment_lines=(
             "# Redraws plots only — does NOT rewrite the JSON/text/management/warnings/runlevel artifacts.",
             "# Intended for fast iteration on plot styling: edit eval_audit/reports/core_metrics.py and rerun.",
             "# To redraw one plot family, append e.g.: --plot_target core_metric_report",
-            *portable_repo_root_lines(),
-            'cd "$REPO_ROOT"',
-            'PYTHONPATH="$REPO_ROOT" "$PYTHON_BIN" '
-            + " ".join(shlex.quote(part) for part in redraw_plots_cmd_parts)
-            + ' "$@"',
-        ],
+        ),
     )
 
     cmd_parts = [
@@ -556,17 +536,8 @@ def main(argv: list[str] | None = None) -> None:
         *(["--planner-artifact-fpath", str(planner_meta["planner_artifact_fpath"])] if planner_meta.get("planner_artifact_fpath") else []),
         *(["--experiment-name", str(packet.get("experiment_name"))] if packet.get("experiment_name") else []),
     ]
-    reproduce_fpath = write_reproduce_script(
-        report_dpath / "reproduce.sh",
-        [
-            "#!/usr/bin/env bash",
-            "set -euo pipefail",
-            *portable_repo_root_lines(),
-            'cd "$REPO_ROOT"',
-            'PYTHONPATH="$REPO_ROOT" "$PYTHON_BIN" '
-            + " ".join(shlex.quote(part) for part in cmd_parts)
-            + ' "$@"',
-        ],
+    reproduce_fpath = write_python_reproduce_script(
+        report_dpath / "reproduce.sh", cmd_parts
     )
 
     logger.info(f"Wrote components manifest: {rich_link(components_fpath)}")

@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as datetime_mod
 import json
-import shlex
-import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -13,7 +10,7 @@ from typing import Any
 import pandas as pd
 from loguru import logger
 
-from eval_audit.infra.api import audit_root, default_index_root
+from eval_audit.infra.api import default_index_root
 from eval_audit.infra.logging import rich_link, setup_cli_logging
 from eval_audit.infra.paths import official_public_index_dpath
 from eval_audit.utils.numeric import nested_get
@@ -21,9 +18,8 @@ from eval_audit.infra.fs_publish import link_alias, symlink_to, write_text_atomi
 from eval_audit.infra.paths import experiment_analysis_dpath
 from eval_audit.infra.report_layout import (
     legacy_repo_publication_root,
-    portable_repo_root_lines,
     publication_experiments_root,
-    write_reproduce_script,
+    write_python_reproduce_script,
 )
 from eval_audit.planning.core_report_planner import build_planning_artifact
 from eval_audit.reports.core_packet_summary import (
@@ -36,10 +32,12 @@ from eval_audit.reports.core_packet_summary import (
 from eval_audit.reports import pair_report
 from eval_audit.reports.paper_labels import load_paper_label_manager
 from eval_audit.workflows.plan_core_report_packets import write_planning_outputs
-from eval_audit.workflows.rebuild_core_report import (
-    latest_index_csv,
+from eval_audit.infra.index_io import (
     latest_official_index_csv,
     load_rows,
+    resolve_index_fpath,
+)
+from eval_audit.workflows.rebuild_core_report import (
     main as rebuild_core_report_main,
     slugify_identifier,
 )
@@ -259,15 +257,10 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
 
-    index_fpath = (
-        Path(args.index_fpath).expanduser().resolve()
-        if args.index_fpath else
-        latest_index_csv(Path(args.index_dpath).expanduser().resolve())
-    )
-    official_index_fpath = (
-        Path(args.official_index_fpath).expanduser().resolve()
-        if args.official_index_fpath else
-        latest_official_index_csv(Path(args.official_index_dpath).expanduser().resolve())
+    index_fpath = resolve_index_fpath(args.index_fpath, args.index_dpath)
+    official_index_fpath = resolve_index_fpath(
+        args.official_index_fpath, args.official_index_dpath,
+        latest_fn=latest_official_index_csv,
     )
     rows = load_rows(index_fpath)
     experiment_rows = [r for r in rows if r.get('experiment_name') == args.experiment_name]
@@ -585,15 +578,9 @@ def main(argv: list[str] | None = None) -> None:
         *( ['--local-eee-root', str(planning_artifact.get('local_eee_root'))] if planning_artifact.get('local_eee_root') else [] ),
         *( ['--ensure-local-eee'] if planning_artifact.get('ensure_local_eee') else [] ),
     ]
-    reproduce_fpath = write_reproduce_script(out_dpath / 'reproduce.sh', [
-        '#!/usr/bin/env bash',
-        'set -euo pipefail',
-        *portable_repo_root_lines(),
-        'cd "$REPO_ROOT"',
-        'PYTHONPATH="$REPO_ROOT" "$PYTHON_BIN" '
-        + ' '.join(shlex.quote(part) for part in cmd_parts)
-        + ' "$@"',
-    ])
+    reproduce_fpath = write_python_reproduce_script(
+        out_dpath / 'reproduce.sh', cmd_parts
+    )
 
     # Write provenance.json at the experiment root (overwritten each run).
     provenance: dict[str, Any] = {

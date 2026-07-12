@@ -161,3 +161,35 @@ def write_reproduce_script(script_fpath: Path, lines: list[str]) -> Path:
     script_fpath.chmod(0o755)
     logger.debug(f'Write to: {rich_link(script_fpath)}')
     return script_fpath
+
+
+def write_python_reproduce_script(
+    script_fpath: Path,
+    cmd_parts: list[str],
+    *,
+    comment_lines: tuple[str, ...] | list[str] = (),
+) -> Path:
+    """Write the standard "re-run this ``python -m`` command" script (ADR 5).
+
+    Assembles the canonical preamble (shebang, ``set -euo pipefail``,
+    optional comment lines, portable repo-root/python resolution,
+    ``cd "$REPO_ROOT"``) around a shell-quoted
+    ``PYTHONPATH="$REPO_ROOT" "$PYTHON_BIN" <cmd_parts> "$@"`` line.
+    Previously hand-assembled at four sites in ``analyze_experiment`` /
+    ``rebuild_core_report`` (D1). Scripts needing a different shape (env
+    capture, ``SCRIPT_DIR`` vars) keep composing
+    :func:`write_reproduce_script` directly.
+    """
+    import shlex
+
+    lines = [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        *comment_lines,
+        *portable_repo_root_lines(),
+        'cd "$REPO_ROOT"',
+        'PYTHONPATH="$REPO_ROOT" "$PYTHON_BIN" '
+        + " ".join(shlex.quote(part) for part in cmd_parts)
+        + ' "$@"',
+    ]
+    return write_reproduce_script(script_fpath, lines)

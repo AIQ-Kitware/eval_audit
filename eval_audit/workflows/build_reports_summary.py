@@ -37,6 +37,7 @@ from eval_audit.infra.profiling import profile
 # The implementation moved to eval_audit.reports.summary.* on 2026-06-11
 # (Phase 2 of docs/historical/planning/repo-refactor-plan.md). Tests and operational
 # scripts import these names from this module; keep re-exporting them.
+from eval_audit.infra.index_io import resolve_index_fpath
 from eval_audit.reports.summary.common import (  # noqa: F401
     DEFAULT_BREAKDOWN_DIMS,
     CANONICAL_AGREEMENT_TOL,
@@ -1625,11 +1626,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     _ = args.plots_only  # currently advisory only; reserved for future use
 
-    index_fpath = (
-        Path(args.index_fpath).expanduser().resolve()
-        if args.index_fpath
-        else latest_index_csv(Path(args.index_dpath).expanduser().resolve())
-    )
+    index_fpath = resolve_index_fpath(args.index_fpath, args.index_dpath)
     filter_inventory_json = (
         Path(args.filter_inventory_json).expanduser().resolve()
         if args.filter_inventory_json
