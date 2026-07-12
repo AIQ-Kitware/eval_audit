@@ -1,7 +1,13 @@
 # Repo Simplification & Refactor Plan — 2026-07-12
 
 **Status:** DESIGN — no code yet. Findings audited read-only; awaiting owner
-sign-off on sequencing and on the two optional capstones (A4, D1).
+sign-off on sequencing and on the two optional capstones (A4, D6).
+
+**Reviewed:** 2026-07-12 second pass (Fable 5 over the Opus 4.8 audit). Every
+high-impact recommendation re-verified against the tree; the deltas are listed
+in §2.0 so the review is auditable. Net effect: the plan got *smaller* — two
+proposed refactors were dropped as not earning their keep, one item got
+simpler (no shim needed), and two small finds were added.
 
 **Lens:** elegance, ease-of-understanding, and lower maintenance for the code
 as it stands *after* the era-pinned pre-v0.5 replay path landed — deliberately
@@ -10,7 +16,8 @@ not a correctness re-audit (the 2026-07-10 era review already did that).
 **Method:** five parallel deep audits (helm↔normalized diff cores; `reports/`;
 `workflows/`+`cli/`; the execution/replay + era layer; repo hygiene), every
 high-impact claim re-verified in the main session (importer greps, dead-symbol
-scans, path-parser count, R-6 consolidation status, deferred-item persistence).
+scans, path-parser count, R-6 consolidation status, deferred-item persistence),
+then a second review pass re-checking the recommendations themselves.
 
 ---
 
@@ -41,9 +48,10 @@ gitignored scratch (venvs + machine-local outputs), not committed cruft.
    the single biggest source of "these packages look like they overlap"
    confusion.
 2. **Consolidate the new era/replay branching.** The pre-v0.5 replay path is
-   *well-isolated* (config-driven `eras.py` + `docker/eras.yaml`), but it added
-   a uniform layer of `if era` guards and a 3-deep node/factory/constant
-   subclass chain that is now the fastest-growing part of the tree.
+   *well-isolated* (config-driven `eras.py` + `docker/eras.yaml`); the real
+   remaining costs are one module with scattered era guards
+   (`bundle_export.py`) and one path-convention parser duplicated in three
+   places that can drift.
 3. **Small, cheap clarity moves** — dead-symbol deletion, a handful of literal
    duplicate helpers, and a few genuine god-functions.
 
@@ -54,7 +62,8 @@ Everything below is scoped to those three. The numbers behind them:
   The rest is prod-dead or transitional.
 - `build_reports_summary.py` = 1,715 lines, ~140 of which are compat
   re-exports of modules that were already extracted.
-- Era branching = ~7 uniform single-boolean guard sites + one subclass chain.
+- Era branching = ~7 uniform single-boolean guard sites, of which only the
+  `bundle_export.py` cluster is worth consolidating (see §2.0 R-b).
 
 ---
 
@@ -98,19 +107,19 @@ idioms are copy-pasted across `analyze_experiment`, `rebuild_core_report`, and
 `build_reports_summary`. The two EEE CLIs duplicate a `core_metrics` subprocess
 block **three times** verbatim.
 
-**F5 — The era/replay path is well-isolated but has a subclass chain and a
-duplicated path parser.** Adding a replay capability today = new
-`Materialize…Node` subclass + new factory + new `_DOCKER_*_PIPELINE` constant +
-new branch. The `(public_track, suite_version)` `benchmark_output` path
-convention is parsed in **≥3 places** that can drift (`eras.py:197`,
-`workflows/compare_batch.py:38`, `indexing/official_public_index.py:48`) —
-already flagged as deferred in the 2026-07-10 review.
+**F5 — One era path-convention parser duplicated three ways.** The
+`(public_track, suite_version)` `benchmark_output` path convention is parsed in
+**≥3 places** that can drift (`eras.py:197`, `workflows/compare_batch.py:38`,
+`indexing/official_public_index.py:48`) — already flagged as deferred in the
+2026-07-10 review, and dangerous because era resolution silently picks the
+measurement instrument. (The node subclass chain, originally also flagged, was
+cleared on review — see §2.0 R-a.)
 
 **F6 — A thin layer of genuine duplication + dead code in `reports/`.** The
 `core_*` and `eee_heatmap_*` and `filter_analysis_*` splits are **clean, not
 duplicated** (the names mislead). But `_atomic_savefig` is a literal copy in
 two modules, plotly bar helpers are diverged duplicates, the two big matplotlib
-heatmap renderers share ~300 lines of parallel scaffold, and ~4-5 symbols
+heatmap renderers share ~300 lines of parallel scaffold, and ~5-6 symbols
 (largest: `_build_end_to_end_funnel_root`, 89 lines) are dead.
 
 **F7 — Two rival failure-classification engines.**
@@ -130,25 +139,61 @@ Six workstreams (A–F). Each item carries **effort** and **risk**. Ordered
 within each workstream low-risk → high-risk. The recommended global sequencing
 is in §3.
 
+### 2.0 Review deltas (what the second pass changed, and why)
+
+- **R-a — DROPPED: collapsing the replay-node subclass chain + capability
+  dispatch table** (the audit's original B2/B5). Two facts kill it: (1) the
+  kwdagger pipeline targets are **fully-qualified factory-path strings**
+  (`kwdagger_bridge.py:33-53` → `helm_docker_pipeline.helm_single_run_*()`),
+  an external contract with the scheduler — three named factories must exist
+  no matter how the nodes are organized; (2) the era subclass
+  (`helm_docker_pipeline.py:368`) is a docstring plus **one attribute
+  override**. A `{(from_run_spec, exact_path, capability) → target}` dispatch
+  dict would add tuple-key indirection while deleting almost nothing. The
+  chain is the simple design. Revisit only if a *fourth* replay variant
+  appears. Moved to §5 do-not-touch.
+- **R-b — kept the era items that survive review:** the `bundle_export.py`
+  deployment-schema consolidation (now B2) and the two config/build dedups
+  (now B3) are real; the path-parser unification (B1) is the important one.
+- **R-c — A1 simplified.** The right home for `run_entries` is a **top-level
+  module** `eval_audit/run_entries.py`, following the repo's existing
+  convention (`eras.py`, `judge_registry.py`, `model_registry.py`, and
+  especially `metrics_taxonomy.py` — which was *itself* lifted out of `helm/`
+  this same way). No new package. And **no back-compat shim is needed**:
+  grep confirms zero `reproduce/` or generated-script imports of
+  `helm.run_entries` — only a `docs/pipeline.md` link to fix.
+- **R-d — E4 re-scored.** The claim that the `core_metrics` facade's ~62
+  re-exports exist "so tests can reach them" is overstated: tests reference
+  the facade via module attributes in essentially **one file**
+  (`test_core_metrics_single_run.py`). Most re-exported names are referenced
+  by nothing. Split E4 into a trivial delete-the-unreferenced pass (Batch 1)
+  and a small optional repoint of the few real uses.
+- **R-e — one missed dead item added to E1:**
+  `compat/helm_outputs._MsgspecRunView` (:53) — a NotImplementedError
+  placeholder constructed at `:75` and never called (no `.msgspec.` call sites
+  anywhere outside `normalized/helm_compat.py`, which aliases its own
+  `.msgspec` to `.json`).
+- **R-f — workstream D renumbered** into dependency order (helpers → dedup →
+  unify → relocate → decide → capstone); the audit's cross-reference numbering
+  was confusing.
+
 ### Workstream A — Clarify the comparison core (finish the diff migration)
 
 > Exit picture: `helm/` becomes a single, honestly-named "HELM semantic-diff
 > adapter" (`diff.py` + `diff_primitives.py` + a slim reader), the general
 > utility is out of it, and the prod-dead stack is gone.
 
-**A1 — Move `run_entries.py` out of `helm/`.** *(effort: med · risk: low ·
-the headline clarity win)*
-Relocate `eval_audit/helm/run_entries.py` → a neutral home. Recommended:
-`eval_audit/runspec/run_entries.py` (new tiny package for "parse/canonicalize
-HELM run names & specs"), or fold into `eval_audit/indexing/` if a new package
-is unwanted. Pure move + rewrite ~10 import sites
+**A1 — Move `run_entries.py` out of `helm/` to `eval_audit/run_entries.py`.**
+*(effort: low-med · risk: low · the headline clarity win)*
+Pure `git mv` + rewrite ~10 import sites
 (`cli/index_historic_helm_runs.py:61`, `indexing/historic_filtering.py:12`,
 `integrations/infer_stack/{freeze,presets}.py`,
 `integrations/kwdagger_bridge.py:104`, `pipelines/lease_bracket.py:126`,
 `planning/core_report_planner.py:20`, `virtual/coverage.py:38`,
-`workflows/{compare_batch,index_results}.py`) plus `tests/test_run_entries.py`.
-Keep a re-export shim at `helm/run_entries.py` for one deprecation cycle if any
-`reproduce.sh` references it (grep first).
+`workflows/{compare_batch,index_results}.py`) plus `tests/test_run_entries.py`
+and the `docs/pipeline.md:180` link. Precedent: `metrics_taxonomy.py` (same
+lift, same direction). **No re-export shim** — verified zero script-side
+imports of the old path.
 
 **A2 — Delete the prod-dead `helm/` code.** *(effort: med · risk: low —
 prod-safe; cost is test churn)*
@@ -193,12 +238,13 @@ shrink `helm/` ~3.3k→~1.6k at near-zero risk and leave a clean target), then
 treat A4 as a dedicated, owner-signed-off milestone — or defer it until the
 paper actually needs the hard split.
 
-### Workstream B — Consolidate the new era/replay branching
+### Workstream B — Era/replay cleanup (the surviving items)
 
 > Do **not** touch `eras.py` (the resolver is the model to emulate),
 > `lease_bracket.py` (correctly era-free), the era↔image guard
-> (`kwdagger_bridge.py:628-650`, the strongest safety net), or merge the two
-> dockerfiles (the CPU/era vs CUDA/modern split is documented and correct).
+> (`kwdagger_bridge.py:628-650`, the strongest safety net), the replay-node
+> subclass chain (§2.0 R-a), or merge the two dockerfiles (the CPU/era vs
+> CUDA/modern split is documented and correct).
 
 **B1 — Unify the `benchmark_output` path parser.** *(effort: low · risk: low ·
 already deferred from 2026-07-10)*
@@ -207,41 +253,30 @@ convention, consumed by `eras.parse_public_signal_from_run_dir` (:197),
 `workflows/compare_batch.parse_helm_run_dir` (:38), and
 `indexing/official_public_index._scan_benchmark_output_dir` (:48) — they even
 disagree on fallbacks today, and era resolution silently picking the wrong
-instrument makes drift dangerous. Natural home is the new `runspec/` package
-from A1 (pairs the two moves). Prefer having era resolution consume the signal
-already recorded on the index row where possible, rather than re-parsing.
+instrument makes drift dangerous. Natural home: the relocated
+`eval_audit/run_entries.py` from A1, next to its existing
+`discover_benchmark_output_dirs` (sequence B1 after A1). Prefer having era
+resolution consume the signal already recorded on the index row where
+possible, rather than re-parsing.
 
-**B2 — Collapse the 3-deep replay-node chain into one parameterized node +
-dispatch table.** *(effort: med · risk: med — hot scheduling path, but
-`test_eras_pipeline.py` + submatrix-contract tests cover it)*
-`MaterializeHelmRunFromSpecEraDockerNode` (`helm_docker_pipeline.py:368`)
-overrides only `executable`. Replace the subclass+factory+`_DOCKER_*_PIPELINE`
-constant chain (`kwdagger_bridge.py:33-53`) with one node taking `executable`
-and a `{(from_run_spec, exact_path, capability) → pipeline_target}` dispatch
-dict, so a future capability is a table entry, not four edits.
-
-**B3 — Consolidate `bundle_export.py` era branching behind a deployment-schema
+**B2 — Consolidate `bundle_export.py` era branching behind a deployment-schema
 strategy.** *(effort: med · risk: low-med — pure builder logic,
 `test_exporter_freeze.py` covers it)*
 The ~6 `resolved_era is not None` guards + `_model_deployment_entry_era`
 (`:109-175`) + the "skip modern alias assertion" / "protocol_mode must be
 completions" / "no rewrite target" checks are one decision: *which deployment
 schema*. Extract an `EraDeploymentSchema` / `ModernDeploymentSchema` pair
-(entry-builder + its assertions) selected once.
+(entry-builder + its assertions) selected once. This is the one place era
+branching has real scatter; the other guard sites are single, well-commented,
+and fine as-is.
 
-**B4 — Kill the two small era config/build duplications.** *(effort: low ·
+**B3 — Kill the two small era config/build duplications.** *(effort: low ·
 risk: low · both deferred from 2026-07-10)*
 Make `helm_extras`/`capability` explicit-required in `eras.yaml` and drop the
 hardcoded defaults from **both** readers (`eras.py:_parse_era_spec` and
 `docker/read_eras.py`); fold the two near-identical `docker build` invocations
 in `build.sh:333-364` into one call parameterized by dockerfile + a
 `BUILD_ARGS` array.
-
-**B5 — [OPTIONAL, forward-looking] Make `capability` drive dispatch.**
-*(effort: low · risk: low)* Turn the assert-single-value in
-`_era_pipeline_for_manifest` (`kwdagger_bridge.py:77-82`) into a
-`{capability → executable}` lookup. Skip unless a second era capability is
-actually planned; pairs naturally with B2.
 
 ### Workstream C — Finish the god-module decomposition
 
@@ -275,19 +310,7 @@ example-selection / assembly.
 
 ### Workstream D — De-duplicate orchestration & the EEE-CLI layer
 
-**D2 — Extract shared EEE render helpers.** *(effort: low · risk: low — the two
-EEE CLIs are both tested)* One `_run_core_metrics(report_dpath, *, passthrough,
-render_heavy)` replacing the verbatim `[sys.executable, "-m",
-"eval_audit.reports.core_metrics", …]` + `PYTHONPATH` block copied at
-`from_eee.py:167-183`, `from_eee.py:473`, and `compare_pair_eee.py:373-389`.
-Collapse `compare_pair_eee._meta_from_artifact` (:87-124) into
-`eee_sources._extract_artifact_meta` via a `single_path=` param (its own
-docstring admits it mirrors the shared extractor). Home: `normalized/eee_sources.py`
-or a new `workflows/eee_render.py`. *(This item is numbered D2 to match the
-workflows audit; there is no D-prefixed "D1" ordering — D1 below is the larger
-structural fix that should come later.)*
-
-**D3 — Extract `resolve_index_pair()` + `write_reproduce_sh()` helpers.**
+**D1 — Extract `resolve_index_pair()` + `write_reproduce_sh()` helpers.**
 *(effort: low · risk: low)* The
 `Path(x).resolve() if set else latest_*_csv(dir)` idiom
 (`analyze_experiment.py:262-271`, `rebuild_core_report.py:370-395`,
@@ -296,12 +319,22 @@ structural fix that should come later.)*
 (`analyze_experiment.py:588-596`, `rebuild_core_report.py:505-570`) each want
 one shared home (`workflows/` or `infra/`).
 
-**D4 — Unify the two failure-classification engines.** *(effort: med · risk:
+**D2 — Extract shared EEE render helpers.** *(effort: low · risk: low — the two
+EEE CLIs are both tested)* One `_run_core_metrics(report_dpath, *, passthrough,
+render_heavy)` replacing the verbatim `[sys.executable, "-m",
+"eval_audit.reports.core_metrics", …]` + `PYTHONPATH` block copied at
+`from_eee.py:167-183`, `from_eee.py:473`, and `compare_pair_eee.py:373-389`.
+Collapse `compare_pair_eee._meta_from_artifact` (:87-124) into
+`eee_sources._extract_artifact_meta` via a `single_path=` param (its own
+docstring admits it mirrors the shared extractor). Home:
+`normalized/eee_sources.py` or a new `workflows/eee_render.py`.
+
+**D3 — Unify the two failure-classification engines.** *(effort: med · risk:
 low — both tested; behavior-diff the taxonomies first)* Make
 `cli/summarize_experiment_failures.py` consume
 `reports/summary/failure_triage.py` (or delete it if triage subsumes it).
 
-**D5 — Move business logic out of the fat CLIs.** *(effort: med · risk: med —
+**D4 — Move business logic out of the fat CLIs.** *(effort: med · risk: med —
 start with the low-risk slice)* `cli/` is 89% logic by line. First slice
 (low-risk, self-contained, has `test_portfolio_status_cli`):
 `portfolio_status.py`'s `summarize_rows` (:72-260) + `_format_report` →
@@ -312,7 +345,14 @@ packages with thin shims (retain module `main()`s so runbook `-m` invocations
 keep working). Highest-risk: `index_historic_helm_runs.main`'s ~205-line
 Stage-1 orchestration → `indexing/stage1_runner.py` (defer within this item).
 
-**D1 — [OPTIONAL CAPSTONE] Extract a typed `analyze_index()` primitive.**
+**D5 — Decide `compare_batch`'s fate.** *(investigation: low; removal: med —
+operator decision)* It is a legacy manifest-driven pipeline on the retired
+`HelmRunDiff.summary_dict`, invoked only by the "UNSURE"-marked
+`reproduce/{smoke,apples}/30_compare.sh` runbooks yet still a console script.
+Confirm it is vestigial vs the planner path; if so, deprecate it like
+`cli/reports.py` (keep resolving for old reproduce scripts, stop advertising).
+
+**D6 — [OPTIONAL CAPSTONE] Extract a typed `analyze_index()` primitive.**
 *(effort: high · risk: med — hot analysis path)* A typed
 `workflows/core_analysis.py::analyze_index(local_index, official_index,
 experiment, out_dpath, …)` owning index-resolution + plan + per-packet render +
@@ -323,20 +363,17 @@ proving the primitive can be shared). **Sequence after C1** (needs the clean
 summary seams) and gate on `test_rebuild_core_report` + `test_virtual_experiment*`
 + an EEE e2e.
 
-**D6 — Decide `compare_batch`'s fate.** *(investigation: low; removal: med —
-operator decision)* It is a legacy manifest-driven pipeline on the retired
-`HelmRunDiff.summary_dict`, invoked only by the "UNSURE"-marked
-`reproduce/{smoke,apples}/30_compare.sh` runbooks yet still a console script.
-Confirm it is vestigial vs the planner path; if so, deprecate it like
-`cli/reports.py` (keep resolving for old reproduce scripts, stop advertising).
-
 ### Workstream E — Small clarity wins (cheap, do early)
 
 **E1 — Delete the dead symbols.** *(effort: trivial · risk: low)*
 `_build_end_to_end_funnel_root` (`summary/sankeys.py:216`, 89 lines),
 `pair_report._agree_ratio_at` (:95, dead **and** a 3rd copy of
 `find_curve_value`), `core_packet_summary.packet_reference_component` (:88),
-`core_packet.comparison_sample_history_name` (:41). ~106+ lines.
+`core_packet.comparison_sample_history_name` (:41), and
+`compat/helm_outputs._MsgspecRunView` (:53-75, NotImplementedError placeholder
+constructed but never called — drop the class and the `.msgspec` attribute, or
+alias it to `.json` as `normalized/helm_compat.py:125` already does).
+~130+ lines.
 
 **E2 — De-dup the plotting helpers.** *(effort: trivial-low · risk: low)*
 `_atomic_savefig` (literal copy at `eee_heatmap_render.py:108` &
@@ -349,12 +386,16 @@ in `summary/plots.py` & `filter_analysis_charts.py`) → `reports/_plotly_bars.p
 near-identical `_write_stamped_table(...)` calls — loop over a
 `[(stem, rows), …]` list.
 
-**E4 — [OPTIONAL] Shrink the compat re-export facades.** *(effort: med · risk:
-med — pure test-import churn)* `core_metrics.py` (~62), `filter_analysis.py`
-(~41), `eee_only_heatmap.py` (~30) re-export private symbols *only* so tests can
-reach them. Point the tests at the real modules and keep re-exporting only
-genuinely public names. ~130 lines + private-symbol coupling removed. Lower
-priority — the facades are harmless and the churn is all in tests.
+**E4 — Prune the compat re-export facades, measured-first.** *(effort: low for
+step (a), low-med for step (b) · risk: low)* `core_metrics.py` (~62),
+`filter_analysis.py` (~41), `eee_only_heatmap.py` (~30) re-export private
+symbols from their split-out siblings. Per §2.0 R-d, most of those names are
+referenced by **nothing** (tests touch the `core_metrics` facade via module
+attributes in essentially one file). (a) Grep each re-exported name; delete
+every unreferenced one — trivial, belongs in Batch 1. (b) Optionally repoint
+the few genuinely-used names (e.g. `test_core_metrics_single_run.py`'s
+`PlotLayout`/`_set_suptitle`/`_scaled_figsize`) at the real modules and shrink
+the facades to public names only.
 
 ### Workstream F — Non-code hygiene
 
@@ -389,27 +430,26 @@ Dependency-ordered so each commit leaves the tree working (per CLAUDE.md).
 **Never commit the dirty submodule gitlinks.**
 
 **Batch 1 — cheap, high-clarity, near-zero risk (do first):**
-E1 (dead symbols) · E2 (dup helpers) · B4 (era config/build dup) · F2
-(norecursedirs) · D2 (EEE render helper) · D3 (index/reproduce helpers).
+E1 (dead symbols) · E2 (dup helpers) · E4(a) (delete unreferenced facade
+re-exports) · B3 (era config/build dup) · F2 (norecursedirs) · D1
+(index/reproduce helpers) · D2 (EEE render helper).
 One commit per item; all guarded by the existing suite.
 
 **Batch 2 — the headline structural clarity moves:**
-A1 (move `run_entries` out of `helm/`) → B1 (unify path parser, lands in the
-same new `runspec/` package) → A2/A3 (delete prod-dead `helm/` + `_json_compatible`
-twin). Then C1 (finish the `build_reports_summary` split). Each is one commit
-(A1 and C1 may be several — one per moved module — following the Phase-2
-granularity).
+A1 (move `run_entries` → top-level module) → B1 (unify path parser, lands in
+the same module) → A2/A3 (delete prod-dead `helm/` + `_json_compatible` twin).
+Then C1 (finish the `build_reports_summary` split). Each is one commit (A1 and
+C1 may be several — one per moved module — following the Phase-2 granularity).
 
 **Batch 3 — medium consolidations:**
-B2 (replay-node table) · B3 (deployment-schema strategy) · C2 (heatmap
-scaffold) · C3 (breakdown split) · D4 (failure-engine unify) · D5-portfolio
-slice · E3 (filter write-loop). Independent; parallelizable across sessions.
+B2 (deployment-schema strategy) · C2 (heatmap scaffold) · C3 (breakdown split)
+· D3 (failure-engine unify) · D4-portfolio slice · E3 (filter write-loop) ·
+E4(b) (facade repoint). Independent; parallelizable across sessions.
 
 **Batch 4 — optional capstones (each needs owner sign-off + a captured
 behavior baseline):**
-D1 (`analyze_index` primitive; after C1) · A4 (retire `HelmRunDiff`; delivers
-the EEE hard split) · E4 (facade shrink) · D5-remainder · D6 (compare_batch
-decision).
+D6 (`analyze_index` primitive; after C1) · A4 (retire `HelmRunDiff`; delivers
+the EEE hard split) · D4-remainder · D5 (compare_batch decision).
 
 **Non-code:** F1 (disk reclaim) any time; F3/F4 after the branch merges.
 
@@ -424,20 +464,20 @@ not start until 1–2 land the clean seams.
 
 - **Every touched file:** `python -m py_compile`; fast suite with the repo
   `.venv` (baseline 442 passed / 71 skipped per the 2026-07-06 audit).
-- **Relocations (A1, A2, B1, C1, D2, D3, D5):** grep sweep for every
+- **Relocations (A1, A2, B1, C1, D1, D2, D4):** grep sweep for every
   moved/deleted symbol across `eval_audit/` + `tests/` + `reproduce/` +
-  `docs/`; keep a re-export shim where a `reproduce.sh` still imports the old
-  path (ADR 5).
+  `docs/`; keep a re-export shim only where a `reproduce.sh` still imports the
+  old path (ADR 5) — for A1 none is needed (verified).
 - **Render relocations (C1, C2, C3):** byte-identical artifact gates —
   `tests/test_end_to_end_summary.py` + `tests/test_eee_only_demo.py`
   (C2 additionally: pixel-diff the heatmap PNGs) — modulo the plotly-UUID /
   timestamp noise floor established by HEAD-vs-HEAD reruns.
-- **Era items (B1–B4):** `tests/test_eras*.py` + `test_run_spec_materializer.py`
+- **Era items (B1–B3):** `tests/test_eras*.py` + `test_run_spec_materializer.py`
   + `test_exporter_freeze.py` + `test_from_spec_materialized_schedule.py` +
   `test_kwdagger_submatrix_contract.py`. B2/B3 are host-testable without an era
   image; the shim internals still need the validation ladder before results are
   trusted (per the 2026-07-10 review).
-- **Diff-core capstones (A4, D1):** the phase3 behavior-equivalence matrix +
+- **Diff-core capstones (A4, D6):** the phase3 behavior-equivalence matrix +
   `tests/fixtures/phase3_baseline/`; **stop condition** — if agreement numbers
   move beyond matrix tolerance at any step, halt: a soft separation was
   load-bearing somewhere unaudited.
@@ -452,6 +492,11 @@ not start until 1–2 land the clean seams.
   are clean, documented data/render/CLI layer splits; the agreement math is
   already single-sourced in `normalized/diff.py`. The names suggest overlap; the
   code does not have it.
+- **The replay-node subclass chain + factory functions**
+  (`helm_docker_pipeline.py`) — reviewed and cleared (§2.0 R-a): the factories
+  are kwdagger's string-addressed interface, and each subclass is one attribute
+  override. A dispatch table would be *less* simple. Revisit only at a fourth
+  variant.
 - **Merging the two dockerfiles** — era (CPU/ubuntu/py3.10) vs modern
   (CUDA/py3.11) share almost nothing; the separation is documented and correct.
 - **`eras.py`, `lease_bracket.py`, the era↔image guard** — the resolver is the
