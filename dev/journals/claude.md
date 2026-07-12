@@ -1257,3 +1257,64 @@ first. Committed onto `impl/run-from-run-spec` (not pushed).
 **Next steps**: (a) the pre-existing qwen ambiguity needs a look — either the corpus gained a duplicate suite or the whitelist needs a suite-scoped root, orthogonal to this merge; (b) merge committed as `eb1b9faf` on `impl/run-from-run-spec`, not pushed.
 
 **Design insight**: when both branches append to the same YAML mapping, resolve at the block level (reconstruct base + block A + block B), never at the hunk level — git's common-line anchoring inside repetitive YAML (repeated `container_*` keys) produces structurally misleading conflict hunks.
+
+## 2026-07-12 11:12:00 -0400
+
+**User intent**: Fourth simplification pass. Audit the repo (post era-pinned
+pre-v0.5 replay path) for refactors/simplification and write a detailed,
+implementable plan. Then (model switch mid-session) review the first-pass
+findings and revise the plan with a simplicity-first eye.
+
+**Model/config**: claude-opus-4-8[1m] for the audit + first draft;
+claude-fable-5 for the review revision (Claude Code, VSCode extension harness,
+five parallel general-purpose audit subagents).
+
+**What happened**: Five parallel deep audits (helm↔normalized diff cores,
+reports/, workflows+cli, era/replay layer, repo hygiene), with every
+high-impact claim re-verified in the main session before it entered the plan.
+Output: `docs/planning/repo-simplification-plan-2026-07-12.md` (commits
+`ea74ac38` draft, review revision on top). The central reframe: three prior
+passes (2026-07-02/-06/-10) already banked the deletion wins, so this plan is
+"finish what's in flight" (diff-core migration residue, the half-split
+`build_reports_summary.py`), plus era-branching consolidation, plus small
+dead-code/dup-helper wins.
+
+**Review deltas worth remembering** (the second pass made the plan *smaller*):
+- Dropped the "collapse the replay-node subclass chain into a dispatch table"
+  recommendation. Two verifications killed it: kwdagger addresses pipelines by
+  fully-qualified factory-path *strings* (external contract — the three named
+  factories must exist regardless), and the era subclass is a docstring plus
+  one attribute override. The proposed dispatch dict would add tuple-key
+  indirection while deleting almost nothing.
+- Simplified the `run_entries.py` relocation: top-level
+  `eval_audit/run_entries.py` following the `metrics_taxonomy.py` precedent
+  (itself lifted out of `helm/` the same way), not a new package; and no
+  back-compat shim — grep shows zero reproduce/generated-script imports of the
+  old path.
+- Re-scored the facade-re-export cleanup: the "tests need these ~62 names"
+  claim was overstated (one test file, module-attribute access); most
+  re-exports are referenced by nothing → measured delete becomes a Batch-1
+  trivial item.
+- Added one missed dead item: `compat/helm_outputs._MsgspecRunView`
+  (NotImplementedError placeholder, constructed but never called).
+
+**Uncertainties / open decisions**: the two capstones (A4 retire HelmRunDiff —
+also delivers the deferred EEE-only hard split; D6 typed `analyze_index()`
+primitive) need owner sign-off and a captured behavior baseline; `ladder-out/`
+(2.3G scratch) reclamation needs a user call; D5 (`compare_batch` fate) is an
+operator decision.
+
+**Reusable insights.**
+1. On a repo with prior audit passes, read the implemented plans *first* and
+   scope the new audit to what changed since — the biggest risk is re-planning
+   banked work, not missing debt.
+2. Before recommending "collapse subclasses into a dispatch table," check who
+   addresses the classes: string-addressed factories (schedulers, plugin
+   registries) make the named functions the interface, and the table deletes
+   nothing.
+3. Audit-agent claims about *why* code exists ("kept for tests") are the ones
+   to re-verify by grep — liveness claims were reliable, purpose claims less so.
+
+**Next steps**: plan awaits owner sign-off on sequencing + capstones; Batch 1
+(dead symbols, dup helpers, unreferenced re-exports, era config dedup,
+norecursedirs, shared helpers) is implementable immediately at near-zero risk.
