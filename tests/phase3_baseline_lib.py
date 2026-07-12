@@ -69,7 +69,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # Shared EEE-demo fixture path + guard (IM-11). ``conftest`` is importable
 # whenever tests/ is on sys.path — the same condition under which this library
 # module is imported (bare ``from phase3_baseline_lib import ...``).
-from conftest import (  # noqa: E402
+from conftest import (  # noqa: E402, F401
+    # FIXTURE_ROOT is a re-export: test_phase3_baseline imports it from
+    # this lib (F401 can't see re-export intent).
     EEE_DEMO_ROOT as FIXTURE_ROOT,
     EEE_DEMO_OFFICIAL_DIR as OFFICIAL_DIR,
     EEE_DEMO_LOCAL_DIR as LOCAL_DIR,

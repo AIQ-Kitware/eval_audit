@@ -51,8 +51,6 @@ from eval_audit.run_entries import (
 from eval_audit.helm.diff import HelmRunDiff
 from eval_audit.utils.sankey import emit_sankey_artifacts
 
-from loguru import logger
-
 
 def parse_helm_run_dir(run_dir: str) -> dict[str, str]:
     """Label a run dir via the shared ``benchmark_output`` parser (B1).
