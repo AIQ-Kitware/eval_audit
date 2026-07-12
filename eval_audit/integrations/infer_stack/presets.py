@@ -15,6 +15,8 @@ that way if you hand-edit the catalog.
 from __future__ import annotations
 
 import importlib.resources
+import os
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -36,7 +38,36 @@ def _load_preset_catalog() -> dict[str, dict[str, Any]]:
     return yaml.safe_load(text)
 
 
+def _merge_extra_preset_files(catalog: dict[str, dict[str, Any]]) -> None:
+    """Merge presets from files named in ``INFER_STACK_EXTRA_PRESET_FILES``.
+
+    Colon(os.pathsep)-separated paths, each a ``{preset_key: preset_cfg}`` mapping
+    in the same schema as ``preset_configs.yaml``. This lets a self-contained
+    runbook ship its own (often generated) preset data — e.g. the hundreds of
+    from-spec run_entries for an all-runs era replay — without bloating the shared
+    catalog. A key that collides with an already-loaded preset is a hard error, so
+    a runbook can never silently shadow a shared preset. Default (unset) is a
+    no-op: the shared catalog is unchanged.
+    """
+    raw = os.environ.get("INFER_STACK_EXTRA_PRESET_FILES", "").strip()
+    if not raw:
+        return
+    for path in raw.split(os.pathsep):
+        path = path.strip()
+        if not path:
+            continue
+        extra = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+        for key, cfg in extra.items():
+            if key in catalog:
+                raise ValueError(
+                    f"extra preset file {path!r} redefines existing preset {key!r}; "
+                    "rename the runbook preset (do not shadow the shared catalog)."
+                )
+            catalog[key] = cfg
+
+
 PRESET_CONFIGS: dict[str, dict[str, Any]] = _load_preset_catalog()
+_merge_extra_preset_files(PRESET_CONFIGS)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
