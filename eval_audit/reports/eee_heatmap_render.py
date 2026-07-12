@@ -12,7 +12,6 @@ import os
 import re
 from pathlib import Path
 from typing import Any
-import safer
 from loguru import logger
 from eval_audit.infra.fs_publish import write_text_atomic
 from eval_audit.infra.logging import rich_link
@@ -105,14 +104,7 @@ def _render_text_table(
 # ---------------------------------------------------------------------------
 
 
-def _atomic_savefig(fig, fpath: Path, **kwargs) -> Path:
-    """``fig.savefig`` to ``fpath`` atomically via safer (parent dirs auto-
-    created). Format is inferred from the suffix; defaults to png."""
-    fpath = Path(fpath)
-    suffix = fpath.suffix.lstrip(".") or "png"
-    with safer.open(fpath, "wb", make_parents=True) as fp:
-        fig.savefig(fp, format=suffix, **kwargs)
-    return fpath
+from eval_audit.reports._mpl import atomic_savefig as _atomic_savefig  # noqa: E402
 
 
 # Serif fonts that are reliably present on our build machines. Listed in

@@ -135,7 +135,6 @@ from eval_audit.reports.summary.breakdown import (  # noqa: F401
     _publish_prioritized_examples_tree,
 )
 from eval_audit.reports.summary.plots import (  # noqa: F401
-    _AXIS_COUNT_TAGS,
     _ordered_unique_values,
     _abbreviate_label,
     _bar_count_label,

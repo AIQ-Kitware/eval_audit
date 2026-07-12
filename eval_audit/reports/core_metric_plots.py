@@ -16,7 +16,6 @@ import eval_audit.infra.mpl_backend  # noqa: F401  (force headless Agg before py
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-import safer
 from eval_audit.utils.labels import emit_label_legend_artifacts, short_alias_map
 from eval_audit.infra.profiling import profile
 from eval_audit.reports.core_metric_curves import (
@@ -693,11 +692,4 @@ def _plot_single_pair_summary(
     return fig_fpath
 
 
-def _atomic_savefig(fig, fpath: Path, **kwargs) -> Path:
-    """matplotlib ``fig.savefig`` writing to ``fpath`` atomically via safer.
-    Format inferred from the file suffix (defaults to png)."""
-    fpath = Path(fpath)
-    suffix = fpath.suffix.lstrip('.') or 'png'
-    with safer.open(fpath, 'wb', make_parents=True) as fp:
-        fig.savefig(fp, format=suffix, **kwargs)
-    return fpath
+from eval_audit.reports._mpl import atomic_savefig as _atomic_savefig  # noqa: E402

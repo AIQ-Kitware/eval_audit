@@ -22,19 +22,6 @@ from eval_audit.reports.summary.failure_triage import (
 )
 
 
-_AXIS_COUNT_TAGS = {
-    "benchmark": "n_benchmarks",
-    "model": "n_models",
-    "dataset": "n_datasets",
-    "scenario": "n_scenarios",
-    "official_instance_agree_bucket": "n_buckets",
-    "agreement_bucket": "n_buckets",
-    "failure_reason": "n_failure_reasons",
-    "category": "n_categories",
-    "group_value": "n_categories",
-}
-
-
 def _ordered_unique_values(rows: list[dict[str, Any]], key: str) -> list[str]:
     values: list[str] = []
     seen: set[str] = set()
@@ -47,22 +34,10 @@ def _ordered_unique_values(rows: list[dict[str, Any]], key: str) -> list[str]:
 
 
 from eval_audit.utils.coercion import abbreviate_label as _abbreviate_label  # R-6
-
-
-def _bar_count_label(axis_key: str, n_bars: int, *, axis_title: str | None = None) -> str:
-    label = axis_title if axis_title is not None else axis_key.replace("_", " ").title()
-    count_tag = _AXIS_COUNT_TAGS.get(axis_key, "n_categories")
-    return f"{label} ({count_tag}={n_bars})"
-
-
-def _bar_tickangle(n_bars: int) -> int:
-    if n_bars > 50:
-        return 90
-    if n_bars > 25:
-        return 75
-    if n_bars > 12:
-        return 60
-    return -45
+from eval_audit.reports._plotly_bars import (  # E2
+    bar_count_label as _bar_count_label,
+    bar_tickangle as _bar_tickangle,
+)
 
 
 def _compact_bar_figure_size(unique_x: list[str]) -> tuple[int, int]:

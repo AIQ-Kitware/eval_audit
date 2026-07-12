@@ -18,21 +18,11 @@ def _title_with_n(title: str, n: int) -> str:
     return f'{title} n={n}'
 
 
-_AXIS_COUNT_TAGS = {
-    'model': 'n_models',
-    'benchmark': 'n_benchmarks',
-    'dataset': 'n_datasets',
-    'scenario': 'n_scenarios',
-    'failure_reason': 'n_failure_reasons',
-    'candidate_pool': 'n_candidate_pools',
-    'reason_combo': 'n_reason_combos',
-}
-
-
-def _bar_count_label(axis_key: str, n_bars: int, *, axis_title: str | None = None) -> str:
-    label = axis_title if axis_title is not None else axis_key.replace('_', ' ').title()
-    count_tag = _AXIS_COUNT_TAGS.get(axis_key, 'n_categories')
-    return f'{label} ({count_tag}={n_bars}, n_bars={n_bars})'
+from eval_audit.reports._plotly_bars import (  # E2
+    bar_count_label as _bar_count_label,
+    bar_tickangle as _bar_tickangle,
+    bar_tickfont_size as _bar_tickfont_size,
+)
 
 
 def _bar_axis_values(rows: list[dict[str, Any]], x: str) -> list[str]:
@@ -88,25 +78,13 @@ def _bar_chart_xaxis_update(
             'tickangle': -45,
             'automargin': True,
         }
-    if n_bars > 50:
-        tickangle = 90
-        tickfont_size = 8
-    elif n_bars > 25:
-        tickangle = 75
-        tickfont_size = 8
-    elif n_bars > 12:
-        tickangle = 60
-        tickfont_size = 9
-    else:
-        tickangle = -45
-        tickfont_size = 10
     return {
         'title_text': title_text,
         'tickmode': 'array',
         'tickvals': unique_x,
         'ticktext': [_abbreviate_label(value) for value in unique_x],
-        'tickangle': tickangle,
-        'tickfont': {'size': tickfont_size},
+        'tickangle': _bar_tickangle(n_bars),
+        'tickfont': {'size': _bar_tickfont_size(n_bars)},
         'automargin': True,
     }
 

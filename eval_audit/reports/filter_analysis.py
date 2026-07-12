@@ -47,7 +47,6 @@ from eval_audit.reports.filter_analysis_text import (  # noqa: F401
 )
 from eval_audit.reports.filter_analysis_charts import (  # noqa: F401
     _title_with_n,
-    _AXIS_COUNT_TAGS,
     _bar_count_label,
     _bar_axis_values,
     _abbreviate_label,
