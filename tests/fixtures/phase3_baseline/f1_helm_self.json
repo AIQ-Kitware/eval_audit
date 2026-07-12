@@ -1,0 +1,1312 @@
+{
+ "core_metric_report": {
+  "comparability": {
+   "component_metadata": {
+    "local-attempt-a": {
+     "adapter_instructions": "The following are multiple choice questions (with answers) about philosophy.\n",
+     "base_model": "openai/gpt2",
+     "deployment": "huggingface/gpt2",
+     "max_eval_instances": 10,
+     "scenario_class": "helm.benchmark.scenarios.mmlu_scenario.MMLUScenario"
+    },
+    "official-run": {
+     "adapter_instructions": "The following are multiple choice questions (with answers) about philosophy.\n",
+     "base_model": "openai/gpt2",
+     "deployment": "huggingface/gpt2",
+     "max_eval_instances": 10,
+     "scenario_class": "helm.benchmark.scenarios.mmlu_scenario.MMLUScenario"
+    }
+   },
+   "facts": {
+    "same_adapter_instructions": {
+     "status": "yes",
+     "values": [
+      "<instructions>"
+     ]
+    },
+    "same_base_model": {
+     "status": "yes",
+     "values": [
+      "openai/gpt2"
+     ]
+    },
+    "same_deployment": {
+     "status": "yes",
+     "values": [
+      "huggingface/gpt2"
+     ]
+    },
+    "same_max_eval_instances": {
+     "status": "yes",
+     "values": [
+      10
+     ]
+    },
+    "same_scenario_class": {
+     "status": "yes",
+     "values": [
+      "helm.benchmark.scenarios.mmlu_scenario.MMLUScenario"
+     ]
+    }
+   }
+  },
+  "comparisons": [
+   {
+    "caveats": [],
+    "comparability_facts": {},
+    "comparison_id": "official_vs_local",
+    "comparison_kind": "official_vs_local",
+    "component_ids": [
+     "official-run",
+     "local-attempt-a"
+    ],
+    "enabled": true,
+    "notes": null,
+    "reference_component_id": "official-run",
+    "warnings": []
+   }
+  ],
+  "comparisons_manifest_path": "<OUT>/comparisons_manifest.json",
+  "components": [
+   {
+    "attempt_identity": null,
+    "attempt_uuid": null,
+    "component_id": "official-run",
+    "display_name": "official: mmlu",
+    "experiment_name": "phase3-helm",
+    "instance_source_policy": "helm-preferred",
+    "job_path": null,
+    "machine_host": null,
+    "max_eval_instances": 10,
+    "run_path": "<OFFICIAL-DIR>",
+    "source_kind": "official",
+    "tags": [
+     "official"
+    ]
+   },
+   {
+    "attempt_identity": "attempt-a",
+    "attempt_uuid": "attempt-a",
+    "component_id": "local-attempt-a",
+    "display_name": "local 1: mmlu",
+    "experiment_name": "phase3-helm",
+    "instance_source_policy": "helm-preferred",
+    "job_path": null,
+    "machine_host": "host-a",
+    "max_eval_instances": 10,
+    "run_path": "<LOCAL-DIR>",
+    "source_kind": "local",
+    "tags": [
+     "local"
+    ]
+   }
+  ],
+  "components_manifest_path": "<OUT>/components_manifest.json",
+  "diagnostic_flags": [],
+  "generated_utc": "<UTC>",
+  "official_selection": {
+   "discarded_component_ids": [],
+   "policy_name": "phase3_baseline",
+   "retained_component_ids": [
+    "official-run"
+   ],
+   "selected_public_track": "main",
+   "warnings": []
+  },
+  "packet_caveats": [],
+  "packet_id": "phase3-f1_helm_self",
+  "packet_warnings": [],
+  "pairs": [
+   {
+    "artifact_formats": {
+     "local-attempt-a": "helm",
+     "official-run": "helm"
+    },
+    "caveats": [],
+    "comparability_facts": {},
+    "comparison_id": "official_vs_local",
+    "comparison_kind": "official_vs_local",
+    "component_ids": [
+     "official-run",
+     "local-attempt-a"
+    ],
+    "core_metrics": [
+     "exact_match",
+     "exact_match@5",
+     "prefix_exact_match",
+     "prefix_exact_match@5",
+     "quasi_exact_match",
+     "quasi_exact_match@5",
+     "quasi_prefix_exact_match",
+     "quasi_prefix_exact_match@5"
+    ],
+    "diagnosis": {
+     "label": "reproduced",
+     "primary_priority": 0,
+     "primary_reason_names": [
+      "no_detected_drift"
+     ],
+     "reasons": [
+      {
+       "details": {
+        "bookkeeping_agree_ratio": 1.0,
+        "core_agree_ratio": 1.0
+       },
+       "name": "no_detected_drift",
+       "priority": 0
+      }
+     ]
+    },
+    "inputs": {
+     "run_a": "<OFFICIAL-DIR>",
+     "run_b": "<LOCAL-DIR>"
+    },
+    "instance_level": {
+     "agreement_vs_abs_tol": [
+      {
+       "abs_tol": 0.0,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      },
+      {
+       "abs_tol": 1e-12,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      },
+      {
+       "abs_tol": 1e-09,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      },
+      {
+       "abs_tol": 1e-06,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      },
+      {
+       "abs_tol": 0.0001,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      },
+      {
+       "abs_tol": 0.001,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      },
+      {
+       "abs_tol": 0.01,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      },
+      {
+       "abs_tol": 0.02,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      },
+      {
+       "abs_tol": 0.05,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      },
+      {
+       "abs_tol": 0.1,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      },
+      {
+       "abs_tol": 0.25,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      },
+      {
+       "abs_tol": 0.5,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      },
+      {
+       "abs_tol": 1.0,
+       "agree_ratio": 1.0,
+       "count": 80,
+       "matched": 80
+      }
+     ],
+     "by_metric": [
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 10,
+       "metric": "exact_match"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 10,
+       "metric": "exact_match@5"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 10,
+       "metric": "prefix_exact_match"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 10,
+       "metric": "prefix_exact_match@5"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 10,
+       "metric": "quasi_exact_match"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 10,
+       "metric": "quasi_exact_match@5"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 10,
+       "metric": "quasi_prefix_exact_match"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 10,
+       "metric": "quasi_prefix_exact_match@5"
+      }
+     ],
+     "n_joined_pairs": 250,
+     "n_nonfinite_dropped": 0,
+     "n_rows": 80,
+     "overall_quantiles": {
+      "abs_delta": {
+       "max": 0.0,
+       "min": 0.0,
+       "p50": 0.0,
+       "p90": 0.0,
+       "p95": 0.0,
+       "p99": 0.0
+      },
+      "count": 80
+     },
+     "per_metric_agreement": {
+      "exact_match": [
+       {
+        "abs_tol": 0.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-12,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-09,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-06,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.0001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.01,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.02,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.05,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.1,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.25,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.5,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       }
+      ],
+      "exact_match@5": [
+       {
+        "abs_tol": 0.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-12,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-09,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-06,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.0001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.01,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.02,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.05,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.1,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.25,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.5,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       }
+      ],
+      "prefix_exact_match": [
+       {
+        "abs_tol": 0.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-12,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-09,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-06,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.0001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.01,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.02,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.05,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.1,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.25,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.5,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       }
+      ],
+      "prefix_exact_match@5": [
+       {
+        "abs_tol": 0.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-12,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-09,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-06,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.0001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.01,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.02,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.05,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.1,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.25,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.5,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       }
+      ],
+      "quasi_exact_match": [
+       {
+        "abs_tol": 0.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-12,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-09,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-06,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.0001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.01,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.02,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.05,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.1,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.25,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.5,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       }
+      ],
+      "quasi_exact_match@5": [
+       {
+        "abs_tol": 0.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-12,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-09,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-06,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.0001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.01,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.02,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.05,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.1,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.25,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.5,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       }
+      ],
+      "quasi_prefix_exact_match": [
+       {
+        "abs_tol": 0.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-12,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-09,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-06,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.0001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.01,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.02,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.05,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.1,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.25,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.5,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       }
+      ],
+      "quasi_prefix_exact_match@5": [
+       {
+        "abs_tol": 0.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-12,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-09,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1e-06,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.0001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.001,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.01,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.02,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.05,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.1,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.25,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 0.5,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       },
+       {
+        "abs_tol": 1.0,
+        "agree_ratio": 1.0,
+        "count": 10,
+        "matched": 10
+       }
+      ]
+     }
+    },
+    "instance_sources": {
+     "local-attempt-a": "helm",
+     "official-run": "helm"
+    },
+    "label": "official_vs_local",
+    "reference_component_id": "official-run",
+    "run_level": {
+     "agreement_vs_abs_tol": [
+      {
+       "abs_tol": 0.0,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      },
+      {
+       "abs_tol": 1e-12,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      },
+      {
+       "abs_tol": 1e-09,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      },
+      {
+       "abs_tol": 1e-06,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      },
+      {
+       "abs_tol": 0.0001,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      },
+      {
+       "abs_tol": 0.001,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      },
+      {
+       "abs_tol": 0.01,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      },
+      {
+       "abs_tol": 0.02,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      },
+      {
+       "abs_tol": 0.05,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      },
+      {
+       "abs_tol": 0.1,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      },
+      {
+       "abs_tol": 0.25,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      },
+      {
+       "abs_tol": 0.5,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      },
+      {
+       "abs_tol": 1.0,
+       "agree_ratio": 1.0,
+       "count": 8,
+       "matched": 8
+      }
+     ],
+     "by_metric": [
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 1,
+       "metric": "exact_match test on mmlu"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 1,
+       "metric": "exact_match valid on mmlu"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 1,
+       "metric": "prefix_exact_match test on mmlu"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 1,
+       "metric": "prefix_exact_match valid on mmlu"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 1,
+       "metric": "quasi_exact_match test on mmlu"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 1,
+       "metric": "quasi_exact_match valid on mmlu"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 1,
+       "metric": "quasi_prefix_exact_match test on mmlu"
+      },
+      {
+       "abs_delta": {
+        "max": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+       },
+       "count": 1,
+       "metric": "quasi_prefix_exact_match valid on mmlu"
+      }
+     ],
+     "n_rows": 8,
+     "overall_quantiles": {
+      "abs_delta": {
+       "max": 0.0,
+       "min": 0.0,
+       "p50": 0.0,
+       "p90": 0.0,
+       "p95": 0.0,
+       "p99": 0.0
+      },
+      "count": 8
+     }
+    },
+    "warnings": []
+   }
+  ],
+  "planner_version": "phase3.baseline",
+  "report_dpath": "<OUT>",
+  "run_diagnostics": {
+   "local-attempt-a": {
+    "empty_completion_count": 0,
+    "empty_completion_rate": 0.0,
+    "n_request_states": 10,
+    "n_with_completions": 10,
+    "nonempty_completion_count": 10,
+    "output_token_count": {
+     "max": 1,
+     "mean": 1,
+     "p50": 1.0,
+     "p90": 1.0
+    },
+    "run_name": "local",
+    "run_path": "<LOCAL-DIR>",
+    "stats_means": {
+     "finish_reason_unknown": {
+      "test": 1.0,
+      "valid": 1.0
+     },
+     "num_completion_tokens": {
+      "test": 1.0,
+      "valid": 1.0
+     },
+     "num_output_tokens": {
+      "test": 1.0,
+      "valid": 1.0
+     }
+    }
+   },
+   "official-run": {
+    "empty_completion_count": 0,
+    "empty_completion_rate": 0.0,
+    "n_request_states": 10,
+    "n_with_completions": 10,
+    "nonempty_completion_count": 10,
+    "output_token_count": {
+     "max": 1,
+     "mean": 1,
+     "p50": 1.0,
+     "p90": 1.0
+    },
+    "run_name": "official",
+    "run_path": "<OFFICIAL-DIR>",
+    "stats_means": {
+     "finish_reason_unknown": {
+      "test": 1.0,
+      "valid": 1.0
+     },
+     "num_completion_tokens": {
+      "test": 1.0,
+      "valid": 1.0
+     },
+     "num_output_tokens": {
+      "test": 1.0,
+      "valid": 1.0
+     }
+    }
+   }
+  },
+  "run_entry": "mmlu:subject=philosophy",
+  "run_spec_name": "local",
+  "single_run_mode": true,
+  "thresholds": [
+   0.0,
+   1e-12,
+   1e-09,
+   1e-06,
+   0.0001,
+   0.001,
+   0.01,
+   0.02,
+   0.05,
+   0.1,
+   0.25,
+   0.5,
+   1.0
+  ],
+  "warnings_manifest_path": "<OUT>/warnings.json"
+ },
+ "warnings": {
+  "comparisons": [
+   {
+    "caveats": [],
+    "comparability_facts": {},
+    "comparison_id": "official_vs_local",
+    "comparison_kind": "official_vs_local",
+    "disabled_reason": null,
+    "enabled": true,
+    "warnings": []
+   }
+  ],
+  "diagnostic_flags": [],
+  "official_selection": {
+   "discarded_component_ids": [],
+   "policy_name": "phase3_baseline",
+   "retained_component_ids": [
+    "official-run"
+   ],
+   "selected_public_track": "main",
+   "warnings": []
+  },
+  "packet_caveats": [],
+  "packet_id": "phase3-f1_helm_self",
+  "packet_warnings": [],
+  "planner_version": "phase3.baseline",
+  "report_dpath": "<OUT>",
+  "run_entry": "mmlu:subject=philosophy"
+ }
+}
