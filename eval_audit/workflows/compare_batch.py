@@ -1,3 +1,21 @@
+"""Legacy manifest-driven batch comparison — DEPRECATED (2026-07-12).
+
+Scheduled for deletion after one deprecation cycle. This module is the
+last consumer of the retired ``HelmRunDiff.summary_dict`` batch shape and
+the sole consumer of
+``eval_audit.normalized.helm_compat.helm_view_from_path`` — that fragile
+bridge helper (constructor-bypassing ``NormalizedRun.__new__``,
+self-documented as "goes away" at Stage 4) is scheduled to be deleted
+together with this module.
+
+The replacement is the planner-driven path
+(``eval-audit-analyze-experiment`` → per-packet ``core_metric_report``
+via ``NormalizedDiff``), which produces the agreement numbers this batch
+report stopped emitting in R-2 (2026-07-06). Do not add new callers; the
+only remaining invocations are the ``UNSURE``-marked
+``reproduce/{smoke,apples}/30_compare.sh`` runbooks, kept resolving for
+those pre-existing scripts (ADR 5) until the cycle elapses.
+"""
 from __future__ import annotations
 
 import argparse
@@ -624,6 +642,11 @@ def write_management_summary(
 
 def main(argv: list[str] | None = None) -> None:
     setup_cli_logging()
+    logger.warning(
+        "eval-audit-compare-batch is DEPRECATED (2026-07-12) and scheduled for "
+        "deletion after one deprecation cycle (helm_view_from_path goes with it); "
+        "use the planner-driven eval-audit-analyze-experiment instead."
+    )
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--results-dpath", default=None)
