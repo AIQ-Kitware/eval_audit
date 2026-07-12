@@ -1,0 +1,28 @@
+# Seed pip constraints for the helm-v0.2.4 era image.
+#
+# Starts from the v0.3.0-validated instance-selection pins; the v0.2.4
+# entity_matching determinism check (validation ladder step 2) may require a
+# different pandas/numpy pair — settle empirically, then freeze (see
+# docker/README.md :: "Era constraints freeze workflow"). This is a SEED only.
+pandas==2.0.3
+numpy==1.23.5
+# Era crfm-helm's setup.cfg declares `pyarrow>=11.0.0` (open upper bound), so a
+# fresh resolve pulls modern pyarrow (>=15), which REMOVED `pa.PyExtensionType`
+# and breaks the era-pinned `datasets==2.5.2` (features.py uses it) at import.
+# Pin to the era's own frozen requirements.txt value to restore the era env.
+#
+# CAUTION: do NOT try to "just adopt" the era crfm-helm requirements.txt wholesale
+# as these constraints. That freeze is STALE vs the setup.cfg in the same commit
+# (it pins spacy==3.2.4 while setup.cfg declares spacy~=3.5.3 -> uv resolve is
+# unsatisfiable, cascading through spaCy's subtree). It is also redundant:
+# setup.cfg already era-pins every fidelity-critical dep via `~=` (transformers,
+# tokenizers, datasets, numpy, scipy, ...). pyarrow>=11.0.0 is the ONLY open
+# upper bound, so it is the only one that needs an explicit era pin here.
+pyarrow==11.0.0
+# fsspec is a datasets transitive with an open lower bound (datasets 2.5.2 wants
+# fsspec[http]>=2021.11.1), so a fresh resolve pulls a modern fsspec whose
+# LocalFileSystem class no longer matches datasets 2.5.2's isinstance check ->
+# `NotImplementedError: Loading a dataset cached in a LocalFileSystem is not
+# supported` at load. Pin the era value (same class as pyarrow: an open-bound
+# TRANSITIVE that drifts, not a setup.cfg direct dep).
+fsspec==2022.8.2

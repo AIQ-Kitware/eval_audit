@@ -54,3 +54,6 @@ old-backup-reports/
 # symlink to directory with reports
 crfm-helm-audit-store
 paper_draft
+# validation-ladder machine-local artifacts (reproduce/classic_era_replay)
+ladder-out/
+reproduce/classic_era_replay/ladder.env

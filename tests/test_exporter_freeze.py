@@ -112,6 +112,40 @@ def test_freeze_uses_inline_token_and_maps_lease(tmp_path, monkeypatch) -> None:
     assert "model_deployment" not in seen[0]
 
 
+def test_freeze_era_multi_endpoint_keys_lease_by_model(tmp_path, monkeypatch) -> None:
+    # Finding 10: an era (omit_model_deployment) MULTI-endpoint bundle has no
+    # scalar lease_endpoint. The era deployment name equals the official model
+    # name, so the lease map is keyed on the run-entry's model= token (previously
+    # era used the scalar only, freezing NO lease_endpoint -> endpoint never
+    # acquired).
+    run = _fixture_run(tmp_path)
+    _patch_classify(monkeypatch, run)
+    entry = "mmlu:subject=anatomy,method=multiple_choice_joint,eval_split=test,model=allenai/olmo-7b"
+    sources = _freeze_run_spec_sources(
+        {"run_entries": [entry]}, precomputed_root=str(tmp_path),
+        model_entries=[{"name": "allenai/olmo-7b"}, {"name": "eleutherai/pythia-6.9b"}],
+        lease_facts={"lease_endpoints": {"allenai/olmo-7b": "ep-olmo", "eleutherai/pythia-6.9b": "ep-pythia"}},
+        runs=[run], omit_model_deployment=True,
+    )
+    assert "model_deployment" not in sources[0]        # era: verbatim by-name
+    assert sources[0]["lease_endpoint"] == "ep-olmo"   # keyed on model=
+
+
+def test_freeze_era_multi_endpoint_unmapped_model_raises(tmp_path, monkeypatch) -> None:
+    # Finding 10: a run whose model= is absent from the lease map (and no single
+    # fallback) fails loud rather than silently freezing no endpoint.
+    run = _fixture_run(tmp_path)
+    _patch_classify(monkeypatch, run)
+    entry = "mmlu:subject=anatomy,model=allenai/olmo-7b"
+    with pytest.raises(ValueError, match="not in the bundle's lease_endpoints"):
+        _freeze_run_spec_sources(
+            {"run_entries": [entry]}, precomputed_root=str(tmp_path),
+            model_entries=[{"name": "x/a"}, {"name": "y/b"}],
+            lease_facts={"lease_endpoints": {"x/a": "ep-a", "y/b": "ep-b"}},
+            runs=[run], omit_model_deployment=True,
+        )
+
+
 def test_freeze_raises_on_non_resolved(tmp_path, monkeypatch) -> None:
     run = _fixture_run(tmp_path)
     _patch_classify(monkeypatch, run, status="NO_MATCH")

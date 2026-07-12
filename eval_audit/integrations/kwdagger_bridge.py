@@ -18,6 +18,7 @@ from eval_audit.infra.yaml_io import dump_yaml, load_manifest
 from eval_audit.infra.paths import experiment_result_dpath
 from eval_audit.integrations.docker_provenance import (
     ResolvedImage,
+    image_label,
     resolve_image_digest,
     runtime_version,
     write_container_provenance,
@@ -41,6 +42,44 @@ _DOCKER_PIPELINE = (
 _DOCKER_FROM_SPEC_PIPELINE = (
     "eval_audit.pipelines.helm_docker_pipeline.helm_single_run_from_spec_docker_pipeline()"
 )
+
+# Era (pre-v0.5) variant: the inner CLI is the standalone era shim
+# (``helm_era_shim.replay``) instead of magnet's from-spec CLI, run inside the
+# pinned era image. Selected on the exact-path branch when the manifest pins an
+# era whose capability is ``era-shim-from-spec`` (era replay is verbatim,
+# exact-path only). Same containerized wrapper + algo identity.
+_DOCKER_FROM_SPEC_ERA_PIPELINE = (
+    "eval_audit.pipelines.helm_docker_pipeline.helm_single_run_from_spec_era_docker_pipeline()"
+)
+
+
+def _era_pipeline_for_manifest(manifest: dict[str, Any]) -> str | None:
+    """Return the era from-spec pipeline target when the manifest pins an era.
+
+    Resolves the manifest ``era`` key against ``docker/eras.yaml`` and asserts
+    its capability is ``era-shim-from-spec`` (the only capability that exists).
+    Returns ``None`` for the modern era (no ``era`` key). Raises on an unknown
+    era key or an unexpected capability so a misconfigured manifest fails at
+    schedule time, not GPU time.
+    """
+    from eval_audit.eras import ERA_SHIM_FROM_SPEC, load_era_registry
+
+    era_key = manifest.get("era")
+    if not era_key:
+        return None
+    registry = load_era_registry()
+    era = registry.get(str(era_key))
+    if era is None:
+        raise ValueError(
+            f"manifest pins unknown era {era_key!r}; known: "
+            f"{', '.join(sorted(registry)) or '<none>'} (docker/eras.yaml)."
+        )
+    if era.capability != ERA_SHIM_FROM_SPEC:
+        raise ValueError(
+            f"era {era_key!r} has capability {era.capability!r}; only "
+            f"{ERA_SHIM_FROM_SPEC!r} is supported by the era pipeline."
+        )
+    return _DOCKER_FROM_SPEC_ERA_PIPELINE
 
 
 def _locator_run_entry(run_entry: str) -> str:
@@ -299,6 +338,10 @@ def build_schedule_params(
     # already baked into the copy, so no model_deployment / max_eval_instances
     # rewrite is emitted, and precomputed_root is NOT mounted — the recipe source
     # is the tiny staging dir, not the corpus. See run-from-relative-path-plan.md.
+    # Era pipeline selection: an era manifest is exact-path only (the shim has no
+    # discovery mode), so resolve it here and require the exact-path branch below.
+    era_pipeline = _era_pipeline_for_manifest(manifest)
+
     if manifest.get("from_run_spec") and materialized_runs:
         if staging_root:
             matrix["helm.staging_root"] = [str(staging_root)]
@@ -321,7 +364,22 @@ def build_schedule_params(
                 entry["helm.lease_endpoint"] = rec.lease_endpoint
             submatrices.append(entry)
         matrix["submatrices"] = submatrices
-        return {"pipeline": _DOCKER_FROM_SPEC_PIPELINE, "matrix": matrix}
+        # Era manifests replay via the era shim image; modern via magnet's CLI.
+        return {
+            "pipeline": era_pipeline or _DOCKER_FROM_SPEC_PIPELINE,
+            "matrix": matrix,
+        }
+
+    # Beyond here are the run-entry / from-spec-discovery paths. Era replay is
+    # exact-path only (the shim cannot discover a run dir from a run-entry token),
+    # so an era manifest that reaches here is misconfigured — fail loud.
+    if era_pipeline is not None:
+        raise ValueError(
+            f"era manifest (era={manifest.get('era')!r}) requires exact-path replay "
+            "(run_spec_sources materialized to copies); the era shim has no "
+            "run-entry/discovery mode. Regenerate the manifest with "
+            "--run-spec-sources-fpath (exact-path)."
+        )
 
     # --- Run-entry axis (run-entry reconstruction OR from-spec discovery) ------
     # D-5: the "official" verbatim-replay sentinel is only realizable on the
@@ -551,12 +609,54 @@ def _prepare_container_execution(
         manifest["precomputed_root"] = str(Path(precomputed_root).expanduser().resolve())
 
     resolved_image = resolve_image_digest(str(container_image), runtime=runtime_name)
+
+    # Era<->image guard: the image's org.aiq.era label MUST match the manifest era
+    # (and be ABSENT for a modern manifest). This catches a mismatched image at
+    # SCHEDULE time (host) rather than GPU time — e.g. a modern image pinned for an
+    # era manifest (magnet's v0.5+ CLI would crash mid-run) or an era image pinned
+    # for a modern manifest (no magnet CLI).
+    #
+    # Finding 4: read the label from the immutable ``run_ref`` (a mutable tag could
+    # be retagged between resolve and inspect); and SKIP the read entirely for a
+    # pinned MODERN manifest — the pre-era code path never touched the runtime for
+    # an already-pinned image, and a digest-pinned modern image may not be present
+    # locally (inspecting it would raise on a docker-less host). An era manifest,
+    # or any unpinned ref (local post-resolve), still gets the guard. For a
+    # digest-pinned era image, resolve_image_digest short-circuited without pulling,
+    # so pull_if_missing lets the label read see the real image instead of
+    # false-failing.
+    manifest_era = manifest.get("era")
+    image_era = None
+    if manifest_era or not resolved_image.pinned:
+        image_era = image_label(
+            resolved_image.run_ref,
+            "org.aiq.era",
+            runtime=runtime_name,
+            pull_if_missing=True,
+        )
+    if manifest_era:
+        if image_era != str(manifest_era):
+            raise ValueError(
+                f"era<->image mismatch: manifest pins era {manifest_era!r} but the "
+                f"container image {resolved_image.run_ref!r} carries "
+                f"org.aiq.era={image_era!r}. "
+                f"Build/pin the era image (ERA={manifest_era} ./docker/build.sh)."
+            )
+    elif image_era:
+        raise ValueError(
+            f"era<->image mismatch: a modern manifest (no era) was pinned to an era "
+            f"image {resolved_image.run_ref!r} (org.aiq.era={image_era!r}). Use the "
+            "modern helm-runner image, or set the manifest era to match."
+        )
+
     provenance = {
         "schema": "eval-audit/container-provenance/1",
         "experiment_name": experiment_name,
         "container_runtime": runtime_name,
         "runtime_version": runtime_version(runtime_name),
         "image": resolved_image.to_dict(),
+        "era": manifest_era,
+        "image_era_label": image_era,
         "resolved_at": datetime.now(timezone.utc).isoformat(),
     }
     return resolved_image, provenance

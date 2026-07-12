@@ -620,6 +620,504 @@ prefill / prefix-cache) — those are confounder-removal for matching an HF offi
 not parameters of the model recipe, so sweeping them would muddy the comparison
 rather than widen it. "All parameters" means the recipe surface, not vLLM's scheduler.
 
+## 2026-07-10 10:53:25 -0400
+
+**Model/harness.** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude Code.
+
+**Intent.** Implement the era-pinned HELM reproduction plan
+(`docs/planning/era-pinned-helm-containers-plan.md`) end to end: enable verbatim
+from-spec replay of the ~59% of the corpus that is pre-v0.5 (classic-track
+`v0.2.4`/`v0.3.0`) inside CPU-only era images whose HELM harness is the era's
+release commit, with model inference kept out-of-process on modern vLLM.
+
+**What I built (branch `impl/era-pinned-helm-containers`, six dependency-ordered
+commits).**
+
+1. **Era registry.** `docker/eras.yaml` (helm-v0.2.4=`626d8609`,
+   helm-v0.3.0=`8ea285f7`, python 3.10, seed constraints `pandas==2.0.3`/`numpy==1.23.5`)
+   + `eval_audit/eras.py` (frozen `EraSpec`/`EraMatch`, `resolve_era` keyed on the
+   path-derived `(public_track, suite_version)` signal, `resolve_era_for_sources`
+   raising on mixed eras). 11 unit tests.
+2. **Era image build.** `docker/build.sh` `ERA=` mode (reads the registry via a
+   tiny `read_eras.py`, `git archive`s HELM at the era commit, stages the shim +
+   constraints, skips magnet/eval_audit, rejects `BUILD_FROM=worktree`), a
+   CPU-only `ubuntu:22.04` era dockerfile with final-stage assertions
+   (`register_model_deployments_from_path`, `helm.benchmark.runner.RunSpec`, shim
+   imports, py3.10, pin spot-check) stamping `org.aiq.era`, plus the freeze
+   workflow in `docker/README.md`.
+3. **The shim** `docker/era_shim/helm_era_shim/`: `replay.py` (flag-compatible
+   with magnet's from-spec CLI via stdlib argparse; strict-dacite-decode into the
+   era RunSpec = drift detector; preflight; prepares `prod_env` + a
+   `credentials.conf` keyed on the official model name for v0.2.4's eager
+   AutoClient; drives era `run_benchmarking`; Stage-4-compatible output contract)
+   and `openai_compat_client.py` (requests port to `/v1/completions` building era
+   `Sequence`/`Token`, constructor tolerant of both eras' injection styles).
+4. **Host-side.** `run_spec_materializer.py` guard refuses to insert a
+   `model_deployment` field into a spec that lacks it (the era signal);
+   `bundle_export._model_deployment_entry_era` emits the era schema (official
+   model name, shim client, no api_key, cattrs-no-defaults nulls); `freeze.py`
+   `omit_model_deployment` for era sources; `--era` export flag. 5 tests.
+5. **Threading.** `ManifestSpec.era`; make-manifest `--era {auto,<key>,modern}`
+   (auto resolves from sources, mixed-era = SystemExit, exact-path-only
+   validation); `MaterializeHelmRunFromSpecEraDockerNode` (executable =
+   `helm_era_shim.replay`) + factory + `-e EVAL_AUDIT_ERA_API_KEY`; the bridge
+   selects the era pipeline on the exact-path branch, rejects era on
+   run-entry/discovery, and guards the image's `org.aiq.era` label against the
+   manifest era at schedule time (new `docker_provenance.image_label`). 7 tests.
+6. **Docs + runbook.** `reproduce/classic_era_replay/` (README + 4 scripts mapped
+   to the validation ladder), a `container-execution.md` era section, a
+   `helm-gotchas.md` G10 cross-ref, and a status banner on the plan.
+
+**Design tradeoffs / what I'm confident vs uncertain about.**
+
+- *Confident (host-verifiable):* the registry resolution, mixed-era rejection,
+  materializer guard, bundle era schema, builder era resolution, bridge pipeline
+  selection + era↔image guard — all unit-tested with the repo `.venv`. build.sh
+  passes `bash -n`; the shim's framework-free logic (argparse, guards, coercion)
+  is smoke-tested without importing era HELM.
+- *Uncertain (needs a GPU host + docker):* nothing that imports era `helm.*` has
+  actually run. The shim and era dockerfile are validated only by `py_compile` /
+  `bash -n`. I studied the era source at both release commits (`git show`) to get
+  the API right — RunSpec is `helm.benchmark.runner.RunSpec` with exactly 6
+  fields at both eras; `run_benchmarking` is signature-identical; the AutoClient
+  builds a `ServerService(base_path=local_path)` which auto-registers deployments
+  + demands `credentials.conf` (v0.2.4 requires a per-deployment key); the
+  completions response shape matches vLLM's `/v1/completions`. But the plan's
+  open questions (torch-CPU pin style, `pyext~=0.7` build under uv/3.10, dacite
+  strict-decode of the full AdapterSpec, HF-Hub drift for old `datasets`) are all
+  empirical and unresolved.
+- *Ordering wrinkle:* commit 2 (era dockerfile referencing `docker/era_shim/`)
+  landed before commit 3 (the shim), per the plan's narrative order. The tree
+  stays working because neither the dockerfile nor the era build path is
+  exercised by tests/compile; the modern build is byte-identical to before.
+
+**Next steps (all empirical, on a GPU host).** Walk the validation ladder:
+build both era images → freeze + commit the era constraints → instrument-fidelity
+diff on a pandas-sensitive `entity_matching` run (byte-for-byte instance identity,
+no model) → the `synthetic_reasoning_natural × pythia-6.9b` flagship (expect
+~20% recovered vs the official 0% Together artifact) → one full packet per era
+through Stages 3–6 → the per-scenario HF-fetch audit. Settle the open questions
+during that pass and fold the findings back into the plan. One reusable insight:
+reading era submodule source with `git show <release-commit>:<path>` (rather than
+checking out) let me pin the exact era API surface without perturbing the working
+tree — essential when one superproject must target two incompatible library eras.
+
+## 2026-07-10 12:24:00 -0400
+
+**Model/harness.** Fable 5 (`claude-fable-5`), Claude Code (review + harness session).
+
+**Intent.** (1) Audit the six era-pinned commits; (2) make the validation
+ladder runnable by anyone, on any machine, without editing scripts.
+
+**Review.** 8-angle review with every era-API claim checked against the era
+source (`git -C submodules/helm show 626d8609:… / 8ea285f7:…`) plus one
+empirical pyhocon test. 10 findings (8 CONFIRMED, 2 PLAUSIBLE) written to
+`docs/planning/era-pinned-review-findings-2026-07-10.md` with per-finding
+fix + verify blocks and a commit-grouped fix plan for the next session.
+Headline: the shim's era contract was written against v0.3.0 semantics —
+v0.2.4 never registers the deployments yaml (silent Together fallthrough for
+eleutherai/lmsys/meta/…), and pyhocon dot-splits credential keys so dotted
+model names (pythia-6.9b, the flagship) die at both eras.
+
+**Ladder harness.** New in `reproduce/classic_era_replay/`:
+`05_ladder_gate.sh` (tiered orchestrator: PASS/FAIL/SKIP table, skips name
+the unlocking env var), `15_instrument_fidelity.sh` (rung 2: era-image
+dry-run + host instance-identity diff vs official `scenario_state.json`),
+`50_hf_fetch_audit.sh` (rung 5: one dry-run per scenario family from
+`configs/run_details.yaml`), `drivers/{dryrun_driver,instance_diff}.py`,
+`ladder.env.example` (the single machine-specific file; gitignored as
+`ladder.env`). Plus `tests/test_era_shim_imports.py` — a static era-import
+checker that AST-parses the shim's `helm.*` imports and verifies each symbol
+exists at BOTH era commits via `git show`; try/except-guarded imports are
+exempt (the sanctioned fix pattern). It xfails exactly findings 3+8 (3
+xfailed, 33 pass) so the suite stays green while new era-incompatible
+imports fail loudly — this closes the "no host test imports era helm" gap
+that let the review findings through.
+
+**Design insights.** (1) The dry-run driver imports the *installed* shim's
+own helpers inside the container, so rungs 2/5 validate the real decode
+path, not a parallel one. (2) `run_benchmarking(dry_run=True)` is the
+era-stable primitive for both instance-identity and fetch auditing (it is
+what `helm-run --dry-run` does at both eras); rung 5 caps adaptation for
+speed but rung 2 must never cap (capping changes instance selection — the
+thing under test). (3) Portable-runbook pattern: all machine specifics in
+one sourced env file + a gate that skips-and-names, never scripts that need
+editing.
+
+**Next steps.** Opus applies the findings-doc fixes (commit grouping is in
+the doc; the import checker's KNOWN_BAD entries come out with findings 3/8);
+then walk `05_ladder_gate.sh` on a docker host and the GPU machine for both
+eras. Findings 1, 2, 5 surface at rung 3 if not fixed first.
+
+## 2026-07-10 19:37:00 -0400
+
+**User intent.** "Move the pre-0.5.0 testing gates to dev and make it mirror
+the e2e test runbook already in dev — a model run e2e testing all
+capabilities, all deployments/specs done, runnable with little user input."
+Mid-session redirect: produce a *detailed implementation plan an Opus-level
+agent can follow* rather than implementing it myself.
+
+**Model/config.** claude-fable-5 (Fable 5), Claude Code VSCode harness, 1M
+context; work done in a worktree at `/home/agent/worktrees/era-tests` on
+`impl/era-pinned-helm-containers` (the main checkout stays on
+`impl/run-from-run-spec` with the uncommitted phi-2 fp16 pin awaiting the
+user's grid rerun).
+
+**Deliverable.** `docs/planning/era-tests-dev-runbook-plan.md` — the
+migration plan for rebuilding `reproduce/classic_era_replay/` as
+`dev/era-tests/` in the `dev/e2e-tests` shape. Fact-finding that shaped it:
+
+- **Test subject**: `eleutherai/pythia-6.9b` is the only corpus model with a
+  full official packet at BOTH classic eras (74 runs each at v0.2.4 and
+  v0.3.0). Grid = 2 eras × {synthetic_reasoning_natural:easy (generation,
+  the ~20%-recovery flagship), mmlu:us_foreign_policy (multiple_choice_joint,
+  max_tokens=1/num_outputs=5 — the shim logprob path)}. Verified both run
+  dirs at both eras carry the six-key classic run_spec.
+- **The canonical `official_public_index.csv` has ZERO classic rows** (55748
+  rows, all modern tracks) — same desync family as the stale
+  filter_inventory.json. The plan adds a `25_index_official_classic.sh`
+  emitting runbook-scoped index+inventory under `indexes/era-tests/`, with a
+  loud warning to override `--out_fpath/--out_detail_fpath` (their defaults
+  clobber the curated `run_details.yaml`).
+- **The freeze path makes the old 20_make_manifest.sh redundant**:
+  `export-benchmark-bundle --freeze-rel-paths` (era from the preset via
+  `preset_cfg.get("era")`) bakes frozen `run_spec_sources` + `era:` into
+  directly runnable smoke/full manifests — so the era grid mirrors the e2e
+  vllm transport almost verbatim (gc → gateway bootstrap → export → run
+  --lease --container-image <era image>).
+- **Phase 0 is the findings doc**: findings 1/2/3/5 each independently break
+  this exact runbook path (2 names pythia-6.9b's dotted key), so the plan
+  makes fixing them a blocking prerequisite and warns the implementer that
+  post-fix, era export takes --base-url/--api-key-value like e2e.
+
+**Tradeoffs.** One preset per era carrying both scenarios (different logical
+keys → no packet pooling; e2e's per-scenario split exists only because its
+three variants share one scenario). Grid rows are eras, not scenarios (era =
+provenance unit). ladder.env dies in favor of e2e-style defaults+env. No
+auto-build in 06 (fail-with-remedy, matching e2e). Five open questions are
+flagged empirical-first (freeze disambiguation across classic suites,
+composer era-scoping, require_per_instance_stats vs per-instance-stats-less
+classic officials, era HF-fetch health, lease/network combo) rather than
+guessed at.
+
+**Loose ends.** An exploration subagent digesting the era CLI surface died
+mid-run (task id vanished); its scope was re-covered by direct reads. The
+e2e-conventions digest that fed the plan came from the other subagent and is
+reflected in the plan's "copy verbatim" tables. Next: an implementing agent
+executes the plan phases 0→3 on this branch, starting with the findings-doc
+fix order.
+
+## 2026-07-11 10:40:00 -0400
+
+**User intent.** "Implement the full plan with all bug fixes" — execute
+docs/planning/era-tests-dev-runbook-plan.md end to end: fix ALL ten era-path
+review findings, then build the turnkey dev/era-tests runbook.
+
+**Model/config.** claude-opus-4-8[1m], Claude Code VSCode harness; worked in a
+git worktree at /home/agent/worktrees/era-tests on
+`impl/era-pinned-helm-containers` (the main checkout stays on
+`impl/run-from-run-spec`, untouched). Ran python via the main checkout's
+`.venv/bin/python` with `PYTHONPATH` pointed at the worktree so worktree code
+shadows the editable install; the helm submodule isn't populated in a worktree,
+so the tier-0 static import checker was validated by symlinking the main
+checkout's populated submodule in (removed afterward).
+
+**What landed (10 commits).**
+- Phase 0 (6 commits, `0c58ee9`..`0486bb7` + resolution doc): every finding in
+  era-pinned-review-findings-2026-07-10.md fixed, with host-importable tests for
+  each one that can be exercised without an era image. Notables: Finding 2 (the
+  pyhocon dot-split that breaks `eleutherai/pythia-6.9b`'s credential lookup at
+  BOTH eras) — fixed on both sides (shim writes a nested-key credentials.conf via
+  `_hocon_nested_deployment_key`, verified empirically against pyhocon; export
+  puts `api_key` in client_spec args); Finding 1 (v0.2.4 silent Together routing)
+  — explicit `register_model_deployments_from_path`; Finding 3 (v0.2.4 image
+  couldn't build) — version-tolerant `wrap_request_time` import. Also taught the
+  static import checker to exempt except-ImportError handler bodies (its
+  documented try/except pattern only exempted the try body — my fixes were the
+  first to use the pattern and exposed the gap).
+- Phase 1 (`67c0b53`): era-tests infer-stack catalog/settings, two per-era
+  presets (era-pythia_6_9b-v0_2_4 / -v0_3_0), two per-era vexp manifests.
+- Phase 2 (`99ff4df`): dev/era-tests/ runbook mirroring dev/e2e-tests, git mv'ing
+  the ladder rungs + drivers and deleting the superseded build/export/
+  make-manifest/run scripts.
+
+**Design decisions + empirically-resolved open questions.**
+- *Freeze ambiguity (plan OQ1) → per-era corpus VIEW.* pythia-6.9b's runs exist
+  at v0.2.4 AND v0.3.0 with identical run-dir names, so `--freeze-rel-paths`
+  against the broad classic root is AMBIGUOUS (confirmed: `_classify` returns
+  AMBIGUOUS). Narrowing `--precomputed-root` to `runs/<suite>` breaks discovery
+  (it walks for a dir literally named `benchmark_output`). Solution: `_lib.sh ::
+  era_corpus_view` builds `<view>/classic/benchmark_output/runs/<suite> ->` real
+  suite (one symlink/era), preserving the `classic/benchmark_output/...` layout
+  era resolution needs. Verified end-to-end: both entries RESOLVE, era resolves
+  to the right key, and a live export produces correctly suite-scoped frozen
+  sources for both eras.
+- *Cross-suite pairing (plan OQ2) → per-era scoped official indexes.* The
+  canonical official_public_index.csv has ZERO classic rows; step 25 runs
+  eval-audit-index-historic once per era with `--suite_pattern <suite>` into
+  indexes/era-tests/<suite>/, and redirects `--out_fpath/--out_detail_fpath` to
+  scratch so the curated run_details.yaml is never clobbered. Per-suite (not one
+  combined index) so a v0.2.4 local run can't pair against a v0.3.0 official
+  (identical logical keys across suites).
+- One preset PER ERA carrying both scenarios (distinct logical keys → clean
+  compose); grid rows are eras (the provenance unit); 06 fails-with-remedy rather
+  than auto-building; ladder.env retired for e2e-style defaults+env.
+
+**Validation done (sandbox).** 120 pytest green (era + touched-area suites);
+bash -n all 13 scripts; _lib.sh helpers exercised; live `--freeze-rel-paths`
+export for BOTH eras (correct era schema, api_key in args, explicit base_url,
+era: stamp, per-source lease); both vexp manifests load through the real
+`virtual.manifest.load_manifest`; drivers py_compile.
+
+**What remains (needs docker + GPU + built era images — cannot run here).**
+Build both era images (`ERA=<key> ./docker/build.sh`); 06 image probes; 07 rungs
+2/5; the 10/15 grids; step 25's actual index build; 30/40. **Plan OQ3 is still
+open:** whether era `run_benchmarking` emits `per_instance_stats.json` — the
+generated manifests set `require_per_instance_stats: true` and `_locate_run_dir`
+depends on it, but the official classic runs ship none, so the LOCAL side must
+produce it. First thing to check on a GPU host; if it doesn't, add an era carve-out
+in `_manifest_doc`, not a hand-edit.
+
+## 2026-07-11 11:05:00 -0400
+
+**User intent.** Review the Opus implementation of the era-tests plan for
+correctness and elegance, then apply the fixes.
+
+**Model/config.** claude-fable-5 (Fable 5) reviewing claude-opus-4-8's ten
+commits (`0c58ee9..3046c8e`), verifying against the era HELM sources
+(`git -C submodules/helm show 626d8609/8ea285f7`) and empirically, per the
+method of era-pinned-review-findings-2026-07-10.md.
+
+**Verdict.** The Phase-0 era-machinery fixes all check out (registration
+placement, nested-HOCON `in`+getitem, create_object dict-merge — no duplicate
+kwarg, guard run_ref/pull semantics, Finding-9 blast radius contained to the
+manifest builder, corpus-view symlinks never dereferenced in-container since
+the exact-path branch mounts no precomputed_root). Two CONFIRMED integration
+bugs in the new runbook, both fixed in this commit:
+
+1. **v0.2.4 master-key clobber (would 401 every request).** v0.2.4's AutoClient
+   constructs the client with `additional_args={"api_key": <credentials.conf>}`
+   and era `create_object` merges additional_args LAST — so the credentials
+   value (`EVAL_AUDIT_ERA_API_KEY`, default EMPTY = no Authorization header)
+   overrides the master key the export baked into client_spec.args. v0.3.0 is
+   unaffected (inject_object_spec_args fills only MISSING params). Fix: the
+   grids export `EVAL_AUDIT_ERA_API_KEY="${LEASE_MASTER_KEY:-…}"` before
+   eval-audit-run; the shim chmods 600 the prod_env credentials.conf + the
+   deployments-yaml copy (both now carry the live key and persist in out_dpath).
+2. **Double-`classic` path join broke gate tier 1.** `_lib.sh` repointed
+   `PRECOMPUTED_ROOT` at the TRACK root, but the moved rung 2/5 helpers still
+   joined `$PRECOMPUTED_ROOT/$(rel stripped against the MIRROR root)` →
+   `.../classic/classic/...` → every pick missing → rung 2 exits 1 → gate FAIL.
+   Fix: `era_mirror_root` in _lib.sh (detects track-root vs mirror-root
+   conventions by probing for `benchmark_output/`; `ERA_MIRROR_ROOT` overrides)
+   and both rungs join + mount against it. Verified the join resolves a real
+   official run dir under both conventions.
+
+Minor: the pyhocon test now asserts `model in deps` too (v0.2.4 checks
+membership BEFORE getitem — the shipped test only covered getitem; verified
+`in` resolves for the nested layout); removed the dead
+`EVAL_AUDIT_ERA_HF_CACHE_DIR` export. Noted, not changed: `era_image`'s single
+`$PYTHON_BIN` dependency for read_eras.py (consistent with the e2e convention),
+07's slightly-off SKIP wording when era_image itself fails, and the deliberate
+10/15 grid duplication (mirrors e2e). 88 era-suite tests green post-fix.
+
+**Design insight.** Two of the three bugs came from a *meaning shift* in a
+shared variable (`PRECOMPUTED_ROOT`: mirror root → track root) and a *merge
+order* the modern path doesn't have (additional_args wins at v0.2.4). Both are
+invisible to host tests and would only fire on the GPU host at rung 3 / tier 1
+— exactly the class of bug the gate exists to catch early, which is an argument
+for running 07 before every grid invocation, not just once.
+
+## 2026-07-11 14:20:00 -0400
+
+**Model**: claude-opus-4-8 (Claude Code, VSCode extension). **Branch**:
+`impl/era-pinned-helm-containers`.
+
+**User intent**: "Can the new era-tests runbook be run locally on an 8 GB GPU?"
+→ then "check if there are two separate smaller models, one for 0.2.4 and one
+for 0.3.0" → then "check out to the correct branch and swap out the model" with
+option (a) (make the swap as a new commit).
+
+**What I found.** The runbook's containers are CPU-only (`container_gpus: none`);
+the entire GPU load is the out-of-process vLLM backend serving the subject. The
+prior subject, `eleutherai/pythia-6.9b` (~14 GB fp16), does not fit 8 GB. I swept
+the classic corpus (`/data/crfm-helm-public/classic/benchmark_output/runs/{v0.2.4,
+v0.3.0}`) for small open-weight models with full official packets. Result: the
+"two separate models" framing is unnecessary — `together/redpajama-incite-base-3b-v1`
+has the **same full 74-run packet at BOTH eras** (identical coverage to pythia-6.9b)
+AND fits 8 GB (~2.8B params, ~5.6 GB fp16). The distinct-per-era small candidates
+are all partial (pythia-2.8b: 7 runs @ v0.2.4, 0 @ v0.3.0; pythia-1b: 4/4;
+falcon-7b: 0/74 and too big anyway), so splitting subjects would cost packet
+completeness for no benefit. Both probe scenarios
+(`synthetic_reasoning_natural:easy`, `mmlu:us_foreign_policy`) exist for redpajama-3b
+at both eras. `adapter_spec.model` in the official run_spec is
+`together/redpajama-incite-base-3b-v1` (model_deployment None — pre-v0.5, expected).
+
+**The swap (pure subject substitution, structure unchanged).** Renamed
+`era-pythia_6_9b-*` → `era-redpajama_3b-*`, `pythia69b-single` →
+`redpajama3b-single`, `eleutherai/pythia-6.9b` → `together/redpajama-incite-base-3b-v1`
+across the runbook scope only: the two era presets in
+`eval_audit/integrations/infer_stack/preset_configs.yaml`, the serving catalog
+`dev/era-tests/config/infer_stack/catalog.yaml` (HF source
+`togethercomputer/RedPajama-INCITE-Base-3B-v1`, runtime retuned for 8 GB —
+`gpu_memory_utilization` 0.8→0.85, `max_num_seqs` 16→8), `dev/era-tests/_lib.sh`
+(ERA_TARGETS + era_vexp_manifest map + comments), the numbered scripts' comments,
+the README, and the two vexp configs (git-mv'd to `era-redpajama-v{024,030}.yaml`,
+scope regex `^together/redpajama-incite-base-3b-v1$`). Added a subject-change
+banner to the plan doc rather than rewriting its 28 references — the plan's every
+structural decision (per-era presets, per-era corpus view for the cross-suite
+name collision, per-era official index, verbatim by-name replay) holds verbatim
+because redpajama-3b's runs collide across suites exactly as pythia-6.9b's did.
+
+**Deliberately NOT touched.** The era *test* fixtures (test_eras*, test_era_shim*,
+test_exporter_freeze) use pythia-6.9b as a generic sample model to exercise the
+era machinery (dotted-name HOCON nesting `"eleutherai/pythia-6" { "9b" = … }`,
+freeze lease-map keying, discovery) — they don't reference the runbook presets, so
+they stay. All the other pythia-6.9b references tree-wide (run_details.yaml,
+run_specs.yaml, virtual-experiment tests, historical docs) are unrelated
+pythia-6.9b work outside this runbook.
+
+**Validation.** YAML parses + preset/catalog invariants (new keys present, old
+keys absent, run_entries carry the new model token); `bash -n` on all scripts;
+sourced `_lib.sh` resolves both targets → renamed manifests that exist on disk;
+`bash -n` clean; the full era pytest suite (88 tests) passes. Not run (needs
+docker+GPU the sandbox lacks): the actual grid — that's the user's GPU-host pass.
+
+**Reusable insight.** When a runbook's subject is chosen for a corpus property
+("full packet at both eras"), re-query the corpus before assuming the subject is
+forced — the constraint (full packet ∩ both eras) had a second solution that also
+satisfied an orthogonal constraint (fits 8 GB). The 8 GB question dissolved into a
+one-model swap because the corpus happened to contain a 3B model with identical
+coverage. Also: keep the swap a *rename*, not a *value edit* — leaving
+`pythia_6_9b` identifiers on a redpajama model would be a landmine for the next
+reader.
+
+**Next steps.** User's GPU-host pass is unchanged in shape: build era images
+(`ERA=<key> ./docker/build.sh`), 06 → 07 → 10/15 grids → 20/25/30/40. On the 8 GB
+card, watch the first vLLM load — if it OOMs, drop `gpu_memory_utilization` to
+0.80 in the catalog (noted inline). The phi-2 wip stash on `run-from-run-spec`
+(`git stash list`) is untouched and waiting for that branch.
+
+### Addendum (same session): first era image build surfaced a smoke-test bug
+
+The user ran `ERA=<key> ./docker/build.sh` for the first time and the final-stage
+import check failed (exit 1). Root cause: the dockerfile smoke test did
+`from helm.benchmark.runner import RunSpec, run_benchmarking`, but at BOTH era
+refs (626d8609, 8ea285f7) `run_benchmarking` lives in `helm.benchmark.run`, not
+`.runner` (only `RunSpec` is in `.runner`). The shim itself is correct
+(`replay.py :: _replay_run_spec` does `from helm.benchmark.run import
+run_benchmarking`); only the build-time assertion had the wrong module. Split the
+import into two lines to match the real era API. Verified all three imported
+symbols resolve at both refs (register_model_deployments_from_path, RunSpec,
+run_benchmarking). Unrelated to the redpajama swap — a pre-existing build-path bug
+that could only surface at first real image build (no docker in the sandbox).
+Insight: import-surface smoke tests must be validated against the *actual* pinned
+source, not from memory of the modern API — the module a symbol lives in drifts
+across releases just as often as the symbol itself.
+
+### Addendum 2: adopt the era's frozen requirements.txt as constraints (enriched seed)
+
+After the pyarrow drift, the user asked whether we could "just use the era's
+frozen requirements.txt" instead of pinning drift one at a time. Answer: yes, but
+not verbatim — two blockers. (1) The era freeze pins torch/torchvision to
+`+cu113` (CUDA) on linux; the era image is CPU-only and the dockerfile asserts a
+CPU build, so those won't install (not on the CPU wheel index). (2) It pins
+`pandas==1.5.0`/`numpy==1.23.3`, which would revert the tech-report-validated
+instance-selection pins (2.0.3/1.23.5). User chose the enriched-seed path.
+Generated both era constraints from each ref's requirements.txt (193/192 pins)
+with exactly those two deviations: keep validated pandas/numpy, rewrite
+torch/torchvision to CPU (`torch==1.12.1`/`torchvision==0.13.1`; CPU index serves
++cpu). Key realization: pinning torch to the era 1.12.1 is what makes the WHOLE
+tree internally consistent — the era's old typing_extensions==4.4.0 / sympy /
+networkx pins agree with torch 1.12, whereas the prior seed-only build let torch
+float to 2.x whose modern deps would fight those pins. Bonus fidelity: era
+tokenizers==0.13.3 / transformers==4.28.1/4.33.1 reproduce official tokenization
+(the era WindowService does it) better than a modern resolve. Residual risk to
+watch at RUNTIME (not build): pandas 2.0.3 against era datasets==2.5.2 (datasets
+2.5 predates pandas 2.0; if a scenario hits a removed pandas API it'll surface
+then) — the two probe scenarios (synthetic_reasoning, mmlu) are light on
+pandas/datasets so likely fine. Close-out remains the pip-freeze workflow once
+green. Insight: a CI-era requirements.txt is a coherent lock EXCEPT where the
+target environment differs on axes the freeze encodes (GPU vs CPU) or where a
+validated override supersedes it — reconcile exactly those axes, adopt the rest.
+
+### Addendum 3: enriched freeze REVERTED — setup.cfg ~= ranges already era-pin
+
+The enriched-freeze build failed at the uv resolve: `crfm-helm==0.2.4 depends on
+spacy>=3.5.3,<3.6 and spacy==3.2.4 -> unsatisfiable`. Root cause: the era
+requirements.txt is STALE relative to the era setup.cfg — setup.cfg was bumped to
+`spacy~=3.5.3` after the requirements.txt froze `spacy==3.2.4`. Hard-pinning the
+stale freeze fights setup.cfg (authoritative) and would cascade through spaCy's
+subtree (thinc/blis/pydantic/...). More important: the freeze was UNNECESSARY.
+setup.cfg already era-pins every fidelity-critical dep via `~=` (compatible
+release): transformers~=4.28.1, tokenizers~=0.13.3, datasets~=2.5.2, numpy~=1.23.3,
+scipy, scikit-learn, sympy — each floats only within its era minor series. The
+ONLY open-upper-bound dep in the whole setup.cfg is `pyarrow>=11.0.0` — the exact
+one that drifted to 15 and broke datasets. So the minimal correct fix is: validated
+pandas/numpy (pandas is a transitive via datasets, unpinned by setup.cfg; numpy
+~=1.23.3 admits 1.23.5) + pyarrow==11.0.0. Reverted constraints to that (the
+2e8338f state). The seed-only resolve had already SUCCEEDED at the builder stage
+in the very first build (the #21 layer was CACHED), so seed+pyarrow is known-good.
+Kept the enriched-freeze commit in history + this note as the learning trail.
+Insight: before hard-pinning a lockfile, check the package's OWN dependency
+declaration — if it uses compatible-release (`~=`) ranges, it already pins the
+minor series; you only need to constrain the deps it leaves open-ended (or pure
+transitives it never names, like pandas here). A CI requirements.txt can also be
+stale vs the setup.cfg in the same commit; setup.cfg wins.
+
+### Addendum 4: rung-2 fidelity diffed a file the public corpus never ships
+
+First real 07 gate run: tier0 + rung5 PASS, rung2 FAIL for both eras — but as "0
+pass, 0 fail, 3 skipped" (all SKIP "official scenario_state.json missing"). Root
+cause: rung-2 (instance_diff.py) compared the produced dry-run scenario_state.json
+against an OFFICIAL scenario_state.json — which the public HELM corpus NEVER ships
+(0 across ~8000 run dirs/suite). scenario.json is metadata-only (no instances)
+too. The only published per-instance record is display_requests.json /
+display_predictions.json (keyed by instance_id, with the full request prompt).
+Pre-existing design flaw, surfaced at first real run (like the dockerfile import
+and pyarrow bugs) — orthogonal to the redpajama swap. Fix: rung-2 now compares
+identity as (instance_id, train_trial_index, prompt) — official from
+display_requests.json, produced from the dry-run scenario_state.json;
+instance_diff.py is shape-detecting (list => display records, dict => scenario
+state). The prompt is a strict superset of the old input+references key (it embeds
+them + few-shot examples + formatting after model-window truncation), so it's a
+STRONGER fidelity signal AND the only one the corpus supports. Verified: era
+dry_run writes scenario_state.json unconditionally (runner.py:290; request_states
+come from adapter.adapt() at :244 before execute), and the two shape-branches
+produce identical keys (synthesized-scenario_state vs real display_requests →
+INSTANCES_MATCH 1000). Kept the pythia/vicuna picks: instance selection + prompt
+construction are what the rung tests, and the dry-run uses the picked run's own
+run_spec (same model), so prompts truncate identically — rung-2 validates the ERA
+INSTRUMENT, not the runbook subject (redpajama is tested by the 10/15 grid). All
+6 picks have run_spec.json + display_requests.json, so none skip now. Whether they
+PASS the diff is the actual research question (byte-for-byte prompt fidelity);
+can't tell without docker. Insight: a fidelity check is only as good as the
+artifact it diffs — validate the comparison target EXISTS in the corpus before
+diffing against it; the richest published signal (the prompt) beat the schema-pure
+one (input+references) that wasn't published.
+
+### Addendum 5: rung-2 must filter unfetchable-data probes, not fail on them
+
+After wget/unzip + fsspec fixes, rung-2 v0.2.4 = entity_matching PASS
+(INSTANCES_MATCH 1000), raft PASS (115), math FAIL. math's crash is
+`ConnectionError: Unauthorized ... competition_math.py ... use_auth_token` — MATH
+is a SCRIPT-based dataset the 2026 HF Hub blocks (401 on the .py loader). My prior
+inference "rung 5 forwards the token and passed, so forwarding it fixes math" was
+WRONG on two counts: (1) HF_TOKEN is NOT set in the shell (nothing to forward),
+and (2) rung 5 is an AUDIT that passes at 17/20 and itself lists MATHScenario
+(+BabiQA, TruthfulQA) under "failing families — pre-warm or mount-vendor". So MATH
+is a genuine ENVIRONMENT/RECIPE filter, exactly the CLAUDE.md distinction:
+data-unavailable = a filtering reason, NOT a reproducibility/instrument failure.
+Fix: rung-2 now classifies a dry-run crash whose log carries data-fetch/auth
+signatures (Unauthorized/Couldn't reach/ConnectionError/use_auth_token/GatedRepo/
+401/403/DNS) as SKIP (environment filter), not FAIL — so the gate passes on the
+families whose data actually loads (entity_matching, raft) and filters the rest.
+Kept the HF_TOKEN/HUGGING_FACE_HUB_TOKEN forward (harmless; helps if a token is
+ever set). The runbook's own two scenarios (synthetic_reasoning, mmlu) both PASS
+rung-5 fetch with no token, so the main grid path needs none. Insight: a gate over
+historical data must separate "the instrument is wrong" from "the data is no
+longer reachable" — conflating them turns Hub drift into a false reproducibility
+failure. rung 5 already had the taxonomy; rung 2 now matches it.
 ## 2026-07-11 16:59:16 -0400
 
 **Model/harness:** Claude Opus 4.8 (1M context), `claude-opus-4-8[1m]`, Claude Code.

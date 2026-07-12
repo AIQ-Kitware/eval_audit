@@ -170,6 +170,62 @@ def _detail_lut(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return lut
 
 
+def _resolve_manifest_era(
+    *,
+    era_arg: str,
+    run_spec_sources: list[dict[str, Any]],
+    precomputed_root: str | None,
+) -> str | None:
+    """Resolve ``--era`` (auto | modern | <key>) to a concrete era key or None.
+
+    ``auto`` derives the era from the sources' rel-paths (one manifest = one era;
+    a mixed-era set raises). ``modern`` forces None (modern image). An explicit
+    key pins that era but still runs the mixed-era check so an inconsistent source
+    set is rejected rather than silently mislabeled. Returns the era key string,
+    or ``None`` for the modern era.
+    """
+    from eval_audit.eras import load_era_registry, resolve_era_for_sources
+
+    if era_arg == "modern":
+        return None
+    if not run_spec_sources:
+        # No exact-path sources: only 'auto'/'modern' are meaningful (both modern).
+        if era_arg != "auto":
+            raise SystemExit(
+                f"--era {era_arg} requires --run-spec-sources-fpath (exact-path "
+                "replay); era has no meaning without pinned sources."
+            )
+        return None
+    if not precomputed_root:
+        raise SystemExit(
+            "--era resolution requires --precomputed-root (the host root the "
+            "run_spec source rel-paths resolve against)."
+        )
+    registry = load_era_registry()
+    # Raises on a mixed-era source set regardless of auto/explicit; surface it as a
+    # clean CLI error rather than a traceback.
+    try:
+        resolved = resolve_era_for_sources(
+            precomputed_root, run_spec_sources, registry=registry
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    if era_arg == "auto":
+        return resolved.key if resolved is not None else None
+    # Explicit key: must be known, and must agree with what the sources resolve to.
+    if era_arg not in registry:
+        raise SystemExit(
+            f"unknown --era {era_arg!r}; known: {', '.join(sorted(registry)) or '<none>'}"
+        )
+    resolved_key = resolved.key if resolved is not None else None
+    if resolved_key is not None and resolved_key != era_arg:
+        raise SystemExit(
+            f"--era {era_arg} disagrees with the run_spec sources, which resolve to "
+            f"{resolved_key!r}. Fix the sources or pass --era auto."
+        )
+    return era_arg
+
+
 def _build_manifest(
     *,
     experiment_name: str,
@@ -184,6 +240,7 @@ def _build_manifest(
     precomputed_root: str | None = None,
     model_deployment: str | None = None,
     run_spec_sources: list[dict[str, Any]] | None = None,
+    era: str | None = None,
 ) -> dict[str, Any]:
     return ManifestSpec(
         experiment_name=experiment_name,
@@ -198,6 +255,7 @@ def _build_manifest(
         precomputed_root=precomputed_root,
         model_deployment=model_deployment,
         run_spec_sources=list(run_spec_sources or []),
+        era=era,
     ).to_dict()
 
 
@@ -277,6 +335,17 @@ def main(argv: list[str] | None = None) -> None:
             "it and the audit reports same_deployment=no. It MUST name a deployment "
             "registered in the run's model_deployments.yaml. When omitted, the "
             "official deployment name replays verbatim (pure by-name)."
+        ),
+    )
+    parser.add_argument(
+        "--era",
+        default="auto",
+        help=(
+            "Era-pinned replay (pre-v0.5). 'auto' (default) resolves the era from "
+            "the run_spec sources' rel-paths (one manifest = one era; a mixed-era "
+            "set is a hard error); 'modern' forces the modern image; an explicit "
+            "era key (e.g. helm-v0.2.4, from docker/eras.yaml) pins that era. Only "
+            "valid with --run-spec-sources-fpath (exact-path verbatim replay)."
         ),
     )
     args = parser.parse_args(argv)
@@ -362,6 +431,35 @@ def main(argv: list[str] | None = None) -> None:
     if run_spec_sources:
         run_spec_sources = [sources_by_label[entry] for entry in run_entries]
 
+    # Era-pinned replay resolution. Era is exact-path only (the shim has no
+    # discovery mode); 'auto'/'modern' with no run_spec_sources = modern.
+    era_key = _resolve_manifest_era(
+        era_arg=args.era,
+        run_spec_sources=run_spec_sources,
+        precomputed_root=args.precomputed_root,
+    )
+    if era_key is not None:
+        # Validate the era manifest invariants (one manifest = one era = one image).
+        if not args.from_run_spec or not run_spec_sources:
+            raise SystemExit(
+                f"--era {era_key} requires exact-path replay (--run-spec-sources-fpath "
+                "with --precomputed-root): the era shim has no discovery mode."
+            )
+        if args.model_deployment is not None:
+            raise SystemExit(
+                f"--era {era_key} is incompatible with --model-deployment: a pre-v0.5 "
+                "adapter_spec has no model_deployment field to rewrite (era replay is "
+                "verbatim by-name)."
+            )
+        rewrite_targets = [
+            s["run_entry"] for s in run_spec_sources if s.get("model_deployment")
+        ]
+        if rewrite_targets:
+            raise SystemExit(
+                f"--era {era_key} run_spec sources must not carry model_deployment "
+                f"rewrite targets (era replay is verbatim); offending: {rewrite_targets}"
+            )
+
     max_eval_instances = (
         args.max_eval_instances
         if args.max_eval_instances is not None
@@ -395,6 +493,7 @@ def main(argv: list[str] | None = None) -> None:
         precomputed_root=args.precomputed_root,
         model_deployment=args.model_deployment,
         run_spec_sources=run_spec_sources,
+        era=era_key,
     )
 
     out_fpath = Path(args.output)
@@ -427,6 +526,7 @@ def main(argv: list[str] | None = None) -> None:
         "from_run_spec": args.from_run_spec,
         "precomputed_root": args.precomputed_root,
         "model_deployment": args.model_deployment,
+        "era": era_key,
         "include_patterns": args.include_pattern,
         "exclude_patterns": args.exclude_pattern,
         "models": args.model,

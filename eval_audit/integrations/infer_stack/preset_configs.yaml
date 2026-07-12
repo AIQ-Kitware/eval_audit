@@ -2051,3 +2051,89 @@
     'container_network': 'host'
     'hf_cache_dir': '~/.cache/eval-audit-hf'
     'container_gpus': 'none'
+
+# ── Classic-era (pre-v0.5) replay presets ────────────────────────────────────
+# One preset PER ERA (not per scenario): the two scenarios have different logical
+# run keys, so a single per-era experiment composes cleanly (unlike the phi-2
+# e2e, whose three variants of ONE scenario would pool into a single packet).
+# Era replay is verbatim by-name: NO model_deployment_name (there is no
+# adapter_spec.model_deployment to rewrite pre-v0.5) and NO helm_tokenizer_name
+# (the era WindowService, keyed on the official model name, reproduces official
+# tokenization). `era` routes the exporter to the era shim client + schema and
+# stamps the manifest so the bridge selects the era pipeline + guards the image
+# label. See docs/planning/era-tests-dev-runbook-plan.md and
+# docs/planning/era-pinned-helm-containers-plan.md.
+#
+# IMPORTANT: `precomputed_root` below is the broad classic root, which is
+# AMBIGUOUS for redpajama-incite-base-3b-v1 (its runs exist under BOTH v0.2.4 and v0.3.0 with
+# identical run-dir names, so --freeze-rel-paths would fail AMBIGUOUS). The
+# runbook OVERRIDES it with `--precomputed-root <per-era suite-scoped view>`
+# (dev/era-tests/_lib.sh :: era_corpus_view) so each era freezes exactly its own
+# suite. The default is left broad (not a bogus per-era path) so a bare export
+# fails loud (AMBIGUOUS) rather than silently pinning the wrong suite.
+'era-redpajama_3b-v0_2_4':
+  'profile': 'redpajama3b-single'
+  'bundle_name': 'era-redpajama_3b-v0_2_4'
+  'access_kind': 'openai-compatible'
+  'era': 'helm-v0.2.4'
+  'profiles':
+  - 'profile': 'redpajama3b-single'
+    'helm_model_name': 'together/redpajama-incite-base-3b-v1'
+    'protocol_mode': 'completions'
+  'smoke_manifest':
+    'experiment_name': 'era-redpajama_3b-v0_2_4-smoke'
+    'description': 'Classic-era (v0.2.4) smoke: redpajama-incite-base-3b-v1, 5 instances/run.'
+    'run_entries':
+    - 'synthetic_reasoning_natural:difficulty=easy,model=together/redpajama-incite-base-3b-v1'
+    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=together/redpajama-incite-base-3b-v1,data_augmentation=canonical'
+    'suite': 'era-redpajama_3b-v0_2_4-smoke'
+    'max_eval_instances': 5
+    'precomputed_root': '/data/crfm-helm-public/classic'
+    'container_network': 'host'
+    'hf_cache_dir': '~/.cache/eval-audit-hf'
+    'container_gpus': 'none'
+  'full_manifest':
+    'experiment_name': 'era-redpajama_3b-v0_2_4-full'
+    'description': 'Classic-era (v0.2.4) full: redpajama-incite-base-3b-v1 (official 1000-cap).'
+    'run_entries':
+    - 'synthetic_reasoning_natural:difficulty=easy,model=together/redpajama-incite-base-3b-v1'
+    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=together/redpajama-incite-base-3b-v1,data_augmentation=canonical'
+    'suite': 'era-redpajama_3b-v0_2_4-full'
+    'max_eval_instances': 1000
+    'precomputed_root': '/data/crfm-helm-public/classic'
+    'container_network': 'host'
+    'hf_cache_dir': '~/.cache/eval-audit-hf'
+    'container_gpus': 'none'
+'era-redpajama_3b-v0_3_0':
+  'profile': 'redpajama3b-single'
+  'bundle_name': 'era-redpajama_3b-v0_3_0'
+  'access_kind': 'openai-compatible'
+  'era': 'helm-v0.3.0'
+  'profiles':
+  - 'profile': 'redpajama3b-single'
+    'helm_model_name': 'together/redpajama-incite-base-3b-v1'
+    'protocol_mode': 'completions'
+  'smoke_manifest':
+    'experiment_name': 'era-redpajama_3b-v0_3_0-smoke'
+    'description': 'Classic-era (v0.3.0) smoke: redpajama-incite-base-3b-v1, 5 instances/run.'
+    'run_entries':
+    - 'synthetic_reasoning_natural:difficulty=easy,model=together/redpajama-incite-base-3b-v1'
+    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=together/redpajama-incite-base-3b-v1,data_augmentation=canonical'
+    'suite': 'era-redpajama_3b-v0_3_0-smoke'
+    'max_eval_instances': 5
+    'precomputed_root': '/data/crfm-helm-public/classic'
+    'container_network': 'host'
+    'hf_cache_dir': '~/.cache/eval-audit-hf'
+    'container_gpus': 'none'
+  'full_manifest':
+    'experiment_name': 'era-redpajama_3b-v0_3_0-full'
+    'description': 'Classic-era (v0.3.0) full: redpajama-incite-base-3b-v1 (official 1000-cap).'
+    'run_entries':
+    - 'synthetic_reasoning_natural:difficulty=easy,model=together/redpajama-incite-base-3b-v1'
+    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=together/redpajama-incite-base-3b-v1,data_augmentation=canonical'
+    'suite': 'era-redpajama_3b-v0_3_0-full'
+    'max_eval_instances': 1000
+    'precomputed_root': '/data/crfm-helm-public/classic'
+    'container_network': 'host'
+    'hf_cache_dir': '~/.cache/eval-audit-hf'
+    'container_gpus': 'none'

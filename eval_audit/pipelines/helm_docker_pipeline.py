@@ -200,6 +200,11 @@ class MaterializeHelmRunDockerNode(LeaseBracketMixin, MaterializeHelmRunNode):
         lines.append("-e HOST_UID=$(id -u) -e HOST_GID=$(id -g)")
         lines.append("-e HF_HOME=/hf-cache")
         lines.append("-e HF_TOKEN -e HUGGING_FACE_HUB_TOKEN")
+        # Era shim: forward the per-deployment API key the era credentials.conf
+        # embeds (v0.2.4's AutoClient eagerly demands one; vLLM ignores it). Bare
+        # ``-e VAR`` forwards it only when set on the worker; harmless (unset) for
+        # the modern image, which never reads it. See docker/era_shim.
+        lines.append("-e EVAL_AUDIT_ERA_API_KEY")
         lines.append(f"-e EVAL_AUDIT_OUT_DPATH={q(out_dpath)}")
         lines.append(f"-e EVAL_AUDIT_CONTAINER_IMAGE={q(image)}")
         if "@sha256:" in image:
@@ -356,5 +361,37 @@ def helm_single_run_from_spec_docker_pipeline():
     """
     nodes = {
         "materialize_helm_run": MaterializeHelmRunFromSpecDockerNode(),
+    }
+    return kwdagger.Pipeline(nodes)
+
+
+class MaterializeHelmRunFromSpecEraDockerNode(MaterializeHelmRunFromSpecDockerNode):
+    """Replay a pre-v0.5 (era) run_spec.json verbatim inside the pinned era image.
+
+    Identical container wrapper + algo identity to the modern from-spec node;
+    only the inner ``executable`` differs — it runs the standalone era shim
+    (``helm_era_shim.replay``) instead of magnet's from-spec CLI (whose v0.5+
+    module paths do not exist in the era image). The shim accepts the exact
+    underscore flag set ``render_magnet_command`` emits, so the rendered command
+    contract is unchanged.
+
+    The bridge selects this node only on the exact-path branch when the manifest
+    pins an era whose capability is ``era-shim-from-spec`` (era replay is
+    verbatim, exact-path only — the shim has no discovery mode), and guards the
+    resolved image's ``org.aiq.era`` label against the manifest era before
+    scheduling.
+    """
+
+    executable = "python -m helm_era_shim.replay"
+
+
+def helm_single_run_from_spec_era_docker_pipeline():
+    """kwdagger pipeline factory: a single containerized ERA from-spec replay node.
+
+    Referenced by ``kwdagger schedule`` via the fully-qualified path
+    ``eval_audit.pipelines.helm_docker_pipeline.helm_single_run_from_spec_era_docker_pipeline()``.
+    """
+    nodes = {
+        "materialize_helm_run": MaterializeHelmRunFromSpecEraDockerNode(),
     }
     return kwdagger.Pipeline(nodes)

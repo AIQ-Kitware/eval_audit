@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "helm_era_shim"
+version = "0.1.0"
+description = "Standalone era-HELM (pre-v0.5) verbatim-replay shim: a from-spec replay CLI + a backported OpenAI-compatible completions client. Installed into the era image only; never imports magnet or eval_audit."
+requires-python = ">=3.8"
+# Runtime deps are satisfied by era crfm-helm[all] (the image installs this
+# package with --no-deps). `requests` is listed for completeness / host installs.
+dependencies = [
+    "requests",
+]
+
+[tool.setuptools]
+packages = ["helm_era_shim"]

@@ -67,3 +67,23 @@ def test_matching_repo_digest_is_pinned(monkeypatch):
     assert resolved.run_ref == match
     assert resolved.digest_kind == "repo_digest"
     assert resolved.pinned is True
+
+
+def test_image_label_uses_double_quoted_go_template(monkeypatch):
+    # Regression: the --format template must double-quote the label key. Python's
+    # {key!r} emits single quotes, which docker's Go template parser rejects with
+    # "malformed character constant". _run is mocked in the suite, so guard the
+    # actual template string image_label builds rather than trusting a mock.
+    captured = {}
+
+    def _fake_run(cmd, *args, **kwargs):
+        if "--format" in cmd:
+            captured["fmt"] = cmd[cmd.index("--format") + 1]
+        return subprocess.CompletedProcess(cmd, 0, stdout="helm-v0.2.4", stderr="")
+
+    monkeypatch.setattr(docker_provenance, "_run", _fake_run)
+    value = docker_provenance.image_label("img@sha256:" + "e" * 64, "org.aiq.era")
+    assert value == "helm-v0.2.4"
+    fmt = captured["fmt"]
+    assert fmt == '{{index .Config.Labels "org.aiq.era"}}', fmt
+    assert "'org.aiq.era'" not in fmt  # single quotes => Go character-constant error

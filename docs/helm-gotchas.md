@@ -223,6 +223,18 @@ necessarily new recipes for old models.
 **Workaround.** Use `run_spec_hash` to identify recipe-identical
 public-track versions of the same logical run.
 
+**Era-replay note.** The era-pinned reproduction containers
+(`docs/planning/era-pinned-helm-containers-plan.md`,
+`docker/eras.yaml`) key the *measurement instrument* on
+`(public_track, suite_version)` — so `v0.2.4` and `v0.3.0` map to
+distinct era images. That is a **suite**-era mapping, and for the
+classic track it is the right granularity (the two suite dirs were
+produced by the two era harnesses). It is NOT a claim that suite
+version == release version in general; `run_spec_hash` remains the tool
+for detecting recipe-identical duplicates *across* suites. Resolution
+lives in `eval_audit/eras.py` (`resolve_era`), keyed on the same
+path-derived signal the official public index records.
+
 ---
 
 ## G11. `per_instance_stats.json` corruption on giant runs

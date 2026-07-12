@@ -81,6 +81,17 @@ def main(argv: list[str] | None = None) -> None:
             "export. Per-run rewrite targets make multi-deployment bundles work."
         ),
     )
+    s.add_argument(
+        "--era",
+        default=None,
+        help=(
+            "Era key from docker/eras.yaml (e.g. helm-v0.2.4). Generates an "
+            "ERA-schema model_deployments.yaml bound to the era shim client "
+            "(verbatim by-name; no model_deployment rewrite) and stamps era on "
+            "the manifest so the bridge selects the era pipeline + guards the "
+            "era image label. Requires --freeze-rel-paths (era is exact-path only)."
+        ),
+    )
     s.set_defaults(cmd_name="export-benchmark-bundle")
 
     args = parser.parse_args(argv)
@@ -108,6 +119,7 @@ def main(argv: list[str] | None = None) -> None:
         from_run_spec=args.from_spec,
         precomputed_root=args.precomputed_root,
         freeze_rel_paths=args.freeze_rel_paths,
+        era=args.era,
     )
     print(json.dumps({
         "bundle_dir": str(result["bundle_dir"]),
