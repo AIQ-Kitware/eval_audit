@@ -28,41 +28,13 @@ never changes a comparability fact — but the diagnosis re-labels:
 
 from __future__ import annotations
 
-import json
-import math
 from typing import Any, Mapping, Sequence
 
-import ubelt as ub
-
-
-def _json_compatible(obj: Any) -> Any:
-    """Recursively coerce to strict JSON-compatible types.
-
-    Private copy of ``eval_audit.helm.diff_primitives._json_compatible``
-    so this module stays importable without ``eval_audit.helm.*``; the
-    behavior must stay identical for the equivalence gate to hold.
-    """
-    if obj is None or isinstance(obj, (str, int, bool)):
-        return obj
-    if isinstance(obj, float):
-        return obj if math.isfinite(obj) else None
-    if isinstance(obj, dict):
-        return {str(k): _json_compatible(v) for k, v in obj.items()}
-    if isinstance(obj, set):
-        # IM-12: sets have no stable iteration order (PYTHONHASHSEED-dependent);
-        # sort by the serialized value so output is deterministic.
-        return sorted((_json_compatible(v) for v in obj), key=lambda x: json.dumps(x, sort_keys=True, default=str))
-    if isinstance(obj, (list, tuple)):
-        return [_json_compatible(v) for v in obj]
-    try:
-        if hasattr(obj, 'as_tuple') and callable(getattr(obj, 'as_tuple')):
-            return _json_compatible(list(obj.as_tuple()))
-    except Exception:
-        pass
-    try:
-        return ub.urepr(obj, nl=0, compact=1)
-    except Exception:
-        return str(obj)
+# A3: one shared implementation (utils.jsonify — framework-free, so this
+# module stays importable without eval_audit.helm.*) replaces the private
+# copy that used to live here. It carries this module's IM-12 determinism
+# fix (sets serialized in sorted order).
+from eval_audit.utils.jsonify import json_compatible as _json_compatible
 
 
 def diagnose_repro(

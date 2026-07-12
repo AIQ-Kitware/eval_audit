@@ -7,7 +7,6 @@ Split out of ``eval_audit.helm.diff`` on 2026-06-11
 function bodies are unchanged.
 """
 from __future__ import annotations
-import math
 import ubelt as ub
 from collections import Counter
 from dataclasses import dataclass
@@ -242,32 +241,11 @@ def _path_value_examples(
     return _json_compatible(examples)
 
 
-def _json_compatible(obj: Any) -> Any:
-    """Recursively coerce to strict JSON-compatible types.
-
-    Notably:
-    - tuples/sets -> lists
-    - non-finite floats -> None
-    - unknown objects -> string repr
-    """
-    if obj is None or isinstance(obj, (str, int, bool)):
-        return obj
-    if isinstance(obj, float):
-        return obj if math.isfinite(obj) else None
-    if isinstance(obj, dict):
-        return {str(k): _json_compatible(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple, set)):
-        return [_json_compatible(v) for v in obj]
-    try:
-        # common dataclass / custom key cases
-        if hasattr(obj, 'as_tuple') and callable(getattr(obj, 'as_tuple')):
-            return _json_compatible(list(obj.as_tuple()))
-    except Exception:
-        pass
-    try:
-        return ub.urepr(obj, nl=0, compact=1)
-    except Exception:
-        return str(obj)
+# A3: one shared implementation (utils.jsonify) replaces the private copy
+# here and the near-twin in normalized.diagnose. The shared version carries
+# the IM-12 determinism fix (sets serialized in sorted order) that this
+# module's old copy lacked.
+from eval_audit.utils.jsonify import json_compatible as _json_compatible  # noqa: E402
 
 
 def _preview_list(items: list[str], *, limit: int = 20) -> list[str]:
