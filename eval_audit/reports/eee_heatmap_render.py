@@ -130,6 +130,180 @@ def _paper_rc() -> dict[str, object]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Shared model×benchmark grid scaffold (C2)
+#
+# _render_heatmap and _render_diff_heatmap used to carry ~150 duplicated
+# lines each of figure setup, missing-cell drawing, axis finishing,
+# colorbar attachment, title logic, and the save/pdf/cropwhite epilogue.
+# The helpers below are that scaffold, extracted verbatim (every constant
+# preserved); each renderer keeps its own colormap + per-cell drawing.
+# ---------------------------------------------------------------------------
+
+#: Cell/background color for grid positions with no packet at all.
+_MISSING_COLOR = "#bdbdbd"
+
+
+def _grid_figure(fig_size: tuple[float, float]):
+    """rc_context + Agg figure + missing-color facecolor. Returns
+    ``(rc_ctx, fig, ax)``; pass ``rc_ctx`` to :func:`_save_grid_figure`."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    rc_ctx = plt.rc_context(_paper_rc())
+    rc_ctx.__enter__()
+    fig, ax = plt.subplots(figsize=fig_size)
+    ax.set_facecolor(_MISSING_COLOR)
+    return rc_ctx, fig, ax
+
+
+def _cell_text_color(cell_rgba) -> str:
+    """White text on dark cells, black on light (Rec. 601 luminance) —
+    adapts to whatever colormap is in use."""
+    r, g, b = cell_rgba[:3]
+    luminance = 0.299 * r + 0.587 * g + 0.114 * b
+    return "white" if luminance < 0.55 else "black"
+
+
+def _draw_missing_cell(ax, col: int, row: int) -> None:
+    """Missing cell: solid darker gray + em-dash, drawn explicitly so the
+    cell border visually delimits it from the same-colored background."""
+    import matplotlib.pyplot as plt
+
+    rect = plt.Rectangle(
+        (col - 0.5, row - 0.5), 1, 1,
+        facecolor=_MISSING_COLOR,
+        edgecolor="white", linewidth=0.5,
+    )
+    ax.add_patch(rect)
+    ax.text(
+        col, row, "—",
+        ha="center", va="center",
+        fontsize=10, color="#606060",
+    )
+
+
+def _finish_grid_axes(
+    ax,
+    *,
+    models: list[str],
+    benchmarks: list[str],
+    transpose: bool,
+    bench_label,
+) -> None:
+    """Ticks, axis labels, limits, y-inversion, and the despined look —
+    identical for both renderers modulo the benchmark-label function."""
+    n_bench = len(benchmarks)
+    n_models = len(models)
+    if transpose:
+        ax.set_xticks(range(n_bench))
+        ax.set_xticklabels(
+            [bench_label(b) for b in benchmarks],
+            fontsize=10, ha="right", rotation=35,
+        )
+        ax.set_yticks(range(n_models))
+        ax.set_yticklabels(
+            [_MODEL_DISPLAY.get(m, m) for m in models],
+            fontsize=10,
+        )
+        # Push the xlabel below the rotated benchmark tick labels —
+        # without explicit padding the long ones (e.g. "Synthetic
+        # Reasoning (Natural)") descend past the default xlabel
+        # position and clip the "Benchmark" text under tight bbox.
+        ax.set_xlabel("Benchmark", fontsize=11, labelpad=18)
+        ax.set_ylabel("Model", fontsize=11, labelpad=10)
+        ax.set_xlim(-0.5, n_bench - 0.5)
+        ax.set_ylim(-0.5, n_models - 0.5)
+    else:
+        ax.set_xticks(range(n_models))
+        ax.set_xticklabels(
+            [_MODEL_DISPLAY.get(m, m) for m in models],
+            fontsize=10, ha="right", rotation=25,
+        )
+        ax.set_yticks(range(n_bench))
+        ax.set_yticklabels(
+            [bench_label(b) for b in benchmarks],
+            fontsize=10,
+        )
+        ax.set_xlabel("Model", fontsize=11)
+        ax.set_ylabel("Benchmark", fontsize=11)
+        ax.set_xlim(-0.5, n_models - 0.5)
+        ax.set_ylim(-0.5, n_bench - 0.5)
+    ax.invert_yaxis()
+    # Despine: drop the axes box and tick marks. The white grid lines
+    # between cells already delimit the data area, and the despined look
+    # is the paper-figure default.
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.tick_params(axis="both", which="both", length=0)
+
+
+def _attach_grid_colorbar(fig, ax, scalar, *, transpose: bool, label: str):
+    """Slim colorbar with the shared fraction/pad constants; the caller
+    adds any tick formatter."""
+    if transpose:
+        cbar = fig.colorbar(scalar, ax=ax, fraction=0.02, pad=0.01)
+    else:
+        cbar = fig.colorbar(scalar, ax=ax, fraction=0.03, pad=0.02)
+    cbar.set_label(label, fontsize=10)
+    cbar.ax.tick_params(labelsize=9, length=0)
+    cbar.outline.set_visible(False)
+    return cbar
+
+
+def _set_grid_title(ax, title: str, sub: str) -> None:
+    if title and sub:
+        ax.set_title(f"{title}\n{sub}", fontsize=9, pad=8)
+    elif title:
+        ax.set_title(title, fontsize=9, pad=8)
+    elif sub:
+        ax.set_title(sub, fontsize=9, pad=8)
+
+
+def _save_grid_figure(fig, rc_ctx, primary_path: Path, *, log_label: str) -> Path:
+    """tight_layout, raster save + vector PDF sibling, close, rc exit,
+    cropwhite (soft kwplot import), and the write logs."""
+    import matplotlib.pyplot as plt
+
+    plt.tight_layout()
+    primary_suffix = primary_path.suffix.lower()
+    _atomic_savefig(
+        fig, primary_path,
+        dpi=300, bbox_inches="tight", pad_inches=0.3,
+    )
+    # Always emit a vector PDF sibling next to the rendered file so the
+    # paper figure picks up a resolution-independent version. tight bbox
+    # already trims the PDF; raster paths still need cropwhite_ondisk
+    # (which is image-only).
+    pdf_path = primary_path.with_suffix(".pdf")
+    if primary_suffix == ".pdf":
+        pdf_path = primary_path
+    else:
+        _atomic_savefig(
+            fig, pdf_path,
+            bbox_inches="tight", pad_inches=0.05,
+        )
+    plt.close(fig)
+    rc_ctx.__exit__(None, None, None)
+    # Trim residual white margins on the raster output. Soft import: if
+    # kwplot isn't installed, the saved PNG is still usable. PDFs are
+    # vector and tight bbox already cropped them, so skip kwplot there.
+    if primary_suffix in {".png", ".jpg", ".jpeg"}:
+        try:
+            import kwplot
+            kwplot.cropwhite_ondisk(primary_path)
+        except ImportError as exc:
+            logger.debug(
+                f"kwplot not available ({exc}); skipping cropwhite_ondisk "
+                f"on {primary_path}."
+            )
+    logger.info(f"Wrote {log_label}: {rich_link(primary_path)}")
+    if pdf_path != primary_path:
+        logger.info(f"Wrote vector {log_label}: {rich_link(pdf_path)}")
+    return primary_path
+
+
 @profile
 def _render_heatmap(
     cells: dict[tuple[str, str], dict[str, Any]],
@@ -177,14 +351,12 @@ def _render_heatmap(
         fig_w = max(6.0, 2.2 * n_models + 2.0)
         fig_h = max(5.0, 0.5 * n_bench + 1.5)
 
-    rc_ctx = plt.rc_context(_paper_rc())
-    rc_ctx.__enter__()
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
     # In transpose mode we *don't* call set_aspect("equal") — letting
     # cells be rectangular (wider than tall) gives the percentage
     # labels enough horizontal room to read cleanly. The default
     # (non-transpose) layout still draws square cells via the figure
     # aspect alone.
+    rc_ctx, fig, ax = _grid_figure((fig_w, fig_h))
 
     # Colormap: a custom diverging "OrangeBlue" built from Wong's
     # colorblind-safe palette — warm orange (#E69F00) at the low end,
@@ -222,9 +394,8 @@ def _render_heatmap(
     cmap_norm = mcolors.Normalize(vmin=cmap_vmin, vmax=cmap_vmax)
     cmap_scalar = plt.cm.ScalarMappable(norm=cmap_norm, cmap=cmap)
 
-    # Background defaults to the "missing" color so any cell we don't
-    # explicitly draw shows as missing.
-    _MISSING_COLOR = "#bdbdbd"
+    # Background defaults to the "missing" color (set by _grid_figure) so
+    # any cell we don't explicitly draw shows as missing.
     _JOIN_FAILED_COLOR = "#f0f0f0"  # neutral light gray — pairs with
                                      # diagonal hatching to mark cells
                                      # whose data is non-comparable
@@ -236,7 +407,6 @@ def _render_heatmap(
                                          # analyzer-side (missing metric
                                          # registration), not an upstream
                                          # data problem.
-    ax.set_facecolor(_MISSING_COLOR)
 
     # Draw each cell explicitly so the three statuses get distinct visuals.
     # In transposed layout, x=benchmarks (col), y=models (row); in the
@@ -264,14 +434,7 @@ def _render_heatmap(
                     edgecolor="white", linewidth=0.5,
                 )
                 ax.add_patch(rect)
-                # Pick text color from the cell's actual luminance
-                # (Rec. 601 weighting). This adapts to whatever
-                # colormap is in use — viridis goes dark→bright, YlGn
-                # light→dark, OrangeBlue diverges. White text on
-                # dark cells, black on light, regardless of cmap.
-                r, g, b = cell_rgba[:3]
-                luminance = 0.299 * r + 0.587 * g + 0.114 * b
-                text_color = "white" if luminance < 0.55 else "black"
+                text_color = _cell_text_color(cell_rgba)
                 # Strip a trailing ".0" so 100.0% renders as "100%"
                 # (the trailing zero overflowed narrow cells in the
                 # paper-slim layout). Non-integer percents keep one
@@ -327,63 +490,15 @@ def _render_heatmap(
                     fontweight="bold",
                 )
             else:
-                # Missing: solid darker gray + em-dash. Drawn explicitly
-                # so the cell border visually delimits it from the
-                # background of the same color.
-                rect = plt.Rectangle(
-                    (col - 0.5, row - 0.5), 1, 1,
-                    facecolor=_MISSING_COLOR,
-                    edgecolor="white", linewidth=0.5,
-                )
-                ax.add_patch(rect)
-                ax.text(
-                    col, row, "—",
-                    ha="center", va="center",
-                    fontsize=10, color="#606060",
-                )
+                _draw_missing_cell(ax, col, row)
 
-    # Axis labels
-    if transpose:
-        ax.set_xticks(range(n_bench))
-        ax.set_xticklabels(
-            [_BENCHMARK_DISPLAY.get(b, b) for b in benchmarks],
-            fontsize=10, ha="right", rotation=35,
-        )
-        ax.set_yticks(range(n_models))
-        ax.set_yticklabels(
-            [_MODEL_DISPLAY.get(m, m) for m in models],
-            fontsize=10,
-        )
-        # Push the xlabel below the rotated benchmark tick labels —
-        # without explicit padding the long ones (e.g. "Synthetic
-        # Reasoning (Natural)") descend past the default xlabel
-        # position and clip the "Benchmark" text under tight bbox.
-        ax.set_xlabel("Benchmark", fontsize=11, labelpad=18)
-        ax.set_ylabel("Model", fontsize=11, labelpad=10)
-        ax.set_xlim(-0.5, n_bench - 0.5)
-        ax.set_ylim(-0.5, n_models - 0.5)
-    else:
-        ax.set_xticks(range(n_models))
-        ax.set_xticklabels(
-            [_MODEL_DISPLAY.get(m, m) for m in models],
-            fontsize=10, ha="right", rotation=25,
-        )
-        ax.set_yticks(range(n_bench))
-        ax.set_yticklabels(
-            [_BENCHMARK_DISPLAY.get(b, b) for b in benchmarks],
-            fontsize=10,
-        )
-        ax.set_xlabel("Model", fontsize=11)
-        ax.set_ylabel("Benchmark", fontsize=11)
-        ax.set_xlim(-0.5, n_models - 0.5)
-        ax.set_ylim(-0.5, n_bench - 0.5)
-    ax.invert_yaxis()
-    # Despine: drop the axes box and tick marks. The white grid lines
-    # between cells already delimit the data area, and the despined look
-    # is the paper-figure default.
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    ax.tick_params(axis="both", which="both", length=0)
+    _finish_grid_axes(
+        ax,
+        models=models,
+        benchmarks=benchmarks,
+        transpose=transpose,
+        bench_label=lambda b: _BENCHMARK_DISPLAY.get(b, b),
+    )
 
     # Colorbar for the present-status colormap. In transposed layout
     # the figure is wide and short; the axis already has a fixed
@@ -391,14 +506,12 @@ def _render_heatmap(
     # of the same height to the right of the axis. The in-figure
     # status legend lives below the x-axis (rotated benchmark labels),
     # so the two never collide.
-    if transpose:
-        cbar = fig.colorbar(cmap_scalar, ax=ax, fraction=0.02, pad=0.01)
-    else:
-        cbar = fig.colorbar(cmap_scalar, ax=ax, fraction=0.03, pad=0.02)
-    cbar.set_label("Agreement (\\%)" if plt.rcParams.get("text.usetex")
-                   else "Agreement (%)", fontsize=10)
-    cbar.ax.tick_params(labelsize=9, length=0)
-    cbar.outline.set_visible(False)
+    cbar = _attach_grid_colorbar(
+        fig, ax, cmap_scalar,
+        transpose=transpose,
+        label="Agreement (\\%)" if plt.rcParams.get("text.usetex")
+              else "Agreement (%)",
+    )
     cbar.ax.yaxis.set_major_formatter(
         FuncFormatter(lambda x, _pos: f"{x * 100:.0f}%")
     )
@@ -459,50 +572,11 @@ def _render_heatmap(
             sub = f"instance-level agree_ratio at abs_tol={abs_tol}"
         else:
             sub = subtitle
-        if title and sub:
-            ax.set_title(f"{title}\n{sub}", fontsize=9, pad=8)
-        elif title:
-            ax.set_title(title, fontsize=9, pad=8)
-        elif sub:
-            ax.set_title(sub, fontsize=9, pad=8)
+        _set_grid_title(ax, title, sub)
 
-    plt.tight_layout()
-    primary_path = out_dir / out_filename
-    primary_suffix = primary_path.suffix.lower()
-    _atomic_savefig(
-        fig, primary_path,
-        dpi=300, bbox_inches="tight", pad_inches=0.3,
+    return _save_grid_figure(
+        fig, rc_ctx, out_dir / out_filename, log_label="heatmap"
     )
-    # Always emit a vector PDF sibling next to the rendered file so the
-    # paper figure picks up a resolution-independent version. tight bbox
-    # already trims the PDF; raster paths still need cropwhite_ondisk
-    # (which is image-only).
-    pdf_path = primary_path.with_suffix(".pdf")
-    if primary_suffix == ".pdf":
-        pdf_path = primary_path
-    else:
-        _atomic_savefig(
-            fig, pdf_path,
-            bbox_inches="tight", pad_inches=0.05,
-        )
-    plt.close(fig)
-    rc_ctx.__exit__(None, None, None)
-    # Trim residual white margins on the raster output. Soft import: if
-    # kwplot isn't installed, the saved PNG is still usable. PDFs are
-    # vector and tight bbox already cropped them, so skip kwplot there.
-    if primary_suffix in {".png", ".jpg", ".jpeg"}:
-        try:
-            import kwplot
-            kwplot.cropwhite_ondisk(primary_path)
-        except ImportError as exc:
-            logger.debug(
-                f"kwplot not available ({exc}); skipping cropwhite_ondisk "
-                f"on {primary_path}."
-            )
-    logger.info(f"Wrote heatmap: {rich_link(primary_path)}")
-    if pdf_path != primary_path:
-        logger.info(f"Wrote vector heatmap: {rich_link(pdf_path)}")
-    return primary_path
 
 
 # ---------------------------------------------------------------------------
@@ -782,12 +856,7 @@ def _render_diff_heatmap(
             )
     scalar = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
 
-    _MISSING_COLOR = "#bdbdbd"
-
-    rc_ctx = plt.rc_context(_paper_rc())
-    rc_ctx.__enter__()
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
-    ax.set_facecolor(_MISSING_COLOR)
+    rc_ctx, fig, ax = _grid_figure((fig_w, fig_h))
 
     cell_value_fontsize = 8 if transpose else 7
     for i_bench, bench in enumerate(benchmarks):
@@ -805,9 +874,7 @@ def _render_diff_heatmap(
                     edgecolor="white", linewidth=0.5,
                 )
                 ax.add_patch(rect)
-                r, g, b = cell_rgba[:3]
-                luminance = 0.299 * r + 0.587 * g + 0.114 * b
-                text_color = "white" if luminance < 0.55 else "black"
+                text_color = _cell_text_color(cell_rgba)
                 # Two stacked scores: P(ublic) on top, L(ocal) below. 3
                 # significant figures keeps 0.824 / 1.0 / 0.0 legible
                 # without overflowing narrow cells.
@@ -821,59 +888,17 @@ def _render_diff_heatmap(
                     linespacing=1.35,
                 )
             else:
-                # Missing: solid gray + em-dash (no runlevel score for
-                # this model/benchmark/metric).
-                rect = plt.Rectangle(
-                    (col - 0.5, row - 0.5), 1, 1,
-                    facecolor=_MISSING_COLOR,
-                    edgecolor="white", linewidth=0.5,
-                )
-                ax.add_patch(rect)
-                ax.text(
-                    col, row, "—",
-                    ha="center", va="center",
-                    fontsize=10, color="#606060",
-                )
+                # Missing: no runlevel score for this model/benchmark/metric.
+                _draw_missing_cell(ax, col, row)
 
-    if transpose:
-        ax.set_xticks(range(n_bench))
-        ax.set_xticklabels(
-            [_bench_label(b) for b in benchmarks],
-            fontsize=10, ha="right", rotation=35,
-        )
-        ax.set_yticks(range(n_models))
-        ax.set_yticklabels(
-            [_MODEL_DISPLAY.get(m, m) for m in models],
-            fontsize=10,
-        )
-        ax.set_xlabel("Benchmark", fontsize=11, labelpad=18)
-        ax.set_ylabel("Model", fontsize=11, labelpad=10)
-        ax.set_xlim(-0.5, n_bench - 0.5)
-        ax.set_ylim(-0.5, n_models - 0.5)
-    else:
-        ax.set_xticks(range(n_models))
-        ax.set_xticklabels(
-            [_MODEL_DISPLAY.get(m, m) for m in models],
-            fontsize=10, ha="right", rotation=25,
-        )
-        ax.set_yticks(range(n_bench))
-        ax.set_yticklabels(
-            [_bench_label(b) for b in benchmarks],
-            fontsize=10,
-        )
-        ax.set_xlabel("Model", fontsize=11)
-        ax.set_ylabel("Benchmark", fontsize=11)
-        ax.set_xlim(-0.5, n_models - 0.5)
-        ax.set_ylim(-0.5, n_bench - 0.5)
-    ax.invert_yaxis()
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    ax.tick_params(axis="both", which="both", length=0)
+    _finish_grid_axes(
+        ax,
+        models=models,
+        benchmarks=benchmarks,
+        transpose=transpose,
+        bench_label=_bench_label,
+    )
 
-    if transpose:
-        cbar = fig.colorbar(scalar, ax=ax, fraction=0.02, pad=0.01)
-    else:
-        cbar = fig.colorbar(scalar, ax=ax, fraction=0.03, pad=0.02)
     if squared:
         cbar_label = (
             "Squared error (Local $-$ Public)$^2$"
@@ -886,9 +911,7 @@ def _render_diff_heatmap(
             if plt.rcParams.get("text.usetex")
             else "Local − Public (aggregate score)"
         )
-    cbar.set_label(cbar_label, fontsize=10)
-    cbar.ax.tick_params(labelsize=9, length=0)
-    cbar.outline.set_visible(False)
+    _attach_grid_colorbar(fig, ax, scalar, transpose=transpose, label=cbar_label)
 
     if not transpose or force_title:
         if subtitle is None:
@@ -898,43 +921,11 @@ def _render_diff_heatmap(
                 sub = "cell: P=public / L=local aggregate score; color = local − public"
         else:
             sub = subtitle
-        if title and sub:
-            ax.set_title(f"{title}\n{sub}", fontsize=9, pad=8)
-        elif title:
-            ax.set_title(title, fontsize=9, pad=8)
-        elif sub:
-            ax.set_title(sub, fontsize=9, pad=8)
+        _set_grid_title(ax, title, sub)
 
-    plt.tight_layout()
-    primary_path = out_dir / out_filename
-    primary_suffix = primary_path.suffix.lower()
-    _atomic_savefig(
-        fig, primary_path,
-        dpi=300, bbox_inches="tight", pad_inches=0.3,
+    return _save_grid_figure(
+        fig, rc_ctx, out_dir / out_filename, log_label="aggregate-diff heatmap"
     )
-    pdf_path = primary_path.with_suffix(".pdf")
-    if primary_suffix == ".pdf":
-        pdf_path = primary_path
-    else:
-        _atomic_savefig(
-            fig, pdf_path,
-            bbox_inches="tight", pad_inches=0.05,
-        )
-    plt.close(fig)
-    rc_ctx.__exit__(None, None, None)
-    if primary_suffix in {".png", ".jpg", ".jpeg"}:
-        try:
-            import kwplot
-            kwplot.cropwhite_ondisk(primary_path)
-        except ImportError as exc:
-            logger.debug(
-                f"kwplot not available ({exc}); skipping cropwhite_ondisk "
-                f"on {primary_path}."
-            )
-    logger.info(f"Wrote aggregate-diff heatmap: {rich_link(primary_path)}")
-    if pdf_path != primary_path:
-        logger.info(f"Wrote vector aggregate-diff heatmap: {rich_link(pdf_path)}")
-    return primary_path
 
 
 @profile
