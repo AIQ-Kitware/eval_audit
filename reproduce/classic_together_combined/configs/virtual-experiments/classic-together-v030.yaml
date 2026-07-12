@@ -1,0 +1,32 @@
+schema_version: 1
+name: classic-together-v030
+description: >
+  Classic-era (pre-v0.5) era-pinned replay @ helm-v0.3.0 of GPT-J 6B,
+  GPT-NeoX 20B, and OPT 66B — all official runs — composed and paired against the
+  OFFICIAL classic v0.3.0 runs. same_deployment resolves 'unknown' for era pairs
+  (a pre-v0.5 adapter_spec has no model_deployment field) — expected, not a bug.
+  Sibling per-era manifest: classic-together-v024 (see it for why the runbook
+  builds a per-era official index).
+
+scope:
+  models:
+    - "regex:^together/gpt-j-6b$"
+    - "regex:^together/gpt-neox-20b$"
+    - "regex:^together/opt-66b$"
+
+sources:
+  - kind: audit_index
+    fpath: /data/crfm-helm-audit-store/indexes/audit_results_index.csv
+    include_experiments:
+      - era-gptj_6b-v0_3_0-full
+      - era-gptneox_20b-v0_3_0-full
+      - era-opt_66b-v0_3_0-full
+
+  - kind: official_public_index
+    fpath: /data/crfm-helm-audit-store/indexes/classic-together/v0.3.0/official_public_index.csv
+    pre_filter:
+      kind: helm_stage1
+      inventory_fpath: /data/crfm-helm-audit-store/analysis/classic-together/v0.3.0/filter_inventory.json
+
+output:
+  root: /data/crfm-helm-audit-store/virtual-experiments/classic-together-v030

@@ -1,0 +1,65 @@
+# infer-stack serving catalog for the classic Together open-weight combined
+# runbook — GPT-J 6B, GPT-NeoX 20B, OPT 66B, replayed era-pinned (v0.2.4 / v0.3.0).
+#
+# The era container is a CPU-only HELM harness that talks to these vLLM endpoints
+# over HTTP (it holds no weights), so model inference stays on modern vLLM while
+# the *measurement instrument* is pinned to the era. One endpoint per model,
+# shared across both eras (the era differs only in the HELM image, not the served
+# weights). The grid leases one endpoint at a time (reclaim: stop) — OPT-66B in
+# particular cannot co-host.
+#
+# Endpoint name == the era preset's `profile` field (config/presets.yaml) and the
+# TARGETS / 05_check_profiles.sh references; it doubles as the served name the era
+# shim client requests. All three are BASE models → `protocol: completions` (the
+# era shim speaks /v1/completions only; a chat readiness probe would hang acquire).
+#
+# HELM-domain aliases (model/tokenizer) live in the presets (authoritative); the
+# catalog owns transport: backing HF model + served context window + sizing.
+models:
+  gpt-j-6b:
+    source: hf://EleutherAI/gpt-j-6b
+  gpt-neox-20b:
+    source: hf://EleutherAI/gpt-neox-20b
+  opt-66b:
+    source: hf://facebook/opt-66b
+
+endpoints:
+  gptj6b-single:
+    engine: vllm
+    reclaim: stop
+    model: gpt-j-6b
+    protocol: completions
+    runtime:
+      max_model_len: 2048          # GPTJWindowService era window
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 2048
+      max_num_seqs: 32
+      enable_prefix_caching: true
+
+  gptneox20b-single:
+    engine: vllm
+    reclaim: stop
+    model: gpt-neox-20b
+    protocol: completions
+    runtime:
+      max_model_len: 2048          # GPTNeoXWindowService era window
+      # ~40 GB fp16: fits one 80 GB card, or shard across two smaller ones.
+      tensor_parallel_size: 2
+      gpu_memory_utilization: 0.90
+      max_num_batched_tokens: 2048
+      max_num_seqs: 16
+      enable_prefix_caching: true
+
+  opt66b-single:
+    engine: vllm
+    reclaim: stop
+    model: opt-66b
+    protocol: completions
+    runtime:
+      max_model_len: 2048          # OPTWindowService era window
+      # ~132 GB fp16 — requires a multi-GPU host; shard across four cards.
+      tensor_parallel_size: 4
+      gpu_memory_utilization: 0.90
+      max_num_batched_tokens: 2048
+      max_num_seqs: 8
+      enable_prefix_caching: true

@@ -1,0 +1,6 @@
+backend: compose
+litellm: true
+ui: false
+skip_display_gpus: false
+reverse_proxy: false
+data_dir: /data/service/infer-stack
