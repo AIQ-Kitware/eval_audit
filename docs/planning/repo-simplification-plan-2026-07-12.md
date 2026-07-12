@@ -12,6 +12,37 @@ journal entry; fails identically on the pre-session base). Net code deltas:
 **Batch 4 capstones (A4, D6) + operator decisions (D5, F1 ladder-out,
 D4-remainder) remain open** — each needs owner sign-off per §2/§3.
 
+**Operator decisions (2026-07-12):**
+- **D5 = proceed, phase 1 (deprecation) done.** `compare_batch` deprecated
+  in place (module docstring + `main()` `logger.warning`, following the
+  `cli/reports.py` pattern; the two `reproduce/{smoke,apples}/30_compare.sh`
+  runbooks carry a one-line deprecation comment). It keeps resolving for
+  those pre-existing scripts (ADR 5). **Deletion + `helm_view_from_path`
+  removal after one deprecation cycle.**
+- **A4 = migration trigger-gated on the paper schedule** (the heatmap-paper
+  analysis run), not started now. **Gate-prep DONE:** the phase3 behavior
+  baseline capture is extended to the HELM render path — cells **F1**
+  (HELM self-compare, strict 1.0) and **F2** (official vs deterministically
+  drifted local, `core_metric_drift`) captured as
+  `tests/fixtures/phase3_baseline/f{1,2}_helm_*.json`, gated by a new slow
+  parametrized test in `tests/test_phase3_baseline.py` and proven
+  deterministic (double-capture byte-identical). **F8** (mixed HELM×EEE
+  packet) is **still missing** and deliberately not fabricated: no on-disk
+  fixture pairs a HELM run and an EEE artifact under a shared logical run
+  key, so it cannot be assembled without first building a new coordinated
+  fixture (matrix "build for 4.3/4.6", §7). A4 should build F8 as its first
+  step. (F5/F6/F9/F10 remain spec/future cells.)
+- **D6 = declined.** Post-D2 the EEE-CLI duplication residual no longer
+  justifies a hot-analysis-path restructure (rule of three: only two entry
+  points fork the loop today, and `build_virtual_experiment` already reuses
+  `analyze_experiment.main`). Revisit only if a *third* entry point appears.
+- **D4-remainder = declined as a standalone item.** Fold the remaining
+  fat-CLI relocations into the next real Stage-1 change rather than churning
+  the CLIs on their own.
+- **F1 = split.** Scratch venvs (`dev/e2e-tests/.venv`, `.venv-1`)
+  reclaimed on-disk now; `ladder-out/` **retained** until the era
+  validation ladder completes for both eras.
+
 **Original status:** DESIGN — no code yet. Findings audited read-only;
 awaiting owner sign-off on sequencing and on the two optional capstones
 (A4, D6).

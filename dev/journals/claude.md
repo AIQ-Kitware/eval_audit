@@ -1378,3 +1378,78 @@ HelmRunDiff; needs the F1/F2/F8 baseline capture first), D6 (typed
 analyze_index), D5 (compare_batch fate), D4-remainder, F1 (ladder-out
 reclaim), F3/F4 (doc archival after merge). The branch is 22 commits ahead;
 not pushed.
+
+## 2026-07-12 13:20:56 -0400
+
+**User intent.** Execute the operator-approved tail of
+`docs/planning/repo-simplification-plan-2026-07-12.md` (Batches 1–3 already
+landed in 22 commits): D5 phase-1 deprecation of `compare_batch`, A4
+gate-prep (extend the phase3 behavior baseline to the HELM render path),
+the operator-decision bookkeeping, and reclaim two scratch venvs.
+
+**Model / config.** claude-opus-4-8[1m] subagent dispatched by
+claude-fable-5; Claude Code harness, repo `.venv`. Every commit gated by
+the fast suite plus `--run-slow` selections on anything touched (the
+plan's own lesson: a regression hid in a slow-marked test).
+
+**What happened.**
+- **D5 phase 1 (commit 36bb74e0).** Deprecated `workflows/compare_batch.py`
+  in place following the `cli/reports.py` tone — module docstring + a
+  one-line `logger.warning` in `main()` naming the planner-driven
+  replacement (`eval-audit-analyze-experiment`) and flagging that
+  `helm_view_from_path` dies with it. One-line deprecation comment added to
+  both `reproduce/{smoke,apples}/30_compare.sh` (behavior unchanged;
+  `bash -n` clean). No behavior change.
+- **A4 gate-prep (commit e1b8547d) — the meat.** The committed phase3
+  baseline covered only the EEE cells (F3/F4 via `compare-pair-eee`). A4
+  changes the HELM render path those snapshots never exercise, so I
+  extended the capture to HELM cells driven through the *same* path the EEE
+  cells use — `core_metrics` via components/comparisons manifests. Fixture
+  source: the `every_eval_ever` submodule HELM run
+  (`mmlu:…openai_gpt2`), the same run `test_normalized_compare.py` already
+  loads through the full HELM→EEE conversion, so I know it converts in this
+  venv. **F1** = official-vs-itself (diagnosis `reproduced`, agreement 1.0
+  across the whole abs_tol sweep). **F2** = official vs a
+  deterministically drifted local (flip 3 per-instance `exact_match` means
+  0→1; bump the base `exact_match`/`quasi_exact_match` test aggregate to
+  0.5) → diagnosis `core_metric_drift`, run agree@0=0.75 / inst
+  agree@0=0.9625, both recovering to 1.0 as abs_tol grows — a genuine drift
+  regime, not exact-match. Determinism proved by double-capture into
+  separate dirs (fresh conversion caches each time) diffed byte-identical.
+  New slow parametrized gate in `tests/test_phase3_baseline.py`
+  (`importorskip` helm/every_eval_ever; skips if the submodule fixture is
+  absent). Zero production-code changes.
+- **Bookkeeping (this commit).** Operator-decisions block added to the plan
+  (D5 proceed/phase-1-done; A4 trigger-gated + gate-prep done with F8
+  status; D6 declined; D4-remainder declined standalone; F1 split —
+  venvs reclaimed, `ladder-out/` retained) and this entry.
+- **Disk reclaim.** `git check-ignore` + `git ls-files` confirmed
+  `dev/e2e-tests/.venv` and `.venv-1` gitignored with zero tracked files,
+  then `rm -rf` (only those two; `ladder-out/`, `tmp/`, `.build-staging`,
+  and the canonical `.venv` untouched).
+
+**F8 honesty.** F8 (mixed HELM×EEE packet) is **not** captured. No on-disk
+fixture pairs a HELM run and an EEE artifact under a shared logical run key,
+so a mixed packet can't be assembled from existing fixtures without
+*inventing* a new coordinated one — which the brief explicitly forbids
+("honesty over completeness"). Recorded as still-missing in three places:
+the harness module docstring, `capture_baseline.py`'s docstring, and the
+plan's A4 decision. Building F8 (extend `build_fixture.py` per matrix §7)
+should be A4's first step.
+
+**Uncertainties / what might break.** (1) The HELM cells depend on the
+`every_eval_ever` submodule being checked out and on `helm` +
+`every_eval_ever` importing — all three guarded by skips, so a bare
+checkout degrades to skip, not fail. (2) The HELM→EEE conversion writes a
+persistent cache under `/data/crfm-helm-audit-store/eee/by-run-path/<hash>`;
+because run dirs are unique tempdirs there is no stale-cache collision, but
+the cache does accrete entries across capture runs (matches production
+behavior; harmless). (3) The manifest `comparability_facts` I author are
+inputs, not the A4 surface — A4 changes the diff/diagnosis computed from run
+*content*, which these snapshots pin — so any consistent facts gate A4
+correctly; I set them faithfully from the fixture run_spec anyway.
+
+**Next steps.** A4 itself remains owner/paper-gated: build F8 first, then
+retire `HelmRunDiff` with all of F1–F8 green. D5 deletion +
+`helm_view_from_path` removal after one deprecation cycle. Branch is 25
+commits ahead of the pre-session base; not pushed.
