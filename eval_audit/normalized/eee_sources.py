@@ -97,12 +97,18 @@ def detect_helm_sidecars(artifact_dir: Path) -> dict[str, Any]:
     }
 
 
-def extract_artifact_meta(row: dict[str, Any], *, root: Path) -> dict[str, Any]:
-    """From a discovered artifact, pull model / benchmark / experiment fields."""
-    data = row["data"]
-    json_path: Path = row["json_path"]
-    artifact_dir = json_path.parent
+def _meta_fields(
+    data: dict[str, Any],
+    json_path: Path,
+    *,
+    experiment_name: str | None,
+) -> dict[str, Any]:
+    """Shared meta extraction from a parsed EEE aggregate (D2).
 
+    Used by both the tree-walking :func:`extract_artifact_meta` and the
+    single-file :func:`extract_artifact_meta_from_file`.
+    """
+    artifact_dir = json_path.parent
     model_info = data.get("model_info") or {}
     model_id = (model_info.get("id") or model_info.get("name") or "").strip()
     eval_results = data.get("evaluation_results") or []
@@ -116,18 +122,6 @@ def extract_artifact_meta(row: dict[str, Any], *, root: Path) -> dict[str, Any]:
         )
     else:
         benchmark = "unknown"
-
-    # Experiment name = the path component just below "local/" (if present),
-    # so the user can group local attempts however they like. The documented
-    # contract is ``local/<experiment>/<benchmark>/<dev>/<model>/<uuid>.json``,
-    # whose artifact_dir (the json's parent) is ``<experiment>/<benchmark>/
-    # <dev>/<model>`` — exactly 4 parts relative to ``local/``. The old ``> 4``
-    # guard never fired for this layout, silently collapsing every row to
-    # ``eee_only_local`` and discarding the user's chosen grouping (D-1).
-    rel = artifact_dir.relative_to(root)
-    experiment_name: str | None = None
-    if len(rel.parts) >= 4:
-        experiment_name = rel.parts[0]
     sidecars = detect_helm_sidecars(artifact_dir)
     return {
         "artifact_dir": artifact_dir,
@@ -139,6 +133,42 @@ def extract_artifact_meta(row: dict[str, Any], *, root: Path) -> dict[str, Any]:
         "run_spec_fpath": sidecars["run_spec_fpath"],
         "max_eval_instances": sidecars["max_eval_instances"],
     }
+
+
+def extract_artifact_meta(row: dict[str, Any], *, root: Path) -> dict[str, Any]:
+    """From a discovered artifact, pull model / benchmark / experiment fields."""
+    data = row["data"]
+    json_path: Path = row["json_path"]
+
+    # Experiment name = the path component just below "local/" (if present),
+    # so the user can group local attempts however they like. The documented
+    # contract is ``local/<experiment>/<benchmark>/<dev>/<model>/<uuid>.json``,
+    # whose artifact_dir (the json's parent) is ``<experiment>/<benchmark>/
+    # <dev>/<model>`` — exactly 4 parts relative to ``local/``. The old ``> 4``
+    # guard never fired for this layout, silently collapsing every row to
+    # ``eee_only_local`` and discarding the user's chosen grouping (D-1).
+    rel = json_path.parent.relative_to(root)
+    experiment_name: str | None = None
+    if len(rel.parts) >= 4:
+        experiment_name = rel.parts[0]
+    return _meta_fields(data, json_path, experiment_name=experiment_name)
+
+
+def extract_artifact_meta_from_file(json_path: Path) -> dict[str, Any]:
+    """Single-file variant of :func:`extract_artifact_meta` (D2).
+
+    Takes one explicit ``<uuid>.json`` instead of walking a tree; no
+    experiment grouping applies. Raises :class:`ValueError` on an
+    unparseable or non-EEE-shaped file so CLI callers can wrap it in
+    their own exit semantics.
+    """
+    try:
+        data = json.loads(json_path.read_text())
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"cannot parse {json_path}: {exc}") from exc
+    if not isinstance(data, dict) or "evaluation_results" not in data or "model_info" not in data:
+        raise ValueError(f"{json_path} does not look like an EEE aggregate JSON")
+    return _meta_fields(data, json_path, experiment_name=None)
 
 
 def stable_short_hash(*parts: str) -> str:

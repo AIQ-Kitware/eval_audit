@@ -34,18 +34,20 @@ without re-running the analysis.
 from __future__ import annotations
 
 import argparse
-import json
 import os
-import shlex
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Iterable
 
-from eval_audit.infra.fs_publish import write_text_atomic
 from eval_audit.infra.logging import setup_cli_logging
 from eval_audit.planning.core_report_planner import build_planning_artifact
+from eval_audit.workflows.eee_render import (
+    repo_pythonpath_env,
+    run_core_metrics,
+    write_packet_manifests,
+)
 from eval_audit.workflows.plan_core_report_packets import write_planning_outputs
 
 from eval_audit.infra.profiling import profile
@@ -139,11 +141,12 @@ def _render_packet(
     plot_layout_args: list[str],
     render_heavy_plots: bool,
 ) -> Path:
-    """Run rebuild_core_report on a single planner packet.
+    """Render one planner packet by shelling out to ``reports.core_metrics``.
 
-    The packet manifests are pre-written next to the output dir; this just
-    invokes core_metrics so the per-pair plots + comparability facts are
-    rendered.
+    The packet manifests are written next to the output dir first; the
+    ``core_metrics`` child then renders the per-pair plots +
+    comparability facts (R-m: this never routed through
+    ``rebuild_core_report`` — the old docstring was wrong).
 
     Output layout mirrors the canonical
     ``<root>/<experiment_name>/core-reports/<packet>/...`` shape so that
@@ -157,30 +160,12 @@ def _render_packet(
     report_dpath = out_root / experiment_name / "core-reports" / packet_id
     report_dpath.mkdir(parents=True, exist_ok=True)
 
-    (report_dpath / "components_manifest.json").write_text(
-        json.dumps(packet["components_manifest"], indent=2) + "\n"
+    write_packet_manifests(report_dpath, packet)
+    run_core_metrics(
+        report_dpath,
+        render_heavy_plots=render_heavy_plots,
+        plot_layout_args=plot_layout_args,
     )
-    (report_dpath / "comparisons_manifest.json").write_text(
-        json.dumps(packet["comparisons_manifest"], indent=2) + "\n"
-    )
-
-    cmd: list[str] = [
-        sys.executable, "-m", "eval_audit.reports.core_metrics",
-        "--report-dpath", str(report_dpath),
-        "--components-manifest", str(report_dpath / "components_manifest.json"),
-        "--comparisons-manifest", str(report_dpath / "comparisons_manifest.json"),
-        # EEE-only mode: never enrich instances from HELM origins
-        # (Phase 3 / 4.5 declared instance-source policy).
-        "--instance-source", "eee-only",
-    ]
-    if render_heavy_plots:
-        cmd.append("--render-heavy-pairwise-plots")
-    cmd += plot_layout_args
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[2]) + (
-        os.pathsep + env.get("PYTHONPATH", "") if env.get("PYTHONPATH") else ""
-    )
-    subprocess.run(cmd, check=True, env=env)
     return report_dpath
 
 
@@ -469,12 +454,8 @@ def main(argv: list[str] | None = None) -> None:
             "--index-fpath", str(local_index_fpath),
             "--summary-root", str(summary_root),
         ]
-        env = os.environ.copy()
-        env["PYTHONPATH"] = str(Path(__file__).resolve().parents[2]) + (
-            os.pathsep + env.get("PYTHONPATH", "") if env.get("PYTHONPATH") else ""
-        )
         print(f"\nBuilding aggregate summary under {summary_root}/ ...")
-        subprocess.run(summary_cmd, check=True, env=env)
+        subprocess.run(summary_cmd, check=True, env=repo_pythonpath_env())
         print(f"DONE: aggregate summary at {summary_root}/all-results/")
 
 

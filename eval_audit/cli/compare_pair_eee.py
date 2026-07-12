@@ -34,9 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
-import subprocess
 import sys
 import textwrap
 from pathlib import Path
@@ -47,9 +45,10 @@ from eval_audit.normalized.eee_sources import (
     build_local_index_row as _build_local_index_row,
     build_logical_run_key as _build_logical_run_key,
     build_official_index_row as _build_official_index_row,
-    detect_helm_sidecars,
+    extract_artifact_meta_from_file,
     write_index_csv as _write_index_csv,
 )
+from eval_audit.workflows.eee_render import run_core_metrics
 from eval_audit.infra.logging import setup_cli_logging
 from eval_audit.planning.core_report_planner import build_planning_artifact
 
@@ -87,41 +86,14 @@ def _resolve_eee_artifact_path(path: str | Path) -> Path:
 def _meta_from_artifact(json_path: Path) -> dict[str, Any]:
     """Load an EEE aggregate JSON and extract the planner-row inputs.
 
-    Mirrors what ``from_eee._extract_artifact_meta`` produces for the
-    discovery path, but takes a single explicit ``<uuid>.json`` rather
-    than walking a tree.
+    Thin CLI wrapper over the shared single-file extractor in
+    ``normalized.eee_sources`` (D2 — this used to be a hand-copied
+    mirror of the tree-walking discovery path).
     """
     try:
-        data = json.loads(json_path.read_text())
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"FAIL: cannot parse {json_path}: {exc}")
-    if not isinstance(data, dict) or "evaluation_results" not in data or "model_info" not in data:
-        raise SystemExit(f"FAIL: {json_path} does not look like an EEE aggregate JSON")
-    artifact_dir = json_path.parent
-    model_info = data.get("model_info") or {}
-    model_id = (model_info.get("id") or model_info.get("name") or "").strip()
-    eval_results = data.get("evaluation_results") or []
-    if eval_results:
-        first = eval_results[0]
-        source_data = first.get("source_data") or {}
-        benchmark = (
-            source_data.get("dataset_name")
-            or first.get("evaluation_name")
-            or "unknown"
-        )
-    else:
-        benchmark = "unknown"
-    sidecars = detect_helm_sidecars(artifact_dir)
-    return {
-        "artifact_dir": artifact_dir,
-        "json_path": json_path,
-        "model_id": model_id,
-        "benchmark": benchmark,
-        "experiment_name": None,
-        "evaluation_id": data.get("evaluation_id"),
-        "run_spec_fpath": sidecars["run_spec_fpath"],
-        "max_eval_instances": sidecars["max_eval_instances"],
-    }
+        return extract_artifact_meta_from_file(json_path)
+    except ValueError as exc:
+        raise SystemExit(f"FAIL: {exc}")
 
 
 def _format_pair_keys(official_meta: dict[str, Any], local_meta: dict[str, Any]) -> str:
@@ -370,23 +342,11 @@ def main(argv: list[str] | None = None) -> None:
         json.dumps(packet["comparisons_manifest"], indent=2) + "\n"
     )
 
-    cmd: list[str] = [
-        sys.executable, "-m", "eval_audit.reports.core_metrics",
-        "--report-dpath", str(out_dir),
-        "--components-manifest", str(out_dir / "components_manifest.json"),
-        "--comparisons-manifest", str(out_dir / "comparisons_manifest.json"),
-        # EEE-only mode: never enrich instances from HELM origins
-        # (Phase 3 / 4.5 declared instance-source policy).
-        "--instance-source", "eee-only",
-    ]
-    if args.render_heavy_pairwise_plots:
-        cmd.append("--render-heavy-pairwise-plots")
-    cmd += plot_layout_args
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[2]) + (
-        os.pathsep + env.get("PYTHONPATH", "") if env.get("PYTHONPATH") else ""
+    run_core_metrics(
+        out_dir,
+        render_heavy_plots=args.render_heavy_pairwise_plots,
+        plot_layout_args=plot_layout_args,
     )
-    subprocess.run(cmd, check=True, env=env)
 
     caveats_fpath = _write_caveats_file(
         out_dir,
