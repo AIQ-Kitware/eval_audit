@@ -1241,3 +1241,19 @@ backend, which isn't checked out here — genuinely deferred, as the plan stages
 serving host with the full install: `./08` (corpus freeze — the authoritative
 0-NO_MATCH/0-AMBIGUOUS gate), then `./10`/`./15`. Verify T2 HF weight ids on the Hub
 first. Committed onto `impl/run-from-run-spec` (not pushed).
+
+## 2026-07-12 10:34:10 -0400
+
+**User intent**: Assess, then perform, the merge of `impl/era-pinned-helm-containers` into `impl/run-from-run-spec` without breaking existing run paths.
+
+**Model/config**: claude-fable-5 (Claude Code, VSCode extension harness).
+
+**What happened**: Pre-merge audit via `git merge-tree` showed only two conflicts, both append-vs-append (journal + `preset_configs.yaml`). Audited every shared module the era branch touches: the feature is opt-in end-to-end (`ManifestSpec.era=None` default, key omitted from manifest docs so modern manifests stay byte-identical and kwdagger job-identity hashes stable; `_era_pipeline_for_manifest` returns None without the key; exporter/freeze gate on `resolved_era`/`omit_model_deployment`). Two fail-loud guards touch modern paths (materializer refuses `model_deployment` rewrite on pre-v0.5 specs; bridge inspects `org.aiq.era` label only for unpinned modern images) — neither affects existing runbooks.
+
+**Merge mechanics worth remembering**: git anchored the `preset_configs.yaml` conflict on shared trailing lines (`container_network`/`full_manifest`) and split it into three hunks *mid-preset* — a naive per-hunk union would have interleaved the gpt-oss preset with the era presets and corrupted the YAML. Correct resolution: both sides appended whole blocks at the merge-base EOF (line 915), so I rebuilt the file as HEAD's version + era's 86 appended lines, then validated with `yaml.safe_load` (25 presets). Journal resolved by chronological reorder (era-side entries all predate HEAD-side).
+
+**Validation**: era + exporter + provenance + qwen suites in the merged worktree: 94/95 pass. Two failure groups triaged as NOT merge-induced: (1) `test_era_shim_imports` v0.3.0 failures were the merge worktree's helm submodule missing object `8ea285f7` — fixed by local fetch from the main worktree's submodule; (2) `test_qwen_from_spec::test_combined_preset_resolves_with_local_strip` fails identically on the unmerged base `faef9ea` — /data/crfm-helm-public now has token-subset-ambiguous duplicates for the qwen mmlu entries (corpus drift, possibly from era-era classic pulls).
+
+**Next steps**: (a) the pre-existing qwen ambiguity needs a look — either the corpus gained a duplicate suite or the whitelist needs a suite-scoped root, orthogonal to this merge; (b) merge committed as `eb1b9faf` on `impl/run-from-run-spec`, not pushed.
+
+**Design insight**: when both branches append to the same YAML mapping, resolve at the block level (reconstruct base + block A + block B), never at the hunk level — git's common-line anchoring inside repetitive YAML (repeated `container_*` keys) produces structurally misleading conflict hunks.
