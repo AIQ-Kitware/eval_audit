@@ -27,3 +27,10 @@ pyarrow==11.0.0
 # supported` at load. Pin the era value (same class as pyarrow: an open-bound
 # TRANSITIVE that drifts, not a setup.cfg direct dep).
 fsspec==2022.8.2
+# nltk: era setup.cfg declares `nltk~=3.7`, but that is TWO-component compatible
+# release = >=3.7,<4.0 (NOT <3.8), so a fresh resolve floats to nltk 3.9 — which
+# renamed the tokenizer resource (`punkt` -> `punkt_tab`) and changes metric
+# tokenization vs the era. Pin the era value so BiasMetric/rouge tokenize exactly
+# as the official run did (and so the image's provisioned `punkt` is the right
+# resource). Same drift class as pyarrow/fsspec, via a two-component `~=`.
+nltk==3.7

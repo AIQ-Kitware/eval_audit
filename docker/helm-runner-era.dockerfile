@@ -148,6 +148,15 @@ ENV VIRTUAL_ENV=/opt/venv \
     UV_COMPILE_BYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# HELM metrics tokenize with NLTK (BiasMetric.evaluate_stereotypical_associations
+# -> word_tokenize; BasicMetric rouge). NLTK ships no data, and the metric path
+# does not self-download (only basic_metrics guards punkt for rouge), so the real
+# replay dies at metric time with LookupError: Resource 'punkt' not found.
+# Provision it at build time into a default, world-readable search path. With the
+# era `nltk==3.7` pin the resource is `punkt` (nltk 3.9 renamed it `punkt_tab`);
+# the pin keeps era tokenization/metric behavior AND this resource name.
+RUN python -c "import nltk; nltk.download('punkt', download_dir='/usr/local/share/nltk_data')"
+
 # Final-stage assertions — this is the stage that ships, so guard the era API
 # surface the shim replay depends on, the interpreter, and the frozen pins here
 # (the builder's own check can pass while the shipped image is broken).
