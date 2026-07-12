@@ -23,7 +23,7 @@ import importlib.metadata
 import json
 import os
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from loguru import logger
 
@@ -104,11 +104,13 @@ def _resolve_instance_source_policy(ref: NormalizedRunRef) -> str:
 
     Priority: an explicit ``instance_source_policy`` on ``ref.extra``
     (set by the entry point — EEE-only CLIs declare ``eee-only``, the
-    HELM-driven renderer declares ``helm-preferred``), then the
-    deprecated ``EVAL_AUDIT_EEE_STRICT`` env override (one deprecation
-    cycle; equivalent to ``eee-only``), then ``helm-preferred`` — the
-    legacy enriched behavior, now explicit and recorded instead of
-    silent (Phase 3 / 4.5).
+    HELM-driven renderer declares ``helm-preferred``), then
+    ``helm-preferred`` — the legacy enriched behavior, now explicit and
+    recorded instead of silent (Phase 3 / 4.5). The deprecated
+    ``EVAL_AUDIT_EEE_STRICT`` env override was retired 2026-07-12 after
+    its one-cycle deprecation window (plan item E5a); pass
+    ``--instance-source eee-only`` / set the policy on ``ref.extra``
+    instead.
     """
     raw = str(ref.extra.get(INSTANCE_SOURCE_POLICY_KEY) or "").strip().lower()
     if raw in _INSTANCE_SOURCE_POLICIES:
@@ -118,11 +120,6 @@ def _resolve_instance_source_policy(ref: NormalizedRunRef) -> str:
             f"Unknown instance_source_policy {raw!r}; "
             f"expected one of {sorted(_INSTANCE_SOURCE_POLICIES)}"
         )
-    eee_strict = os.environ.get(
-        "EVAL_AUDIT_EEE_STRICT", ""
-    ).strip().lower() in {"1", "true", "yes"}
-    if eee_strict:
-        return "eee-only"
     return "helm-preferred"
 
 

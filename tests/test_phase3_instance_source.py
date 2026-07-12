@@ -11,9 +11,10 @@ EEE-derived vs HELM-derived instance ids deliberately disagree. Pins:
 3. ``helm-preferred`` with a recorded-but-unreadable HELM origin
    degrades to EEE instances with the degradation recorded, never a
    silent number change or a crash;
-4. the deprecated ``EVAL_AUDIT_EEE_STRICT`` env override still maps to
-   ``eee-only``; the implicit default remains ``helm-preferred`` (the
-   legacy enriched behavior, now recorded).
+4. the implicit default remains ``helm-preferred`` (the legacy enriched
+   behavior, now recorded), and the retired ``EVAL_AUDIT_EEE_STRICT``
+   env var has no effect (retired 2026-07-12 after its deprecation
+   cycle — plan item E5a).
 """
 from __future__ import annotations
 
@@ -120,13 +121,15 @@ def test_helm_preferred_without_origin_is_plain_eee(probe, monkeypatch):
     assert run.ref.extra["instance_source"] == "eee"
 
 
-def test_env_strict_maps_to_eee_only_and_default_is_helm_preferred(probe, monkeypatch):
-    monkeypatch.setenv("EVAL_AUDIT_EEE_STRICT", "1")
+def test_default_is_helm_preferred_and_retired_env_var_is_inert(probe, monkeypatch):
     run = _load(probe, policy=None)
-    assert run.ref.extra["instance_source_policy"] == "eee-only"
-    assert _sample_ids(run) == EEE_IDS
+    assert run.ref.extra["instance_source_policy"] == "helm-preferred"
+    assert _sample_ids(run) == {"H0", "H1", "H2", "H3"}
 
-    monkeypatch.delenv("EVAL_AUDIT_EEE_STRICT")
+    # The retired EVAL_AUDIT_EEE_STRICT override must have no effect —
+    # policy selection is explicit-only (E5a). This pins against a
+    # zombie revival of the env branch.
+    monkeypatch.setenv("EVAL_AUDIT_EEE_STRICT", "1")
     run = _load(probe, policy=None)
     assert run.ref.extra["instance_source_policy"] == "helm-preferred"
     assert _sample_ids(run) == {"H0", "H1", "H2", "H3"}
