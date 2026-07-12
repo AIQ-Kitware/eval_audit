@@ -110,6 +110,7 @@ def _model_deployment_entry_era(
     facts: ServingFacts,
     *,
     helm_model_name: str,
+    helm_tokenizer_name: str | None = None,
     base_url: str | None = None,
     api_key_value: str | None = None,
 ) -> dict[str, Any]:
@@ -133,11 +134,18 @@ def _model_deployment_entry_era(
       pre-construction credential check. ``"EMPTY"`` is the shim client's
       unset sentinel (no ``Authorization`` header — correct for a direct vLLM
       server); a real key is threaded for a gateway that authenticates.
-    * All five cattrs-no-defaults keys are emitted explicitly
-      (``model_name`` / ``tokenizer_name: null`` / ``max_sequence_length: null``)
-      so ``cattrs.structure`` at the era succeeds. ``tokenizer_name: null`` lets
-      the era WindowService (keyed on the official model name) reproduce official
-      tokenization/windowing untouched.
+    * All five cattrs-no-defaults keys are emitted explicitly (``model_name`` /
+      ``tokenizer_name`` / ``max_sequence_length``) so ``cattrs.structure`` at the
+      era succeeds. ``tokenizer_name`` and ``max_sequence_length`` MUST be set:
+      registering a deployment routes the era ``WindowServiceFactory`` down the
+      ``if get_model_deployment(model): ...`` branch, which at v0.2.4 hard-raises
+      ``"Tokenizer name must be set on model deplyment"`` when the deployment's
+      ``tokenizer_name`` is null (there is no auto-inference — the model-name
+      GPTNeoX/etc. fallback is only reached when NO deployment is registered), and
+      at v0.3.0 builds a ``DefaultWindowService`` that needs both. The value comes
+      from the preset's ``helm_tokenizer_name`` (e.g. ``EleutherAI/gpt-neox-20b``
+      for the redpajama/pythia GPT-NeoX family — what ``GPTNeoXWindowService``
+      used officially); the catalog ``max_model_len`` supplies the window.
 
     Requires an explicit ``base_url`` (Finding 5): the era shim client cannot
     authenticate at the LiteLLM gateway with the ``EMPTY`` sentinel — every
@@ -156,12 +164,23 @@ def _model_deployment_entry_era(
             "the LiteLLM gateway, which the era shim client cannot authenticate "
             "against with the EMPTY sentinel (every request would 401)."
         )
+    if facts.max_model_len is None:
+        raise ValueError(
+            f"era model deployment for {helm_model_name!r}: catalog endpoint "
+            f"{facts.endpoint!r} declares no runtime.max_model_len; set it in "
+            "catalog.yaml so the era WindowService can size the prompt window."
+        )
     return {
         "name": helm_model_name,
         "model_name": helm_model_name,
-        # null => auto-inferred by the era WindowService keyed on model_name.
-        "tokenizer_name": None,
-        "max_sequence_length": None,
+        # Both REQUIRED once a deployment is registered: v0.2.4's
+        # WindowServiceFactory raises "Tokenizer name must be set on model
+        # deplyment" for a null tokenizer_name, and v0.3.0's DefaultWindowService
+        # needs both. Preset-authoritative tokenizer (the official era alias, e.g.
+        # EleutherAI/gpt-neox-20b); catalog max_model_len sizes the window. Falls
+        # back to the model's own HF tokenizer only if the preset omits it.
+        "tokenizer_name": helm_tokenizer_name or facts.hf_model_id,
+        "max_sequence_length": int(facts.max_model_len),
         "client_spec": {
             "class_name": _ERA_CLIENT_CLASS,
             "args": {
@@ -479,6 +498,7 @@ def materialize_benchmark_bundle(
                 _model_deployment_entry_era(
                     fact,
                     helm_model_name=spec.get("helm_model_name"),
+                    helm_tokenizer_name=spec.get("helm_tokenizer_name"),
                     base_url=base_url,
                     api_key_value=api_key_value,
                 )

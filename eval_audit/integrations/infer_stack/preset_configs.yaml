@@ -2079,6 +2079,11 @@
   'profiles':
   - 'profile': 'redpajama3b-single'
     'helm_model_name': 'together/redpajama-incite-base-3b-v1'
+    # GPT-NeoX-20B tokenizer — what the era GPTNeoXWindowService used officially
+    # for the redpajama/pythia family. REQUIRED: registering an era deployment
+    # forces the v0.2.4 WindowServiceFactory's deployment branch, which raises
+    # "Tokenizer name must be set on model deplyment" if this is unset.
+    'helm_tokenizer_name': 'EleutherAI/gpt-neox-20b'
     'protocol_mode': 'completions'
   'smoke_manifest':
     'experiment_name': 'era-redpajama_3b-v0_2_4-smoke'
@@ -2112,6 +2117,11 @@
   'profiles':
   - 'profile': 'redpajama3b-single'
     'helm_model_name': 'together/redpajama-incite-base-3b-v1'
+    # GPT-NeoX-20B tokenizer — what the era GPTNeoXWindowService used officially
+    # for the redpajama/pythia family. REQUIRED: registering an era deployment
+    # forces the v0.2.4 WindowServiceFactory's deployment branch, which raises
+    # "Tokenizer name must be set on model deplyment" if this is unset.
+    'helm_tokenizer_name': 'EleutherAI/gpt-neox-20b'
     'protocol_mode': 'completions'
   'smoke_manifest':
     'experiment_name': 'era-redpajama_3b-v0_3_0-smoke'

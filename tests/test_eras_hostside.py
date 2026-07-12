@@ -88,15 +88,52 @@ def test_era_deployment_entry_schema():
     # Name == official model name (verbatim by-name).
     assert entry["name"] == "eleutherai/pythia-6.9b"
     assert entry["model_name"] == "eleutherai/pythia-6.9b"
-    # cattrs-no-defaults: the null keys are present explicitly.
-    assert entry["tokenizer_name"] is None
-    assert entry["max_sequence_length"] is None
+    # tokenizer_name/max_sequence_length MUST be set: registering a deployment
+    # forces v0.2.4's WindowServiceFactory deployment branch, which raises
+    # "Tokenizer name must be set on model deplyment" for a null tokenizer_name.
+    # No helm_tokenizer_name passed here => falls back to the model's own HF
+    # tokenizer; the window comes from the catalog max_model_len.
+    assert entry["tokenizer_name"] == "EleutherAI/pythia-6.9b"
+    assert entry["max_sequence_length"] == 2048
     assert entry["client_spec"]["class_name"] == _ERA_CLIENT
     assert entry["client_spec"]["args"]["base_url"] == "http://localhost:8000/v1"
     assert entry["client_spec"]["args"]["openai_model_name"] == "pythia-6.9b"
     # Finding 2: api_key lives in args (credentials.conf can't address dotted
     # model names); the EMPTY sentinel means "unset" to the shim client.
     assert entry["client_spec"]["args"]["api_key"] == "EMPTY"
+
+
+def test_era_deployment_entry_uses_preset_tokenizer():
+    """The preset's helm_tokenizer_name lands on the deployment (the era official
+    alias, e.g. GPT-NeoX-20B for redpajama) — the v0.2.4 window-service fix."""
+    facts = ServingFacts(
+        endpoint="redpajama3b-single",
+        served_model_name="redpajama-incite-base-3b-v1",
+        hf_model_id="togethercomputer/RedPajama-INCITE-Base-3B-v1",
+        max_model_len=2048,
+    )
+    entry = _model_deployment_entry_era(
+        facts,
+        helm_model_name="together/redpajama-incite-base-3b-v1",
+        helm_tokenizer_name="EleutherAI/gpt-neox-20b",
+        base_url="http://localhost:8000/v1",
+    )
+    assert entry["tokenizer_name"] == "EleutherAI/gpt-neox-20b"
+    assert entry["max_sequence_length"] == 2048
+
+
+def test_era_deployment_entry_requires_max_model_len():
+    """A catalog endpoint with no max_model_len can't size the era window."""
+    facts = ServingFacts(
+        endpoint="e", served_model_name="m", hf_model_id="org/m", max_model_len=None
+    )
+    with pytest.raises(ValueError, match="max_model_len"):
+        _model_deployment_entry_era(
+            facts,
+            helm_model_name="together/redpajama-incite-base-3b-v1",
+            helm_tokenizer_name="EleutherAI/gpt-neox-20b",
+            base_url="http://localhost:8000/v1",
+        )
 
 
 def test_era_deployment_entry_threads_api_key():
