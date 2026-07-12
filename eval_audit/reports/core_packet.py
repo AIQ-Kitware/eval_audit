@@ -38,14 +38,6 @@ def comparison_sample_latest_name(comparison_id: str) -> str:
     return f"instance_samples_{comparison_artifact_stem(comparison_id)}.txt"
 
 
-def comparison_sample_history_name(comparison_id: str, stamp: str) -> str:
-    """Deprecated: kept for backwards-compat with callers that still pass a
-    stamp. Returns the same path as :func:`comparison_sample_latest_name`
-    (the stamp infix is no longer written; see fs_publish.py docstring)."""
-    del stamp
-    return comparison_sample_latest_name(comparison_id)
-
-
 def write_manifest(
     report_dpath: Path,
     *,

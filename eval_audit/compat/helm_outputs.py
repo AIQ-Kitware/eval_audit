@@ -50,29 +50,11 @@ class _JsonRunView:
         return self._load("per_instance_stats")
 
 
-class _MsgspecRunView(_JsonRunView):
-    """Unimplemented msgspec-backed reader placeholder.
-
-    Previously this silently aliased the plain-JSON view, so ``.msgspec.X()``
-    returned dicts while promising msgspec objects. Raise instead of lying: a
-    caller that genuinely needs the msgspec path fails loudly rather than
-    getting JSON dicts. Construction stays cheap (HelmRun builds one eagerly);
-    only method access raises.
-    """
-
-    def _load(self, name: str):
-        raise NotImplementedError(
-            "eval_audit.compat.helm_outputs._MsgspecRunView is not implemented; "
-            "use the .json view (plain JSON) instead."
-        )
-
-
 class HelmRun:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.name = self.path.name
         self.json = _JsonRunView(self.path)
-        self.msgspec = _MsgspecRunView(self.path)
 
     @classmethod
     def coerce(cls, data: Any) -> "HelmRun":

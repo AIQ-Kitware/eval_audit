@@ -85,11 +85,6 @@ def packet_component(packet: dict[str, Any], component_id: str | None) -> dict[s
     return packet.get("component_lookup", {}).get(component_id, {})
 
 
-def packet_reference_component(packet: dict[str, Any], comparison_kind: str) -> dict[str, Any]:
-    comparison = find_packet_comparison(packet, comparison_kind)
-    return packet_component(packet, comparison.get("reference_component_id"))
-
-
 def packet_component_by_source_kind(
     packet: dict[str, Any],
     comparison_kind: str,

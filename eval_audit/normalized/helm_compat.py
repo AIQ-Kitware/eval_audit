@@ -105,9 +105,9 @@ class _NormalizedJsonView:
 class HelmRunView:
     """Adapter that exposes a :class:`NormalizedRun` as a HELM-shape reader.
 
-    The legacy comparison core reads ``.path``, ``.name``, ``.json.X()`` and
-    (less commonly) ``.msgspec.X()``. We map all of these onto the
-    in-memory cache, falling back to disk via the run's :class:`Origin`.
+    The legacy comparison core reads ``.path``, ``.name`` and ``.json.X()``.
+    We map all of these onto the in-memory cache, falling back to disk via
+    the run's :class:`Origin`.
     """
 
     def __init__(self, run: NormalizedRun):
@@ -119,10 +119,6 @@ class HelmRunView:
         self.path = Path(helm_path) if helm_path else Path(run.ref.artifact_path)
         self.name = self.path.name
         self.json = _NormalizedJsonView(run)
-        # Most call sites only touch ``.json``; alias ``.msgspec`` to it so
-        # legacy paths that happened to use the alternative reader still
-        # resolve. Both views ultimately serve the same JSON dicts.
-        self.msgspec = self.json
 
 
 def helm_view(run: NormalizedRun) -> HelmRunView:

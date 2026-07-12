@@ -92,14 +92,6 @@ def validate_run_dir(run_dpath: Path) -> None:
         )
 
 
-def _agree_ratio_at(curve: list[dict[str, Any]], abs_tol: float) -> float | None:
-    """Read the agreement ratio at a specific abs_tol from an agreement curve."""
-    for row in curve:
-        if float(row['abs_tol']) == float(abs_tol):
-            return row['agree_ratio']
-    return None
-
-
 def _tolerance_highlights(
     curve: list[dict[str, Any]], tolerances: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
