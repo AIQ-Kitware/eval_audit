@@ -1,13 +1,16 @@
-"""Phase 3 sub-stage 4.2 gate: normalized diagnosis == HELM diagnosis.
+"""diagnose_repro behavior battery + HelmRunDiff delegation pin.
 
-``HelmRunDiff._diagnose_repro`` is a pure function of its keyword
-inputs (it never reads ``self``), so the gate drives both
-implementations across a branch-covering battery of synthetic inputs
-and asserts deep equality of the full diagnosis dict — labels,
-priorities, reason ordering, and details.
+Since sub-stage 4.6 landed, ``HelmRunDiff._diagnose_repro`` *delegates*
+to :func:`eval_audit.normalized.diagnose.diagnose_repro` — there is no
+second implementation to drift (the original 4.2 "two copies must
+agree" purpose is obsolete; docstring updated 2026-07-12, plan item A2).
+What this file still pins:
 
-``HelmRunDiff`` keeps its own copy until sub-stage 4.6; this test is
-what keeps the two from drifting in the meantime.
+* the input→label behavior of ``diagnose_repro`` itself, across a
+  branch-covering battery of synthetic inputs (labels, priorities,
+  reason ordering, substitution re-labeling); and
+* that ``HelmRunDiff._diagnose_repro`` remains a pure delegation
+  (identical output on identical inputs) while ``HelmRunDiff`` exists.
 """
 from __future__ import annotations
 

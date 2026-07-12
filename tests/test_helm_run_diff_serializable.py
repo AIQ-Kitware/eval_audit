@@ -1,26 +1,9 @@
 import json
-from typing import Any, Iterable
+from typing import Any
 
 from eval_audit.helm.analysis import HelmRunAnalysis
 from eval_audit.helm.diff import HelmRunDiff
 from eval_audit.helm.diff import dataset_overlap_from_request_states
-
-
-class DummyJoined:
-    def __init__(self, rows: Iterable[dict[str, Any]]):
-        # rows should each have a 'key' field
-        self.row_by_key = {r['key']: r for r in rows}
-
-    def __iter__(self):
-        return iter(self.row_by_key.values())
-
-
-class DummyRun:
-    def __init__(self, joined: DummyJoined):
-        self._joined = joined
-
-    def joined_instance_stat_table(self, *, assert_assumptions: bool = False, short_hash: int = 0):
-        return self._joined
 
 
 def _dummy_analysis(run_spec: dict[str, Any], stats: list[dict[str, Any]]):
@@ -33,7 +16,6 @@ def _dummy_analysis(run_spec: dict[str, Any], stats: list[dict[str, Any]]):
     ana.scenario = lambda: {'class_name': 'ToyScenario', 'output_path': '/tmp/a'}
     ana.scenario_state = lambda: {'request_states': []}
     ana.stats = lambda: stats
-    ana.joined_instance_stat_table = lambda *args, **kwargs: DummyJoined([])
     return ana
 
 

@@ -31,11 +31,6 @@ Example:
     >>> import json
     >>> from eval_audit.helm.analysis import HelmRunAnalysis
     >>> from eval_audit.helm.diff import HelmRunDiff
-    >>> class _DummyJoined:
-    ...     def __init__(self):
-    ...         self.row_by_key = {}
-    ...     def __iter__(self):
-    ...         return iter(self.row_by_key.values())
     >>> def _ana(run_spec, stats, request_states):
     ...     a = HelmRunAnalysis.__new__(HelmRunAnalysis)
     ...     a._raw_cache = {}
@@ -46,7 +41,6 @@ Example:
     ...     a.scenario = lambda: {'class_name': 'ToyScenario', 'output_path': 'tmp/a'}
     ...     a.scenario_state = lambda: {'request_states': request_states}
     ...     a.stats = lambda: stats
-    ...     a.joined_instance_stat_table = lambda *args, **kwargs: _DummyJoined()
     ...     return a
     >>> rs = [{'instance': {'id': 'id1', 'split': 'test', 'input': {'text': 'Q'}}, 'train_trial_index': 0, 'request': {'prompt': 'P'}, 'result': {'completions': [{'text': 'A'}]}}]
     >>> stats_a = [{'name': {'name': 'exact_match', 'split': 'test'}, 'count': 1, 'mean': 1.0}]

@@ -11,7 +11,7 @@ from collections import Counter
 from typing import Any
 import ubelt as ub
 from eval_audit.utils import hashers as helm_hashers
-from eval_audit.helm import metrics as helm_metrics
+from eval_audit import metrics_taxonomy as helm_metrics
 
 
 def summary_dict(
@@ -19,10 +19,8 @@ def summary_dict(
     *,
     level: int | str = 1,
     short_hash: int = 12,
-    include_instance_stats: bool | None = None,
     include_headline_instances: bool | None = None,
     drop_zero_count: bool = False,
-    assert_join_assumptions: bool = False,
 ) -> dict[str, Any]:
     """
     Programmatic single-run summary.
@@ -40,17 +38,16 @@ def summary_dict(
         Suggested semantics (current implementation):
           - level <= 0: ultra-lite (one-line-friendly fields)
           - level >= 1: include run-level inventories (families by class/support)
-          - level >= 5: include instance-level inventories (joined per-instance stats)
           - level >= 10: include a few headline instances (truncated prompt/completion)
 
-        Back-compat: 'lite' maps to 0.
+        Back-compat: 'lite' maps to 0. (The level >= 5 instance-level
+        join inventories were retired 2026-07-12 — plan item A2; the
+        ``instance_stats`` key stays in the output as ``None`` for shape
+        stability. Per-instance comparison lives in
+        :mod:`eval_audit.normalized`.)
 
     short_hash:
         Hash prefix length used in small signatures.
-
-    include_instance_stats:
-        If None: enabled when level >= 5.
-        If True: always attempt to build instance inventories via joined_instance_stat_table().
 
     include_headline_instances:
         If None: enabled when level >= 10.
@@ -60,14 +57,10 @@ def summary_dict(
         If True: ignore count==0 rows in certain inventories. (Default False because
         “unsupported” (count==0) is explicitly useful in this summary.)
 
-    assert_join_assumptions:
-        If True, call the joiner with assertions enabled (loud failures). Keep
-        False by default for runtime.
-
     Returns
     -------
     dict
-        Structured summary with run-level and (optionally) instance-level inventories.
+        Structured summary with run-level inventories.
     """
     # Backwards compatibility
     if isinstance(level, str):
@@ -76,19 +69,15 @@ def summary_dict(
         else:
             raise KeyError(level)
 
-    if include_instance_stats is None:
-        include_instance_stats = level >= 5
     if include_headline_instances is None:
         include_headline_instances = level >= 10
 
     cache_key = (
-        'summary_dict_v4',
+        'summary_dict_v5',
         level,
         short_hash,
-        include_instance_stats,
         include_headline_instances,
         drop_zero_count,
-        assert_join_assumptions,
     )
     if cache_key in self._cache:
         return self._cache[cache_key]
@@ -250,42 +239,10 @@ def summary_dict(
         name_getter=lambda r: (r.get('name', None) or {}),
     )
 
-    # --- instance-level inventories via join ---
+    # Instance-level join inventories retired (A2): the key survives as
+    # None so downstream shape assumptions hold; per-instance comparison
+    # is served by eval_audit.normalized.
     inst_info = None
-    if include_instance_stats:
-        try:
-            joined = self.joined_instance_stat_table(
-                assert_assumptions=assert_join_assumptions,
-                short_hash=short_hash,
-            )
-        except Exception as ex:
-            inst_info = {'error': repr(ex)}
-        else:
-            # joined rows are "one per stat", so variants/base stats are reconstructed from request_state in rows
-            # But we can count variants more directly from scenario_state:
-            # (still useful to report join-derived counts)
-            inst_rows_total = len(joined)
-            inst_rows_nonzero = sum(1 for r in joined if int(r.count or 0) != 0)
-            inst_rows_with_mean = sum(
-                1
-                for r in joined
-                if (int(r.count or 0) != 0) and (r.mean is not None)
-            )
-
-            # per-instance family inventory: use the underlying stat dicts
-            inst_stats = [r.stat for r in joined]
-            inst_fams, inst_fams_sig = _family_support_inventory(
-                inst_stats,
-                name_getter=lambda s: (s.get('name', None) or {}),
-            )
-
-            inst_info = {
-                'rows_total': inst_rows_total,
-                'rows_nonzero': inst_rows_nonzero,
-                'rows_with_mean': inst_rows_with_mean,
-                'families_by_class': inst_fams,
-                'inventory_sig': inst_fams_sig,
-            }
 
     # --- headline instances (IDs + truncated text) ---
     headline = None
@@ -395,11 +352,9 @@ def summary(
     level: int = 1,
     writer=None,
     short_hash: int = 12,
-    include_instance_stats: bool | None = None,
     include_headline_instances: bool | None = None,
     family_topn: int = 12,
     drop_zero_count: bool = False,
-    assert_join_assumptions: bool = False,
     prompt_chars: int = 80,
     completion_chars: int = 80,
     input_chars: int = 80,
@@ -425,10 +380,6 @@ def summary(
             - counts
             - metric families grouped by: (metric_class -> supported/unsupported -> family)
 
-      level >= 5:
-          includes instance-level inventories via joined_instance_stat_table()
-          (often the most informative “is this the same run?” signal)
-
       level >= 10:
           prints headline instances (ids + truncated input/prompt/completion) so you can
           immediately look them up by id.
@@ -451,9 +402,6 @@ def summary(
               -> family (heuristic prefix family via metric_family())
 
         This is often better than raw metric lists for “shape of the run”.
-
-    instance_stats.*:
-        Same structure, but computed from per-instance stats (joined to request_states).
     """
     if writer is None:
         try:
@@ -474,17 +422,14 @@ def summary(
     info = self.summary_dict(
         level=level,
         short_hash=short_hash,
-        include_instance_stats=include_instance_stats,
         include_headline_instances=include_headline_instances,
         drop_zero_count=drop_zero_count,
-        assert_join_assumptions=assert_join_assumptions,
     )
 
     label = info.get('label') or ub.Path(info.get('path')).name
     sig = info.get('signatures') or {}
     req = info.get('requests') or {}
     rs = info.get('run_stats') or {}
-    inst = info.get('instance_stats', None)
 
     # --- truncation helpers ---
     try:
@@ -571,42 +516,6 @@ def summary(
             writer('        unsupported:')
             for fam, cnt in unsupp:
                 writer(f'          {fam}: {cnt}')
-
-    # --- instance-level stats ---
-    if inst is None:
-        writer('  instance-level stats: (disabled)')
-    elif isinstance(inst, dict) and inst.get('error'):
-        writer(f'  instance-level stats: ERROR {inst.get("error")}')
-    else:
-        writer(
-            '  instance-level stats (joined per_instance_stats + request_states):'
-        )
-        writer(
-            f'    rows_total={inst.get("rows_total")} '
-            f'rows_nonzero={inst.get("rows_nonzero")} rows_with_mean={inst.get("rows_with_mean")} '
-            f'families_sig={sig.get("instance_stats_families_sig")}'
-        )
-        inst_fams = inst.get('families_by_class') or {}
-        writer(
-            '    families_by_class (class -> supported/unsupported -> family):'
-        )
-        for cls in classes_to_show:
-            if cls not in inst_fams:
-                continue
-            cinfo = inst_fams.get(cls) or {}
-            writer(
-                f'      {cls}: supported_rows={cinfo.get("n_rows_supported")} unsupported_rows={cinfo.get("n_rows_unsupported")}'
-            )
-            supp = cinfo.get('supported', [])[:family_topn]
-            unsupp = cinfo.get('unsupported', [])[:family_topn]
-            if supp:
-                writer('        supported:')
-                for fam, cnt in supp:
-                    writer(f'          {fam}: {cnt}')
-            if unsupp and level >= 10:
-                writer('        unsupported:')
-                for fam, cnt in unsupp:
-                    writer(f'          {fam}: {cnt}')
 
     # --- headline instances (high level) ---
     headline = info.get('headline_instances', None)

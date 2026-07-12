@@ -64,7 +64,7 @@ def test_instance_level_self_pair_zero_delta(nrun) -> None:
 def test_core_metric_keys_are_core_classified(nrun) -> None:
     keys = ncompare.core_metric_keys(nrun)
     assert keys
-    from eval_audit.helm import metrics as hm
+    from eval_audit import metrics_taxonomy as hm
     for key in keys:
         cls, _ = hm.classify_metric(key)
         assert cls == "core"

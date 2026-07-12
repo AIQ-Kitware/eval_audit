@@ -35,30 +35,20 @@ Notes
 
 from __future__ import annotations
 
-from collections import Counter
-from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 import ubelt as ub
 
 from eval_audit.utils import hashers as helm_hashers
-from eval_audit.helm import metrics as helm_metrics
+from eval_audit import metrics_taxonomy as helm_metrics
 from eval_audit.utils.numeric import safe_float as _safe_float
 
-# --- compat re-exports -------------------------------------------------
 # Implementation moved to helm.instance_stats / helm.analysis_report on
 # 2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md).
 # HelmRunAnalysis methods resolve summary/summary_dict through this
-# module's globals; keep re-exporting.
-from eval_audit.helm.instance_stats import (  # noqa: F401
-    StatMeta,
-    _coerce_int,
-    _nice_perturbation_id,
-    InstanceVariantKey,
-    InstanceStatKey,
-    InstanceStatRow,
-    JoinedInstanceStatTable,
-)
+# module's globals; keep re-exporting. (The instance-level join stack
+# was retired 2026-07-12 — plan item A2.)
+from eval_audit.helm.instance_stats import StatMeta  # noqa: F401
 from eval_audit.helm.analysis_report import (  # noqa: F401
     summary_dict,
     summary,
@@ -204,93 +194,3 @@ class HelmRunAnalysis(ub.NiceRepr):
         self._cache[cache_key] = idx
         return idx
 
-    def stats_inventory(
-        self, *, drop_zero_count: bool = False
-    ) -> dict[str, Counter]:
-        """Lightweight histograms over ``stats.json`` for exploration."""
-        cache_key = ('stats_inventory', drop_zero_count)
-        if cache_key in self._cache:
-            return self._cache[cache_key]
-
-        hist: dict[str, Counter] = {
-            'counts': Counter(),
-            'perturbed': Counter(),
-            'splits': Counter(),
-            'family': Counter(),
-            'metric_class': Counter(),
-        }
-        for row in self.stats():
-            c = int(row.get('count', 0) or 0)
-            hist['counts'][c] += 1
-            if drop_zero_count and c == 0:
-                continue
-            name_obj = row.get('name', None)
-            metric = (
-                name_obj.get('name', None)
-                if isinstance(name_obj, dict)
-                else None
-            )
-            split = (
-                name_obj.get('split', None)
-                if isinstance(name_obj, dict)
-                else None
-            )
-            is_pert = bool(
-                isinstance(name_obj, dict)
-                and name_obj.get('perturbation', None)
-            )
-            hist['perturbed'][is_pert] += 1
-            hist['splits'][split] += 1
-            hist['family'][helm_metrics.metric_family(metric)] += 1
-            hist['metric_class'][helm_metrics.classify_metric(metric)[0]] += 1
-
-        self._cache[cache_key] = hist
-        return hist
-
-    # --- Requests + per-instance stats join ----------------------------
-
-    def joined_instance_stat_table(
-        self, *, assert_assumptions: bool = True, short_hash: int = 16
-    ):
-        """Join per-instance stats to request_states.
-
-        Returns one row **per per-instance stat**, with the corresponding
-        request_state attached.
-
-        Why this exists
-        ---------------
-        HELM's assets are not trivially zippable:
-
-        * ``scenario_state()['request_states']`` is effectively "one row per
-          evaluated instance variant" and may contain multiple rows with the
-          same ``(instance_id, train_trial_index)`` when perturbations are
-          present.
-        * ``per_instance_stats.json`` often contains **multiple bundles** for
-          the same ``(instance_id, train_trial_index)`` (e.g., bookkeeping
-          metrics in one bundle and a single task metric in another).
-
-        The join strategy
-        -----------------
-        1) Index request_states by base key ``(instance_id, train_trial_index)``
-           and *perturbation id*, where the perturbation id is derived from
-           ``request_state['instance']['perturbation']``.
-        2) Merge per_instance_stats bundles by base key.
-        3) For each stat in the merged bundle, match:
-             - If ``stat['name']['perturbation']`` exists, use its perturbation id.
-             - Otherwise match the unperturbed request_state.
-
-        Assumptions (asserted when ``assert_assumptions=True``)
-        -------------------------------------------------------
-        * per_instance_stats has at least one row for every base request key.
-        * For each (instance_id, train_trial_index, perturbation_id) there is
-          exactly one request_state.
-        * Every per-instance stat can be matched to exactly one request_state.
-        """
-        request_states = self.scenario_state().get('request_states', []) or []
-        perinstance_stats = self.per_instance_stats() or []
-        tbl = JoinedInstanceStatTable(
-            request_states, perinstance_stats, short_hash=short_hash
-        )
-        if assert_assumptions:
-            tbl.assert_assumptions()
-        return tbl

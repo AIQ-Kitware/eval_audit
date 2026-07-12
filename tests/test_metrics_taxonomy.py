@@ -66,15 +66,6 @@ def test_every_judge_dependent_prefix_is_a_core_metric():
         assert classify_metric(prefix)[0] == "core", prefix
 
 
-def test_legacy_shim_reexports():
-    from eval_audit.helm import metrics as legacy
-
-    assert legacy.classify_metric is classify_metric
-    assert legacy.metric_family is metric_family
-    assert legacy.METRIC_PREFIXES is METRIC_PREFIXES
-    assert legacy.is_judge_dependent is is_judge_dependent
-
-
 def test_normalized_compare_imports_no_helm_modules():
     """Gate for sub-stage 4.0: the EEE-native comparison core is
     importable without loading any eval_audit.helm.* module.
