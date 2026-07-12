@@ -233,7 +233,12 @@ used by the olmo runbooks + `test_deployment_match.py`). This also delivers the
 intentionally-deferred **EEE-only hard split** (`docs/eee-only-hard-split-todo.md`)
 for free, since the EEE path would no longer touch `eval_audit.helm.*`.
 **Gate:** the phase3 behavior-equivalence matrix + `tests/fixtures/phase3_baseline/`
-must stay green; halt if numbers move. **Recommend doing A1–A3 first** (they
+must stay green; halt if numbers move. Caveat: the *committed* baseline snapshots
+cover only the EEE cells (F3/F4, via `compare-pair-eee`) — **extend the capture
+to the HELM-path cells (matrix F1/F2/F8) before starting A4**, since A4 changes
+exactly the path the committed snapshots do not exercise (the HELM fixtures
+exist behind `test_core_metrics_single_run`/`test_rebuild_core_report`; only
+their snapshot capture is missing). **Recommend doing A1–A3 first** (they
 shrink `helm/` ~3.3k→~1.6k at near-zero risk and leave a clean target), then
 treat A4 as a dedicated, owner-signed-off milestone — or defer it until the
 paper actually needs the hard split.
