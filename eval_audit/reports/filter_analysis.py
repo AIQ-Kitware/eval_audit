@@ -111,28 +111,41 @@ def emit_filter_report_artifacts(
     cardinality_txt = build_filter_cardinality_text(inventory_rows)
     local_serving_txt = build_local_serving_recovery_text(inventory_rows)
 
+    # E3: one local writer per artifact kind kills the repeated
+    # (report_dpath, <dest>, ..., stamp, ...) boilerplate on every line of
+    # the outputs dict below; the dict literal itself stays explicit so the
+    # artifact-key -> stem -> rows mapping is greppable and ordered.
+    def _tsv(stem, rows):
+        return str(_write_stamped_table(report_dpath, tables_dpath, stem, stamp, rows))
+
+    def _txt(stem, suffix, text):
+        return str(_write_stamped_text(report_dpath, static_dpath, stem, stamp, suffix, text))
+
+    def _json_art(stem, payload):
+        return str(_write_stamped_json(report_dpath, machine_dpath, stem, stamp, payload))
+
     outputs = {
-        'summary_json': str(_write_stamped_json(report_dpath, machine_dpath, 'model_filter_summary', stamp, {'summary': summary})),
-        'inventory_json': str(_write_stamped_json(report_dpath, machine_dpath, 'model_filter_inventory', stamp, inventory_rows)),
-        'summary_txt': str(_write_stamped_text(report_dpath, static_dpath, 'model_filter_report', stamp, '.txt', summary_txt)),
-        'filter_cardinality_txt': str(_write_stamped_text(report_dpath, static_dpath, 'filter_cardinality_summary', stamp, '.txt', cardinality_txt)),
-        'local_serving_txt': str(_write_stamped_text(report_dpath, static_dpath, 'filter_local_serving_summary', stamp, '.txt', local_serving_txt)),
-        'selected_run_specs_txt': str(_write_stamped_text(report_dpath, static_dpath, 'model_filter_selected_run_specs', stamp, '.txt', selected_run_specs_txt)),
-        'inventory_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_inventory', stamp, inventory_rows)),
-        'selected_runs_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_selected_runs', stamp, selected_rows)),
-        'excluded_runs_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_excluded_runs', stamp, excluded_rows)),
-        'by_model_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_counts_by_model', stamp, by_model_rows)),
-        'by_dataset_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_counts_by_dataset', stamp, by_dataset_rows)),
-        'by_scenario_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_counts_by_scenario', stamp, by_scenario_rows)),
-        'by_benchmark_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_counts_by_benchmark', stamp, by_benchmark_rows)),
-        'reason_by_model_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_excluded_reason_by_model', stamp, reason_by_model_rows)),
-        'reason_by_dataset_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_excluded_reason_by_dataset', stamp, reason_by_dataset_rows)),
-        'reason_by_scenario_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_excluded_reason_by_scenario', stamp, reason_by_scenario_rows)),
-        'reason_by_benchmark_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_excluded_reason_by_benchmark', stamp, reason_by_benchmark_rows)),
-        'open_access_reason_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_excluded_reason_open_access_only', stamp, open_access_exclusion_reason_rows)),
-        'open_access_reason_by_model_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_excluded_reason_open_access_only_by_model', stamp, open_access_exclusion_reason_by_model_rows)),
-        'open_access_text_reason_by_model_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_excluded_reason_open_access_text_only_by_model', stamp, open_access_text_exclusion_reason_by_model_rows)),
-        'open_access_text_size_reason_by_model_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'model_filter_excluded_reason_open_access_text_size_only_by_model', stamp, open_access_text_size_exclusion_reason_by_model_rows)),
+        'summary_json': _json_art('model_filter_summary', {'summary': summary}),
+        'inventory_json': _json_art('model_filter_inventory', inventory_rows),
+        'summary_txt': _txt('model_filter_report', '.txt', summary_txt),
+        'filter_cardinality_txt': _txt('filter_cardinality_summary', '.txt', cardinality_txt),
+        'local_serving_txt': _txt('filter_local_serving_summary', '.txt', local_serving_txt),
+        'selected_run_specs_txt': _txt('model_filter_selected_run_specs', '.txt', selected_run_specs_txt),
+        'inventory_tsv': _tsv('model_filter_inventory', inventory_rows),
+        'selected_runs_tsv': _tsv('model_filter_selected_runs', selected_rows),
+        'excluded_runs_tsv': _tsv('model_filter_excluded_runs', excluded_rows),
+        'by_model_tsv': _tsv('model_filter_counts_by_model', by_model_rows),
+        'by_dataset_tsv': _tsv('model_filter_counts_by_dataset', by_dataset_rows),
+        'by_scenario_tsv': _tsv('model_filter_counts_by_scenario', by_scenario_rows),
+        'by_benchmark_tsv': _tsv('model_filter_counts_by_benchmark', by_benchmark_rows),
+        'reason_by_model_tsv': _tsv('model_filter_excluded_reason_by_model', reason_by_model_rows),
+        'reason_by_dataset_tsv': _tsv('model_filter_excluded_reason_by_dataset', reason_by_dataset_rows),
+        'reason_by_scenario_tsv': _tsv('model_filter_excluded_reason_by_scenario', reason_by_scenario_rows),
+        'reason_by_benchmark_tsv': _tsv('model_filter_excluded_reason_by_benchmark', reason_by_benchmark_rows),
+        'open_access_reason_tsv': _tsv('model_filter_excluded_reason_open_access_only', open_access_exclusion_reason_rows),
+        'open_access_reason_by_model_tsv': _tsv('model_filter_excluded_reason_open_access_only_by_model', open_access_exclusion_reason_by_model_rows),
+        'open_access_text_reason_by_model_tsv': _tsv('model_filter_excluded_reason_open_access_text_only_by_model', open_access_text_exclusion_reason_by_model_rows),
+        'open_access_text_size_reason_by_model_tsv': _tsv('model_filter_excluded_reason_open_access_text_size_only_by_model', open_access_text_size_exclusion_reason_by_model_rows),
     }
     outputs['flat_filter_sankey'] = emit_sankey_artifacts(
         rows=build_filter_reason_sankey_rows(inventory_rows),
@@ -293,31 +306,44 @@ def emit_filter_analysis_artifacts(
         'selected_excluded_by_scenario_rows': selected_excluded_by_scenario_rows,
     }
 
+    # E3: one local writer per artifact kind kills the repeated
+    # (report_dpath, <dest>, ..., stamp, ...) boilerplate on every line of
+    # the outputs dict below; the dict literal itself stays explicit so the
+    # artifact-key -> stem -> rows mapping is greppable and ordered.
+    def _tsv(stem, rows):
+        return str(_write_stamped_table(report_dpath, tables_dpath, stem, stamp, rows))
+
+    def _txt(stem, suffix, text):
+        return str(_write_stamped_text(report_dpath, static_dpath, stem, stamp, suffix, text))
+
+    def _json_art(stem, payload):
+        return str(_write_stamped_json(report_dpath, machine_dpath, stem, stamp, payload))
+
     outputs = {
-        'summary_json': str(_write_stamped_json(report_dpath, machine_dpath, 'filter_candidate_analysis', stamp, summary_payload)),
-        'summary_txt': str(_write_stamped_text(report_dpath, static_dpath, 'filter_candidate_analysis', stamp, '.txt', analysis_text)),
-        'summary_md': str(_write_stamped_text(report_dpath, static_dpath, 'filter_candidate_analysis', stamp, '.md', analysis_md)),
-        'by_model_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_coverage_by_model', stamp, by_model_rows)),
-        'by_dataset_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_coverage_by_dataset', stamp, by_dataset_rows)),
-        'by_scenario_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_coverage_by_scenario', stamp, by_scenario_rows)),
-        'by_benchmark_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_coverage_by_benchmark', stamp, by_benchmark_rows)),
-        'candidate_pool_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_pool', stamp, candidate_pool_rows)),
-        'selection_path_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_selection_paths', stamp, selection_path_rows)),
-        'reason_by_model_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_reasons_by_model', stamp, reasons_by_model)),
-        'reason_by_dataset_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_reasons_by_dataset', stamp, reasons_by_dataset)),
-        'reason_by_scenario_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_reasons_by_scenario', stamp, reasons_by_scenario)),
-        'reason_by_benchmark_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_reasons_by_benchmark', stamp, reasons_by_benchmark)),
-        'reason_combo_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_reason_combinations', stamp, reason_combo_rows)),
-        'open_access_reason_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_open_access_exclusion_reasons', stamp, open_access_exclusion_reason_rows)),
-        'open_access_reason_by_model_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_open_access_exclusion_reasons_by_model', stamp, open_access_exclusion_reason_by_model_rows)),
-        'model_scenario_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_model_by_scenario', stamp, pair_model_scenario_rows)),
-        'model_benchmark_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_model_by_benchmark', stamp, pair_model_benchmark_rows)),
-        'benchmark_dataset_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_benchmark_by_dataset', stamp, pair_benchmark_dataset_rows)),
-        'reason_examples_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_reason_examples', stamp, reason_example_rows)),
-        'sel_excl_by_model_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_selection_by_model', stamp, selected_excluded_by_model_rows)),
-        'sel_excl_by_benchmark_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_selection_by_benchmark', stamp, selected_excluded_by_benchmark_rows)),
-        'sel_excl_by_dataset_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_selection_by_dataset', stamp, selected_excluded_by_dataset_rows)),
-        'sel_excl_by_scenario_tsv': str(_write_stamped_table(report_dpath, tables_dpath, 'filter_candidate_selection_by_scenario', stamp, selected_excluded_by_scenario_rows)),
+        'summary_json': _json_art('filter_candidate_analysis', summary_payload),
+        'summary_txt': _txt('filter_candidate_analysis', '.txt', analysis_text),
+        'summary_md': _txt('filter_candidate_analysis', '.md', analysis_md),
+        'by_model_tsv': _tsv('filter_candidate_coverage_by_model', by_model_rows),
+        'by_dataset_tsv': _tsv('filter_candidate_coverage_by_dataset', by_dataset_rows),
+        'by_scenario_tsv': _tsv('filter_candidate_coverage_by_scenario', by_scenario_rows),
+        'by_benchmark_tsv': _tsv('filter_candidate_coverage_by_benchmark', by_benchmark_rows),
+        'candidate_pool_tsv': _tsv('filter_candidate_pool', candidate_pool_rows),
+        'selection_path_tsv': _tsv('filter_selection_paths', selection_path_rows),
+        'reason_by_model_tsv': _tsv('filter_candidate_reasons_by_model', reasons_by_model),
+        'reason_by_dataset_tsv': _tsv('filter_candidate_reasons_by_dataset', reasons_by_dataset),
+        'reason_by_scenario_tsv': _tsv('filter_candidate_reasons_by_scenario', reasons_by_scenario),
+        'reason_by_benchmark_tsv': _tsv('filter_candidate_reasons_by_benchmark', reasons_by_benchmark),
+        'reason_combo_tsv': _tsv('filter_candidate_reason_combinations', reason_combo_rows),
+        'open_access_reason_tsv': _tsv('filter_candidate_open_access_exclusion_reasons', open_access_exclusion_reason_rows),
+        'open_access_reason_by_model_tsv': _tsv('filter_candidate_open_access_exclusion_reasons_by_model', open_access_exclusion_reason_by_model_rows),
+        'model_scenario_tsv': _tsv('filter_candidate_model_by_scenario', pair_model_scenario_rows),
+        'model_benchmark_tsv': _tsv('filter_candidate_model_by_benchmark', pair_model_benchmark_rows),
+        'benchmark_dataset_tsv': _tsv('filter_candidate_benchmark_by_dataset', pair_benchmark_dataset_rows),
+        'reason_examples_tsv': _tsv('filter_candidate_reason_examples', reason_example_rows),
+        'sel_excl_by_model_tsv': _tsv('filter_candidate_selection_by_model', selected_excluded_by_model_rows),
+        'sel_excl_by_benchmark_tsv': _tsv('filter_candidate_selection_by_benchmark', selected_excluded_by_benchmark_rows),
+        'sel_excl_by_dataset_tsv': _tsv('filter_candidate_selection_by_dataset', selected_excluded_by_dataset_rows),
+        'sel_excl_by_scenario_tsv': _tsv('filter_candidate_selection_by_scenario', selected_excluded_by_scenario_rows),
     }
 
     selected_fraction_by_model_rows = by_model_rows
