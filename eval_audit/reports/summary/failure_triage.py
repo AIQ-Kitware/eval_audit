@@ -61,7 +61,7 @@ def _classify_failure(job_dpath: Path, row: dict[str, Any]) -> dict[str, Any]:
         (
             # Caught by the parent-shell stderr capture (cmd_stderr.txt)
             # because the TypeError fires before helm-run's own logger is up.
-            # Reconstruction in eval_audit/helm/run_entries.py prevents new
+            # Reconstruction in eval_audit/run_entries.py prevents new
             # occurrences; this rule classifies any historical failures.
             "malformed_run_entry",
             "run_entry passed kwargs the run_spec_function does not accept",

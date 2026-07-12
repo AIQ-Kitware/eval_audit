@@ -78,7 +78,7 @@ def _inline_local_deployment(run_entries: list[str], deployment: str) -> list[st
     that source's per-run rewrite target and ``lease_endpoints`` key. (R-8:
     delegates to the shared append helper.)
     """
-    from eval_audit.helm.run_entries import append_model_deployment
+    from eval_audit.run_entries import append_model_deployment
 
     return [append_model_deployment(entry, deployment) for entry in run_entries]
 

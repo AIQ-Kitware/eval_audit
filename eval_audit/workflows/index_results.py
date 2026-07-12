@@ -25,7 +25,7 @@ import safer
 
 from eval_audit.infra.fs_publish import write_text_atomic
 from eval_audit.infra.logging import rich_link, setup_cli_logging
-from eval_audit.helm.run_entries import parse_run_entry_description
+from eval_audit.run_entries import parse_run_entry_description
 
 from loguru import logger
 

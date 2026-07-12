@@ -25,7 +25,7 @@ are. `run_spec.json` is written **after** all of that
 `metric_specs`, `annotators`, `data_augmenter_spec`.
 
 So reconstructing a string and re-parsing it (today's
-`reconstruct_run_entry_from_run_spec` in `eval_audit/helm/run_entries.py`)
+`reconstruct_run_entry_from_run_spec` in `eval_audit/run_entries.py`)
 re-derives the recipe under today's library defaults — a silent drift surface.
 Replaying the `run_spec.json` directly replays the official recipe verbatim. For
 a paper whose claim is "same recipe → same metrics," replaying the resolved spec

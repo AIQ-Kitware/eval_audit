@@ -11,7 +11,7 @@ from eval_audit.cli.compare_pair import main as compare_pair_main
 from eval_audit.cli.manifests import main as manifests_main
 from eval_audit.cli.reports import main as reports_main
 from eval_audit.cli.run import main as run_main
-from eval_audit.helm.run_entries import (
+from eval_audit.run_entries import (
     discover_benchmark_output_dirs,
     normalize_run_entry_for_historic_lookup,
     parse_run_entry_description,

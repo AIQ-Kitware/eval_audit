@@ -35,7 +35,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from eval_audit.helm.run_entries import canonical_logical_key
+from eval_audit.run_entries import canonical_logical_key
 from eval_audit.utils.hashers import stable_hash36
 from eval_audit.infra.fs_publish import (
     safe_unlink,

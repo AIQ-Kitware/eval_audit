@@ -35,12 +35,12 @@ public counterparts exist in the official index.
 Fixing only the prefilter would not help — the grouping key is the determinant.
 
 ## Design: one canonical key, reused everywhere
-Add a single normalizer in [`eval_audit/helm/run_entries.py`](../../eval_audit/helm/run_entries.py)
+Add a single normalizer in [`eval_audit/run_entries.py`](../../eval_audit/run_entries.py)
 (so the planner *and* `compare_batch` share it, unifying the two matchers that
 have drifted apart):
 
 ```python
-# eval_audit/helm/run_entries.py
+# eval_audit/run_entries.py
 BOOKKEEPING_TOKENS = ("groups", "model_deployment")  # non-semantic for comparison
 
 def canonical_logical_key(key: str | None, *, drop_tokens=BOOKKEEPING_TOKENS) -> str | None:
@@ -109,7 +109,7 @@ information.
 
 ## File-by-file changes
 
-**`eval_audit/helm/run_entries.py`**
+**`eval_audit/run_entries.py`**
 - Add `BOOKKEEPING_TOKENS` + `canonical_logical_key()` (above). Unit-test in
   isolation. Reuses the existing `parse_run_name_to_kv` / `canonicalize_kv` /
   `format_run_name_from_kv` building blocks.

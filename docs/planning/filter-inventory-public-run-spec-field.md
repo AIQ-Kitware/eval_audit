@@ -16,7 +16,7 @@ string.
 `filter_inventory.json` rows are keyed on `run_spec_name`, which Stage 1
 *reconstructs* from the materialized `run_spec.json` via
 `reconstruct_run_entry_from_run_spec`
-([run_entries.py:231](../../eval_audit/helm/run_entries.py#L231)). That
+([run_entries.py:231](../../eval_audit/run_entries.py#L231)). That
 reconstruction draws only from `scenario_spec.args`, `adapter_spec.method/model`,
 and **display-name** tokens. It therefore *structurally cannot* recover the
 **droppable run-expander keys** (`output_format_instructions`, `temperature`,

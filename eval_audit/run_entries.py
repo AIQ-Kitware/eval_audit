@@ -1,3 +1,26 @@
+"""Run-entry / run-name parsing, canonicalization, and reconstruction.
+
+Moved from ``eval_audit/helm/run_entries.py`` on 2026-07-12 (plan item A1
+of docs/planning/repo-simplification-plan-2026-07-12.md), following the
+``metrics_taxonomy.py`` precedent: this is general run-identity
+infrastructure with ~10 importers across planning/virtual/indexing/
+integrations/pipelines — not diff/analysis code — and its residence
+under ``helm/`` made the ``helm``/``normalized`` packages look far more
+overlapping than they are.
+
+Two halves (R-g):
+
+* **Pure string parsing/canonicalization** — ``parse_run_name_to_kv``,
+  ``canonical_logical_key``, ``logical_key_set``, the
+  ``model_deployment`` token helpers — no imports; what most consumers
+  use.
+* **HELM-registry-backed reconstruction** —
+  ``parse_run_entry_description``, ``reconstruct_run_entry_from_run_spec``
+  and the registry introspections — these import the *upstream*
+  ``helm.*`` library (crfm-helm) **lazily inside functions**. Keep it
+  that way: this module must stay importable without crfm-helm
+  installed.
+"""
 from __future__ import annotations
 
 import os

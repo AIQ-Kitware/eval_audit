@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from eval_audit.helm.run_entries import (
+from eval_audit.run_entries import (
     BOOKKEEPING_TOKENS,
     canonical_logical_key,
 )

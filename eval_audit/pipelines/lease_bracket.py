@@ -120,10 +120,10 @@ def _coerce_map(value: Any) -> dict[str, str]:
 def _parse_model_deployment(run_entry: Any) -> str | None:
     """Extract the ``model_deployment=<name>`` token from a HELM run-entry.
 
-    Thin wrapper over the shared ``helm.run_entries.parse_model_deployment``
+    Thin wrapper over the shared ``run_entries.parse_model_deployment``
     (R-8); kept for the local call site + its direct test.
     """
-    from eval_audit.helm.run_entries import parse_model_deployment
+    from eval_audit.run_entries import parse_model_deployment
 
     return parse_model_deployment(run_entry)
 

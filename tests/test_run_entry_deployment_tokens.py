@@ -5,7 +5,7 @@ Locks the parse / strip / append behavior of the four previously-duplicated
 implementations (lease_bracket._parse_model_deployment,
 kwdagger_bridge._locator_run_entry, adapter._strip_local_deployment,
 adapter._inline_local_deployment) so consolidating them onto the shared
-helm.run_entries utility cannot silently change behavior. Includes the tricky
+run_entries utility cannot silently change behavior. Includes the tricky
 tokens flagged in the audit: stop=none, groups=, quoted values.
 """
 from __future__ import annotations

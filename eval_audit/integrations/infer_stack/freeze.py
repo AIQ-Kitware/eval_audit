@@ -21,7 +21,7 @@ def _strip_local_deployment(
     ``(discovery_query, stripped_local_name_or_None)``. (R-8: delegates to the
     shared conditional strip.)
     """
-    from eval_audit.helm.run_entries import strip_model_deployment
+    from eval_audit.run_entries import strip_model_deployment
 
     return strip_model_deployment(run_entry, only_names=local_names)
 
@@ -99,7 +99,7 @@ def _freeze_run_spec_sources(
             # froze NO lease_endpoint and the vLLM endpoint was never acquired.
             endpoint = lease_scalar
             if endpoint is None and lease_map:
-                from eval_audit.helm.run_entries import parse_run_name_to_kv
+                from eval_audit.run_entries import parse_run_name_to_kv
 
                 _, kv = parse_run_name_to_kv(run_entry)
                 model = kv.get("model")

@@ -177,7 +177,7 @@ turns the virtual-experiment compose output into individual analysis jobs.
 
 **How local and official runs are paired.** The planner buckets components by
 the **order-insensitive canonical logical key**
-([`canonical_logical_key`](../eval_audit/helm/run_entries.py)): parse the
+([`canonical_logical_key`](../eval_audit/run_entries.py)): parse the
 `benchmark:k=v,...` run name, drop bookkeeping-only tokens
 (`groups=`, `model_deployment=`), canonicalize values (model `/`<->`_`,
 `mmlu_pro` `subject`->`subset`), then re-serialize with the kv pairs **sorted

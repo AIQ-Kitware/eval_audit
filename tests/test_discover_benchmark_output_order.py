@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from eval_audit.helm.run_entries import discover_benchmark_output_dirs
+from eval_audit.run_entries import discover_benchmark_output_dirs
 
 
 def test_discovery_order_is_sorted(tmp_path: Path):

@@ -101,7 +101,7 @@ def _locator_run_entry(run_entry: str) -> str:
 
     R-8: delegates to the shared unconditional strip.
     """
-    from eval_audit.helm.run_entries import strip_model_deployment
+    from eval_audit.run_entries import strip_model_deployment
 
     return strip_model_deployment(run_entry)[0]
 

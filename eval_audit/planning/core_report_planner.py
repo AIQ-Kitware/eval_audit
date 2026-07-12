@@ -17,7 +17,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from eval_audit.helm.run_entries import canonical_logical_key, logical_key_set
+from eval_audit.run_entries import canonical_logical_key, logical_key_set
 from eval_audit.indexing.schema import (
     component_id_for_local,
     extract_judge_models,

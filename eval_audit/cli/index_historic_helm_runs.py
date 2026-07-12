@@ -58,7 +58,7 @@ from loguru import logger
 
 from eval_audit.infra.logging import setup_cli_logging
 from eval_audit.infra.api import repo_run_details_fpath, repo_run_specs_fpath
-from eval_audit.helm.run_entries import (
+from eval_audit.run_entries import (
     parse_run_entry_description,
     parse_run_name_to_kv,
     reconstruct_run_entry_from_run_spec,

@@ -22,7 +22,7 @@ from eval_audit.infra.api import (
     load_manifest,
 )
 from eval_audit.infra.logging import rich_link, setup_cli_logging
-from eval_audit.helm.run_entries import (
+from eval_audit.run_entries import (
     canonicalize_kv,
     discover_benchmark_output_dirs,
     normalize_run_entry_for_historic_lookup,
