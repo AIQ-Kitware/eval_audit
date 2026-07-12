@@ -113,31 +113,26 @@ markers = [
 ]
 # Belt-and-suspenders: explicitly skip directories pytest should never enter
 # even when invoked with a custom path or when conftest discovery walks up.
+# Trimmed 2026-07-12 (plan item F2): entries naming directories that no
+# longer exist were dropped; ".venv*" covers every scratch venv variant.
 norecursedirs = [
   ".git",
   ".cache",
   ".claude",
-  ".venv",
-  ".venv13",
-  ".venv313",
+  ".venv*",
   ".mypy_cache",
   ".pytest_cache",
   ".ruff_cache",
   "__pycache__",
   "*.egg-info",
+  ".build-staging",
   "build",
   "dist",
   "configs",
   "dev",
   "docs",
-  "examples",
-  "in-progress-notes",
+  "ladder-out",
   "node_modules",
-  "old-backup-reports",
-  "reports",
-  "reports-filter-bak",
-  "reports-old",
-  "reports-summary-bak",
   "reproduce",
   "submodules",
   "tmp",
