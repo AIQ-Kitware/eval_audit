@@ -69,13 +69,34 @@ def _read_log_text(job_dir: Path) -> str:
     return "\n".join(chunks)
 
 
-def _extract_error_summary(log_text: str) -> tuple[str, str]:
+def _extract_error_summary(job_dir: Path, log_text: str) -> tuple[str, str]:
+    """Classify one failed job's logs.
+
+    Layered (D3 — one generic taxonomy, two specificity tiers):
+
+    1. This tool's high-specificity regexes run first — they carry capture
+       groups that name the offending dataset/model in the summary, which
+       the generic engine cannot do.
+    2. The generic tail delegates to the shared summary taxonomy
+       (``reports.summary.failure_triage._classify_failure``) instead of
+       maintaining a second, weaker rule set here.
+    3. When triage can't name the failure either, keep this tool's
+       last-error-line fallback (the actual exception text beats
+       ``unknown_failure`` for operator drill-down).
+    """
     for pattern, category, template in ERROR_PATTERNS:
         match = re.search(pattern, log_text, flags=re.MULTILINE | re.DOTALL)
         if match:
             groups = match.groups()
             summary = template.format(*groups) if groups else template
             return category, summary
+
+    from eval_audit.reports.summary.failure_triage import _classify_failure
+
+    triage = _classify_failure(job_dir, {})
+    reason = str(triage.get("failure_reason") or "")
+    if reason not in {"", "unknown_failure", "missing_runtime_log", "truncated_or_incomplete_runtime"}:
+        return reason, str(triage.get("failure_summary") or reason)
 
     error_lines = [
         line.strip()
@@ -107,7 +128,7 @@ def summarize_failures(result_dpath: Path) -> dict[str, Any]:
             continue
 
         log_text = _read_log_text(job_dir)
-        category, summary = _extract_error_summary(log_text)
+        category, summary = _extract_error_summary(job_dir, log_text)
         rows.append(
             {
                 "job_id": job_dir.name,
