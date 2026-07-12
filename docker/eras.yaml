@@ -17,6 +17,10 @@
 # ``benchmark_output/runs/<suite_version>/`` (e.g. ``v0.2.4``).
 # ``public_track`` matches the corpus track (e.g. ``classic``); ``"*"`` is a
 # wildcard for a key that should not constrain the match.
+#
+# EVERY field is explicit-required (helm_git_ref, python_version, constraints,
+# helm_extras, capability, image_name) — neither reader supplies defaults, so
+# this file is the single source of truth for an era's build+dispatch identity.
 
 eras:
   helm-v0.2.4:

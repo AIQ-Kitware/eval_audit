@@ -111,7 +111,18 @@ def _load_era_registry_cached(path_str: str) -> dict[str, EraSpec]:
 def _parse_era_spec(key: str, raw: Any, path: Path) -> EraSpec:
     if not isinstance(raw, dict):
         raise ValueError(f"era {key!r} in {path} must be a mapping")
-    required = ("helm_git_ref", "python_version", "constraints", "image_name")
+    # All fields explicit-required (B3): helm_extras/capability previously
+    # defaulted here AND in docker/read_eras.py — two hardcoded copies of the
+    # same defaults that could silently drift. The registry is checked-in
+    # config; requiring the fields there keeps a single source of truth.
+    required = (
+        "helm_git_ref",
+        "python_version",
+        "constraints",
+        "image_name",
+        "helm_extras",
+        "capability",
+    )
     missing = [k for k in required if not raw.get(k)]
     if missing:
         raise ValueError(f"era {key!r} in {path} missing required keys: {missing}")
@@ -132,8 +143,8 @@ def _parse_era_spec(key: str, raw: Any, path: Path) -> EraSpec:
         helm_git_ref=str(raw["helm_git_ref"]),
         python_version=str(raw["python_version"]),
         constraints=str(raw["constraints"]),
-        helm_extras=str(raw.get("helm_extras", "all")),
-        capability=str(raw.get("capability", ERA_SHIM_FROM_SPEC)),
+        helm_extras=str(raw["helm_extras"]),
+        capability=str(raw["capability"]),
         image_name=str(raw["image_name"]),
         matches=matches,
     )

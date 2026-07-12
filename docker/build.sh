@@ -330,39 +330,41 @@ if [[ "${BUILD_NOFILE}" != "0" ]]; then
     ULIMIT_ARGS=(--ulimit "nofile=${BUILD_NOFILE}:${BUILD_NOFILE}")
 fi
 
+# One docker-build invocation for both modes (B3): the arms previously
+# duplicated everything except --file and the mode-specific build args,
+# which invited drift. Shared args first; each mode appends its own.
+BUILD_ARGS=(
+    --build-arg PYTHON_VERSION="${PYTHON_VERSION}"
+    --build-arg EVAL_AUDIT_REF="${EVAL_AUDIT_REF}"
+    --build-arg BUILD_FROM="${BUILD_FROM}"
+)
 if [[ -n "${ERA}" ]]; then
     # Era build: CPU-only era dockerfile; pass the era ref/pins/extras so the
     # final stage can assert them, and stamp org.aiq.era for the bridge's
     # era<->image guard.
-    DOCKER_BUILDKIT=1 docker build \
-        "${ULIMIT_ARGS[@]}" \
-        --progress=plain \
-        --file "${SCRIPT_DIR}/helm-runner-era.dockerfile" \
-        --build-arg PYTHON_VERSION="${PYTHON_VERSION}" \
-        --build-arg EVAL_AUDIT_REF="${EVAL_AUDIT_REF}" \
-        --build-arg BUILD_FROM="${BUILD_FROM}" \
-        --build-arg HELM_EXTRAS="${ERA_EXTRAS}" \
-        --build-arg ERA_KEY="${ERA}" \
-        --build-arg ERA_HELM_REF="${HELM_REF}" \
-        --build-arg PANDAS_PIN="${ERA_PANDAS_PIN}" \
-        --build-arg NUMPY_PIN="${ERA_NUMPY_PIN}" \
-        --tag "${IMAGE_QUALNAME}" \
-        --tag "${IMAGE_NAME}:dev" \
-        "${STAGING_DIR}"
+    DOCKERFILE="${SCRIPT_DIR}/helm-runner-era.dockerfile"
+    BUILD_ARGS+=(
+        --build-arg HELM_EXTRAS="${ERA_EXTRAS}"
+        --build-arg ERA_KEY="${ERA}"
+        --build-arg ERA_HELM_REF="${HELM_REF}"
+        --build-arg PANDAS_PIN="${ERA_PANDAS_PIN}"
+        --build-arg NUMPY_PIN="${ERA_NUMPY_PIN}"
+    )
 else
-    DOCKER_BUILDKIT=1 docker build \
-        "${ULIMIT_ARGS[@]}" \
-        --progress=plain \
-        --file "${SCRIPT_DIR}/helm-runner.dockerfile" \
-        --build-arg PYTHON_VERSION="${PYTHON_VERSION}" \
-        --build-arg EVAL_AUDIT_REF="${EVAL_AUDIT_REF}" \
-        --build-arg HELM_REF="${HELM_REF}" \
-        --build-arg MAGNET_REF="${MAGNET_REF}" \
-        --build-arg BUILD_FROM="${BUILD_FROM}" \
-        --tag "${IMAGE_QUALNAME}" \
-        --tag "${IMAGE_NAME}:dev" \
-        "${STAGING_DIR}"
+    DOCKERFILE="${SCRIPT_DIR}/helm-runner.dockerfile"
+    BUILD_ARGS+=(
+        --build-arg HELM_REF="${HELM_REF}"
+        --build-arg MAGNET_REF="${MAGNET_REF}"
+    )
 fi
+DOCKER_BUILDKIT=1 docker build \
+    "${ULIMIT_ARGS[@]}" \
+    --progress=plain \
+    --file "${DOCKERFILE}" \
+    "${BUILD_ARGS[@]}" \
+    --tag "${IMAGE_QUALNAME}" \
+    --tag "${IMAGE_NAME}:dev" \
+    "${STAGING_DIR}"
 
 log "Built ${IMAGE_QUALNAME} (and local alias ${IMAGE_NAME}:dev)"
 

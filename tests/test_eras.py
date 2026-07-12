@@ -106,6 +106,8 @@ def test_resolve_era_ambiguous_registry_raises(tmp_path):
                 helm_git_ref: aaa
                 python_version: "3.10"
                 constraints: c-a.txt
+                helm_extras: all
+                capability: era-shim-from-spec
                 image_name: img-a
                 matches:
                   - public_track: classic
@@ -114,6 +116,8 @@ def test_resolve_era_ambiguous_registry_raises(tmp_path):
                 helm_git_ref: bbb
                 python_version: "3.10"
                 constraints: c-b.txt
+                helm_extras: all
+                capability: era-shim-from-spec
                 image_name: img-b
                 matches:
                   - suite_version: v0.2.4

@@ -64,12 +64,10 @@ def main(argv: list[str]) -> int:
         print(f"unknown field {field!r}; known: {', '.join(sorted(_FIELDS))}", file=sys.stderr)
         return 4
     spec = eras[era_key]
-    if field == "helm_extras":
-        value = spec.get(field, "all")
-    elif field == "capability":
-        value = spec.get(field, "era-shim-from-spec")
-    else:
-        value = spec.get(field)
+    # No field defaults here (B3): every field is explicit-required in
+    # eras.yaml, and eval_audit/eras.py enforces the same rule — one source
+    # of truth instead of two hardcoded default copies that could drift.
+    value = spec.get(field)
     if value is None:
         print(f"era {era_key!r} has no field {field!r}", file=sys.stderr)
         return 5
