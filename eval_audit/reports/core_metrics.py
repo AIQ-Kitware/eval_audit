@@ -22,7 +22,6 @@ from eval_audit.infra.logging import rich_link, setup_cli_logging
 import datetime as datetime_mod
 import json
 import os
-import warnings
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +29,6 @@ import kwutil
 import eval_audit.infra.mpl_backend  # noqa: F401  (force headless Agg before pyplot)
 import matplotlib.pyplot as plt
 
-from eval_audit.helm.diff import HelmRunDiff
 
 from eval_audit.infra.fs_publish import safe_unlink, write_text_atomic
 from eval_audit.normalized import (
@@ -43,59 +41,36 @@ from eval_audit.reports.core_packet import load_packet_manifests
 
 from eval_audit.infra.profiling import profile
 
-# --- compat re-exports -------------------------------------------------
+# --- implementation imports + remaining compat re-exports ---------------
 # Implementation moved to reports.core_metric_{curves,plots,tables} on
-# 2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md). Tests
-# access these names via this module; keep re-exporting them.
+# 2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md).
+# These imports serve this module's own orchestration plus the few names
+# tests still reach through this facade. Re-exports with zero internal and
+# zero external references were pruned on 2026-07-12 (plan item E4a) —
+# import from the implementation modules instead of re-adding names here.
 from eval_audit.reports.core_metric_curves import (  # noqa: F401
-    MetricDomain,
-    _load_json,
     _load_optional_cross_machine_pair,
-    _collect_stat_means,
-    _EMPTY_RUN_DIAGNOSTICS,
     _run_diagnostics,
     _diagnostic_flags,
-    _group_quantiles,
-    _metric_quantiles,
-    _BINARY_CORE_METRICS,
-    _BOUNDED_OVERLAP_CORE_METRICS,
-    _metric_descriptor,
     _metric_domain,
-    _common_metric_domain,
     _pair_metric_domain,
-    _should_treat_as_discrete,
-    _agreement_curve,
     _infer_run_spec_name,
-    _load_normalized,
-    _component_source_kind,
-    _load_component_run,
     _build_pair,
-    _agreement_curve_rows,
-    _per_metric_agreement_curves,
-    _distribution_rows,
     _single_run_instance_core_rows,
-    _SimpleStatRow,
-    _single_run_core_stat_index,
     _strip_private,
     _find_pair,
-    _load_run_spec_json,
-    _component_spec_metadata,
-    _same_value_fact,
     _comparability_summary,
     _warnings_payload,
     _warning_summary_lines,
-    _find_curve_value,
 )
 from eval_audit.reports.core_metric_plots import (  # noqa: F401
     _PLOT_TARGETS,
     _wants_plot,
     PlotLayout,
-    _coalesce,
     _plot_layout_from_cli,
     _scaled_figsize,
     _apply_matplotlib_style,
     _palette_color_map,
-    _apply_plot_layout,
     _set_suptitle,
     _subplot_adjust_kwargs,
     _apply_xlim_hint,
@@ -105,7 +80,6 @@ from eval_audit.reports.core_metric_plots import (  # noqa: F401
     _plot_quantiles,
     _plot_pair_metric_distributions,
     _plot_run_metric_distributions,
-    _normalize_plot_run_specs,
     _plot_single_pair_summary,
     _atomic_savefig,
 )

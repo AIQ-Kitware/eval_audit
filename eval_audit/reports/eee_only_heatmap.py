@@ -25,61 +25,37 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
-import os
-import re
-from collections import defaultdict
 from pathlib import Path
-from typing import Any
 
-import safer
 from loguru import logger
 
 from eval_audit.infra.fs_publish import write_text_atomic
 from eval_audit.infra.logging import rich_link, setup_cli_logging
-from eval_audit.infra.report_layout import (
-    portable_repo_root_lines,
-    write_reproduce_script,
-)
 
-from eval_audit.infra.profiling import profile
 
-# --- compat re-exports -------------------------------------------------
+# --- implementation imports ---------------------------------------------
 # Implementation moved to reports.eee_heatmap_{data,render} on 2026-06-11
-# (Phase 2 of docs/historical/planning/repo-refactor-plan.md). This module stays the
-# 'python -m eval_audit.reports.eee_only_heatmap' surface used by
-# reproduce/eee_only_reproducibility_heatmap/30_heatmap.sh.
-from eval_audit.reports.eee_heatmap_data import (  # noqa: F401
-    _MODEL_DISPLAY,
-    _BENCHMARK_DISPLAY,
+# (Phase 2 of docs/historical/planning/repo-refactor-plan.md). This module stays
+# the 'python -m eval_audit.reports.eee_only_heatmap' surface used by
+# reproduce/eee_only_reproducibility_heatmap/30_heatmap.sh; it imports only
+# what its own main() calls (unused compat re-exports pruned 2026-07-12,
+# plan item E4a).
+from eval_audit.reports.eee_heatmap_data import (
     _BENCHMARK_ORDER,
     _MODEL_ORDER,
-    _BOOKKEEPING_METRICS,
-    _benchmark_family,
-    _model_from_component,
     _collect_cells,
     _collect_cells_per_metric,
     _collect_aggregate_diff_cells_per_metric,
-    _accumulate_aggregate_diff_cells,
     _order_aggregate_diff_axes,
-    _parse_float,
-    _find_tol_row,
     _save_cell_data,
 )
-from eval_audit.reports.eee_heatmap_render import (  # noqa: F401
+from eval_audit.reports.eee_heatmap_render import (
     _render_text_table,
-    _atomic_savefig,
-    _PAPER_FONT_STACK,
-    _paper_rc,
     _render_heatmap,
-    _FILENAME_SAFE_RE,
-    _safe_filename_part,
     _render_per_metric_heatmaps,
     _render_per_metric_text_table,
-    _render_diff_heatmap,
     _render_aggregate_diff_heatmaps,
     _render_aggregate_diff_text_table,
-    _render_headline_diff_text_table,
     _render_headline_diff,
     _write_redraw_plots_script,
 )

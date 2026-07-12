@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as datetime_mod
-import json
 from pathlib import Path
 from typing import Any
 
@@ -14,17 +13,19 @@ from eval_audit.infra.report_layout import filtering_reports_root
 from eval_audit.utils.sankey import emit_sankey_artifacts
 from loguru import logger
 
-# --- compat re-exports -------------------------------------------------
+# --- implementation imports + remaining compat re-exports ---------------
 # Implementation moved to reports.filter_analysis_{tables,text,charts,io}
-# on 2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md). The
-# filter tests import these names from this module; keep re-exporting.
+# on 2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md).
+# These imports serve this module's own orchestration plus the few names
+# tests still reach through this facade. Re-exports with zero internal and
+# zero external references were pruned on 2026-07-12 (plan item E4a) —
+# import from the implementation modules instead of re-adding names here.
 from eval_audit.reports.filter_analysis_tables import (  # noqa: F401
     UNCLASSIFIED_EXCLUSION,
     summarize_inventory,
     make_count_table,
     make_reason_breakout_table,
     make_open_access_exclusion_reason_table,
-    make_reason_combo_breakout_table,
     make_open_access_exclusion_reason_by_model_table,
     make_reason_combo_table,
     make_candidate_pool_table,
@@ -32,9 +33,7 @@ from eval_audit.reports.filter_analysis_tables import (  # noqa: F401
     make_pair_table,
     make_reason_examples_table,
     make_decision_examples,
-    classify_hierarchical_filter_stages,
     build_hierarchical_sankey_rows,
-    format_size_label,
     build_hierarchical_sankey_key,
     build_filter_reason_sankey_rows,
     _make_selected_excluded_rows,
@@ -47,21 +46,14 @@ from eval_audit.reports.filter_analysis_text import (  # noqa: F401
 )
 from eval_audit.reports.filter_analysis_charts import (  # noqa: F401
     _title_with_n,
-    _bar_count_label,
-    _bar_axis_values,
-    _abbreviate_label,
-    _bar_chart_layout,
-    _bar_chart_xaxis_update,
     _emit_bar_chart,
     _emit_stacked_bar_chart,
 )
 from eval_audit.reports.filter_analysis_io import (  # noqa: F401
-    to_tsv,
     to_markdown,
     _write_stamped_text,
     _write_stamped_json,
     _write_stamped_table,
-    _shell_quote,
     write_filter_rebuild_script,
     write_filter_reproduce_script,
     _load_inventory_json,
