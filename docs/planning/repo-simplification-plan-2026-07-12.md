@@ -480,6 +480,11 @@ override mapping (`normalized/loaders.py:108-122`, deprecated 2026-06-12
 confirm removal leaves the suite green, or — if it is still load-bearing for
 EEE-only performance — re-document it as a permanent flag and close 4.8 that
 way. Either outcome ends the flag's zombie state.
+*(Outcome 2026-07-12: **kept, documented permanent** — the flag is
+load-bearing three ways: it is the documented EEE-only soft-separation
+mechanism behind the paper's "numbers never consult run_spec.json" claim, it
+saves ~57s/packet, and `test_phase3_judge_substitution` relies on it for a
+clean EEE base. 4.8 closed as keep; note added at the flag definition.)*
 
 ### Workstream F — Non-code hygiene
 

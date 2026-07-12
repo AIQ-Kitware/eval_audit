@@ -280,6 +280,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     # untouched. Default reads EVAL_AUDIT_SKIP_HELM_DIAGNOSIS={1,true,yes}
     # so wrappers can flip this for an entire pipeline invocation without
     # threading the flag through every CLI hop.
+    #
+    # E5b (2026-07-12): PERMANENT — this closes phase3 matrix sub-stage
+    # 4.8's "retire the flag" item the other way. The flag is load-bearing:
+    # it is the documented EEE-only soft-separation mechanism (the paper's
+    # "numbers never consult run_spec.json" claim), it saves ~57s/packet,
+    # and the judge-substitution tests rely on it for a clean EEE base.
     _skip_diag_default = os.environ.get(
         'EVAL_AUDIT_SKIP_HELM_DIAGNOSIS', ''
     ).strip().lower() in {'1', 'true', 'yes'}
