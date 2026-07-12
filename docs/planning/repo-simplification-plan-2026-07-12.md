@@ -317,6 +317,13 @@ possible, rather than re-parsing.
 **B2 — Consolidate `bundle_export.py` era branching behind a deployment-schema
 strategy.** *(effort: med · risk: low-med — pure builder logic,
 `test_exporter_freeze.py` covers it)*
+*(Implementation outcome 2026-07-12: done **minimally** — a single named
+`era_mode` flag derived once at the `:421` decision point and reused at every
+guard site, with the invariant documented in place. The full
+mode-config/strategy extraction was rejected by the same yardstick as R-a:
+the six guards are one-to-three-line documented derivations in one function;
+a dataclass would add indirection to remove three `is not None` repetitions
+while the builder fork and assertion stay put.)*
 The ~8 `resolved_era is not None` guards (`:421-648`) +
 `_model_deployment_entry_era` (`:109`) + the "protocol_mode must be
 completions" / "no rewrite target" / `omit_model_deployment` checks are one

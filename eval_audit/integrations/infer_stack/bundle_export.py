@@ -418,7 +418,13 @@ def materialize_benchmark_bundle(
     # modern HELM-alias assertion is skipped (it validates against the modern
     # submodule — the wrong universe; the shim preflight is the loud check), and
     # replay is verbatim by-name (no model_deployment rewrite).
+    #
+    # B2 invariant: this is the ONLY era decision point in the exporter.
+    # Every era-vs-modern behavior below derives from the single `era_mode`
+    # flag — do not consult the era key (or re-derive the mode) anywhere else
+    # in this function.
     resolved_era = era or preset_cfg.get("era")
+    era_mode = resolved_era is not None
     model_entries = []
     selected_accesses = []
     for fact, spec in zip(facts, specs, strict=True):
@@ -449,7 +455,7 @@ def materialize_benchmark_bundle(
         # The era shim client implements /v1/completions ONLY. Rather than let
         # protocol_mode be required-but-dead on the era fork, assert it is
         # 'completions' so a mis-declared era preset fails loud at export time.
-        if resolved_era is not None and resolved_protocol_mode != "completions":
+        if era_mode and resolved_protocol_mode != "completions":
             raise ValueError(
                 f"era replay only supports protocol_mode 'completions' (the era "
                 f"shim client speaks /v1/completions only), but profile "
@@ -465,7 +471,7 @@ def materialize_benchmark_bundle(
         # This supersedes the earlier by-name rekey to the official name; see
         # docs/historical/planning/from-spec-deployment-rewrite-plan.md Change 5.
         deployment_name = spec.get("model_deployment_name")
-        if resolved_era is not None:
+        if era_mode:
             # Era deployment: bind the OFFICIAL model name to the era shim client
             # (verbatim by-name). No modern alias assertion (wrong submodule
             # universe) and no rewrite target.
@@ -586,7 +592,7 @@ def materialize_benchmark_bundle(
     # era path never sets a rewrite target regardless of deployment count.
     rewrite_deployment = (
         None
-        if resolved_era is not None
+        if era_mode
         else (
             model_entries[0]["name"]
             if from_run_spec and len(model_entries) == 1
@@ -619,12 +625,12 @@ def materialize_benchmark_bundle(
         smoke_sources = _freeze_run_spec_sources(
             smoke_spec, precomputed_root=smoke_root, model_entries=model_entries,
             lease_facts=lease_facts, runs=_runs_for(smoke_root),
-            omit_model_deployment=resolved_era is not None,
+            omit_model_deployment=era_mode,
         )
         full_sources = _freeze_run_spec_sources(
             full_spec, precomputed_root=full_root, model_entries=model_entries,
             lease_facts=lease_facts, runs=_runs_for(full_root),
-            omit_model_deployment=resolved_era is not None,
+            omit_model_deployment=era_mode,
         )
 
     benchmark_smoke_manifest = _manifest_doc(
