@@ -26,6 +26,7 @@ from eval_audit.run_entries import (
     canonicalize_kv,
     discover_benchmark_output_dirs,
     normalize_run_entry_for_historic_lookup,
+    parse_benchmark_output_signal,
     parse_run_name_to_kv,
     run_dir_matches_requested,
 )
@@ -36,24 +37,19 @@ from loguru import logger
 
 
 def parse_helm_run_dir(run_dir: str) -> dict[str, str]:
+    """Label a run dir via the shared ``benchmark_output`` parser (B1).
+
+    Preserves this module's display fallbacks: an unparsable track reads
+    ``"unknown"``; a missing suite component falls back to the parent
+    directory name.
+    """
     p = ub.Path(run_dir)
-    parts = list(p.parts)
-    out = {
-        "helm_suite_name": "unknown",
-        "helm_version": "unknown",
+    public_track, suite_version = parse_benchmark_output_signal(run_dir)
+    return {
+        "helm_suite_name": str(public_track) if public_track is not None else "unknown",
+        "helm_version": str(suite_version) if suite_version is not None else str(p.parent.name),
         "run_leaf": p.name,
     }
-    try:
-        idx = parts.index("benchmark_output")
-    except ValueError:
-        idx = -1
-    if idx >= 1:
-        out["helm_suite_name"] = str(parts[idx - 1])
-    if idx >= 0 and (idx + 2) < len(parts):
-        out["helm_version"] = str(parts[idx + 2])
-    else:
-        out["helm_version"] = str(p.parent.name)
-    return out
 
 
 def load_run_spec_json(run_dir: str | Path) -> dict[str, Any]:

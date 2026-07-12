@@ -208,22 +208,17 @@ def resolve_era(
 def parse_public_signal_from_run_dir(run_dir: Path | str) -> tuple[str | None, str | None]:
     """Derive ``(public_track, suite_version)`` from an official HELM run dir path.
 
-    Same path convention the official public index and ``compare_batch`` use:
-    ``<...>/<public_track>/benchmark_output/runs/<suite_version>/<run_leaf>``.
-    ``public_track`` is the path component immediately *before*
-    ``benchmark_output``; ``suite_version`` is the component two past it (the
-    directory under ``runs/``). Either may be ``None`` if the path does not
-    follow the convention.
+    Delegates to the shared component-based parser (B1:
+    :func:`eval_audit.run_entries.parse_benchmark_output_signal`) so era
+    resolution and ``compare_batch`` cannot drift on the
+    ``<...>/<public_track>/benchmark_output/runs/<suite_version>/<run_leaf>``
+    convention. Either element may be ``None`` if the path does not follow
+    it — :func:`resolve_era` fails loud on the dangerous half-parsed case
+    (Finding 9).
     """
-    parts = list(Path(run_dir).parts)
-    try:
-        idx = parts.index("benchmark_output")
-    except ValueError:
-        return None, None
-    public_track = parts[idx - 1] if idx >= 1 else None
-    # runs/<suite_version> => suite_version is two components past benchmark_output.
-    suite_version = parts[idx + 2] if (idx + 2) < len(parts) else None
-    return public_track, suite_version
+    from eval_audit.run_entries import parse_benchmark_output_signal
+
+    return parse_benchmark_output_signal(run_dir)
 
 
 def era_for_run_dir(

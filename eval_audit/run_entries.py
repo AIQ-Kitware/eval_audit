@@ -418,6 +418,35 @@ def reconstruct_run_entry_from_run_spec(run_spec: dict[str, Any]) -> tuple[str, 
     return run_entry, dropped
 
 
+def parse_benchmark_output_signal(run_dir: os.PathLike[str] | str) -> tuple[str | None, str | None]:
+    """Derive ``(public_track, suite_version)`` from a HELM run-dir path.
+
+    The single component-based parser for the
+    ``<...>/<public_track>/benchmark_output/runs/<suite_version>/<run_leaf>``
+    convention (B1): ``public_track`` is the component immediately *before*
+    ``benchmark_output``; ``suite_version`` is two components past it (the
+    directory under ``runs/``). Either is ``None`` when the path does not
+    follow the convention. Consumers: era resolution
+    (``eval_audit.eras``) and ``compare_batch`` run-dir labeling — the two
+    readers that must agree, since era resolution silently selects the
+    measurement instrument.
+
+    Deliberately different: the official public index derives its
+    ``public_track`` *relative to a scan root* (may be multi-part, e.g.
+    ``a/b``, or ``main`` when the tree sits at the root) — that is a
+    root-anchored labeling choice, not this path-component convention.
+    """
+    parts = list(Path(run_dir).parts)
+    try:
+        idx = parts.index("benchmark_output")
+    except ValueError:
+        return None, None
+    public_track = parts[idx - 1] if idx >= 1 else None
+    # runs/<suite_version> => suite_version is two components past benchmark_output.
+    suite_version = parts[idx + 2] if (idx + 2) < len(parts) else None
+    return public_track, suite_version
+
+
 def discover_benchmark_output_dirs(
     roots: Iterable[os.PathLike[str] | str],
 ) -> Iterator[Path]:
