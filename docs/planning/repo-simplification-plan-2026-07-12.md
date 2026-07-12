@@ -1,7 +1,20 @@
 # Repo Simplification & Refactor Plan — 2026-07-12
 
-**Status:** DESIGN — no code yet. Findings audited read-only; awaiting owner
-sign-off on sequencing and on the two optional capstones (A4, D6).
+**Status (2026-07-12, same day): Batches 1–3 IMPLEMENTED** — 22 commits on
+`impl/run-from-run-spec` (E1, E2, E4a(+string-name fixup), E5a, B3, F2, D1,
+D2, A1, B1, A2, A3, C1, B2-minimal, D4-slice, E3, D3, E5b-keep, C2; scope
+outcomes recorded inline at B2/E4/E5b). Final gate: FULL suite incl.
+`--run-slow` — 638 passed / 1 skipped / 1 pre-existing corpus-drift failure
+(the `test_qwen_from_spec` ambiguity documented in the 2026-07-12 merge
+journal entry; fails identically on the pre-session base). Net code deltas:
+`helm/` 3,336→~1,780 lines; `build_reports_summary.py` 1,715→~330;
+`instance_stats.py` 425→33; ~110 dead re-exports/symbols/flags retired.
+**Batch 4 capstones (A4, D6) + operator decisions (D5, F1 ladder-out,
+D4-remainder) remain open** — each needs owner sign-off per §2/§3.
+
+**Original status:** DESIGN — no code yet. Findings audited read-only;
+awaiting owner sign-off on sequencing and on the two optional capstones
+(A4, D6).
 
 **Reviewed:** 2026-07-12 second pass (Fable 5 over the Opus 4.8 audit). Every
 high-impact recommendation re-verified against the tree; the deltas are listed
@@ -468,6 +481,12 @@ every unreferenced one — trivial, belongs in Batch 1. (b) Optionally repoint
 the few genuinely-used names (e.g. `test_core_metrics_single_run.py`'s
 `PlotLayout`/`_set_suptitle`/`_scaled_figsize`) at the real modules and shrink
 the facades to public names only.
+*(Outcome 2026-07-12: (a) done — 52 dead re-exports removed, one restored
+after a slow-marked test's monkeypatch-by-string-name use surfaced (the AST
+analysis cannot see string refs — lesson recorded). (b) **skipped**: after
+(a), the facades' remaining imports are their own implementation imports
+plus string-name monkeypatch targets; there is no re-export fat left, and
+repointing the monkeypatch targets would churn tests for zero clarity.)*
 
 **E5 — Retire the deferred Phase-3 flags (matrix sub-stage 4.8; the
 deprecation cycle has elapsed).** *(effort: low · risk: low)*

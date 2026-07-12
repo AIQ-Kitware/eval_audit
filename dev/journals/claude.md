@@ -1318,3 +1318,63 @@ operator decision.
 **Next steps**: plan awaits owner sign-off on sequencing + capstones; Batch 1
 (dead symbols, dup helpers, unreferenced re-exports, era config dedup,
 norecursedirs, shared helpers) is implementable immediately at near-zero risk.
+
+## 2026-07-12 13:20:00 -0400
+
+**User intent**: `/goal Implement latest refactor plan` — execute
+`docs/planning/repo-simplification-plan-2026-07-12.md` (Batches 1–3;
+capstones/operator decisions explicitly excluded pending sign-off).
+
+**Model/config**: claude-fable-5 (Claude Code, VSCode extension harness).
+
+**What happened**: 22 commits implementing every Batch 1–3 item, one commit
+per item, suite-gated throughout (fast suite per commit; slow suites where
+the item touched render/EEE/era paths; FULL `--run-slow` suite at A2 and at
+the end: 638 passed / 1 skipped / 1 pre-existing corpus-drift failure).
+Headlines: `run_entries` moved to a top-level module (A1) + one shared
+`benchmark_output` parser (B1); the prod-dead half of `helm/` deleted (A2 —
+`instance_stats.py` 425→33, join stack + `helm/metrics.py` shim gone);
+`build_reports_summary.py` finished its Phase-2 split (C1, 1,715→334, five
+new `reports/summary/scope*.py` modules, AST-computed imports, verbatim
+bodies); the two big heatmap renderers now share a six-helper grid scaffold
+(C2) gated by a hand-rolled synthetic-cells probe — 9 artifacts
+byte-identical before/after.
+
+**Scope judgments made mid-flight** (each recorded in the plan):
+- B2 implemented *minimally* (one named `era_mode` flag + documented
+  invariant); the full strategy extraction failed the same yardstick that
+  killed the node-chain idea (R-a).
+- E5b resolved as **keep**: `--skip-diagnosis` is load-bearing (EEE-only
+  paper claim, ~57s/packet, judge-substitution tests) — phase3 4.8 closed
+  the other way from `EVAL_AUDIT_EEE_STRICT` (retired, E5a).
+- E4(b) skipped: after (a), the facades' remaining imports are their own
+  implementation imports + string-name monkeypatch targets.
+- C3 done as the move (breakdown 1,007→813; repair/publish half →
+  publish.py); decomposing the 481-line selection algorithm deferred.
+- D3 done as *layering*: the CLI's capture-group regexes first, generic
+  tail delegates to `failure_triage` (intentional delta: previously
+  `uncategorized_error` logs now get taxonomy names — CUDA-OOM probe).
+
+**Gotcha worth remembering**: the E4a facade pruning was AST-driven and
+missed a **string-name** reference — `monkeypatch.setattr(core_metrics,
+"_single_run_core_stat_index", ...)` in a slow-marked test. Fixed + lesson
+recorded: before pruning re-exports, sweep for string-literal name refs, and
+gate prunes with `--run-slow`, not just the fast suite.
+
+**Reusable insights.**
+1. For god-module splits, compute each new module's imports mechanically
+   (AST free-names ∩ module-level bindings) and move bodies verbatim — the
+   C1 five-way split compiled and passed characterization first try.
+2. For renderers with zero test coverage, a synthetic-input hash probe
+   (double-render HEAD first to prove determinism) is a cheap, real
+   byte-identity gate — C2's 9-artifact probe caught nothing because the
+   extraction preserved every constant, and now it exists for next time.
+3. Apply the same simplicity yardstick to the plan itself while executing:
+   two items (B2-full, E4b) shrank on contact with the code, and writing
+   the outcome into the plan keeps the audit trail honest.
+
+**Next steps**: Batch 4 remains gated on the owner — A4 (retire
+HelmRunDiff; needs the F1/F2/F8 baseline capture first), D6 (typed
+analyze_index), D5 (compare_batch fate), D4-remainder, F1 (ladder-out
+reclaim), F3/F4 (doc archival after merge). The branch is 22 commits ahead;
+not pushed.
