@@ -19,11 +19,10 @@ for path in "${required_inputs[@]}"; do
   fi
 done
 
-# --allow-single-repeat: with EVAL_AUDIT_SKIP_LOCAL_REPEAT=1 each model has a
+# With EVAL_AUDIT_SKIP_LOCAL_REPEAT=1 each model has a
 # single local attempt, which is the expected shape for this grid.
 PYTHONPATH="$ROOT" "$PYTHON_BIN" -m eval_audit.cli.build_virtual_experiment \
   --manifest "$VEXP_MANIFEST" \
-  --allow-single-repeat \
   "$@"
 
 echo

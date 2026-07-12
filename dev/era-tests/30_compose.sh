@@ -39,9 +39,12 @@ for manifest in "${manifests[@]}"; do
   echo "==================================================================="
   echo "== composing $manifest"
   echo "==================================================================="
+  # One local attempt per scenario is expected here — the grid exports
+  # EVAL_AUDIT_SKIP_LOCAL_REPEAT=1 (in _lib.sh), which the planner reads. The old
+  # --allow-single-repeat flag was a no-op and was deleted (refactor D-3 6dac5e99);
+  # the env var is the real control, so do not re-add the flag.
   PYTHONPATH="$ROOT" "$PYTHON_BIN" -m eval_audit.cli.build_virtual_experiment \
     --manifest "$manifest" \
-    --allow-single-repeat \
     "$@"
 done
 

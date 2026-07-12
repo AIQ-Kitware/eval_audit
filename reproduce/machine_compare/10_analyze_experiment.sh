@@ -6,5 +6,4 @@ cd "$ROOT"
 EXPERIMENT_NAME="${1:?experiment name required}"
 eval-audit-analyze-experiment \
   --experiment-name "$EXPERIMENT_NAME" \
-  --index-dpath "$STORE_ROOT/indexes" \
-  --allow-single-repeat
+  --index-dpath "$STORE_ROOT/indexes"

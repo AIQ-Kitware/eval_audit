@@ -10,8 +10,7 @@ eval-audit-index \
   --report-dpath "$STORE_ROOT/indexes"
 eval-audit-analyze-experiment \
   --experiment-name "$EXPERIMENT_NAME" \
-  --index-dpath "$STORE_ROOT/indexes" \
-  --allow-single-repeat
+  --index-dpath "$STORE_ROOT/indexes"
 python -m eval_audit.workflows.build_reports_summary \
   --experiment-name "$EXPERIMENT_NAME" \
   --index-dpath "$STORE_ROOT/indexes"
