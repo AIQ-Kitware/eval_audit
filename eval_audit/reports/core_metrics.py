@@ -56,6 +56,7 @@ from eval_audit.reports.core_metric_curves import (  # noqa: F401
     _pair_metric_domain,
     _infer_run_spec_name,
     _build_pair,
+    _single_run_core_stat_index,  # monkeypatched by name in test_core_metrics_single_run
     _single_run_instance_core_rows,
     _strip_private,
     _find_pair,
