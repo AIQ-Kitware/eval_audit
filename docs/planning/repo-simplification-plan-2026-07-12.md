@@ -177,6 +177,53 @@ is in §3.
   unify → relocate → decide → capstone); the audit's cross-reference numbering
   was confusing.
 
+Deltas from the **live-code read pass** (same day; direct reads of
+`run_entries.py`, `helm/diff.py`, `normalized/{diff,helm_compat}.py`,
+`cli/from_eee.py`, `bundle_export.py`, `planning/core_report_planner.py`):
+
+- **R-g — `run_entries.py` has two halves.** The pure-string half
+  (parse/canonicalize/logical-key, no imports) serves the ~10 importers; a
+  second half (`parse_run_entry_description`,
+  `reconstruct_run_entry_from_run_spec`, the two registry introspections)
+  lazily imports the **upstream `helm.*` library** (crfm-helm) inside
+  functions. A1 is unchanged, but the move must preserve the function-local
+  imports — the module must stay importable without crfm-helm installed.
+- **R-h — `helm_view_from_path` is a self-documented corpse with one
+  consumer.** Its docstring says "Stage 4 replaces the comparison core
+  itself; this helper goes away then" (`helm_compat.py:149`) — Stage 4
+  shipped 2026-06-12 — and it builds a `NormalizedRun` via
+  `NormalizedRun.__new__` + `object.__setattr__`, bypassing the dataclass
+  constructor. Sole consumer: `workflows/compare_batch.py` (2 call sites).
+  Its deletion is now tied to D5: retiring `compare_batch` deletes the
+  bridge's most fragile export for free. (`compat/helm_outputs.HelmOutputs`
+  stays either way — `index_results.py` is a live consumer.)
+- **R-i — `core_report_planner.py` (1,360 lines) reviewed and cleared.**
+  The second-largest file, unflagged by the audits — read directly: it is
+  cohesive (one domain, ~36 top-level functions in four clean bands:
+  index-row normalization → comparability facts → packet building →
+  artifact read-side views). Leave alone; seam map recorded in §5 in case
+  it keeps growing.
+- **R-j — B2 softened.** The ~8 `resolved_era is not None` guards cluster
+  around two already-separate entry builders whose docstrings encode the
+  2026-07-10 findings (pyhocon nested keys, Finding 2/5 rationale). Prefer
+  a small mode-config dataclass (entry builder + assertions + flags,
+  selected once at `:421`) over full strategy classes, and preserve those
+  finding-annotated docstrings verbatim — they are the audit trail.
+- **R-k — new E5: the deferred flag retirement is due.** Matrix sub-stage
+  4.8 deferred retiring `--skip-diagnosis` + `EVAL_AUDIT_EEE_STRICT` "one
+  deprecation cycle" (2026-06-12); the cycle has elapsed. The env override
+  still lives at `normalized/loaders.py:108-122` (mapped, deprecated);
+  `--skip-diagnosis` is still wired through 4 modules + 2 tests.
+- **R-l — F3 corrected: the two phase3 docs have different fates.** The
+  design doc archives (plan complete; fix its stale "DESIGN — no code yet"
+  header when moving). The **matrix doc stays in `docs/planning/`** — it is
+  the live gate specification referenced by `tests/phase3_baseline_lib.py`
+  and by this plan's A4/D6 gates. The unfiled upstream issue (4.7,
+  `upstream-eee-recipe-facts-issue.md`) also stays until a human files it.
+- **R-m — small doc bug found:** `from_eee._render_packet`'s docstring says
+  "Run rebuild_core_report on a single planner packet" but the code shells
+  out to `reports.core_metrics` directly. Fix folded into D2.
+
 ### Workstream A — Clarify the comparison core (finish the diff migration)
 
 > Exit picture: `helm/` becomes a single, honestly-named "HELM semantic-diff
@@ -193,7 +240,10 @@ Pure `git mv` + rewrite ~10 import sites
 `workflows/{compare_batch,index_results}.py`) plus `tests/test_run_entries.py`
 and the `docs/pipeline.md:180` link. Precedent: `metrics_taxonomy.py` (same
 lift, same direction). **No re-export shim** — verified zero script-side
-imports of the old path.
+imports of the old path. Per R-g: the module's upstream-`helm.*` imports
+(registry introspection for `reconstruct_run_entry_from_run_spec`) are
+function-local by design — keep them that way so the module stays importable
+without crfm-helm installed.
 
 **A2 — Delete the prod-dead `helm/` code.** *(effort: med · risk: low —
 prod-safe; cost is test churn)*
@@ -267,13 +317,16 @@ possible, rather than re-parsing.
 **B2 — Consolidate `bundle_export.py` era branching behind a deployment-schema
 strategy.** *(effort: med · risk: low-med — pure builder logic,
 `test_exporter_freeze.py` covers it)*
-The ~6 `resolved_era is not None` guards + `_model_deployment_entry_era`
-(`:109-175`) + the "skip modern alias assertion" / "protocol_mode must be
-completions" / "no rewrite target" checks are one decision: *which deployment
-schema*. Extract an `EraDeploymentSchema` / `ModernDeploymentSchema` pair
-(entry-builder + its assertions) selected once. This is the one place era
-branching has real scatter; the other guard sites are single, well-commented,
-and fine as-is.
+The ~8 `resolved_era is not None` guards (`:421-648`) +
+`_model_deployment_entry_era` (`:109`) + the "protocol_mode must be
+completions" / "no rewrite target" / `omit_model_deployment` checks are one
+decision: *which deployment schema*. Per R-j: prefer a small mode-config
+dataclass (entry builder + assertions + flags, selected once at `:421`) over
+full strategy classes — the two entry builders stay separate functions — and
+**preserve the finding-annotated docstrings verbatim** (they encode the
+2026-07-10 review's pyhocon/Finding-2/Finding-5 rationale and are the audit
+trail). This is the one place era branching has real scatter; the other guard
+sites are single, well-commented, and fine as-is.
 
 **B3 — Kill the two small era config/build duplications.** *(effort: low ·
 risk: low · both deferred from 2026-07-10)*
@@ -332,7 +385,9 @@ render_heavy)` replacing the verbatim `[sys.executable, "-m",
 Collapse `compare_pair_eee._meta_from_artifact` (:87-124) into
 `eee_sources._extract_artifact_meta` via a `single_path=` param (its own
 docstring admits it mirrors the shared extractor). Home:
-`normalized/eee_sources.py` or a new `workflows/eee_render.py`.
+`normalized/eee_sources.py` or a new `workflows/eee_render.py`. While there,
+fix the R-m doc bug: `_render_packet`'s docstring claims it runs
+`rebuild_core_report`; it shells out to `reports.core_metrics`.
 
 **D3 — Unify the two failure-classification engines.** *(effort: med · risk:
 low — both tested; behavior-diff the taxonomies first)* Make
@@ -356,6 +411,11 @@ operator decision)* It is a legacy manifest-driven pipeline on the retired
 `reproduce/{smoke,apples}/30_compare.sh` runbooks yet still a console script.
 Confirm it is vestigial vs the planner path; if so, deprecate it like
 `cli/reports.py` (keep resolving for old reproduce scripts, stop advertising).
+Per R-h, retirement also deletes `helm_compat.helm_view_from_path` — the
+bridge's most fragile export (constructor-bypassing `NormalizedRun.__new__`,
+self-documented as "goes away" at Stage 4) whose only consumer is
+`compare_batch` — which raises this item's payoff.
+(`compat/helm_outputs.HelmOutputs` stays: `index_results.py` is live.)
 
 **D6 — [OPTIONAL CAPSTONE] Extract a typed `analyze_index()` primitive.**
 *(effort: high · risk: med — hot analysis path)* A typed
@@ -402,6 +462,18 @@ the few genuinely-used names (e.g. `test_core_metrics_single_run.py`'s
 `PlotLayout`/`_set_suptitle`/`_scaled_figsize`) at the real modules and shrink
 the facades to public names only.
 
+**E5 — Retire the deferred Phase-3 flags (matrix sub-stage 4.8; the
+deprecation cycle has elapsed).** *(effort: low · risk: low)*
+Two parts, per R-k: (a) delete the deprecated `EVAL_AUDIT_EEE_STRICT` env
+override mapping (`normalized/loaders.py:108-122`, deprecated 2026-06-12
+"one deprecation cycle" ago) and update `tests/test_phase3_instance_source.py`
+(which currently pins that the deprecated mapping still works) — trivial.
+(b) Execute the matrix's 4.8 check for `--skip-diagnosis` (wired through
+`core_metrics`, `core_metric_curves`, `from_eee`, `loaders` + 2 tests):
+confirm removal leaves the suite green, or — if it is still load-bearing for
+EEE-only performance — re-document it as a permanent flag and close 4.8 that
+way. Either outcome ends the flag's zombie state.
+
 ### Workstream F — Non-code hygiene
 
 **F1 — Reclaim ~8G gitignored scratch (on-disk `rm`, not a git change).**
@@ -418,9 +490,14 @@ collection, so trim to what exists or drop the list.
 
 **F3 — Archive completed planning docs** → `docs/historical/planning/` once
 `impl/run-from-run-spec` merges: `run-from-run-spec-json-plan.md`,
-`simplicity-audit-2026-07-06.md`, `phase3-comparison-core-unification.md`,
-`phase3-behavior-equivalence-matrix.md`. *(This plan supersedes none of them —
-it continues where they stopped.)*
+`simplicity-audit-2026-07-06.md`, `phase3-comparison-core-unification.md`
+(fix its stale "DESIGN — no code yet" header when moving — its own §4 says
+all sub-stages landed). Per R-l, **`phase3-behavior-equivalence-matrix.md`
+stays in `docs/planning/`**: it is the live gate specification referenced by
+`tests/phase3_baseline_lib.py` and by this plan's A4/D6 gates; archive it
+only after A4/D6 are decided. `upstream-eee-recipe-facts-issue.md` also stays
+until the issue is actually filed. *(This plan supersedes none of them — it
+continues where they stopped.)*
 
 **F4 — Minor:** add the ~8 missing `reproduce/*/README.md` (or accept that
 smoke/setup dirs skip them); archive the two stale `dev/analysis/eee_refactor_stage*.md`
@@ -436,9 +513,11 @@ Dependency-ordered so each commit leaves the tree working (per CLAUDE.md).
 
 **Batch 1 — cheap, high-clarity, near-zero risk (do first):**
 E1 (dead symbols) · E2 (dup helpers) · E4(a) (delete unreferenced facade
-re-exports) · B3 (era config/build dup) · F2 (norecursedirs) · D1
-(index/reproduce helpers) · D2 (EEE render helper).
-One commit per item; all guarded by the existing suite.
+re-exports) · E5(a) (retire the `EVAL_AUDIT_EEE_STRICT` override) · B3 (era
+config/build dup) · F2 (norecursedirs) · D1 (index/reproduce helpers) · D2
+(EEE render helper + R-m docstring fix).
+One commit per item; all guarded by the existing suite. E5(b)'s
+`--skip-diagnosis` decision lands in Batch 3.
 
 **Batch 2 — the headline structural clarity moves:**
 A1 (move `run_entries` → top-level module) → B1 (unify path parser, lands in
@@ -507,6 +586,12 @@ not start until 1–2 land the clean seams.
 - **`eras.py`, `lease_bracket.py`, the era↔image guard** — the resolver is the
   design to emulate; leasing is correctly era-free; the guard is the strongest
   safety net in the replay path.
+- **`planning/core_report_planner.py` (1,360 lines)** — reviewed directly
+  (R-i) and cleared: one domain, four clean bands. If it keeps growing, the
+  natural seams are index-row normalization (`normalize_*_index_rows` +
+  prefilter/EEE-resolution, `:192-576`), comparability facts (`:593-739`),
+  packet building (`:740-1160`), and artifact read-side views (`:1166-end`) —
+  recorded here so a future split doesn't have to rediscover them.
 - **Unifying the matplotlib (per-pair paper figures) vs plotly (interactive
   aggregate) backends** — a large project with little payoff.
 - **The EEE-only hard import split** as a standalone effort — it is owner-owned
