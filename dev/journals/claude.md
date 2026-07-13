@@ -1549,3 +1549,73 @@ incident came through.
 **Next steps.** Unchanged: implement commits 1–2 in submodules/infer_stack
 per the plan; plan file still uncommitted (branch is unrelated
 impl/run-from-run-spec).
+
+## 2026-07-13 12:51:45 -0400
+
+**Model / harness.** claude-opus-4-8 (Opus 4.8), Claude Code CLI in the VSCode
+extension harness. Session goal (via `/goal`): implement
+`docs/planning/litellm-route-registry-plan.md` on the submodule branch.
+
+**User intent.** Implement the LiteLLM route-registry plan in
+`submodules/infer_stack` — the fix for the shared-gateway 400 "Invalid model
+name" incident where a cross-catalog converge stripped another runbook's still-
+live routes.
+
+**What landed.** Branched `submodules/infer_stack` off
+`infer-stack-cli-api-migration` as `feat/litellm-route-registry`. Three commits:
+
+1. *Registry core* (`compose.py`). Append-only `litellm_registry.json` in the
+   shared state dir stores *semantic* route rows (`served`/`engine`/`host`), not
+   rendered LiteLLM entries. Every converge merges the invoking catalog +
+   every placed deployment in the full `desired` set (spans all runbooks via the
+   shared ledger) and renders `model_list` from the whole registry. New pure
+   fns (`_registry_incoming_from_catalog/_deployments`, `_merge_route_registry`,
+   `_litellm_model_list_from_registry`, `_seed_registry_from_litellm_config`,
+   `_dump_route_registry`) + `render_compose(route_registry=...)` branch (order
+   dynamic→registry→catalog→legacy) + `ComposeBackend._load/_update_route_
+   registry`, `merge_route_registry`. Entry building factored into shared
+   `_vllm/_ollama_route_entry` so no render path drifts. 15 new tests
+   (test_leasing_route_registry.py) covering the plan's items 1–8, 10–14.
+2. *`routes` CLI + docs.* `RoutesModalCLI` (list/seed/prune) per the
+   ConfigModalCLI nested precedent; prune shows the drop list + confirms.
+   docs/litellm-gateway-routing.md rewritten; module docstring updated. CLI
+   happy-path tests.
+3. *TUI companion.* `_raise_for_body` folds the HTTP response body into API-tab
+   errors (the missing "Invalid model name" body is what made the incident hard
+   to diagnose). Tolerant of minimal fake responses.
+
+Full submodule suite: 377 passed / 2 skipped (deterministic order).
+
+**Design decisions worth remembering.**
+- The registry path is *unconditional* for `litellm and not dynamic_routing`
+  (catalog may be None → deployments-only incoming), which retired the legacy
+  `_litellm_model_list` branch from the backend entirely. This is stronger than
+  the review's suggested "registry-exists OR catalog" guard and eliminates the
+  no-catalog blip too. Verified end-to-end with a scripted A/B/A alternation:
+  olmo stays routable, config byte-stable.
+- Merge preserves the *existing* version so an unknown-version registry (binary
+  rollback) isn't silently rewritten to the current schema.
+- loguru is `logger.disable('infer_stack')`d and doesn't reach pytest caplog —
+  tests capture warnings via a temporary loguru sink (`capture_warnings`).
+- `ComposeBackend.__init__` defaults `litellm=True`, so existing backend
+  converge tests already exercised the litellm path; the registry became active
+  for them with no assertion breakage (model_list content is equivalent; no
+  backend test asserted the legacy per-model `depends_on`).
+
+**Uncertainty / what could break.** The GPU-host acceptance run (§10) is manual
+and not done — the unit layer proves render/registry logic and the incident
+scenario in-process, but real docker recreate-vs-not behavior and an olmo
+completion through the live gateway during a qwen model-load window remain to be
+validated on a GPU host. A `test_tui.py` scroll-offset test flaked once under
+pytest-randomly reordering (row_count 57≠40) — pre-existing suite isolation bug,
+unrelated to the 3-line TUI change; deterministic order and 3 random-order runs
+all pass.
+
+**Left for the user (not auto-done, per policy).** The `submodules/infer_stack`
+gitlink bump is unstaged — push the submodule branch first, then bump. Unrelated
+`reproduce/classic_together_combined/*.sh` edits appeared during the session
+(not mine) and were left untouched.
+
+**Next steps.** Push submodule `feat/litellm-route-registry`; run the §10 GPU-
+host acceptance; optionally add `reproduce/*/_lib.sh` `routes seed` preflight
+hooks (§12 follow-up) once the CLI verb is on a released infer-stack.
