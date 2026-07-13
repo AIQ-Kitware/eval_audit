@@ -76,9 +76,15 @@ python gen_presets.py            # rewrites config/presets.yaml from the corpus
   official index, both officials are one measurement. Only the LOCAL/instrument
   side (v0.2.4 vs v0.3.0 HELM image) genuinely differs per era. Interpret
   accordingly: "both eras reproduce the official" tests two instruments against the
-  *same* target, not two independent officials — and only the era that originally
-  produced a number is its faithful reproduction; the other is a "does the other
-  instrument still land on it?" check.
+  *same* target, not two independent officials.
+- **These officials were originally produced at v0.2.2 — NOT at either pinned era.**
+  All three models' runs first appear (byte-identical) at **v0.2.2** and were carried
+  forward. So v0.2.4 and v0.3.0 are both *later*-version proxy instruments for a
+  v0.2.2-produced number — faithful only where scenario/tokenization/scoring is
+  unchanged since v0.2.2. A truly faithful reproduction of the originals would need a
+  **v0.2.2** era image (not in docker/eras.yaml). Treat the v0.2.4/v0.3.0 results as
+  "does a later instrument still land on the v0.2.2 number?", and read any
+  v0.2.4-vs-v0.3.0 gap as *instrument* drift, since the official target is fixed.
 
 ## Serving / GPU knobs
 

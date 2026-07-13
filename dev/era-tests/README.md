@@ -53,7 +53,10 @@ stresses its logprob fidelity.
   the snapshots, it did not re-run it. Each era's local replay is paired against
   its own suite's official index, but both officials are one measurement, so only
   the LOCAL/instrument side differs per era. "Both eras agree" is two instruments
-  hitting the same target, not two independent confirmations.
+  hitting the same target, not two independent confirmations. Note the official was
+  originally produced at **v0.2.3** (redpajama first appears there — 106 runs, vs 70
+  at v0.2.4/v0.3.0), so BOTH pinned eras are later-version proxies for a
+  v0.2.3-produced number, faithful only where the era code is unchanged since v0.2.3.
 - **Per-era corpus view.** `redpajama-3b` runs exist at both v0.2.4 and v0.3.0 with
   identical run-dir names, so freezing against the broad classic root is
   AMBIGUOUS. The grid overrides `--precomputed-root` with a per-era suite-scoped
