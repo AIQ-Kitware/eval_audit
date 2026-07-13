@@ -344,6 +344,15 @@ recorded as a declared substitution. It only fires for the known
 relocation (a genuinely wrong era pin still fails loudly), covers all 9
 drifted classes, and is a *spec* adaptation — not patching the era image
 — consistent with the documented "later-era proxy instrument" framing.
-Scoped to `docker/era_shim/helm_era_shim/replay.py`
-(`_preflight_resolve_classes` and the decode step just above it).
-*(Status: diagnosed; implement when ready.)*
+
+**Implemented** in `docker/era_shim/helm_era_shim/replay.py`:
+`_canonical_class_name` (single-path probe + relocation), `_remap_object_spec_tree`
+(rebuilds the frozen ObjectSpec tree), and `_canonicalize_class_paths` (applies
+it to `scenario_spec` + `metric_specs` — the same roots the preflight checks).
+It runs as step "1b" right after the strict decode, so both the preflight and
+scoring use the resolvable class, and the run dir's emitted `run_spec.json`
+records the remapped path. Each substitution is recorded on the run manifest as
+`class_path_substitutions` (a declared substitution) and logged to stdout. The
+run-name/logical-key pairing and canonical-recipe hash (which excludes
+`metric_specs`, see G8) are unaffected, so the local↔official comparison does not
+regress. Tests: `tests/test_era_shim_hostside.py` (era-resolver-simulated).

@@ -232,3 +232,112 @@ def test_prepare_local_helm_config_prefers_baked_key_over_env(tmp_path, monkeypa
     )
     deps = ConfigFactory.parse_file(str(prepared / "credentials.conf"))["deployments"]
     assert deps[model] == "sk-master"
+
+
+# --- G13: relocated class-path canonicalization ------------------------------
+# The classic public corpus stores metric class_names under the pre-refactor FLAT
+# path `helm.benchmark.<X>_metrics.<Class>` (a naive benchmark.->helm.benchmark.
+# migration of pre-v0.1.0 run_specs; see docs/helm-gotchas.md G13). The era build
+# has these under the `metrics/` subpackage. These tests simulate that era build's
+# class resolver so the logic is validated independent of the installed HELM (the
+# host's HELM has since moved BasicMetric yet again).
+
+
+def _era_resolver(monkeypatch):
+    """Patch get_class_by_name to mimic an ERA build: metrics resolve ONLY under
+    the metrics/ subpackage; scenarios resolve; nothing else does."""
+    import helm.common.object_spec as oscore
+
+    resolvable = {
+        "helm.benchmark.metrics.basic_metrics.BasicMetric",
+        "helm.benchmark.metrics.bias_metrics.BiasMetric",
+        "helm.benchmark.scenarios.babi_qa_scenario.BabiQAScenario",
+    }
+
+    def fake(name):
+        if name in resolvable:
+            return object
+        raise ModuleNotFoundError(f"No module named for {name!r}")
+
+    monkeypatch.setattr(oscore, "get_class_by_name", fake)
+
+
+def test_canonical_class_name_remaps_flat_metric(monkeypatch):
+    _era_resolver(monkeypatch)
+    out, sub = replay._canonical_class_name("helm.benchmark.basic_metrics.BasicMetric")
+    assert sub is True
+    assert out == "helm.benchmark.metrics.basic_metrics.BasicMetric"
+
+
+def test_canonical_class_name_keeps_resolvable_unchanged(monkeypatch):
+    _era_resolver(monkeypatch)
+    # scenario resolves as-is
+    assert replay._canonical_class_name(
+        "helm.benchmark.scenarios.babi_qa_scenario.BabiQAScenario"
+    ) == ("helm.benchmark.scenarios.babi_qa_scenario.BabiQAScenario", False)
+    # already-subpackage metric resolves as-is
+    assert replay._canonical_class_name(
+        "helm.benchmark.metrics.bias_metrics.BiasMetric"
+    ) == ("helm.benchmark.metrics.bias_metrics.BiasMetric", False)
+
+
+def test_canonical_class_name_wrong_pin_left_for_preflight(monkeypatch):
+    _era_resolver(monkeypatch)
+    # neither the flat path nor its metrics-variant resolves -> untouched, so the
+    # preflight (not this remap) fails loudly on a genuinely-wrong era pin.
+    assert replay._canonical_class_name(
+        "helm.benchmark.ghost_metrics.GhostMetric"
+    ) == ("helm.benchmark.ghost_metrics.GhostMetric", False)
+
+
+def _fake_run_spec(scenario_class, metric_class, metric_args):
+    import dataclasses
+
+    from helm.common.object_spec import ObjectSpec
+
+    @dataclasses.dataclass
+    class _RS:
+        name: str
+        scenario_spec: object
+        metric_specs: list
+
+    return _RS(
+        name="babi_qa:task=15,model=together/gpt-j-6b",
+        scenario_spec=ObjectSpec(class_name=scenario_class, args={"task": 15}),
+        metric_specs=[ObjectSpec(class_name=metric_class, args=metric_args)],
+    )
+
+
+def test_canonicalize_class_paths_rewrites_flat_metric(monkeypatch):
+    _era_resolver(monkeypatch)
+    rs = _fake_run_spec(
+        "helm.benchmark.scenarios.babi_qa_scenario.BabiQAScenario",
+        "helm.benchmark.basic_metrics.BasicMetric",
+        {"names": ["exact_match", "quasi_exact_match"]},
+    )
+    new_rs, subs = replay._canonicalize_class_paths(rs)
+    assert subs == [
+        {
+            "from": "helm.benchmark.basic_metrics.BasicMetric",
+            "to": "helm.benchmark.metrics.basic_metrics.BasicMetric",
+        }
+    ]
+    # metric remapped; scenario untouched; args preserved verbatim
+    assert new_rs.metric_specs[0].class_name == "helm.benchmark.metrics.basic_metrics.BasicMetric"
+    assert new_rs.metric_specs[0].args == {"names": ["exact_match", "quasi_exact_match"]}
+    assert new_rs.scenario_spec.class_name == "helm.benchmark.scenarios.babi_qa_scenario.BabiQAScenario"
+    # idempotent: re-running yields no further substitutions
+    _, subs2 = replay._canonicalize_class_paths(new_rs)
+    assert subs2 == []
+
+
+def test_canonicalize_class_paths_noop_returns_same_object(monkeypatch):
+    _era_resolver(monkeypatch)
+    rs = _fake_run_spec(
+        "helm.benchmark.scenarios.babi_qa_scenario.BabiQAScenario",
+        "helm.benchmark.metrics.bias_metrics.BiasMetric",  # already resolvable
+        {},
+    )
+    new_rs, subs = replay._canonicalize_class_paths(rs)
+    assert subs == []
+    assert new_rs is rs  # unchanged object when nothing was substituted

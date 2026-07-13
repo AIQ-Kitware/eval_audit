@@ -178,6 +178,26 @@ def main(argv: Optional[List[str]] = None) -> Dict[str, Any]:
     run_spec = _decode_era_run_spec(run_spec_path)
     manifest["recipe"]["run_spec_name"] = run_spec.name
 
+    # 1b) Canonicalize relocated class paths (DECLARED substitution). The classic
+    #     public corpus stores metric class_names under the pre-refactor FLAT path
+    #     `helm.benchmark.<X>_metrics.<Class>` — a naive `benchmark.`->`helm.benchmark.`
+    #     migration of run_specs produced by unreleased pre-v0.1.0 HELM (a layout that
+    #     exists in NO commit; see docs/helm-gotchas.md G13). The era build has these
+    #     under the `metrics/` subpackage. Remap ONLY when the stored path is
+    #     unresolvable AND its metrics-subpackage relocation resolves (same leaf
+    #     class), so a genuinely-wrong era pin still fails the preflight (step 5)
+    #     loudly. Applied to the in-memory run_spec so both preflight and scoring use
+    #     the resolvable class; the run dir's emitted run_spec.json reflects it.
+    run_spec, class_path_subs = _canonicalize_class_paths(run_spec)
+    manifest["class_path_substitutions"] = class_path_subs
+    if class_path_subs:
+        print(
+            f"Canonicalized {len(class_path_subs)} relocated class path(s) "
+            "(pre-refactor flat -> era metrics subpackage; declared substitution):"
+        )
+        for sub in class_path_subs:
+            print(f"  - {sub['from']} -> {sub['to']}")
+
     # 2) Opt-in max_eval_instances truncation (adapter_spec.model never touched).
     applied_cap = None
     if max_eval_instances_int is not None:
@@ -331,6 +351,79 @@ def _collect_class_names(run_spec: Any) -> List[str]:
                 seen.add(class_name)
                 names.append(class_name)
     return names
+
+
+def _canonical_class_name(class_name: str) -> Tuple[str, bool]:
+    """Return ``(resolvable_class_name, substituted?)`` for one class path.
+
+    If ``class_name`` already resolves in this era build, return it unchanged.
+    Otherwise, if it is a pre-refactor FLAT ``helm.benchmark.<mod>.<Class>`` whose
+    ``metrics/`` subpackage relocation ``helm.benchmark.metrics.<mod>.<Class>``
+    DOES resolve (same leaf class), return the relocated path. Otherwise return it
+    unchanged (the preflight will report it). Self-verifying: only substitutes a
+    move that the era build actually satisfies — a genuinely-absent class (wrong
+    era pin) resolves neither way and is left for the preflight to fail loudly.
+    See docs/helm-gotchas.md G13.
+    """
+    from helm.common.object_spec import get_class_by_name
+
+    def _resolves(name: str) -> bool:
+        try:
+            get_class_by_name(name)
+            return True
+        except Exception:  # noqa: BLE001 - resolution probe, never crashes
+            return False
+
+    if _resolves(class_name):
+        return class_name, False
+    parts = class_name.split(".")
+    # Only the known relocation: helm.benchmark.<mod>.<Class> -> insert `metrics.`.
+    # <mod> already == "metrics" means it is not the flat form; leave it alone.
+    if len(parts) >= 4 and parts[:2] == ["helm", "benchmark"] and parts[2] != "metrics":
+        candidate = "helm.benchmark.metrics." + ".".join(parts[2:])
+        if _resolves(candidate):
+            return candidate, True
+    return class_name, False
+
+
+def _remap_object_spec_tree(value: Any, subs: List[Dict[str, str]]) -> Any:
+    """Rebuild an ObjectSpec tree with canonicalized ``class_name``s.
+
+    Mirrors ``_iter_object_specs``' shape handling but returns a rewritten copy
+    (ObjectSpec is frozen, so use ``dataclasses.replace``). Appends each applied
+    substitution to ``subs``.
+    """
+    from helm.common.object_spec import ObjectSpec
+
+    if isinstance(value, ObjectSpec):
+        new_class, changed = _canonical_class_name(value.class_name)
+        if changed:
+            subs.append({"from": value.class_name, "to": new_class})
+        new_args = {k: _remap_object_spec_tree(v, subs) for k, v in value.args.items()}
+        return dataclasses.replace(value, class_name=new_class, args=new_args)
+    if isinstance(value, dict):
+        return {k: _remap_object_spec_tree(v, subs) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_remap_object_spec_tree(v, subs) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_remap_object_spec_tree(v, subs) for v in value)
+    return value
+
+
+def _canonicalize_class_paths(run_spec: Any) -> Tuple[Any, List[Dict[str, str]]]:
+    """Canonicalize relocated class paths on the same roots the preflight checks
+    (``scenario_spec`` + ``metric_specs``). Returns ``(run_spec, substitutions)``;
+    the run_spec is unchanged (same object) when nothing was substituted.
+    """
+    subs: List[Dict[str, str]] = []
+    new_scenario = _remap_object_spec_tree(run_spec.scenario_spec, subs)
+    new_metrics = [_remap_object_spec_tree(m, subs) for m in (run_spec.metric_specs or [])]
+    if not subs:
+        return run_spec, []
+    run_spec = dataclasses.replace(
+        run_spec, scenario_spec=new_scenario, metric_specs=new_metrics
+    )
+    return run_spec, subs
 
 
 def _preflight_resolve_classes(run_spec: Any) -> None:
