@@ -54,7 +54,7 @@ Environment variables
   ERA           era key from docker/eras.yaml    (default: empty / modern image)
   DOCKER_REPO   Registry/namespace for push      (default: empty / local only)
   PUSH_IMAGES   1 to push, 0 to build only       (default: 0)
-  PYTHON_VERSION                                 (default: 3.11; era: from eras.yaml)
+  PYTHON_VERSION                                 (default: 3.12; era: from eras.yaml)
   ERA_YAML_PYTHON  python (with PyYAML) to read eras.yaml (default: python3, then .venv)
   STAGING_DIR   Staging context dir              (default: <repo>/.build-staging/helm-runner)
   BUILD_NOFILE  nofile ulimit for build steps    (default: 1048576; 0 omits --ulimit)
@@ -80,7 +80,7 @@ REPO_ROOT="$(realpath "${SCRIPT_DIR}/..")"
 : "${BUILD_FROM:=committed}"
 : "${PUSH_IMAGES:=0}"
 : "${DOCKER_REPO:=}"
-: "${PYTHON_VERSION:=3.11}"
+: "${PYTHON_VERSION:=3.12}"
 : "${ERA:=}"
 : "${STAGING_DIR:=${REPO_ROOT}/.build-staging/helm-runner}"
 

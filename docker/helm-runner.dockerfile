@@ -33,7 +33,11 @@
 ARG CUDA_DEVEL_IMAGE=nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 ARG CUDA_RUNTIME_IMAGE=nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.9.27
-ARG PYTHON_VERSION=3.11
+# 3.12 matches the dev/host venv (3.12.3) and eval_audit's requires-python floor
+# (>=3.12, bumped in e9cf6c44 to satisfy every_eval_ever). HELM allows >=3.10, so
+# 3.12 satisfies the whole stack; 3.11 here made `uv pip install -e eval-audit`
+# fail its requires-python check.
+ARG PYTHON_VERSION=3.12
 
 # ------------------------------------------------------------------------------
 # Stage 1: builder — create /opt/venv with HELM[all] + aiq-magnet installed.
@@ -65,7 +69,7 @@ ENV UV_LINK_MODE=copy \
     UV_PYTHON_INSTALL_DIR=/opt/uv/python \
     VIRTUAL_ENV=/opt/venv \
     PATH=/opt/venv/bin:$PATH
-# The base image has no Python 3.11, so uv downloads a standalone (managed)
+# The base image has no matching Python, so uv downloads a standalone (managed)
 # CPython. Pin where it lands (UV_PYTHON_INSTALL_DIR=/opt/uv/python) and force a
 # managed interpreter, so the venv's bin/python symlinks point at a path we can
 # copy verbatim into the final stage. Without this the interpreter lives under

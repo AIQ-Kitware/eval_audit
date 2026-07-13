@@ -14,7 +14,7 @@ This image is intentionally **independent** of the legacy
 
 | File | Purpose |
 |---|---|
-| `helm-runner.dockerfile` | Multi-stage (CUDA devel builder → CUDA runtime final) image; Python 3.11; `crfm-helm[all]` + `aiq-magnet` editable-installed into `/opt/venv` with `huggingface_hub==0.36.2` pinned. |
+| `helm-runner.dockerfile` | Multi-stage (CUDA devel builder → CUDA runtime final) image; Python 3.12 (matches eval_audit's `>=3.12` floor + the dev venv); `crfm-helm[all]` + `aiq-magnet` editable-installed into `/opt/venv` with `huggingface_hub==0.36.2` pinned. |
 | `helm-runner-era.dockerfile` | **Era (pre-v0.5) variant.** CPU-only `ubuntu:22.04` image; uv-managed **Python 3.10**; era `crfm-helm[all]` at the pinned release commit + a frozen constraints file + the `helm_era_shim` package. No CUDA, no magnet, no eval_audit. |
 | `eras.yaml` | Declarative era registry keyed on `(public_track, suite_version)`: `helm_git_ref`, `python_version`, `constraints`, `image_name`, `matches`. Read by `build.sh` **and** `eval_audit/eras.py`. |
 | `eras/constraints-helm-*.txt` | Per-era pip constraints governing **instance selection** (pandas 2.0.x vs 2.2+ flips instance identity). Seeded, then frozen at build time (below). |
