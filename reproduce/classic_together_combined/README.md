@@ -68,6 +68,17 @@ python gen_presets.py            # rewrites config/presets.yaml from the corpus
 - **All runs means all runs.** Scenarios whose data no longer fetches from the 2026
   Hub, or need credentialed judges/APIs (e.g. toxicity via Perspective), surface as
   environment/recipe *filters* in the reports — not reproducibility failures.
+- **The two eras' officials are the SAME public numbers.** For all three models,
+  every shared run's official artifacts are BYTE-IDENTICAL across v0.2.4 and v0.3.0
+  (verified: 226/226 `display_predictions.json` md5 per model; run_spec.json too) —
+  HELM carried these runs forward across the release snapshots, it did not re-run
+  them. So although each era's local replay is paired against that era's own
+  official index, both officials are one measurement. Only the LOCAL/instrument
+  side (v0.2.4 vs v0.3.0 HELM image) genuinely differs per era. Interpret
+  accordingly: "both eras reproduce the official" tests two instruments against the
+  *same* target, not two independent officials — and only the era that originally
+  produced a number is its faithful reproduction; the other is a "does the other
+  instrument still land on it?" check.
 
 ## Serving / GPU knobs
 

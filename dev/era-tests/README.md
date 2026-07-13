@@ -47,6 +47,13 @@ stresses its logprob fidelity.
   exact official model name). No deployment rewrite.
 - **`same_deployment` resolves `unknown`** for era pairs (both sides lack the
   field). Correct, not a bug — no Stage 5/6 changes.
+- **The two eras compare against the SAME official.** redpajama-3b's official
+  v0.2.4 and v0.3.0 runs are BYTE-IDENTICAL (same `display_predictions.json` md5 +
+  `run_spec.json` for both probe scenarios) — HELM carried the run forward across
+  the snapshots, it did not re-run it. Each era's local replay is paired against
+  its own suite's official index, but both officials are one measurement, so only
+  the LOCAL/instrument side differs per era. "Both eras agree" is two instruments
+  hitting the same target, not two independent confirmations.
 - **Per-era corpus view.** `redpajama-3b` runs exist at both v0.2.4 and v0.3.0 with
   identical run-dir names, so freezing against the broad classic root is
   AMBIGUOUS. The grid overrides `--precomputed-root` with a per-era suite-scoped
