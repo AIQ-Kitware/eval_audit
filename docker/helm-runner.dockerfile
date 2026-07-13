@@ -150,6 +150,19 @@ uv pip install -e /opt/src/eval-audit --no-deps
 python -c "import eval_audit.integrations.helm_plugins; print('eval_audit helm plugins import ok')"
 EOF
 
+# Prune venv artifacts that break `COPY --from=builder /opt/venv` in the final
+# stage. buildkit lchown()s every copied entry and dies on a dangling symlink
+# with "failed to chown ...: lchown ...: no such file or directory". crfm-helm[all]
+# pulls selenium, whose per-platform selenium-manager binaries surfaced this after
+# the e9cf6c44 relock; the macos/windows managers are dead weight on a Linux
+# runtime anyway. Also strip any other dangling symlinks left in site-packages.
+RUN <<'EOF'
+set -eux
+rm -rf /opt/venv/lib/python*/site-packages/selenium/webdriver/common/macos \
+       /opt/venv/lib/python*/site-packages/selenium/webdriver/common/windows
+find /opt/venv/lib/python*/site-packages -xtype l -print -delete
+EOF
+
 # ------------------------------------------------------------------------------
 # Stage 2: final — slim CUDA runtime + the prebuilt venv and source.
 # ------------------------------------------------------------------------------
