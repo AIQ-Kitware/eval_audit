@@ -1453,3 +1453,99 @@ correctly; I set them faithfully from the fixture run_spec anyway.
 retire `HelmRunDiff` with all of F1–F8 green. D5 deletion +
 `helm_view_from_path` removal after one deprecation cycle. Branch is 25
 commits ahead of the pre-session base; not pushed.
+
+## 2026-07-13 11:46:27 -0400
+
+**User intent.** Diagnose why `infer-stack` leases come up healthy (vLLM
+container serving) yet gateway tests fail `400 Bad Request` on
+`/v1/completions` — currently olmo-7b, intermittent. Then: decide whether
+it's fixable, weigh fix designs, and write an implementation plan.
+
+**Model/config.** Claude Fable 5 (`claude-fable-5`), Claude Code VSCode
+extension harness.
+
+**Diagnosis.** The user's `docker logs` was decisive: only `GET /health`
+lines — no POST ever reached vLLM, so the 400 originates at the LiteLLM
+gateway (:14042). User confirmed the body: "Invalid model name." Root
+cause: four runbooks (olmo/qwen/gpt-oss/classic_together) share one stack
+(`/data/service/infer-stack`) with disjoint catalogs, and static-superset
+mode renders the gateway route table from *the invoking catalog only*
+(`compose.py:907` → `_litellm_model_list_from_catalog`). Any cross-catalog
+converge recreates the gateway with the other runbook's routes, stranding
+still-live deployments. Key insight on symptom mapping: runs rarely die
+(blips are point events, HELM retries absorb them) but **acquires** are
+maximally exposed — the minutes-long readiness wait (`require_listed`)
+silently never passes once a foreign converge strips the alias, so the bug
+has been presenting as the user's known "failed to acquire lease" events.
+
+**Design deliberation.** Compared (a) naive union render (catalog ∪ live
+set — still blips on live-set churn), (b) persistent route registry
+(append-only file in state_dir; bytes converge to a fixed point → zero
+steady-state blips), (c) user-proposed compose-roundtrip (parse deployed
+config back to a catalog; elegant — state can't drift — but promotes the
+rendered config to a forever parse-compatible interface), (d) dynamic
+routing (already built; true zero-blip but Postgres sidecar + fleet-wide
+settings flip). Landed on the registry storing *semantic inputs* (served
+name/engine/host), rendered through the existing entry builders, with a
+one-shot seed parsed from the live `litellm_config.yaml` at migration
+(stealing the roundtrip's best property without its compatibility tax).
+No opt-out flag, per repo policy.
+
+**Artifacts.** Plan written to
+`docs/planning/litellm-route-registry-plan.md` (schema, merge semantics,
+`render_compose(route_registry=...)` wiring under the existing converge
+flock, `routes list/prune/seed` CLI, 10 tests, GPU-host acceptance,
+2-commit rollout in the infer_stack submodule). Left UNCOMMITTED — current
+branch `impl/run-from-run-spec` is unrelated; commit it on its own branch
+or alongside the implementation. Reminder: infer_stack has unpushed
+e5fba7b (reserve-gpus); push ordering matters for the eventual gitlink.
+
+**Design insights.** (1) When a shared artifact is rebuilt by multiple
+writers, render it from accumulated shared state, never from the invoking
+writer's worldview — idempotent-merge state converges to a fixed point and
+byte-stable output is what suppresses restart churn. (2) Long waits
+(readiness windows) are where rare races concentrate into visible failure
+rates; short blips hide, long windows collect. (3) `raise_for_status()`
+without printing the response body destroys the one string that names the
+culprit — probe code here already does it right (body[:300]).
+
+**Next steps.** Implement per the plan (2 commits in
+submodules/infer_stack + optional TUI error-body companion); then
+runbook-side `routes seed` hooks in eval_audit as follow-up. Immediate
+operational unblock for the user: re-converge under
+`reproduce/olmo_models_combined/config/infer_stack` to restore olmo
+routes.
+
+## 2026-07-13 12:20:00 -0400 (addendum)
+
+**User intent.** Opus reviewed the route-registry plan (§13 appended to
+`docs/planning/litellm-route-registry-plan.md`); Fable to adjudicate the
+concerns and update the plan.
+
+**Outcome.** All eight concerns accepted or verified-closed; plan is now
+v2 with decisions folded into the body and §13 rewritten as a
+review-record + resolution list. The consequential decisions: (A) registry
+render is now *unconditional* for litellm+static — stronger than the
+suggested guard; the legacy no-catalog branch is retired from the backend
+path, because a catalog-less release/gc converge falling through to legacy
+would re-strip routes (Opus's best catch). (C) new
+`ComposeBackend.merge_route_registry()` for `routes seed`'s
+out-of-converge write. (D) seed imports vLLM rows only, skips Ollama
+(dns_slug isn't invertible); the `service` override field is deleted from
+the schema. (E) exact row-keying rules (per served-map key; RESERVED
+engine filtered). (F) unknown-version registries are preserved-as-read,
+not reseeded. (H) verified benign by reading apply(): it re-reads the
+on-disk file and append-only ⇒ superset, so last-writer-wins is safe.
+Verified fresh this pass: catalog feeds only the entries computation in
+render_compose; `ConfigModalCLI` proves nested subcommand groups exist;
+ledger is shared at data_root()/leasing/ledger.db. Tests 11–14 added.
+
+**Insight.** The reviewer's highest-value finding wasn't a flaw in the
+mechanism but in its *activation condition* — the guard `catalog is not
+None` quietly preserved a path to the original bug. When a fix is gated,
+audit every code path that reaches the old branch, not just the one the
+incident came through.
+
+**Next steps.** Unchanged: implement commits 1–2 in submodules/infer_stack
+per the plan; plan file still uncommitted (branch is unrelated
+impl/run-from-run-spec).
