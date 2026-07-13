@@ -20,12 +20,19 @@
 # The bundle is written to a scratch dir and discarded; 10/15 re-export the real
 # one (routed through LiteLLM).
 #
+# vllm-direct exports fail fast without an explicit --base-url (b127aa48, P2:
+# the client must never silently default to the auth-protected gateway). For
+# this freeze-only preflight the transport is irrelevant and the bundle is
+# discarded, so we pass a loopback placeholder — it never receives a request.
+#
 # Env:
 #   PRECOMPUTED_ROOT  override the corpus root the freeze resolves against
 #                     (default: the preset's own precomputed_root, /data/crfm-helm-public).
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
+
+PREFLIGHT_BASE_URL="${PREFLIGHT_BASE_URL:-http://127.0.0.1:8000/v1}"
 
 root_override=()
 if [[ -n "${PRECOMPUTED_ROOT:-}" ]]; then
@@ -47,6 +54,7 @@ echo "-- freezing the bundle (each entry resolves 1:1 or this hard-fails) --"
   --preset "$GPTOSS_PRESET" \
   --bundle-root "$scratch" \
   --from-spec --freeze-rel-paths \
+  --base-url "$PREFLIGHT_BASE_URL" \
   "${root_override[@]}"
 
 for mode in smoke full; do
