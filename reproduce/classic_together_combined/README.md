@@ -85,18 +85,23 @@ the end with a nonzero exit. Narrow the set with `TARGETS_OVERRIDE="<row> <row>"
   side (v0.2.4 vs v0.3.0 HELM image) genuinely differs per era. Interpret
   accordingly: "both eras reproduce the official" tests two instruments against the
   *same* target, not two independent officials.
-- **These officials were originally produced PRE-v0.2.2 — NOT at either pinned era.**
-  All three models' runs first appear (byte-identical) at v0.2.2, the earliest suite
-  *in the mirror* — but that's a mirror boundary, not the origin. GPT-J / GPT-NeoX /
-  OPT-66B were in the ORIGINAL HELM paper (Nov 2022, ~v0.1.0; CHANGELOG dates
-  v0.3.0=2023-11-01, so v0.2.2 is mid-2023), so they were almost certainly run once
-  at the original release and carried forward. So v0.2.4/v0.3.0 are *much*-later
-  proxy instruments for those numbers — faithful only where scenario/tokenization/
-  scoring is unchanged since the (unmirrored) origin. Read any v0.2.4-vs-v0.3.0 gap
-  as *instrument* drift (the official target is fixed). A faithful reproduction of
-  the originals would need the origin-era image (≤v0.1.0), which isn't in
-  docker/eras.yaml; confirm the exact origin via the public HELM classic release
-  list or by pulling pre-v0.2.2 suites upstream.
+- **These officials were produced by UNRELEASED pre-v0.1.0 HELM (2022-07-31 →
+  2022-08-26) — NOT at either pinned era, and NOT at any tagged release.** This is
+  pinned from the run_spec `class_name` lineage, not just dates: the stored metric
+  path `helm.benchmark.basic_metrics.BasicMetric` (helm prefix + FLAT) existed in no
+  git commit — it's a naive `benchmark.`→`helm.benchmark.` migration of the original
+  flat `benchmark.basic_metrics` path, which was only flat *before* the 2022-08-26
+  "Refactor metrics" nesting, while the run_spec's nested scenario path requires the
+  2022-07-31 "move scenarios to scenarios" commit. That intersection is a ~4-week
+  window in summer 2022 (v0.1.0 was tagged 2022-11-17). See `docs/helm-gotchas.md`
+  §G13 for the full lineage + triangulation. Consequences: (1) v0.2.4/v0.3.0 are
+  *much*-later proxy instruments — read any v0.2.4-vs-v0.3.0 gap as *instrument*
+  drift against a fixed target; (2) there is no origin-era image to build (untagged
+  commit, mid-2022 deps, and v0.1.0 predates the `model_deployments` architecture the
+  era shim needs); (3) the stored flat metric paths resolve in NO era build, so the
+  runbook needs the era-shim class-path canonicalization (G13 workaround) to run at
+  all. Contrast redpajama-3b (`dev/era-tests`), whose ~v0.2.3 origin is post-refactor
+  and whose run_specs carry the resolvable subpackage path.
 
 ## Serving / GPU knobs
 

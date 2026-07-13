@@ -270,3 +270,80 @@ added in newer releases mean the canonicalized form differs.
 (`_canonical_recipe_hash` in `eval_audit/virtual/coverage.py`), which
 applies our own normalization on top of HELM's. The output is stable
 across HELM releases for the same recipe.
+
+---
+
+## G13. Classic-corpus `class_name` paths are a migrated hybrid that resolves in *no* HELM version
+
+**Symptom.** Era-replaying an original-paper classic run (GPT-J 6B /
+GPT-NeoX 20B / OPT-66B) fails the era shim's class preflight:
+
+```
+Preflight failed: ... cannot resolve 1 class(es) referenced by the run_spec.json:
+  - helm.benchmark.basic_metrics.BasicMetric: ModuleNotFoundError:
+    No module named 'helm.benchmark.basic_metrics'
+```
+
+`BasicMetric` is in **every** classic run_spec (735/735 for these three
+models; 9 distinct drifted metric classes total), so this blocks the
+*entire* `reproduce/classic_together_combined` runbook — while
+`dev/era-tests` (redpajama-3b) sails through.
+
+**Mechanism.** The `class_name` string stored in the public classic
+corpus is **not a faithful record of the producing code's import path**.
+It is a once-migrated hybrid: at some point HELM bulk-rewrote archived
+run_specs with a naive `benchmark.` → `helm.benchmark.` prefix
+substitution (when the package moved to `src/helm/` at commit
+`c2ee966d`, 2022-11-16 "Rename modules and commands"), **preserving
+whatever module nesting existed at production time**. The metric classes
+were *flat* under `benchmark/` at production but were later nested into
+`benchmark/metrics/` — which the naive prefix rewrite did not account
+for. The result, `helm.benchmark.basic_metrics.BasicMetric` (helm
+prefix **+** flat), is a layout that **existed in no git commit**
+(`git log -- src/helm/benchmark/basic_metrics.py` → 0 commits): flat
+metrics only ever existed *without* the `helm.` prefix, and the `helm.`
+prefix only ever appeared *after* metrics were nested.
+
+Full rename-aware lineage of `basic_metrics.py` (from a blob-less clone
+of `stanford-crfm/helm`):
+
+| commit | date | path → import |
+|---|---|---|
+| `301ab631` | 2021-12-28 | `src/basic_metrics.py` → `basic_metrics` |
+| `59b412c2` | 2021-12-28 | `src/benchmark/basic_metrics.py` → `benchmark.basic_metrics` (flat) |
+| `37d8707a` | **2022-08-26** "Refactor metrics" | `src/benchmark/metrics/basic_metrics.py` → `benchmark.metrics.basic_metrics` (nested) |
+| `c2ee966d` | 2022-11-16 "Rename modules and commands" | `src/helm/benchmark/metrics/basic_metrics.py` → `helm.benchmark.metrics.basic_metrics` |
+
+Reversing the naive migration recovers the *producing-code* paths from
+the stored run_spec: scenario `benchmark.scenarios.babi_qa_scenario`
+(nested) + metric `benchmark.basic_metrics` (flat). Scenarios were
+nested at `0c8738c8` (2022-07-31 "move scenarios to scenarios"); metrics
+were nested at `37d8707a` (2022-08-26). The only window where scenarios
+are already nested **and** metrics are still flat is
+**2022-07-31 → 2022-08-26** — so these officials were produced by
+**unreleased pre-v0.1.0 HELM from that ~4-week window** (v0.1.0 was
+tagged 2022-11-17). No released/tagged HELM version matches them, and
+building the true origin instrument is infeasible (untagged commit,
+py3.8 + mid-2022 deps, and v0.1.0-era HELM predates the whole
+`model_deployments` architecture the era shim relies on — see the
+carry-forward memory / `docs/eee-vs-helm-metadata.md`).
+
+Why redpajama-3b is immune: it debuted ~v0.2.3 (mid-2023), *after* the
+metrics-subpackage refactor, so its stored run_specs already carry the
+subpackage path `helm.benchmark.metrics.basic_metrics.BasicMetric`,
+which resolves natively at the v0.2.4/v0.3.0 era builds. The **metric
+class-path form is the origin fingerprint**: flat
+`helm.benchmark.<X>_metrics` = pre-refactor (this migrated hybrid);
+subpackage `helm.benchmark.metrics.<X>_metrics` = post-refactor.
+
+**Workaround.** A self-verifying, declared class-path canonicalization in
+the era shim: when a flat `helm.benchmark.*` class fails `get_class_by_name`
+**and** its `helm.benchmark.metrics.*` relocation resolves (same leaf
+class), remap it on the in-memory run_spec before preflight + scoring,
+recorded as a declared substitution. It only fires for the known
+relocation (a genuinely wrong era pin still fails loudly), covers all 9
+drifted classes, and is a *spec* adaptation — not patching the era image
+— consistent with the documented "later-era proxy instrument" framing.
+Scoped to `docker/era_shim/helm_era_shim/replay.py`
+(`_preflight_resolve_classes` and the decode step just above it).
+*(Status: diagnosed; implement when ready.)*

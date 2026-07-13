@@ -1619,3 +1619,72 @@ gitlink bump is unstaged — push the submodule branch first, then bump. Unrelat
 **Next steps.** Push submodule `feat/litellm-route-registry`; run the §10 GPU-
 host acceptance; optionally add `reproduce/*/_lib.sh` `routes seed` preflight
 hooks (§12 follow-up) once the CLI verb is on a released infer-stack.
+
+---
+
+## 2026-07-13 13:32:34 -0400
+
+**Model / harness.** claude-opus-4-8 (Opus 4.8), Claude Code CLI, VSCode
+extension harness. Branch `impl/run-from-run-spec`.
+
+**User intent (session arc).** Diagnose a cascade of `classic_together_combined`
+runbook failures on the ssh/GPU box, then (a) fix, (b) parallelize, (c) a deep
+provenance investigation ending in "document this finding."
+
+**What shipped (committed).**
+1. `fix(freeze)` — `discovery._classify` flagged AMBIGUOUS whenever >1 corpus dir
+   matched a run-entry via token-subset, even with a unique strict winner. A bare
+   `bbq:...` entry is a token-subset of its own `groups=ablation_multiple_choice`
+   sibling, so it matched both and freezing died. Now: unique best score (drop the
+   name tie-breaker at index 2) → RESOLVED; only a genuine tie stays AMBIGUOUS
+   (preserves the cross-suite-dup guard the per-era corpus view relies on). Test:
+   tests/test_discovery_classify.py.
+2. `feat(classic-together)` — the smoke/full drivers serialized all 6 (model×era)
+   targets in bash. Serialization was unjustified: the era image is a
+   container_gpus:none HTTP client, and infer-stack COALESCES two leaseholders on
+   the same model onto one vLLM container (demand-refcount; verified via
+   infer_stack 50_coalescing.sh), while different models QUEUE (atomic per-model
+   acquire, no partial-hold deadlock). Factored run_grid_parallel + run_one_grid
+   into _lib.sh; all targets launch concurrently, per-target logs under out/logs/,
+   failures aggregated. Added era_corpus_view_path() (side-effect-free) + serial
+   pre-creation of views so concurrent exports don't race `ln -sfn`. Control flow
+   validated with stubs.
+
+**The provenance finding (documented, NOT yet coded).** Era replay of the classic
+three (gptj/neox/opt) fails the shim class preflight: run_spec names
+`helm.benchmark.basic_metrics.BasicMetric` but v0.2.4 has it at
+`helm.benchmark.metrics.basic_metrics`. Investigation (blob-less clone of
+stanford-crfm/helm, 6298 commits) established:
+- The stored path `helm.benchmark.basic_metrics` (helm prefix + FLAT) exists in NO
+  commit. It's a naive `benchmark.`→`helm.benchmark.` bulk migration (at the
+  src/helm/ rename c2ee966d, 2022-11-16) of the original flat `benchmark.basic_metrics`,
+  preserving production-time nesting.
+- Reversing it triangulates the producing code to a ~4-week window
+  **2022-07-31 → 2022-08-26**: scenario nested (after "move scenarios to scenarios"
+  0c8738c8, 07-31) AND metric still flat (before "Refactor metrics" 37d8707a, 08-26).
+  Unreleased pre-v0.1.0 (tagged 2022-11-17).
+- redpajama-3b is immune: ~v0.2.3 origin (post-refactor) → run_specs carry the
+  resolvable subpackage path. That's why dev/era-tests passed and this runbook didn't.
+- A v0.1.0 era image would NOT help (v0.1.0 already nested) and is infeasible anyway
+  (untagged commit; v0.1.0 predates the model_deployments architecture the shim needs;
+  run_benchmarking is by-descriptor not by-object).
+
+**Where documented.** docs/helm-gotchas.md §G13 (full lineage + tables + workaround);
+reproduce/classic_together_combined/README.md invariant rewritten; memory
+classic-officials-carried-forward-v024-v030 + MEMORY.md updated.
+
+**Recommended fix (option 1, deferred per user).** Self-verifying declared class-path
+canonicalization in the era shim: when a flat `helm.benchmark.*` class fails
+get_class_by_name AND its `helm.benchmark.metrics.*` relocation resolves (same leaf),
+remap on the in-memory run_spec before preflight + scoring, recorded as a declared
+substitution. Scope: docker/era_shim/helm_era_shim/replay.py (_preflight_resolve_classes
++ the decode step above it). 9 drifted classes across 735 run_specs; BasicMetric in all.
+
+**Design insights.** (1) A stored class_name is provenance, not necessarily a runnable
+import path — bulk migrations can synthesize paths that never existed. (2) Class-path
+*shape* (flat vs subpackage) is a sharper origin fingerprint than release dates. (3)
+blob-less clone (`--filter=blob:none --no-checkout`) is the right tool for path-history
+archaeology over a slow link — trees included, blobs lazy, rename-aware `git log`.
+
+**Loose end (not mine).** `submodules/infer_stack` gitlink shows modified; I did NOT
+touch it and left it unstaged (per the no-auto-commit-gitlink rule) — flag to user.
