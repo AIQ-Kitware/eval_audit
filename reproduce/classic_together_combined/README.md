@@ -77,14 +77,18 @@ python gen_presets.py            # rewrites config/presets.yaml from the corpus
   side (v0.2.4 vs v0.3.0 HELM image) genuinely differs per era. Interpret
   accordingly: "both eras reproduce the official" tests two instruments against the
   *same* target, not two independent officials.
-- **These officials were originally produced at v0.2.2 — NOT at either pinned era.**
-  All three models' runs first appear (byte-identical) at **v0.2.2** and were carried
-  forward. So v0.2.4 and v0.3.0 are both *later*-version proxy instruments for a
-  v0.2.2-produced number — faithful only where scenario/tokenization/scoring is
-  unchanged since v0.2.2. A truly faithful reproduction of the originals would need a
-  **v0.2.2** era image (not in docker/eras.yaml). Treat the v0.2.4/v0.3.0 results as
-  "does a later instrument still land on the v0.2.2 number?", and read any
-  v0.2.4-vs-v0.3.0 gap as *instrument* drift, since the official target is fixed.
+- **These officials were originally produced PRE-v0.2.2 — NOT at either pinned era.**
+  All three models' runs first appear (byte-identical) at v0.2.2, the earliest suite
+  *in the mirror* — but that's a mirror boundary, not the origin. GPT-J / GPT-NeoX /
+  OPT-66B were in the ORIGINAL HELM paper (Nov 2022, ~v0.1.0; CHANGELOG dates
+  v0.3.0=2023-11-01, so v0.2.2 is mid-2023), so they were almost certainly run once
+  at the original release and carried forward. So v0.2.4/v0.3.0 are *much*-later
+  proxy instruments for those numbers — faithful only where scenario/tokenization/
+  scoring is unchanged since the (unmirrored) origin. Read any v0.2.4-vs-v0.3.0 gap
+  as *instrument* drift (the official target is fixed). A faithful reproduction of
+  the originals would need the origin-era image (≤v0.1.0), which isn't in
+  docker/eras.yaml; confirm the exact origin via the public HELM classic release
+  list or by pulling pre-v0.2.2 suites upstream.
 
 ## Serving / GPU knobs
 
