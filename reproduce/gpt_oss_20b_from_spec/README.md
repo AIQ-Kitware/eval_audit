@@ -109,20 +109,28 @@ gpt-oss-specific:
   against the corpus (CPU-only); the first `15_run_full.sh` on GPUs is what
   confirms serving + container + comparison.
 
-- **Null-content chat crash (the central risk).** gpt-oss is a reasoning model.
-  On the chat path it can return `message.content = null` (reasoning-only,
-  `finish_reason=length`), and un-patched HELM crashes with `AttributeError:
-  'NoneType' object has no attribute 'strip'` (see
-  [`docs/helm-null-completion-text-patch-proposal.md`](../../docs/helm-null-completion-text-patch-proposal.md)).
-  The risk is concentrated on the **CoT rows (`mmlu_pro`, `gpqa`)**; `bbq`
-  (multiple_choice_joint) and `ifeval` (bounded output) are low-risk, which is why
-  the smoke set is those two. If a full run dies this way, the escape hatch is the
-  **completions fallback**: switch the preset to the completions client
-  (`litellm/gpt-oss-20b-local` / `OpenAILegacyCompletionsClient`, as
-  `configs/local_models/gpt_oss_20b_vllm/model_deployments.yaml` encodes) or apply
-  the null-text normalization patch. Note the trade-off — completions diverges from
-  the official chat protocol, so it is a fallback for *liveness*, not the faithful
-  default.
+- **Null-content chat crash (resolved on the faithful chat path).** gpt-oss is a
+  reasoning model: when it spends its whole generation budget in the reasoning
+  channel without emitting a final-channel answer (`finish_reason=length`), the
+  local vLLM OpenAI-compat endpoint returns `message.content = null`, which
+  un-patched HELM crashes on (`AttributeError: 'NoneType' object has no attribute
+  'strip'`). The official `together/gpt-oss-20b` run returns `""` (empty string) for
+  the *identical* event — verified on the public run dirs (`content is None` = 0;
+  `content == ""` = 59/541 for ifeval, part of the published score). See
+  [`docs/helm-null-completion-text-patch-proposal.md`](../../docs/helm-null-completion-text-patch-proposal.md)
+  ("Confirmed root cause").
+
+  **The from-spec chat path now normalizes `null → ""` faithfully**, via eval_audit's
+  null-safe chat client (`eval_audit.integrations.helm_clients.NullSafeOpenAIChatClient`,
+  selected by `_benchmark_client_class`) — HELM's own `client_spec.class_name` seam,
+  no HELM-source edit. Local runs therefore emit exactly what Together emitted (empty
+  prediction, scored through the normal metric path) instead of crashing. Note this is
+  *not* window- or `max_tokens`-related: the from-spec freeze replays the official
+  budgets (`bbq=10001`, others `14096`) and no official instance's `prompt+output`
+  exceeds the local `max_model_len`. The old **completions fallback**
+  (`litellm/gpt-oss-20b-local` / `OpenAILegacyCompletionsClient`) remains available for
+  *liveness* only, but is no longer needed and is unfaithful (it drops the harmony
+  chat/reasoning path the official run used).
 
 - **gpqa is gated.** `Idavidrein/gpqa` requires an HF token whose account accepted
   the dataset terms (`06_check_hf_auth.sh` gates on this). To run only the three

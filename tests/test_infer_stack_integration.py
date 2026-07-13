@@ -189,7 +189,8 @@ def test_olmo_base_preset_routed_through_gateway(tmp_path: Path) -> None:
 
 def test_olmo_instruct_reuses_sibling_tokenizer_alias(tmp_path: Path) -> None:
     # The 13B instruct model intentionally reuses the 7B tokenizer alias, and is
-    # a chat model (vllm-direct + protocol_mode=chat -> VLLMChatClient).
+    # a chat model (vllm-direct + protocol_mode=chat -> NullSafeVLLMChatClient,
+    # eval_audit's null-safe subclass of VLLMChatClient).
     config_dir = _make_config_dir(tmp_path)
     result = export_benchmark_bundle(
         "",
@@ -199,7 +200,10 @@ def test_olmo_instruct_reuses_sibling_tokenizer_alias(tmp_path: Path) -> None:
         base_url="http://localhost:8000/v1",
     )
     dep = _deployment(result)
-    assert dep["client_spec"]["class_name"].endswith("VLLMChatClient")
+    assert (
+        dep["client_spec"]["class_name"]
+        == "eval_audit.integrations.helm_clients.NullSafeVLLMChatClient"
+    )
     assert dep["model_name"] == "allenai/olmo-2-1124-13b-instruct"
     assert dep["tokenizer_name"] == "allenai/olmo-2-1124-7b-instruct"
     assert dep["tokenizer_name"] != dep["model_name"]
