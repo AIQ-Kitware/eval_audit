@@ -195,3 +195,40 @@ def test_stamp_process_context_stop_fills_timing(tmp_path):
 def test_stamp_process_context_stop_tolerates_missing_props(tmp_path):
     # No 'properties' -> no crash, no duration invented.
     replay._stamp_process_context_stop(tmp_path, {"name": "x"})
+
+
+# --- 401 regression: credentials.conf must use the BAKED key, not the env -----
+# kwdagger's tmux worker ships an empty environ, so $EVAL_AUDIT_ERA_API_KEY never
+# reaches the container; v0.2.4 read that empty value into credentials.conf and
+# 401'd at the gateway (v0.3.0 survived via the args key). The shim now sources
+# the key from the exported model_deployments.yaml (client_spec.args.api_key).
+def _write_deployments(tmp_path, model_name, api_key):
+    import yaml
+    doc = {"model_deployments": [{
+        "name": model_name,
+        "model_name": model_name,
+        "client_spec": {"class_name": "x", "args": {"base_url": "http://g/v1", "api_key": api_key}},
+    }]}
+    p = tmp_path / "model_deployments.yaml"
+    p.write_text(yaml.safe_dump(doc))
+    return str(p)
+
+
+def test_api_key_from_deployments_reads_baked_key(tmp_path):
+    fp = _write_deployments(tmp_path, "together/redpajama-incite-base-3b-v1", "sk-master")
+    assert replay._api_key_from_deployments(fp, "together/redpajama-incite-base-3b-v1") == "sk-master"
+    assert replay._api_key_from_deployments(fp, "other/model") is None
+    assert replay._api_key_from_deployments(None, "x") is None
+
+
+def test_prepare_local_helm_config_prefers_baked_key_over_env(tmp_path, monkeypatch):
+    model = "together/redpajama-incite-base-3b-v1"
+    fp = _write_deployments(tmp_path, model, "sk-master")
+    # Env is EMPTY (the broken tmux channel) — the baked key must still win.
+    monkeypatch.setenv("EVAL_AUDIT_ERA_API_KEY", "EMPTY")
+    prepared = replay._prepare_local_helm_config(
+        out_dpath=tmp_path / "out", local_path="prod_env",
+        model_deployments_fpath=fp, model_name=model,
+    )
+    deps = ConfigFactory.parse_file(str(prepared / "credentials.conf"))["deployments"]
+    assert deps[model] == "sk-master"

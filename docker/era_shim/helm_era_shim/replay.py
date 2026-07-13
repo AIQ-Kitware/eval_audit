@@ -372,7 +372,14 @@ def _prepare_local_helm_config(
     self-contained). The credentials.conf carries a ``deployments`` block keyed
     on the exact model/deployment name — v0.2.4's ``AutoClient`` eagerly demands
     a per-deployment credential before constructing the client; v0.3.0 tolerates
-    it. The key value comes from ``$EVAL_AUDIT_ERA_API_KEY`` (default "EMPTY").
+    it. The key value is the one the exporter BAKED into the model_deployments.yaml
+    (``client_spec.args.api_key``) — the single source of truth — falling back to
+    ``$EVAL_AUDIT_ERA_API_KEY`` then "EMPTY". Reading the baked value (not the env)
+    is what makes v0.2.4 work under kwdagger: its tmux worker ships an EMPTY environ
+    (secrets-hygiene), so a ``-e EVAL_AUDIT_ERA_API_KEY`` passthrough arrives empty
+    and credentials.conf would render EMPTY — which v0.2.4's AutoClient uses as
+    ``additional_args``, overriding the (correct) args key and 401-ing at the
+    gateway. v0.3.0 survived only because it reads the args key directly.
     """
     lp = Path(local_path)
     prepared = lp if lp.is_absolute() else (out_dpath / lp)
@@ -384,7 +391,11 @@ def _prepare_local_helm_config(
             raise SystemExit(f"--model_deployments_fpath does not exist: {src}")
         (prepared / "model_deployments.yaml").write_text(src.read_text())
 
-    api_key = os.environ.get(_ERA_API_KEY_ENV, "EMPTY")
+    api_key = (
+        _api_key_from_deployments(model_deployments_fpath, model_name)
+        or os.environ.get(_ERA_API_KEY_ENV)
+        or "EMPTY"
+    )
     (prepared / "credentials.conf").write_text(
         _render_credentials_conf(model_name, api_key)
     )
@@ -399,6 +410,30 @@ def _prepare_local_helm_config(
         except OSError:
             pass
     return prepared
+
+
+def _api_key_from_deployments(fpath: Optional[str], model_name: str) -> Optional[str]:
+    """The baked ``client_spec.args.api_key`` for ``model_name`` from the exported
+    model_deployments.yaml, or None if unavailable.
+
+    The exporter bakes the live LiteLLM master key here (``--api-key-value``); this
+    is the credential HELM actually authenticates with. Reading it here — rather
+    than ``$EVAL_AUDIT_ERA_API_KEY`` — decouples the v0.2.4 credentials.conf from
+    the env-forwarding channel that kwdagger's empty-environ tmux worker breaks.
+    """
+    if not fpath:
+        return None
+    try:
+        import yaml
+
+        doc = yaml.safe_load(Path(fpath).read_text()) or {}
+    except Exception:
+        return None
+    for entry in doc.get("model_deployments", []) or []:
+        if entry.get("name") == model_name:
+            key = ((entry.get("client_spec") or {}).get("args") or {}).get("api_key")
+            return str(key) if key else None
+    return None
 
 
 def _hocon_nested_deployment_key(model: str, value: str) -> str:
