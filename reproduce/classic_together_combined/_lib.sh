@@ -99,6 +99,8 @@ t_key()              { local rest="${1#*:}"; printf '%s\n' "${rest%%:*}"; }
 t_endpoint()         { printf '%s\n' "${1##*:}"; }
 t_experiment_smoke() { printf '%s-smoke\n' "${1%%:*}"; }
 t_experiment_full()  { printf '%s-full\n' "${1%%:*}"; }
+# The experiment name for a mode ($1=smoke|full, $2=target).
+t_experiment()       { if [[ "$1" == smoke ]]; then t_experiment_smoke "$2"; else t_experiment_full "$2"; fi; }
 t_bundle_root()      { printf '%s\n' "$STORE_ROOT/local-bundles/${1%%:*}"; }
 
 # Resolve an era key -> image ref. Override per-era via ERA_IMAGE_<key> (with
@@ -116,6 +118,11 @@ era_image() {
 # The suite_version dir name for an era key (helm-v0.2.4 -> v0.2.4).
 era_suite_version() { printf '%s\n' "${1#helm-}"; }
 
+# The path era_corpus_view builds for an era key, with NO side effects. Concurrent
+# readers use this after the view has been created (see run_grid_parallel), so they
+# never race era_corpus_view's non-atomic `ln -sfn`. $1 = era key.
+era_corpus_view_path() { printf '%s\n' "$ERA_OUT/corpus-view/$1"; }
+
 # Build (idempotently) a per-era suite-scoped VIEW of the corpus and echo its
 # path, for use as --precomputed-root. Why: these models' runs exist under BOTH
 # v0.2.4 and v0.3.0 with identical run-dir names, so freezing against the broad
@@ -124,7 +131,7 @@ era_suite_version() { printf '%s\n' "${1#helm-}"; }
 era_corpus_view() {
   local key="$1" suite view runs_dir
   suite="$(era_suite_version "$key")"
-  view="$ERA_OUT/corpus-view/$key"
+  view="$(era_corpus_view_path "$key")"
   runs_dir="$view/classic/benchmark_output/runs"
   mkdir -p "$runs_dir"
   ln -sfn "$PRECOMPUTED_ROOT/benchmark_output/runs/$suite" "$runs_dir/$suite"
@@ -146,4 +153,110 @@ clear_results() {
 vexp_manifests() {
   local d="$LIB_DIR/configs/virtual-experiments"
   printf '%s\n' "$d/classic-together-v024.yaml" "$d/classic-together-v030.yaml"
+}
+
+# Export + run ONE target for a mode. Fully isolated per target (distinct
+# bundle_root, experiment result dir, and read-only corpus view), so it is safe to
+# run concurrently with the other targets. Reads a PRE-CREATED corpus view (path
+# only) to avoid racing era_corpus_view's symlink write.
+#   $1=mode(smoke|full) $2=target $3=litellm_base_url $4=lease_master_key
+run_one_grid() {
+  local mode="$1" target="$2" base_url="$3" master_key="$4"
+  local preset key endpoint experiment bundle_root view manifest image
+  preset="$(t_preset "$target")"; key="$(t_key "$target")"; endpoint="$(t_endpoint "$target")"
+  experiment="$(t_experiment "$mode" "$target")"; bundle_root="$(t_bundle_root "$target")"
+  image="$(era_image "$key")"; view="$(era_corpus_view_path "$key")"
+
+  echo "== ${preset}  (era: ${key}, endpoint: ${endpoint})  [${mode^^}]"
+
+  "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
+    --preset "$preset" \
+    --bundle-root "$bundle_root" \
+    --freeze-rel-paths \
+    --precomputed-root "$view" \
+    --base-url "${base_url}/v1" \
+    --api-key-value "$master_key"
+  manifest="$bundle_root/${mode}_manifest.yaml"
+
+  clear_results "$experiment"
+
+  # The master key must ALSO ride EVAL_AUDIT_ERA_API_KEY (forwarded into the
+  # container -> the shim's credentials.conf): at v0.2.4, AutoClient's
+  # additional_args api_key OVERRIDES the client_spec.args key, so with the
+  # default EMPTY the v0.2.4 client would 401 at the gateway. Harmless at v0.3.0.
+  # Exported inside this backgrounded subshell only — it does not leak to siblings.
+  export EVAL_AUDIT_ERA_API_KEY="${master_key:-$EVAL_AUDIT_ERA_API_KEY}"
+
+  eval-audit-run "$manifest" --lease --run=1 --container-image "$image"
+}
+
+# Run EVERY TARGETS row CONCURRENTLY for the given mode, letting the infer-stack
+# lease system arbitrate GPUs rather than serializing in bash. Neither the era
+# image (a container_gpus:none HTTP client) nor the endpoint identity is a reason
+# to serialize: the two eras of one model COALESCE onto a single served endpoint
+# (one vLLM container, demand-refcounted), and different models QUEUE for GPU
+# residency. Per-target output is redirected to $ERA_OUT/logs/<experiment>.log;
+# failures are collected and reported at the end (nonzero return on any failure).
+#   $1 = smoke | full
+run_grid_parallel() {
+  local mode="$1"
+  local litellm_port="${LITELLM_PORT:-14042}"
+  local base_url="${LITELLM_BASE_URL:-http://localhost:$litellm_port}"
+  local log_dir="$ERA_OUT/logs"
+  mkdir -p "$log_dir"
+
+  echo "Reclaiming any leaked leases before start (infer-stack gc)…"
+  infer-stack gc --yes || echo "WARN: 'infer-stack gc' returned nonzero; continuing." >&2
+
+  # Bootstrap the no-blip gateway ONCE so export-benchmark-bundle can read the
+  # managed LiteLLM master key, then release just the bootstrap model.
+  local bootstrap_ep bootstrap_env master_key=""
+  bootstrap_ep="$(t_endpoint "${TARGETS[0]}")"
+  if [[ -n "$bootstrap_ep" ]]; then
+    bootstrap_env="$(mktemp)"
+    echo "Bootstrapping the gateway via ${bootstrap_ep} to read the LiteLLM master key…"
+    infer-stack acquire "$bootstrap_ep" --no-wait --yes --env-file "$bootstrap_env"
+    master_key="$(infer-stack env LITELLM_MASTER_KEY)"
+    infer-stack release --env-file "$bootstrap_env" --evict --yes \
+      || echo "WARN: bootstrap 'release --env-file --evict' returned nonzero; continuing." >&2
+    rm -f "$bootstrap_env"
+  fi
+
+  # Pre-create each era's suite-scoped corpus view ONCE, serially, so the
+  # concurrent exports below never race era_corpus_view's non-atomic symlink write.
+  local key
+  for key in $(_era_keys_from_targets); do era_corpus_view "$key" >/dev/null; done
+
+  # Launch every target concurrently; the lease system arbitrates GPUs.
+  local target experiment log pids=() logs=() names=()
+  for target in "${TARGETS[@]}"; do
+    experiment="$(t_experiment "$mode" "$target")"
+    log="$log_dir/$experiment.log"
+    echo "launch: $(t_preset "$target")  (era $(t_key "$target"), endpoint $(t_endpoint "$target")) -> $log"
+    run_one_grid "$mode" "$target" "$base_url" "$master_key" >"$log" 2>&1 &
+    pids+=("$!"); logs+=("$log"); names+=("$(t_preset "$target")")
+  done
+  echo "Launched ${#pids[@]} target(s) in parallel; tail a log to watch, e.g.: tail -f ${logs[0]}"
+
+  # Join every target (regardless of individual failures) and collect the failed.
+  local i rc failed=()
+  for i in "${!pids[@]}"; do
+    if wait "${pids[$i]}"; then
+      echo "OK:   ${names[$i]}  (${logs[$i]})"
+    else
+      rc=$?
+      echo "FAIL: ${names[$i]}  rc=${rc}  (${logs[$i]})" >&2
+      failed+=("${names[$i]}")
+    fi
+  done
+
+  echo "Reclaiming any leaked leases (infer-stack gc)…"
+  infer-stack gc --yes || echo "WARN: 'infer-stack gc' returned nonzero; continuing." >&2
+
+  if (( ${#failed[@]} > 0 )); then
+    echo >&2; echo "Completed with ${#failed[@]} failed target(s):" >&2
+    printf '  - %s\n' "${failed[@]}" >&2
+    return 1
+  fi
+  echo; echo "OK: all ${#TARGETS[@]} ${mode} runs completed."
 }

@@ -46,13 +46,21 @@ python gen_presets.py            # rewrites config/presets.yaml from the corpus
 ./00_check_env.sh              # eval-audit-check-env
 ./05_check_profiles.sh         # the three <model>-single endpoints are defined
 ./06_check_era_images.sh       # per era: image present + org.aiq.era label + shim + ENV
-./10_run_smoke.sh              # preflight: per target, export(freeze) -> run smoke --lease (5 inst)
-./15_run_full.sh               # the batch: per target, FULL manifest (all ~226 runs, 1000-cap)
+./10_run_smoke.sh              # preflight: ALL targets in parallel, export(freeze) -> run smoke --lease (5 inst)
+./15_run_full.sh               # the batch: ALL targets in parallel, FULL manifest (all ~226 runs, 1000-cap)
 ./20_index_local.sh            # eval-audit-index -> audit_results_index.csv
 ./25_index_official_classic.sh # per-suite official index + inventory (canonical one has 0 classic rows)
 ./30_compose.sh                # compose ONE virtual experiment per era (folds all 3 models)
 ./40_build_summary.sh          # one publication surface per era
 ```
+
+`10`/`15` launch **all 6 targets concurrently** and let the infer-stack lease
+system arbitrate GPUs — the two eras of one model **coalesce** onto a single served
+endpoint (one vLLM container, demand-refcounted), and different models **queue** for
+GPU residency. Neither the era image (a `container_gpus:none` HTTP client) nor the
+endpoint identity forces serialization. Per-target output goes to
+`out/logs/<experiment>.log` (`tail -f` to watch); any target failure is reported at
+the end with a nonzero exit. Narrow the set with `TARGETS_OVERRIDE="<row> <row>"`.
 
 ## Invariants
 
@@ -95,6 +103,14 @@ python gen_presets.py            # rewrites config/presets.yaml from the corpus
 `config/infer_stack/catalog.yaml` sets `tensor_parallel_size` (GPT-NeoX=2, OPT-66B=4).
 OPT-66B requires a multi-GPU host; lower `gpu_memory_utilization` if a card OOMs.
 Narrow a full run with `TARGETS_OVERRIDE="<row> <row>"` (see `_lib.sh :: TARGETS`).
+
+Because all targets launch at once, the host's GPU count sets the true concurrency:
+where several models fit, their endpoints run in parallel; where they don't, the
+lease queue grants GPUs as they free (atomic per-model acquire — no partial-hold
+deadlock). Each model's two eras always coalesce onto one server, so an era pair is
+never a source of extra GPU pressure. On a GPU-scarce host the queue may reload a
+big model (OPT-66B) more than once as it cycles residency; if that churn is costly,
+run one model at a time via `TARGETS_OVERRIDE` (e.g. both OPT-66B rows together).
 
 ## Building the era images
 
