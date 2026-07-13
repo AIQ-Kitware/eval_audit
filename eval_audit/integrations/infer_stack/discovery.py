@@ -82,9 +82,21 @@ def _classify(entry: str, runs: list[_Run]) -> _EntryResult:
     ]
     if not cands:
         return _EntryResult(entry, "NO_MATCH", [], None, None)
-    # P2: break match_score ties on the run name so the chosen "best" (and the
-    # AMBIGUOUS ordering) is deterministic, not dependent on the unsorted walk
-    # order this tool's docstring promises to avoid.
-    best = min(cands, key=lambda r: (match_score(r.name, entry), r.name))
-    status = "RESOLVED" if len(cands) == 1 else "AMBIGUOUS"
+    # match_score is (exact_flag, n_extra_tokens, name); lower is better, and the
+    # trailing name makes every score unique — so it doubles as a deterministic
+    # tie-break (P2: independent of the unsorted walk order).
+    scored = sorted(cands, key=lambda r: match_score(r.name, entry))
+    best = scored[0]
+    # Only a GENUINE tie is AMBIGUOUS. A run-entry that is a token-subset of a
+    # more specific sibling (e.g. the bare `bbq:...` vs its
+    # `...,groups=ablation_multiple_choice` superset) matches both, but the exact
+    # dir strictly out-scores the superset (fewer extra tokens) — a unique best,
+    # so it resolves. Compare the DISCRIMINATING score only (drop the name
+    # tie-breaker at index 2), else every candidate looks unique and nothing is
+    # ever ambiguous. A true tie at the best score (e.g. the same run name in two
+    # suites — the cross-suite dup the per-era corpus view guards against) stays
+    # AMBIGUOUS.
+    best_key = match_score(best.name, entry)[:2]
+    n_best = sum(1 for r in cands if match_score(r.name, entry)[:2] == best_key)
+    status = "RESOLVED" if n_best == 1 else "AMBIGUOUS"
     return _EntryResult(entry, status, cands, best, _official_deployment(best.path))
