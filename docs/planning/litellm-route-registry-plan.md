@@ -1,7 +1,11 @@
 # LiteLLM Route-Registry Plan (infer_stack)
 
-**Status:** planned, not started — v2: Opus review (§13) resolved in place;
-each concern's decision is folded into the body sections below
+**Status:** implemented on `submodules/infer_stack` branch
+`feat/litellm-route-registry` (commits: registry core → `routes` CLI + docs →
+TUI error-body companion). v2: Opus review (§13) resolved in place; each
+concern's decision is folded into the body sections below. Deviation from the
+commit plan in §11: the "optional companion" (TUI HTTP error bodies) landed as
+its own third commit rather than being deferred.
 **Target:** `submodules/infer_stack` (leasing compose backend)
 **Motivating incident:** olmo-7b vLLM healthy, gateway 400 "Invalid model
 name" — another runbook's converge re-rendered the shared gateway from *its*
