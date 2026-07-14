@@ -82,10 +82,17 @@ This runbook ships everything it needs — no dependency on a sibling runbook:
 ./20_index_local.sh              # eval-audit-index -> audit_results_index.csv
 ./30_compose.sh                  # build the virtual experiment from the full run
 ./40_build_summary.sh            # aggregate publication surface
+./50_rsync_from_aiq_gpu.sh       # (from the analysis host) pull the outputs back from aiq-gpu
 ```
 
 The smoke preflight (`10`) is optional once you trust the path — `15` is the run
 that feeds `20`/`30`/`40`.
+
+`50` is the only step run **from the analysis host** rather than on aiq-gpu: when
+the `10`–`40` steps ran on the aiq-gpu GPU box, it mirrors the finished outputs
+back to this host (aiq-gpu's `/data` roots share identical absolute paths). It
+pulls the vexp `output.root` by default; `SYNC_RESULTS=1` also fetches the raw
+run dirs and the shared index. Preview with `DRY_RUN=1`.
 
 ## Knobs (env vars)
 
