@@ -1740,3 +1740,46 @@ for them (`HELM run path is not a directory` — the local HELM run dirs under
 artifact_format=helm, not routed to --local-eee-root). Regenerating the olmo store (matches
 the pre-existing "olmo store stale" note) is needed to see ifeval/gpqa/mmlu_pro in the real
 report — out of scope for this code fix. Flagged to user.
+
+## 2026-07-14 11:20:00 -0700
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code CLI.
+Continuation of the same session as the entry above.
+
+**User intent:** Audit every benchmark's headline (resolved) metric in the
+aggregate score-drift plot vs what it *should* be; then fix the discrepancies.
+Chose option **B** (prefer schema `main_split`, not hard-coded `test`).
+
+**Audit method.** Parsed HELM `run_groups[].environment.{main_name,main_split}`
+across all `submodules/helm/.../schema_*.yaml` (authoritative), ran the real
+resolver over every `core_metric_report.json` in the audit store, cross-referenced.
+
+**Root-cause bug found (bigger than the ask).** `headline_metric_for_benchmark`
+matched the curated map / priority list (bare names) against cell metric keys —
+but run-level cells are keyed by **full** HELM stat descriptions
+("f1_score test on narrativeqa") while my instance-fallback cells are **bare**
+("ifeval_strict_accuracy"). Bare never matched full ⇒ every run-level benchmark
+silently fell to alphabetical-first; instance-fallback benchmarks hit the map.
+That granularity split is exactly why the user saw narrative_qa/wmt_14 "change"
+from bleu_1 after regen (their cells routed through the bare fallback). Curated
+map *values* were all correct vs schema — only the resolver bypassed them.
+
+**Fix (commit c041abb0).** Resolve on each key's bare *family* (`_metric_family`
+strips ` <split> on <scenario>`), and return the representative key on the
+benchmark's HELM main split (`HEADLINE_SPLIT_BY_BENCHMARK`, default `test`;
+boolq/hellaswag/imdb/msmarco_*/quac/truthful_qa are `valid` — hard-coded `test`
+would pick the wrong split's *number*, since test vs valid differ, e.g.
+narrative_qa f1 0.597 test vs 0.661 valid). Added `wmt_14→bleu_4` (was
+mis-picking exact_match ≈0 for MT via the priority list). Verified end-to-end on
+era-redpajama (synthetic_reasoning_natural exact_set_match→f1_set_match). 8 new
+tests (full-key resolution, split preference, preserved bare contract).
+
+**Design insight.** Two code paths producing the same logical value at different
+key granularities (full stat key vs bare id) is a latent trap for any
+allowlist/curated-map match. Normalize to the family at the matching boundary,
+not at each call site. Recorded as [[metric-key-granularity-runlevel-vs-instance]].
+
+**Loose end.** Headline artifacts (PNG/JSON/txt) are cached — need regenerating
+to reflect the fix. era-redpajama can be refreshed here (runs intact) but writes
+to the shared /data store; olmo can't (pruned local run dirs). Flagged to user;
+did NOT auto-regenerate the shared store.
