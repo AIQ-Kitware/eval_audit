@@ -571,8 +571,13 @@ def _write_coverage_matrix_plot(
             level = STATUS_LEVEL["all_failed"]
         cell_status[key] = max(cell_status.get(key, -1), level)
 
-    models = sorted({m for m, _ in cell_status})
-    benchmarks = sorted({b for _, b in cell_status})
+    # Same canonical order as the aggregate-score-drift heatmaps (models
+    # canonical-then-alphabetical, benchmarks likewise) so the coverage
+    # matrix and the drift plot line up row-for-row and column-for-column
+    # and can be compared at a glance.
+    from eval_audit.reports.eee_heatmap_data import order_models, order_benchmarks
+    models = order_models({m for m, _ in cell_status})
+    benchmarks = order_benchmarks({b for _, b in cell_status})
     matrix: list[list[int]] = []
     hover_matrix: list[list[str]] = []
     for model in models:

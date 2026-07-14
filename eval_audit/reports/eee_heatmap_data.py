@@ -11,6 +11,7 @@ import json
 import math
 import re
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 from loguru import logger
@@ -851,6 +852,24 @@ def _collect_headline_diff_cells(
     return cells, benchmark_metric
 
 
+def order_models(models: Iterable[str]) -> list[str]:
+    """Canonical model display order: :data:`_MODEL_ORDER` first, then any
+    others alphabetically.
+
+    Shared by the aggregate-score-drift heatmaps and the coverage-matrix
+    plot so the two line up row-for-row and can be read side by side.
+    """
+    found = set(models)
+    return [m for m in _MODEL_ORDER if m in found] + sorted(found - set(_MODEL_ORDER))
+
+
+def order_benchmarks(benchmarks: Iterable[str]) -> list[str]:
+    """Canonical benchmark display order: :data:`_BENCHMARK_ORDER` first,
+    then any others alphabetically. Companion to :func:`order_models`."""
+    found = set(benchmarks)
+    return [b for b in _BENCHMARK_ORDER if b in found] + sorted(found - set(_BENCHMARK_ORDER))
+
+
 def _order_aggregate_diff_axes(
     cells: dict[tuple[str, str, str], dict[str, Any]],
 ) -> tuple[list[str], list[str], list[str], list[tuple[str, str]]]:
@@ -858,16 +877,14 @@ def _order_aggregate_diff_axes(
 
     Returns ``(models, benchmarks, metrics_in_order, rows_in_order)`` where
     ``models`` / ``benchmarks`` follow the canonical order with any extras
-    appended alphabetically, ``metrics_in_order`` is alphabetical, and
-    ``rows_in_order`` is ``(benchmark, metric)`` for the combined
-    text/JSON tables (benchmarks canonical, metrics alphabetical within).
+    appended alphabetically (via :func:`order_models` / :func:`order_benchmarks`,
+    shared with the coverage-matrix plot), ``metrics_in_order`` is
+    alphabetical, and ``rows_in_order`` is ``(benchmark, metric)`` for the
+    combined text/JSON tables (benchmarks canonical, metrics alphabetical
+    within).
     """
-    models_found = {m for (m, _b, _met) in cells}
-    benchmarks_found = {b for (_m, b, _met) in cells}
-    models = [m for m in _MODEL_ORDER if m in models_found]
-    models += sorted(models_found - set(_MODEL_ORDER))
-    benchmarks = [b for b in _BENCHMARK_ORDER if b in benchmarks_found]
-    benchmarks += sorted(benchmarks_found - set(_BENCHMARK_ORDER))
+    models = order_models({m for (m, _b, _met) in cells})
+    benchmarks = order_benchmarks({b for (_m, b, _met) in cells})
     rows_in_order: list[tuple[str, str]] = []
     for bench in benchmarks:
         metrics_for_bench = sorted({
