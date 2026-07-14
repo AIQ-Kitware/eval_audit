@@ -495,27 +495,6 @@ def _write_per_metric_agreement_plot(
 
 
 @profile
-def _format_match_metrics(metrics: set[str] | None, *, per_line: int = 3) -> str:
-    """Compact ``<br>[m1, m2, ...]`` suffix naming the instance-level stats
-    whose per-instance ``|official − local|`` (within the canonical
-    abs_tol) decides whether each instance *matches*.
-
-    The coverage cell's agreement % pools **all** of a benchmark's core
-    instance-level metrics, so every one is listed. Wrapped every
-    ``per_line`` metrics with ``<br>`` (plotly tick markup) so wide
-    benchmarks — e.g. narrative_qa's six metrics — don't blow out the
-    column. Empty string when the benchmark has no analyzed cell.
-    """
-    if not metrics:
-        return ""
-    ordered = sorted(metrics)
-    lines = [
-        ", ".join(ordered[i:i + per_line])
-        for i in range(0, len(ordered), per_line)
-    ]
-    return "<br>[" + "<br>".join(lines) + "]"
-
-
 def _write_coverage_matrix_plot(
     enriched_rows: list[dict[str, Any]],
     repro_rows: list[dict[str, Any]],
@@ -559,10 +538,11 @@ def _write_coverage_matrix_plot(
     # Build best-status per (model, benchmark) cell
     cell_status: dict[tuple[str, str], int] = {}
     cell_counts: dict[tuple[str, str], dict[str, int]] = {}
-    # The instance-level stats whose |official − local| feeds each cell's
-    # match determination — pooled per benchmark (same core-metric set
-    # across a benchmark's models), surfaced on the column labels/hover.
-    benchmark_match_metrics: dict[str, set[str]] = {}
+    # Agreement proportion (share of instances within the canonical abs_tol)
+    # that drives each cell's color — the max across the cell's analyzed
+    # runs, matching the max-status coloring (bucket is monotonic in it).
+    # Printed inside each analyzed cell.
+    cell_agree: dict[tuple[str, str], float] = {}
     for row in enriched_rows:
         model = str(row.get("model") or "unknown")
         bench = str(row.get("benchmark") or "unknown")
@@ -575,9 +555,11 @@ def _write_coverage_matrix_plot(
             repro = repro_keyed.get(rkey)
             if repro:
                 counts["analyzed"] += 1
-                match_stats = repro.get("core_metrics") or []
-                if match_stats:
-                    benchmark_match_metrics.setdefault(bench, set()).update(match_stats)
+                agree = repro.get("official_instance_agree_tol0p05")
+                if isinstance(agree, (int, float)):
+                    prev = cell_agree.get(key)
+                    if prev is None or agree > prev:
+                        cell_agree[key] = float(agree)
                 bucket = repro.get("official_instance_agree_bucket") or ""
                 if "exact" in bucket:
                     level = STATUS_LEVEL["analyzed_exact"]
@@ -623,15 +605,13 @@ def _write_coverage_matrix_plot(
                 total = counts.get("total", 0)
                 completed = counts.get("completed", 0)
                 analyzed = counts.get("analyzed", 0)
-                stats = benchmark_match_metrics.get(bench)
-                stats_line = (
-                    f"<br>match stats (|official−local| ≤ abs_tol): "
-                    f"{', '.join(sorted(stats))}"
-                    if stats else ""
+                agree = cell_agree.get(key)
+                agree_line = (
+                    f"<br>agreement proportion: {agree:.3f}" if agree is not None else ""
                 )
                 row_hover.append(
                     f"{label}<br>total={total} completed={completed} analyzed={analyzed}"
-                    f"{stats_line}"
+                    f"{agree_line}"
                 )
         matrix.append(row_vals)
         hover_matrix.append(row_hover)
@@ -641,11 +621,10 @@ def _write_coverage_matrix_plot(
         "benchmarks": benchmarks,
         "matrix": matrix,
         "status_level_meanings": STATUS_LABEL,
-        # Instance-level stats whose |official − local| (within the canonical
-        # abs_tol) decides each match, per benchmark. The cell agreement %
-        # pools all of them.
-        "benchmark_match_metrics": {
-            b: sorted(m) for b, m in benchmark_match_metrics.items()
+        # Agreement proportion (share within the canonical abs_tol) driving
+        # each cell's color, keyed "model||benchmark"; printed in the cells.
+        "cell_agreement": {
+            f"{m}||{b}": round(v, 4) for (m, b), v in cell_agree.items()
         },
     }
     if machine_dpath is not None:
@@ -711,36 +690,41 @@ def _write_coverage_matrix_plot(
                     ],
                 },
             ))
-            # Column labels name the instance-level stats scored for the
-            # match. yaxis reversed so models read top→bottom, matching the
+            # Print the agreement proportion (which drives the color) inside
+            # each analyzed cell. Per-cell annotations rather than one shared
+            # texttemplate so the text contrasts with the cell background:
+            # white on the dark high/exact blue/green, black on the lighter
+            # low/moderate cells.
+            cell_annotations = [
+                {
+                    "x": bench, "y": model, "xref": "x", "yref": "y",
+                    "text": f"{cell_agree[(model, bench)]:.2f}",
+                    "showarrow": False,
+                    "font": {
+                        "size": 10,
+                        "color": "white"
+                        if cell_status.get((model, bench), -1) in (5, 6)
+                        else "black",
+                    },
+                }
+                for model in models
+                for bench in benchmarks
+                if (model, bench) in cell_agree
+            ]
+            # yaxis reversed so models read top→bottom, matching the
             # matplotlib drift heatmaps (which invert their y-axis) — so the
             # two grids line up model-for-model.
-            x_title = (
-                "Benchmark  ([…] = instance stats scored for each match:"
-                " |official − local| within abs_tol)"
-            )
-            html_benchmark_labels = [
-                f"{b}{_format_match_metrics(benchmark_match_metrics.get(b))}"
-                for b in benchmarks
-            ]
             fig.update_layout(
                 title=title,
-                xaxis={"title": x_title, "tickangle": -45},
+                xaxis={"title": "Benchmark", "tickangle": -45},
                 yaxis={"title": "Model", "autorange": "reversed"},
                 height=max(400, 60 + 40 * len(models)),
-            )
-            fig.update_xaxes(
-                tickmode="array", tickvals=benchmarks, ticktext=html_benchmark_labels,
-                automargin=True,
+                annotations=cell_annotations,
             )
             fig.write_html(str(html_fpath), include_plotlyjs="cdn")
             html_out = str(html_fpath)
             if os.environ.get("HELM_AUDIT_SKIP_STATIC_IMAGES", "") not in {"1", "true", "yes"}:
-                static_benchmark_labels = [
-                    f"{_abbreviate_label(value)}"
-                    f"{_format_match_metrics(benchmark_match_metrics.get(value))}"
-                    for value in benchmarks
-                ]
+                static_benchmark_labels = [_abbreviate_label(value) for value in benchmarks]
                 static_model_labels = [_abbreviate_label(value) for value in models]
                 benchmark_angle = 90 if len(benchmarks) > 40 else 75 if len(benchmarks) > 25 else 60 if len(benchmarks) > 12 else -45
                 fig.update_xaxes(
