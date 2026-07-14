@@ -887,6 +887,18 @@ def _render_diff_heatmap(
                     fontsize=cell_value_fontsize, color=text_color,
                     linespacing=1.35,
                 )
+                # Instance-level fallback: this benchmark has no run-level
+                # aggregate stat, so P/L are means of the per-instance
+                # scores. Flag it with a "‡" in the cell's top-right corner
+                # (explained in the subtitle) so it can't be mistaken for a
+                # run-level number.
+                if cell.get("source") == "instance_level":
+                    ax.text(
+                        col + 0.46, row - 0.46, "‡",
+                        ha="right", va="top",
+                        fontsize=cell_value_fontsize, color=text_color,
+                        fontweight="bold",
+                    )
             else:
                 # Missing: no runlevel score for this model/benchmark/metric.
                 _draw_missing_cell(ax, col, row)
@@ -921,6 +933,14 @@ def _render_diff_heatmap(
                 sub = "cell: P=public / L=local aggregate score; color = local − public"
         else:
             sub = subtitle
+        # Only annotate the "‡" marker when a fallback cell is actually
+        # drawn, so run-level-only plots don't carry a dangling footnote.
+        has_instance_fallback = any(
+            c and c.get("status") == "present" and c.get("source") == "instance_level"
+            for c in cells.values()
+        )
+        if has_instance_fallback:
+            sub = f"{sub}\n‡ instance-level fallback: mean of per-instance scores (no run-level aggregate)"
         _set_grid_title(ax, title, sub)
 
     return _save_grid_figure(
@@ -1002,6 +1022,8 @@ def _render_aggregate_diff_text_table(
         "",
         "Cell legend:",
         "  0.82/0.79  public aggregate score / local (reproduced) score",
+        "  0.82/0.79‡ instance-level fallback (no run-level aggregate;",
+        "             mean of per-instance scores)",
         "  --         this metric not present for that (model, benchmark)",
         "",
     ]
@@ -1024,7 +1046,8 @@ def _render_aggregate_diff_text_table(
             if cell is None or cell.get("status") != "present":
                 row += f"{'--':>{col_w}}"
             else:
-                marker = f"{cell['official']:.3g}/{cell['local']:.3g}"
+                flag = "‡" if cell.get("source") == "instance_level" else ""
+                marker = f"{cell['official']:.3g}/{cell['local']:.3g}{flag}"
                 row += f"{marker:>{col_w}}"
         lines.append(row)
     n_present = sum(1 for c in cells.values() if c.get("status") == "present")
@@ -1056,6 +1079,8 @@ def _render_headline_diff_text_table(
         "",
         "Cell legend:",
         "  0.82/0.79  public aggregate score / local (reproduced) score",
+        "  0.82/0.79‡ instance-level fallback (no run-level aggregate;",
+        "             mean of per-instance scores)",
         "  --         benchmark's headline metric not present for that model",
         "",
     ]
@@ -1075,7 +1100,8 @@ def _render_headline_diff_text_table(
             if cell is None or cell.get("status") != "present":
                 row += f"{'--':>{col_w}}"
             else:
-                marker = f"{cell['official']:.3g}/{cell['local']:.3g}"
+                flag = "‡" if cell.get("source") == "instance_level" else ""
+                marker = f"{cell['official']:.3g}/{cell['local']:.3g}{flag}"
                 row += f"{marker:>{col_w}}"
         lines.append(row)
     n_present = sum(1 for c in cells.values() if c.get("status") == "present")

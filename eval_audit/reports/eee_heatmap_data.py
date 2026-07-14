@@ -449,10 +449,34 @@ def _accumulate_aggregate_diff_cells(
 
     See :func:`_collect_aggregate_diff_cells_per_metric` for the cell shape
     and the meaning of ``include_bookkeeping``.
+
+    Run-level vs. instance-level fallback
+    -------------------------------------
+    A cell's aggregate score normally comes from the run-level comparison
+    (``core_runlevel_table.csv``): the aggregate stat each side reported.
+    Some benchmarks emit **no run-level stat** for their core metric —
+    instance-only metrics such as ``ifeval_strict_accuracy`` (ifeval) and
+    ``chain_of_thought_correctness`` (gpqa, mmlu_pro) are scored per
+    instance, so the run-level intersection is empty and the CSV has no
+    row. Those benchmarks would silently vanish from the drift plot even
+    though a perfectly good aggregate exists: the mean of the per-instance
+    scores. For every (model, benchmark, metric) with no run-level cell we
+    therefore fall back to that instance-level mean (``a_mean`` official /
+    ``b_mean`` local from the report's ``pairs[].instance_level.by_metric``)
+    and tag the cell ``source="instance_level"`` so renderers can flag it.
+    Run-level always wins when both exist.
     """
-    acc: dict[tuple[str, str, str], dict[str, float]] = defaultdict(
+    run_acc: dict[tuple[str, str, str], dict[str, float]] = defaultdict(
         lambda: {"sum_official": 0.0, "sum_local": 0.0, "n": 0.0}
     )
+    inst_acc: dict[tuple[str, str, str], dict[str, float]] = defaultdict(
+        lambda: {"sum_official": 0.0, "sum_local": 0.0, "n": 0.0}
+    )
+
+    def _keep_metric(metric: str) -> bool:
+        return bool(metric) and (
+            include_bookkeeping or metric not in _BOOKKEEPING_METRICS
+        )
 
     for rp in report_paths:
         try:
@@ -479,47 +503,76 @@ def _accumulate_aggregate_diff_cells(
         if not model_id or not benchmark:
             continue
 
+        # -- run-level (primary source): core_runlevel_table.csv ----------
         csv_path = rp.parent / "core_runlevel_table.csv"
-        if not csv_path.exists():
-            continue
-        try:
-            with csv_path.open(newline="") as fh:
-                rows = list(csv.DictReader(fh))
-        except OSError:
-            continue
+        if csv_path.exists():
+            try:
+                with csv_path.open(newline="") as fh:
+                    rows = list(csv.DictReader(fh))
+            except OSError:
+                rows = []
+            for row in rows:
+                if (row.get("comparison_kind") or "").strip() != "official_vs_local":
+                    continue
+                metric = (row.get("metric") or "").strip()
+                if not _keep_metric(metric):
+                    continue
+                official = _parse_float(row.get("left_mean"))
+                local = _parse_float(row.get("right_mean"))
+                if official is None or local is None:
+                    continue
+                cell = run_acc[(model_id, benchmark, metric)]
+                cell["sum_official"] += official
+                cell["sum_local"] += local
+                cell["n"] += 1
 
-        for row in rows:
-            if (row.get("comparison_kind") or "").strip() != "official_vs_local":
+        # -- instance-level (fallback source): pairs[].instance_level -----
+        # a_mean = official (run_a), b_mean = local (run_b); see
+        # NormalizedDiff / core_metric_curves._build_pair for the a↔official
+        # orientation. Only official_vs_local pairs feed the drift plot.
+        for pair in (report.get("pairs") or []):
+            if (pair.get("comparison_kind") or "").strip() != "official_vs_local":
                 continue
-            metric = (row.get("metric") or "").strip()
-            if not metric:
-                continue
-            if not include_bookkeeping and metric in _BOOKKEEPING_METRICS:
-                continue
-            official = _parse_float(row.get("left_mean"))
-            local = _parse_float(row.get("right_mean"))
-            if official is None or local is None:
-                continue
-            cell = acc[(model_id, benchmark, metric)]
-            cell["sum_official"] += official
-            cell["sum_local"] += local
-            cell["n"] += 1
+            inst = pair.get("instance_level") or {}
+            for entry in (inst.get("by_metric") or []):
+                metric = (entry.get("metric") or "").strip()
+                if not _keep_metric(metric):
+                    continue
+                official = _parse_float(entry.get("a_mean"))
+                local = _parse_float(entry.get("b_mean"))
+                if official is None or local is None:
+                    continue
+                cell = inst_acc[(model_id, benchmark, metric)]
+                cell["sum_official"] += official
+                cell["sum_local"] += local
+                cell["n"] += 1
 
-    result: dict[tuple[str, str, str], dict[str, Any]] = {}
-    for key, cell in acc.items():
-        n = int(cell["n"])
-        if n == 0:
-            continue
-        official = cell["sum_official"] / n
-        local = cell["sum_local"] / n
-        result[key] = {
-            "official": official,
-            "local": local,
-            "diff": local - official,
-            "abs_diff": abs(local - official),
-            "n": n,
-            "status": "present",
-        }
+    def _finalize(
+        acc: dict[tuple[str, str, str], dict[str, float]], source: str
+    ) -> dict[tuple[str, str, str], dict[str, Any]]:
+        out: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for key, cell in acc.items():
+            n = int(cell["n"])
+            if n == 0:
+                continue
+            official = cell["sum_official"] / n
+            local = cell["sum_local"] / n
+            out[key] = {
+                "official": official,
+                "local": local,
+                "diff": local - official,
+                "abs_diff": abs(local - official),
+                "n": n,
+                "status": "present",
+                "source": source,
+            }
+        return out
+
+    # Run-level wins; instance-level fills only the (model, benchmark, metric)
+    # cells the run-level pass never produced.
+    result = _finalize(run_acc, "run_level")
+    for key, cell in _finalize(inst_acc, "instance_level").items():
+        result.setdefault(key, cell)
     return result
 
 
@@ -554,9 +607,15 @@ def _collect_aggregate_diff_cells_per_metric(
             "local": float,      # reproduced aggregate score (mean right_mean)
             "diff": float,       # local - official  (signed; colors the cell)
             "abs_diff": float,   # |local - official|
-            "n": int,            # runlevel rows that fed the average
+            "n": int,            # rows that fed the average
             "status": "present",
+            "source": str,       # "run_level" or "instance_level" (fallback)
         }
+
+    ``source`` is ``"run_level"`` for the normal path (aggregate stat both
+    sides reported) and ``"instance_level"`` for benchmarks whose core
+    metric has no run-level stat, where the cell is the mean of the
+    per-instance scores instead (see :func:`_accumulate_aggregate_diff_cells`).
 
     ``include_bookkeeping=False`` (default) drops metrics in
     :data:`_BOOKKEEPING_METRICS`, mirroring the per-metric agreement

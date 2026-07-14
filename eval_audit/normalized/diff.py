@@ -164,6 +164,34 @@ def group_quantiles(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _side_mean(rows: list[dict[str, Any]], key: str) -> float | None:
+    """Mean of a per-row score column (``'a'`` official / ``'b'`` local).
+
+    Attached to each ``by_metric`` entry so downstream consumers can read
+    the *aggregate score* each side reported for a metric even when the
+    benchmark emits no run-level stat. Instance-only metrics (e.g.
+    ``ifeval_strict_accuracy``, ``chain_of_thought_correctness``) score
+    per instance but have no run-level aggregate, so their run-level
+    comparison is empty; the mean of the per-instance scores *is* the
+    aggregate score, which the aggregate-score-drift plot falls back to.
+    Returns ``None`` when no finite value is present. Rows reaching here
+    have already had non-finite scores dropped upstream, so this is a
+    plain arithmetic mean over the surviving rows.
+    """
+    total = 0.0
+    n = 0
+    for r in rows:
+        v = r.get(key)
+        if v is None:
+            continue
+        fv = float(v)
+        if fv != fv or fv in (float('inf'), float('-inf')):
+            continue
+        total += fv
+        n += 1
+    return total / n if n else None
+
+
 @profile
 def metric_quantiles(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     by_metric: dict[str, list[dict[str, Any]]] = {}
@@ -179,6 +207,12 @@ def metric_quantiles(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for metric, items in sorted(by_metric.items()):
         info = group_quantiles(items)
         info['metric'] = metric
+        # Per-side aggregate score (mean of the official ``a`` / local
+        # ``b`` scores). For run-level rows this is the run-level mean; for
+        # instance-level rows it is the mean over instances, which is what
+        # the aggregate-score-drift plot uses when no run-level stat exists.
+        info['a_mean'] = _side_mean(items, 'a')
+        info['b_mean'] = _side_mean(items, 'b')
         out.append(info)
     return out
 

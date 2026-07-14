@@ -248,6 +248,7 @@
      ],
      "by_metric": [
       {
+       "a_mean": 0.1,
        "abs_delta": {
         "max": 1.0,
         "min": 0.0,
@@ -256,10 +257,12 @@
         "p95": 1.0,
         "p99": 1.0
        },
+       "b_mean": 0.4,
        "count": 10,
        "metric": "exact_match"
       },
       {
+       "a_mean": 0.1,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -268,10 +271,12 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.1,
        "count": 10,
        "metric": "exact_match@5"
       },
       {
+       "a_mean": 0.1,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -280,10 +285,12 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.1,
        "count": 10,
        "metric": "prefix_exact_match"
       },
       {
+       "a_mean": 0.1,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -292,10 +299,12 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.1,
        "count": 10,
        "metric": "prefix_exact_match@5"
       },
       {
+       "a_mean": 0.1,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -304,10 +313,12 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.1,
        "count": 10,
        "metric": "quasi_exact_match"
       },
       {
+       "a_mean": 0.1,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -316,10 +327,12 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.1,
        "count": 10,
        "metric": "quasi_exact_match@5"
       },
       {
+       "a_mean": 0.1,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -328,10 +341,12 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.1,
        "count": 10,
        "metric": "quasi_prefix_exact_match"
       },
       {
+       "a_mean": 0.1,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -340,6 +355,7 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.1,
        "count": 10,
        "metric": "quasi_prefix_exact_match@5"
       }
@@ -1090,6 +1106,7 @@
      ],
      "by_metric": [
       {
+       "a_mean": 0.1111111111111111,
        "abs_delta": {
         "max": 0.3888888888888889,
         "min": 0.3888888888888889,
@@ -1098,10 +1115,12 @@
         "p95": 0.3888888888888889,
         "p99": 0.3888888888888889
        },
+       "b_mean": 0.5,
        "count": 1,
        "metric": "exact_match test on mmlu"
       },
       {
+       "a_mean": 0.0,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -1110,10 +1129,12 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.0,
        "count": 1,
        "metric": "exact_match valid on mmlu"
       },
       {
+       "a_mean": 0.1111111111111111,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -1122,10 +1143,12 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.1111111111111111,
        "count": 1,
        "metric": "prefix_exact_match test on mmlu"
       },
       {
+       "a_mean": 0.0,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -1134,10 +1157,12 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.0,
        "count": 1,
        "metric": "prefix_exact_match valid on mmlu"
       },
       {
+       "a_mean": 0.1111111111111111,
        "abs_delta": {
         "max": 0.3888888888888889,
         "min": 0.3888888888888889,
@@ -1146,10 +1171,12 @@
         "p95": 0.3888888888888889,
         "p99": 0.3888888888888889
        },
+       "b_mean": 0.5,
        "count": 1,
        "metric": "quasi_exact_match test on mmlu"
       },
       {
+       "a_mean": 0.0,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -1158,10 +1185,12 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.0,
        "count": 1,
        "metric": "quasi_exact_match valid on mmlu"
       },
       {
+       "a_mean": 0.1111111111111111,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -1170,10 +1199,12 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.1111111111111111,
        "count": 1,
        "metric": "quasi_prefix_exact_match test on mmlu"
       },
       {
+       "a_mean": 0.0,
        "abs_delta": {
         "max": 0.0,
         "min": 0.0,
@@ -1182,6 +1213,7 @@
         "p95": 0.0,
         "p99": 0.0
        },
+       "b_mean": 0.0,
        "count": 1,
        "metric": "quasi_prefix_exact_match valid on mmlu"
       }

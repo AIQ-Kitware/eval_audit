@@ -398,6 +398,7 @@
      ],
      "by_metric": [
       {
+       "a_mean": 1.0,
        "abs_delta": {
         "max": 1.0,
         "min": 1.0,
@@ -406,10 +407,12 @@
         "p95": 1.0,
         "p99": 1.0
        },
+       "b_mean": 0.0,
        "count": 4,
        "metric": "exact_match"
       },
       {
+       "a_mean": 1.0,
        "abs_delta": {
         "max": 1.0,
         "min": 1.0,
@@ -418,6 +421,7 @@
         "p95": 1.0,
         "p99": 1.0
        },
+       "b_mean": 0.0,
        "count": 4,
        "metric": "quasi_exact_match"
       }
@@ -688,6 +692,7 @@
      ],
      "by_metric": [
       {
+       "a_mean": 1.0,
        "abs_delta": {
         "max": 1.0,
         "min": 1.0,
@@ -696,10 +701,12 @@
         "p95": 1.0,
         "p99": 1.0
        },
+       "b_mean": 0.0,
        "count": 1,
        "metric": "exact_match"
       },
       {
+       "a_mean": 1.0,
        "abs_delta": {
         "max": 1.0,
         "min": 1.0,
@@ -708,6 +715,7 @@
         "p95": 1.0,
         "p99": 1.0
        },
+       "b_mean": 0.0,
        "count": 1,
        "metric": "quasi_exact_match"
       }
