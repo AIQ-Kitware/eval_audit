@@ -1883,3 +1883,52 @@ diff −0.152→−0.009, n 124→62; controls byte-identical.
   is the real cleanup; deferred, flagged to user.
 - Better upstream fix would be the planner demoting stale attempts to
   local_repeat (or dropping them) so no consumer re-hits this.
+
+## 2026-07-14 15:24:23 -0400
+
+**Model/harness:** claude-opus-4-8[1m] via Claude Code.
+
+**User intent:** Newest qwen smoke test (`ifeval:model=qwen/qwen2.5-72b-instruct-turbo`,
+from-spec replay) died with `openai.BadRequestError 400 / litellm.ContextWindowExceededError`:
+served model max context = 4096, request asked for 4096 output tokens → "0 characters upper
+bound for 0 input tokens." Diagnose + fix.
+
+**Root cause.** The two qwen2.5 `*-instruct-turbo` endpoints were served at
+`max_model_len: 4096` (copied from the classic/OLMo per-model tuning). But those two
+turbo endpoints are the *only* qwen members that replay the capabilities whitelist
+(`ifeval`, `mmlu_pro`), whose **official** `run_spec.json` sets `max_tokens=4096`
+(`capabilities_run_specs.py:200`, `:259`). HELM's window service (`local_window_service.py`)
+truncates the *prompt* against `max_sequence_and_generated_tokens_length` but never
+clamps `max_tokens` — so the adapter forwards `max_tokens=4096` verbatim. At a 4096
+serving ceiling that fills the entire window; vLLM/litellm 400s because there's no room
+for even one prompt token. The official Together serve ran `max_sequence_length: 128000`
+(model_deployments.yaml:4193), so the overflow never surfaced upstream.
+
+Why OLMo didn't hit it: OLMo's official capabilities rows carry `num_output_tokens=2048`
+(faithful to OLMo's own spec), which fits under the 4064 reserve. gpt-oss already serves
+16384. The turbo pair is the lone from-spec-4096 case on a 4096 window — a genuine
+serving-config bug, not a reproducibility failure.
+
+**Fix (scoped to the two turbo endpoints only).**
+- `reproduce/qwen_models_combined/config/infer_stack/catalog.yaml`: `qwen-2-5-7b/72b-
+  instruct-turbo-single` → `max_model_len: 8192`, `max_num_batched_tokens: 8192`
+  (kept == max_model_len per the gpt-oss catalog convention; single-prefill ceiling).
+  8192 = 4096 output + 4096 prompt headroom. Header comment documents the exception +
+  the fallback (drop toward 5120 or lower `max_num_seqs` if the 72B fails vLLM startup
+  on KV-cache-can't-hold-max_model_len).
+- `eval_audit/integrations/infer_stack/preset_configs.yaml`: both turbo presets'
+  `helm_max_sequence_and_generated_tokens_length` 4064 → 8160 (32-token reserve below 8192).
+
+Base Qwen1.5 / qwen2-72b-instruct endpoints run only classic-core + `wmt_14` (small
+`max_tokens`); left at 4096. Verified via a scan mapping every ifeval/mmlu_pro/gpqa
+run_entry to its preset — only the two turbo presets carry them.
+
+**Validation.** Both YAMLs parse; `tests/test_qwen_from_spec.py` +
+`tests/test_infer_stack_integration.py` → 21 passed. No test pinned the old 4064.
+
+**Uncertainty / next step.** 8192 on the 72B (tp=2) assumes ≥80GB cards leave a KV pool
+that can hold one 8192-token sequence at startup — could not verify without the GPU. If
+vLLM refuses to start, the catalog header names the fallback. Also: raising the HELM
+window makes any *previously prompt-truncated* turbo row more faithful (official window
+was 128k), so if full turbo data already exists it should be regenerated — but at these
+short prompts nothing was being truncated, so no silent metric shift expected.

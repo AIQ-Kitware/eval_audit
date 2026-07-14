@@ -1728,8 +1728,11 @@
   'helm_model_name': 'qwen/qwen2.5-7b-instruct-turbo'
   'helm_tokenizer_name': 'qwen/qwen2.5-7b-instruct'
   'protocol_mode': 'chat'
-  # 32-token reserve below the served max_model_len (catalog = 4096).
-  'helm_max_sequence_and_generated_tokens_length': 4064
+  # 32-token reserve below the served max_model_len (catalog = 8192, not the
+  # classic 4096: this turbo endpoint replays the capabilities rows whose official
+  # run_spec.json sets max_tokens=4096, which HELM forwards verbatim — a 4096
+  # window leaves no room for the prompt and vLLM 400s. See the catalog header.
+  'helm_max_sequence_and_generated_tokens_length': 8160
   'smoke_manifest':
     'experiment_name': 'audit-qwen-2-5-7b-instruct-turbo-smoke'
     'description': 'Smoke-test from-spec replay for qwen/qwen2.5-7b-instruct-turbo via the local vLLM service (chat).'
@@ -1895,8 +1898,11 @@
   'helm_model_name': 'qwen/qwen2.5-72b-instruct-turbo'
   'helm_tokenizer_name': 'qwen/qwen2.5-7b-instruct'
   'protocol_mode': 'chat'
-  # 32-token reserve below the served max_model_len (catalog = 4096).
-  'helm_max_sequence_and_generated_tokens_length': 4064
+  # 32-token reserve below the served max_model_len (catalog = 8192, not the
+  # classic 4096: this turbo endpoint replays the capabilities rows whose official
+  # run_spec.json sets max_tokens=4096, which HELM forwards verbatim — a 4096
+  # window leaves no room for the prompt and vLLM 400s. See the catalog header.
+  'helm_max_sequence_and_generated_tokens_length': 8160
   'smoke_manifest':
     'experiment_name': 'audit-qwen-2-5-72b-instruct-turbo-smoke'
     'description': 'Smoke-test from-spec replay for qwen/qwen2.5-72b-instruct-turbo via the local vLLM service (chat).'

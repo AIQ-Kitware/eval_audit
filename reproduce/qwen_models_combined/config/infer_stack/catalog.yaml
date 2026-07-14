@@ -33,7 +33,16 @@
 # `tensor_parallel_size` is load-bearing static state: the 72Bs need tp=2 and the
 # 110B needs tp=4 or they OOM. The 32B rides tp=2 (safe on <80GB cards; drop to 1
 # on >=80GB to gain a co-host slot). max_model_len / gpu_memory_utilization mirror
-# the OLMo catalog's per-model tuning (served ceiling 4096; presets reserve 4064).
+# the OLMo catalog's per-model tuning (served ceiling 4096; presets reserve 4064)
+# — EXCEPT the two qwen2.5 *-instruct-turbo endpoints, which serve 8192 (preset
+# reserve 8160). Those two are the only qwen members that replay the capabilities
+# rows (ifeval / mmlu_pro), whose OFFICIAL run_spec.json sets max_tokens=4096. HELM
+# truncates the prompt but never max_tokens, so it emits max_tokens=4096 verbatim;
+# at a 4096 ceiling that fills the whole window and vLLM 400s with
+# ContextWindowExceededError (0 room for the prompt). The official Together serve
+# ran a 128000-token window, so 8192 (4096 output + 4096 prompt headroom) is a
+# faithful, memory-frugal floor. If the 72B fails vLLM startup with "KV cache can't
+# hold max_model_len", drop max_model_len toward 5120 (still > 4096) or max_num_seqs.
 
 models:
   qwen-1-5-7b:
@@ -134,9 +143,9 @@ endpoints:
     reclaim: stop
     model: qwen-2-5-7b-instruct-turbo
     runtime:
-      max_model_len: 4096
+      max_model_len: 8192           # capabilities rows (ifeval/mmlu_pro) replay max_tokens=4096; need room for the prompt
       gpu_memory_utilization: 0.85
-      max_num_batched_tokens: 4096
+      max_num_batched_tokens: 8192  # keep >= max_model_len (single-prefill ceiling; matches the gpt-oss catalog)
       max_num_seqs: 16
       enable_prefix_caching: true
 
@@ -146,8 +155,8 @@ endpoints:
     model: qwen-2-5-72b-instruct-turbo
     runtime:
       tensor_parallel_size: 2
-      max_model_len: 4096
+      max_model_len: 8192           # capabilities rows (ifeval/mmlu_pro) replay max_tokens=4096; need room for the prompt
       gpu_memory_utilization: 0.9
-      max_num_batched_tokens: 4096
+      max_num_batched_tokens: 8192  # keep >= max_model_len (single-prefill ceiling; matches the gpt-oss catalog)
       max_num_seqs: 8
       enable_prefix_caching: true
