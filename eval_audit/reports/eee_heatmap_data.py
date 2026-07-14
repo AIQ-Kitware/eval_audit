@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import json
 import math
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -679,7 +680,55 @@ HEADLINE_METRIC_BY_BENCHMARK: dict[str, str] = {
     "code_humaneval": "pass",
     "msmarco_regular": "RR@10",
     "msmarco_trec": "NDCG@10",
+    # wmt_14 (machine translation): HELM main_name is bleu_4. Without this
+    # entry it falls to _HEADLINE_METRIC_PRIORITY, which leads with
+    # exact_match — degenerate for translation (a hypothesis almost never
+    # equals the reference verbatim, so exact_match ≈ 0).
+    "wmt_14": "bleu_4",
 }
+
+# HELM's per-benchmark main *split* — the split its leaderboard number is
+# reported on (schema ``run_groups[].environment.main_split``). Only the
+# exceptions are listed: every benchmark not named here defaults to ``test``
+# (423 of 492 HELM run_groups use ``test``). The entries below are the
+# classic/lite text benchmarks whose public number comes from the
+# *validation* split (test labels withheld). Several are also in
+# HEADLINE_METRIC_BY_BENCHMARK, so without this map the headline would pick
+# their ``test`` cell — the wrong number. Used only to choose which split's
+# stat represents a metric family; see ``headline_metric_for_benchmark``.
+HEADLINE_SPLIT_BY_BENCHMARK: dict[str, str] = {
+    "boolq": "valid",
+    "hellaswag": "valid",
+    "imdb": "valid",
+    "msmarco_regular": "valid",
+    "msmarco_trec": "valid",
+    "quac": "valid",
+    "truthful_qa": "valid",
+    "natural_qa_closedbook": "valid",
+    "natural_qa_openbook_longans": "valid",
+    "disinformation_reiteration": "valid",
+    "disinformation_wedging": "valid",
+}
+
+_DEFAULT_HEADLINE_SPLIT = "test"
+
+# A run-level cell's metric key is a full HELM stat description
+# ("exact_match test on bbq"); an instance-level fallback cell's key is bare
+# ("ifeval_strict_accuracy"). This matches the " <split> on <scenario>"
+# suffix so both can be reduced to a bare family (+ split) for headline
+# selection.
+_SPLIT_SUFFIX_RE = re.compile(r"\s+(test|valid|train)\s+on\s+.+$")
+
+
+def _metric_family(metric_key: str) -> str:
+    """Bare metric family from a cell's metric key (suffix stripped)."""
+    return _SPLIT_SUFFIX_RE.sub("", metric_key).strip()
+
+
+def _metric_split(metric_key: str) -> str | None:
+    """Split label embedded in a full stat key, or ``None`` if bare."""
+    m = _SPLIT_SUFFIX_RE.search(metric_key)
+    return m.group(1) if m else None
 
 # Fallback ordering when a benchmark isn't in the curated map (or its curated
 # metric isn't present in the data): pick the first of these that the cell
@@ -714,28 +763,61 @@ def headline_metric_for_benchmark(
 ) -> str | None:
     """Choose the single headline metric to show for a benchmark.
 
-    Resolution order:
+    Resolution order (matched on each key's bare *family*):
 
     1. HELM's curated headline (:data:`HEADLINE_METRIC_BY_BENCHMARK`) **if**
-       that metric is actually present in ``available_metrics``.
-    2. otherwise the first :data:`_HEADLINE_METRIC_PRIORITY` entry present.
-    3. otherwise the alphabetically-first available metric.
+       that family is present in ``available_metrics``.
+    2. otherwise the first :data:`_HEADLINE_METRIC_PRIORITY` family present.
+    3. otherwise the alphabetically-first available family.
     4. ``None`` when no metric is available.
 
     The fallback matters because EEE-only inputs and metric-name drift mean
     the schema's exact ``main_name`` isn't always emitted; picking the best
     available keeps the holistic cell populated, and the caller surfaces
     which metric was actually used.
+
+    ``available_metrics`` may hold **full** HELM stat keys (run-level cells,
+    e.g. ``"f1_score test on narrativeqa"``) or **bare** metric ids
+    (instance-level fallback cells, e.g. ``"ifeval_strict_accuracy"``). The
+    curated map and priority list are keyed by bare families, so matching is
+    done on the *family* of each key (suffix stripped). When a family has
+    several split variants, the representative returned is the one on the
+    benchmark's main split (:data:`HEADLINE_SPLIT_BY_BENCHMARK`, default
+    ``test``), then ``test``, then alphabetical — so the returned value is a
+    real key present in the cells *and* the correct split's number.
     """
     if not available_metrics:
         return None
+
+    pref_split = HEADLINE_SPLIT_BY_BENCHMARK.get(benchmark, _DEFAULT_HEADLINE_SPLIT)
+
+    def _rank(key: str) -> tuple[int, str]:
+        # Lower is better: the benchmark's main split first, then test, then
+        # anything else; key as a stable tiebreaker.
+        split = _metric_split(key)
+        if split == pref_split:
+            pri = 0
+        elif split == _DEFAULT_HEADLINE_SPLIT:
+            pri = 1
+        else:
+            pri = 2
+        return (pri, key)
+
+    # One representative key per bare family (best split wins).
+    by_family: dict[str, str] = {}
+    for key in available_metrics:
+        family = _metric_family(key)
+        incumbent = by_family.get(family)
+        if incumbent is None or _rank(key) < _rank(incumbent):
+            by_family[family] = key
+
     curated = HEADLINE_METRIC_BY_BENCHMARK.get(benchmark)
-    if curated and curated in available_metrics:
-        return curated
-    for metric in _HEADLINE_METRIC_PRIORITY:
-        if metric in available_metrics:
-            return metric
-    return sorted(available_metrics)[0]
+    if curated and curated in by_family:
+        return by_family[curated]
+    for family in _HEADLINE_METRIC_PRIORITY:
+        if family in by_family:
+            return by_family[family]
+    return by_family[sorted(by_family)[0]]
 
 
 def _collect_headline_diff_cells(
