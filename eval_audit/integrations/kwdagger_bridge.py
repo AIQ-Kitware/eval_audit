@@ -682,6 +682,7 @@ def kwdagger_schedule_argv(request: KWDaggerScheduleRequest) -> list[str]:
         # materialize_helm.run_helm captures cmd_stdout.txt/cmd_stderr.txt).
         "--log=True",
         "--monitor=tmux",
+        "--other_session_handler=kill"
     ]
     # Auto-activate the running venv inside each spawned job. See
     # _detect_virtualenv_cmd for rationale. This is purely additive —
