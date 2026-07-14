@@ -230,6 +230,27 @@ would transfer **and** delete). Shares `17`'s host knobs (`AIQ_GPU_HOST`, …) v
   `reproduce/olmo_models_combined`, whose gated `gpqa` runs do. (The `06` slot here is
   instead the container-image preflight.)
 
+## Standalone acceptance: LiteLLM route-registry survival (`55_…`)
+
+[`55_check_route_registry_survival.sh`](55_check_route_registry_survival.sh) is a
+**standalone GPU-host acceptance check** — not a grid stage. It is the minimum
+real reproduction of the shared-gateway route-strip incident ("model healthy,
+gateway 400 `Invalid model name`"): it acquires this runbook's `phi2-single`
+(holding the single GPU), then triggers a `converge` under a throwaway
+**disjoint** catalog against the **same shared** `INFER_STACK_DATA_DIR`, and
+asserts that `phi2-single`'s live gateway route **survives** (and still serves).
+
+One GPU is enough — the strip is a render-layer event, so the disjoint catalog's
+endpoint is never served. The check keys off `/v1/models`, so it runs against a
+pre-fix infer-stack too and **fails loudly** there (the incident reproduced),
+making it a regression gate for the `infer_stack` route registry
+(`ComposeBackend._update_route_registry`; `infer-stack routes list`). Run it
+directly:
+
+```bash
+./55_check_route_registry_survival.sh      # PASS = route registry active
+```
+
 ## Output layout
 
 ```
