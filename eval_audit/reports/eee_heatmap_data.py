@@ -505,6 +505,45 @@ def _accumulate_aggregate_diff_cells(
         if not model_id or not benchmark:
             continue
 
+        # Canonical official_vs_local comparison for this report.
+        #
+        # A packet should hold exactly one official_vs_local pair; multi-attempt
+        # locals are meant to become local_repeat. But a report can carry >1
+        # official_vs_local when a stale prior local attempt was never demoted
+        # (e.g. an old run re-run into the same combined experiment). Summing
+        # every such row micro-averages the fresh attempt with the stale one,
+        # dragging the aggregate toward the stale value (a stale run scoring
+        # ~0.0 halves the local score). The rest of the pipeline already
+        # collapses to a single local via _find_pair, which returns the *first*
+        # official_vs_local pair; mirror that here so the drift plot agrees with
+        # the per-pair reports and reproducibility_rows.csv. We key off the
+        # canonical comparison_id (from report["pairs"], the same list
+        # _find_pair walks) and drop rows/pairs from any other attempt.
+        ovl_pairs = [
+            p
+            for p in (report.get("pairs") or [])
+            if (p.get("comparison_kind") or "").strip() == "official_vs_local"
+        ]
+        canonical_ovl_id = (
+            (ovl_pairs[0].get("comparison_id") or "").strip() if ovl_pairs else ""
+        )
+        if len(ovl_pairs) > 1:
+            dropped = [
+                (p.get("comparison_id") or "").strip() for p in ovl_pairs[1:]
+            ]
+            logger.warning(
+                "aggregate_score_diff: {model}/{benchmark} report has "
+                "{n} official_vs_local pairs; keeping canonical "
+                "{canonical!r}, dropping {dropped} (stale/non-canonical "
+                "local attempt). Source: {path}",
+                model=model_id,
+                benchmark=benchmark,
+                n=len(ovl_pairs),
+                canonical=canonical_ovl_id,
+                dropped=dropped,
+                path=rich_link(rp),
+            )
+
         # -- run-level (primary source): core_runlevel_table.csv ----------
         csv_path = rp.parent / "core_runlevel_table.csv"
         if csv_path.exists():
@@ -515,6 +554,11 @@ def _accumulate_aggregate_diff_cells(
                 rows = []
             for row in rows:
                 if (row.get("comparison_kind") or "").strip() != "official_vs_local":
+                    continue
+                # Skip non-canonical (stale) local attempts; see above.
+                if canonical_ovl_id and (
+                    row.get("comparison_id") or ""
+                ).strip() != canonical_ovl_id:
                     continue
                 metric = (row.get("metric") or "").strip()
                 if not _keep_metric(metric):
@@ -531,9 +575,14 @@ def _accumulate_aggregate_diff_cells(
         # -- instance-level (fallback source): pairs[].instance_level -----
         # a_mean = official (run_a), b_mean = local (run_b); see
         # NormalizedDiff / core_metric_curves._build_pair for the a↔official
-        # orientation. Only official_vs_local pairs feed the drift plot.
+        # orientation. Only the canonical official_vs_local pair feeds the
+        # drift plot (mirrors the run-level dedup above).
         for pair in (report.get("pairs") or []):
             if (pair.get("comparison_kind") or "").strip() != "official_vs_local":
+                continue
+            if canonical_ovl_id and (
+                pair.get("comparison_id") or ""
+            ).strip() != canonical_ovl_id:
                 continue
             inst = pair.get("instance_level") or {}
             for entry in (inst.get("by_metric") or []):
