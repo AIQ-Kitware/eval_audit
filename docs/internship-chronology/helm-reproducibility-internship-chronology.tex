@@ -1,0 +1,2179 @@
+% !TeX program = pdflatex
+%==============================================================================
+% A Chronology of the HELM Reproducibility Internship (Kitware, Summer 2026)
+%
+% Author:  Edward Wang <edward.wang@kitware.com>
+% Purpose: An authoritative, detailed technical chronology of the internship
+%          work, written as a series of technical reports / blog posts, to
+%          serve as source material for an academic paper on benchmark
+%          reproducibility.
+%
+% This document is reconstructed from: the weekly intern status decks
+% (docs/internship-powerpoints.zip), the append-only developer journals
+% (dev/journals/{claude,codex}.md and their 2026-H1 archives), the git history
+% (452 authored commits, 2026-06-03 .. 2026-07-14), the standing research
+% journal (docs/helm-reproduction-research-journal.md), and the technical
+% design docs under docs/ (helm-gotchas.md, vllm-vs-huggingface-deployment-
+% match.md, helm-unrecorded-deployment-params.md, eee-vs-helm-metadata.md,
+% pipeline.md, architecture.md, container-execution.md).
+%==============================================================================
+\documentclass[11pt]{report}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{xspace}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage[
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=blue
+]{hyperref}
+\usepackage{bookmark}
+\usepackage{url}
+\usepackage{xurl}
+
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{Z}{>{\raggedright\arraybackslash}p{0.30\textwidth}}
+
+\lstdefinestyle{shell}{
+  basicstyle=\ttfamily\scriptsize,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  frame=single,
+}
+\lstset{style=shell}
+
+% Shorthands
+\newcommand{\eee}{\textit{Every Eval Ever}\xspace}
+\newcommand{\eeeshort}{\textsc{eee}\xspace}
+\newcommand{\helm}{\textsc{helm}\xspace}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\file}[1]{\texttt{#1}}
+\newcommand{\fromspec}{\emph{from-spec}\xspace}
+
+% A consistent "finding" callout
+\newcommand{\finding}[1]{\par\noindent\textbf{Finding.}~#1\par}
+
+\title{\bfseries Reproducing \textsc{helm}: A Technical Chronology\\[4pt]
+  \large What Portions of a Public LLM Benchmark Are Independently\\
+  Reproducible Under a Corrected Local Open-Weight Recipe,\\
+  and Where Unavoidable Differences Appear\\[10pt]
+  \normalsize Kitware Research Internship --- Summer 2026}
+\author{Edward Wang\\ \texttt{edward.wang@kitware.com}\\[4pt]
+  \small Kitware, Inc.}
+\date{Chronology covering 2026-05-15 through 2026-07-14}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+This document is a detailed, chronological technical report of a summer research
+internship whose goal evolved from ``perform large-scale reproductions of the
+\textsc{helm} benchmark'' into a sharper scientific question: \emph{which portions
+of the public \textsc{helm} corpus are independently reproducible under a corrected
+local open-weight execution recipe, and where do unavoidable differences appear?}
+The central methodological contribution is a disciplined separation between
+\emph{recipe/environment failures} (a model is gated, a dataset is no longer
+fetchable, an engine cannot serve a required precision) and \emph{true
+reproducibility failures} (same recipe, same data, same model, different metric).
+The central engineering contribution is a pipeline that replays a public run's
+\file{run\_spec.json} \emph{verbatim} inside a version-pinned container, serves the
+model on independently controlled local hardware, and quantifies the residual
+disagreement with per-metric agreement curves, tolerance sweeps, and
+aggregate-score-drift heatmaps. Along the way we catalogue a family of concrete,
+publishable ``gotchas'' --- silent \file{run\_spec.json} schema evolution, an
+unrecorded execution substrate (dtype, model revision, attention kernel,
+chat-template version), a tokenizer that appends an end-of-text token and produces
+prompt-independent gibberish, an official \textsc{olmo} run that was secretly
+\code{float32}, a chat-template version drift keyed on \code{add\_generation\_prompt},
+and a classic-corpus class path that resolves in no released \textsc{helm} version ---
+each of which is exactly the kind of thing a reviewer of a reproducibility paper will
+ask about. We also summarize a parallel, exploratory research thread on
+\emph{efficient benchmarking} (feature selection plus regression, and a Data-Kernel
+Perspective-Space baseline). The document is written as a series of self-contained
+technical reports so that individual findings can be lifted directly into an
+academic manuscript.
+\end{abstract}
+
+\tableofcontents
+
+%==============================================================================
+\chapter{How to Read This Document}
+%==============================================================================
+
+\section{Scope and provenance}
+
+This is an \emph{authoritative reference} assembled after the fact from primary
+sources so that a future paper can cite it with confidence. The reconstruction
+draws on:
+
+\begin{itemize}[nosep]
+  \item the seven weekly intern status decks (2026-06-02 through 2026-07-14),
+        which record the work in the author's own words and contain the headline
+        result figures;
+  \item the append-only developer journals (\file{dev/journals/claude.md} and its
+        \file{2026-H1} archive), which capture, per work session, the intent, the
+        design alternatives considered, the chosen approach, and the reusable
+        lesson --- roughly one hundred design narratives;
+  \item the git history: 452 commits authored between 2026-06-03 and 2026-07-14,
+        whose messages give a fine-grained, dependency-ordered record of what
+        landed and when;
+  \item the standing research journal
+        (\file{docs/helm-reproduction-research-journal.md}), which frames the
+        scientific question and records the early foundational findings; and
+  \item the technical design documents accumulated under \file{docs/}, chiefly
+        \file{helm-gotchas.md}, \file{vllm-vs-huggingface-deployment-match.md},
+        \file{helm-unrecorded-deployment-params.md}, \file{eee-vs-helm-metadata.md},
+        \file{pipeline.md}, \file{architecture.md}, and
+        \file{container-execution.md}.
+\end{itemize}
+
+The internship ran from 2026-05-15. The first $\sim$2.5 weeks (through the 06-02
+status update) were spent on onboarding and a literature review; the first
+authored commits appear on 2026-06-03. The work then proceeds essentially without
+interruption through 2026-07-14, the last date this chronology covers.
+
+\section{A note on inherited foundations versus internship contributions}
+
+The internship did not start from an empty repository. A substantial foundation
+was already in place: the \file{eval\_audit} package itself; the \emph{Every Eval
+Ever} (\eeeshort) normalized artifact format used as the common comparison
+substrate; the \code{kwdagger} scheduler integration; and an early set of
+reproducibility findings on \textsc{boolq}/Pythia and Vicuna/\textsc{NarrativeQA}
+(described in \S\ref{sec:inherited}). Where this document describes that
+foundation, it does so to make the internship's own contributions legible; the
+chronology proper (Chapters~\ref{chap:e2e} onward) is the author's work. The
+developer journals are written in the first person by the AI pair-programming
+harness (Claude Code) that the author drove; throughout this report, ``we'' denotes
+the author directing that toolchain, making the design decisions, and executing and
+interpreting the runs on the GPU hosts.
+
+\section{The two threads}
+
+Two research threads ran in parallel for the first month, after which the second
+was paused in favor of the first:
+
+\begin{description}[style=nextline,leftmargin=1.5em]
+  \item[Thread A --- \textsc{helm} reproduction (Chapters \ref{chap:framing}--\ref{chap:reporting}).]
+    The main line of work: building the machinery to faithfully replay public
+    \textsc{helm} runs on local open-weight hardware, and using it to determine
+    what is and is not reproducible, and why. This is the bulk of the internship
+    and of this document.
+  \item[Thread B --- efficient benchmarking (Chapter \ref{chap:effbench}).]
+    An exploratory statistics thread: can a small, well-chosen \emph{coreset} of
+    benchmark questions plus a regression predict a model's full-benchmark score,
+    and does a Data-Kernel Perspective-Space (\textsc{dkps}) representation help?
+    This lived in two sibling repositories (\file{mrmr\_eval}, \file{dkps}) and
+    reached a working prototype with preliminary results before being paused.
+\end{description}
+
+%==============================================================================
+\chapter{The Research Question and Its Framing}
+\label{chap:framing}
+%==============================================================================
+
+\section{From ``reproduce \textsc{helm}'' to a falsifiable claim}
+
+The stated initial goal was to perform large-scale reproductions of the public
+\textsc{helm} (Holistic Evaluation of Language Models) results. The public
+corpus publishes, for many (scenario, model) pairs, the prompts sent, the
+completions returned, and the computed metrics. Reproducing a result means
+re-running the same evaluation locally and checking that the numbers match.
+
+That goal did not survive contact with the data, and the way it failed is itself
+the scientific content. Two categories of models dominate the public corpus:
+open-weight models that were originally served through a hosted API (frequently
+\emph{Together AI}), and closed-weight models that cannot be run locally at all.
+The recipe that produced each public number is only partially recorded: the
+\file{run\_spec.json} captures \emph{what} to generate (prompts, decoding
+parameters, scenario, metrics) and the \emph{name} of the model and its
+deployment, but almost nothing about the \emph{execution substrate} --- the
+precision the weights were loaded at, the exact checkpoint revision, the attention
+kernel, the tokenizer and chat-template versions, the software-stack versions. As
+a result, three distinct difficulties compound:
+
+\begin{enumerate}[nosep]
+  \item \textbf{Running the benchmarks at all} --- gated models and datasets,
+        packaging incompatibilities, download endpoints that have since revoked
+        access, and scenario code that requires optional dependencies or
+        credentials.
+  \item \textbf{Setting up a \emph{faithful} local reproduction} --- matching the
+        original recipe when key execution parameters were never written down, and
+        when the original was served by an external provider whose stack we cannot
+        inspect.
+  \item \textbf{Attributing disagreement} --- when local and public numbers
+        differ, deciding whether the benchmark is legitimately non-reproducible,
+        whether the difference is an artifact of an uncontrollable external
+        deployment, or whether our local reproduction is simply missing a detail.
+\end{enumerate}
+
+The goal was therefore reframed. The paper-worthy claim is \emph{not} ``all of
+public \textsc{helm} is reproducible.'' It is:
+
+\begin{quote}\itshape
+A carefully defined, runnable subset of \textsc{helm} appears reproducible under a
+corrected local open-weight recipe, with clearly documented failure modes.
+\end{quote}
+
+\section{The load-bearing distinction: two kinds of failure}
+\label{sec:distinction}
+
+Everything downstream --- the Stage-1 filters, the Sankey diagrams, the
+per-packet diagnoses, the aggregate heatmaps --- is organized around one
+distinction that must be held rigorously.
+
+\begin{description}[style=nextline,leftmargin=1.5em]
+  \item[Recipe / environment failures (these are \emph{filtering reasons}, not
+        reproducibility results).] The model is gated behind a license; the dataset
+        is gated or its download endpoint denies access; the model is packaged in a
+        way local deployment cannot consume (e.g.\ a vision--language model); the
+        required GPU architecture or precision is unavailable; a scenario needs a
+        proprietary annotator. A run excluded because of
+        \code{no-local-helm-deployment} is a \emph{design constraint}, not evidence
+        that \textsc{helm} is irreproducible.
+  \item[True reproducibility failures.] Same recipe, same data, same model, but
+        different metrics. These are measured with a tolerance sweep from
+        \code{abs\_tol}$=0$ (exact match) out to \code{abs\_tol}$=0.1$ (a tenth of
+        the metric's range), analyzed per metric to see which metrics are fragile,
+        and validated across machines to separate platform-specific from
+        recipe-specific drift. An \code{agreement\_ratio} that dips to $0.7$ at
+        \code{abs\_tol}$=0$ is a genuine reproducibility problem.
+\end{description}
+
+Much of the intellectual work of the internship was correctly \emph{classifying}
+each observed disagreement into one of these buckets --- and resisting the
+temptation to fold every failed large-grid job into a blanket negative result.
+Chapters~\ref{chap:deploymatch} and~\ref{chap:eras} are, in large part, the story
+of moving specific disagreements out of the ``irreproducible'' bucket and into the
+``environment/recipe'' bucket once their true cause was found.
+
+\section{The inherited baseline: what was already known}
+\label{sec:inherited}
+
+Before the internship, the project had established a small but load-bearing set of
+results, recorded in \file{docs/helm-reproduction-research-journal.md}. They set
+the priors that the internship's work refined.
+
+\begin{itemize}
+  \item \textbf{Local reruns are stable; the official--local gap is not noise.} For
+        \code{boolq:model=eleutherai/pythia-6.9b}, two local repeats agreed at a
+        strict run-level ratio of $0.955$ with a maximum run-level delta of
+        $0.0015$, whereas official-vs-local agreement was $0.463$ with run-level
+        deltas up to $\sim\!12$. The official--local gap is far larger than
+        rerun noise, so ordinary nondeterminism cannot be the main explanation ---
+        the residual is structural (deployment and execution-spec drift).
+  \item \textbf{A dramatic ``irreproducibility'' turned out to be a local
+        misconfiguration.} Local Vicuna/\textsc{NarrativeQA} produced 99/100 empty
+        completions; the cause was \textsc{helm} silently auto-applying a
+        \emph{chat template} to a non-chat prompt. Rerunning with
+        \code{apply\_chat\_template: false} recovered near-official scores
+        (\code{exact\_match} $0.27$, \code{f1} $0.64$, \code{rouge\_l} $0.64$).
+        The lesson --- that \code{apply\_chat\_template} must be an explicit,
+        controlled setting, and that high empty-completion rate / near-zero output
+        tokens / pervasive \code{finish\_reason\_unknown} are red flags --- recurs
+        throughout the internship.
+  \item \textbf{The metric-scale caveat.} A single global tolerance is hard to
+        interpret because \emph{core} metrics live in $[0,1]$ while
+        \emph{bookkeeping} metrics (byte counts, token counts, log-probs) do not.
+        The reporting must separate metric classes; this became the
+        \code{metrics\_taxonomy} module (\S\ref{sec:taxonomy}).
+\end{itemize}
+
+These priors motivated the internship's dominant methodological choice --- prefer
+open-weight models runnable on realistic hardware, control the deployment
+explicitly rather than trusting \textsc{helm}'s automatic inference, and treat the
+reproducibility question as a \emph{distribution} (same-machine, cross-machine,
+official-vs-local) rather than a single point estimate.
+
+%==============================================================================
+\chapter{Onboarding and Literature Review (mid-May -- June 2)}
+\label{chap:litreview}
+%==============================================================================
+
+The first status deck (2026-06-02) reports two workstreams: end-to-end tests for
+the audit pipeline (Chapter~\ref{chap:e2e}) and a literature review that seeded
+both the reproducibility thread and the efficient-benchmarking thread
+(Chapter~\ref{chap:effbench}). Three papers were reviewed in depth.
+
+\begin{description}[style=nextline,leftmargin=1.25em]
+  \item[LoRA weight-space learning --- \emph{W2T: LoRA Weights Already Know What
+        They Can Do} (Han et al., 2026), building on Chen, Helm, Park, Priebe \&
+        Villar, \emph{Extracting information from fine-tuned weights}.]
+    A LoRA update is $AB^\top$; the factorization $(A,B)$ is non-identifiable
+    because $(AM, BM^{-\top})$ yields the same update for any invertible $M$ (a
+    $\mathrm{GL}$-group symmetry). W2T canonicalizes via the SVD and embeds the
+    canonicalized weights with a transformer into a ``weight-space,'' whose
+    embeddings drive downstream tasks: attribute classification (properties of the
+    fine-tuning data), performance prediction, and adapter retrieval. The review
+    noted that the ablations attribute most of the method's power to the
+    \emph{canonicalization} step, and floated directions: generative modelling over
+    LoRA weights, simpler statistical embeddings (e.g.\ MDS) in place of the
+    transformer, and multi-/merged-adapter settings.
+  \item[Efficient benchmarking --- \emph{Efficient Benchmarking Is Just Feature
+        Selection and Multiple Regression} (Bowyer, Locatelli \& Cao, 2026).]
+    Given $M$ source models, represent each question $X_i$ as a vector in
+    $\mathbb{R}^M$ (each coordinate is a model's score on that question) and the
+    target $Y$ as the vector of overall scores; \emph{select} an informative
+    subset of questions with mRMR (Minimum-Redundancy-Maximum-Relevance) and
+    \emph{predict} full-benchmark scores with ridge / kernel-ridge regression.
+    Baselines: Lasso, Anchor Points, IRT. This framing became Thread~B.
+  \item[Connecting the two.] The review proposed comparing LoRA and \textsc{dkps}
+        (Data-Kernel Perspective-Space) representations, using Bayesian / Gaussian-
+        process regression to unify selection and regression, and enriching the
+        per-question feature vector with question-text embeddings --- directions
+        pursued in Chapter~\ref{chap:effbench}.
+\end{description}
+
+%==============================================================================
+\chapter{End-to-End Tests: Validating the Audit Instrument}
+\label{chap:e2e}
+%==============================================================================
+
+\emph{Commits: 2026-06-03 through 2026-06-04, and the E2E deck of 2026-06-02.}
+
+\section{Motivation}
+
+Before trusting the audit pipeline's verdicts, the pipeline itself had to be
+validated end to end on a case where the ground truth was controllable. The
+audit workflow has six stages: (1) stand up a vLLM server for the target model
+(via \code{infer-stack}, over LiteLLM / docker-compose); (2) write a benchmark
+bundle; (3) execute runs on the servers; (4) aggregate run artifacts; (5) index
+them; (6) build the analysis. The tools involved --- \code{infer-stack},
+\code{eval-audit}, \code{magnet}, \code{kwdagger}, \code{cmd\_queue} --- each have
+seams where a subtle mismatch produces a plausible-but-wrong comparison.
+
+\section{The controlled experiment}
+
+The subject was \code{microsoft/phi-2} on \code{mmlu:philosophy}, run under three
+deliberately chosen deployments:
+
+\begin{itemize}[nosep]
+  \item \textbf{HF}: \textsc{helm}'s in-process \code{HuggingFaceClient},
+        \code{temperature=0};
+  \item \textbf{vLLM}: served through vLLM, \code{temperature=0} --- should match
+        HF up to engine numerics;
+  \item \textbf{vLLM ``incomparable''}: served through vLLM at \code{temperature=1}
+        --- a deliberate negative control that \emph{should} disagree, proving the
+        instrument can detect a real difference.
+\end{itemize}
+
+\section{Three instrument bugs found and fixed}
+
+Validating the instrument surfaced three ways the comparison machinery could
+silently mispair runs --- each fixed so that equivalent runs are actually
+recognized as equivalent:
+
+\begin{enumerate}
+  \item \textbf{Hard-coded serving ports.} \code{infer-stack} used hard-coded
+        ports without exposing them in a form \textsc{helm} could consume. Fix:
+        read ports from the configuration source of truth and export them into a
+        \code{.env} file queryable by the rest of the pipeline.
+  \item \textbf{The \code{--groups} flag.} Public benchmark runs carry a
+        \code{--groups} flag that has no effect on execution but prevented
+        equivalent local runs from being matched to their public counterparts. Fix:
+        ignore \code{groups=} tokens when locating comparable public runs, and emit
+        a warning that this normalization occurred.
+  \item \textbf{The \code{--temperature} run-name elision.} \textsc{helm} strips
+        the temperature from the run \emph{name}, creating a divergence between the
+        run spec and the run-directory name, so temperature-varying runs could not
+        be located. Fix: locate run folders more robustly by reading the original
+        run spec out of the generated artifacts rather than trusting the directory
+        name.
+\end{enumerate}
+
+These three fixes are small but foundational: they are the first instances of a
+theme that dominates the rest of the internship --- \textsc{helm}'s run identity is
+carried by a drift-prone \emph{string}, and robust reproduction requires matching
+on \emph{canonicalized recipe content}, not names (revisited at scale in
+\S\ref{sec:canonkey} and in gotchas G1--G2, G10--G12; see
+Appendix~\ref{app:gotchas}).
+
+\section{Outcome and next steps recorded at the time}
+
+The e2e tests established that HF and vLLM at \code{temperature=0} agree on the
+core metric while the \code{temperature=1} control diverges as intended --- i.e.\
+the instrument both confirms equivalence and detects real differences. The deck's
+next steps (automate the e2e suite into CI, improve the warnings the systems emit,
+and begin auditing more public models) foreshadow the rest of the summer.
+
+%==============================================================================
+\chapter{Corpus Cartography: Mapping the Reproducible Subset}
+\label{chap:cartography}
+%==============================================================================
+
+\emph{Status deck of 2026-06-09.}
+
+\section{The question: what \emph{can} be run at all?}
+
+Before reproducing anything, one must know the shape of the corpus and which
+slice is even a candidate. A statistics-and-filtering script was written to crawl
+a directory of \textsc{helm} runs, extract per-run metadata, and emit a machine-
+readable filter inventory (\file{filter\_inventory.json}). For each run it records
+the model (parameter count, access class \{open, limited, closed\}), the scenario
+and its class path, the benchmark family, whether the task requires a closed
+(proprietary) judge, and a \emph{selection status} with explicit
+\emph{failure reasons}. A representative row (a Thai-exam Typhoon-8B run) carries
+fields such as \code{model\_num\_parameters}, \code{model\_access},
+\code{model\_has\_hf\_client}, \code{size\_threshold\_params}, \code{eligible\_model},
+\code{candidate\_pool}, and a \code{failure\_reason\_summary} --- the vocabulary
+that the Stage-1 Sankey diagrams later consume.
+
+\section{The numbers}
+
+The crawl over the public corpus produced a stark funnel
+(Table~\ref{tab:corpusstats}). Of \textbf{34{,}512} total runs, only
+\textbf{1{,}109} were \emph{selected} as candidates for local reproduction under
+the open-weight, runnable-recipe policy. The model-access distribution alone
+explains much of the attrition: nearly as many \emph{limited}-access (18{,}273)
+as \emph{open} (12{,}823) runs, plus 508 closed and 2{,}894 with no recorded
+access class. Parameter counts were available for only 13{,}979 runs, so a size
+budget could be applied to fewer than half the corpus with certainty.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+\textbf{Quantity} & \textbf{Count} \\
+\midrule
+Total runs discovered            & 34{,}512 \\
+Structurally incomplete          & 14 \\
+Eligible model, out of scope     & 5 \\
+\textbf{Selected (candidates)}   & \textbf{1{,}109} \\
+\midrule
+Model access: open               & 12{,}823 \\
+Model access: limited            & 18{,}273 \\
+Model access: closed             & 508 \\
+Model access: none recorded      & 2{,}894 \\
+\midrule
+Runs with parameter-count data   & 13{,}979 \\
+\midrule
+Full grid points (models $\times$ scenarios) & 78{,}690 \\
+Full grid: models / scenarios    & 366 / 215 \\
+Filtered grid points             & 2{,}013 \\
+Filtered grid: models / scenarios & 33 / 61 \\
+\midrule
+Runs requiring a closed judge    & 484 \\
+Runs excluded \emph{solely} for closed judge & 25 \\
+\bottomrule
+\end{tabular}
+\caption{The public-\textsc{helm} corpus funnel as measured on 2026-06-09. The
+runnable subset is roughly 3\% of the corpus, and grid coverage is sparse: 198
+of 2{,}013 filtered grid points are actually populated (``likely not all
+scenario/model pairs make sense'').}
+\label{tab:corpusstats}
+\end{table}
+
+\finding{The closed-judge dependency is real but not dominant.} Of 484 runs that
+require a closed judge, only 25 are excluded \emph{solely} for that reason --- the
+rest fail an independent filter too. This number motivated the later
+\emph{open-judge extension} (\S\ref{sec:judge}): admitting closed-judge benchmarks
+behind a flag and re-running them with an open judge recovers a
+non-trivial-but-bounded slice.
+
+\finding{Grid coverage is sparse and non-rectangular.} The full model$\times$scenario
+grid has 78{,}690 points but only 6{,}844 are covered; the filtered grid has 2{,}013
+points and 198 covered. This is the empirical basis for treating reproduction as a
+\emph{coverage problem} --- the denominator of any ``fraction reproducible'' claim
+must be the set of populated, in-scope grid points, not the Cartesian product. It
+directly motivates the three-level coverage funnel (logical / recipe-canonical /
+recipe-identical) that the pipeline reports (\S\ref{sec:funnel}).
+
+\section{Why this is Stage 1}
+
+This cartography is Stage 1 of the pipeline
+(\file{index\_historic\_helm\_runs.py}): it discovers runs, applies the eligibility
+filters, and emits the filter report whose Sankey diagram shows what was kept or
+dropped and \emph{why}. Its output is the ``denominator'' the architecture
+document (ADR-6) insists must remain explainable: every excluded run carries its
+typed exclusion reason, so a reviewer can audit the claim ``we reproduced $X$ of
+$Y$ runnable runs.'' Crucially, the exclusion reasons here are almost all
+\emph{recipe/environment} reasons (\S\ref{sec:distinction}) --- gated model,
+closed judge, no local deployment, over the size budget --- not reproducibility
+verdicts.
+
+\begin{quote}\small
+\textbf{Corpus caveat (recorded later).} The curated candidate set that drives the
+reproduction runbooks (\file{configs/run\_details.yaml}) is a hand-selected
+Pythia/Vicuna/Qwen/OLMo subset, not the full eligible list; and an on-disk
+\file{filter\_inventory.json} captured at one moment can go stale relative to the
+live corpus (e.g.\ a modern-only pass that contains zero classic-era rows). The
+distinction between ``the corpus'' and ``the curated candidate set'' matters when
+reading any coverage number.
+\end{quote}
+
+%==============================================================================
+\chapter{The Unified Comparison Core}
+\label{chap:core}
+%==============================================================================
+
+\emph{Commits: 2026-06-11 through 2026-06-12 (roughly 30 commits); the ``Phase 0--3''
+refactor and the ``Phase 3 / 4.0--4.9'' comparison-core unification.}
+
+Two days of intense work rebuilt the analysis substrate so that every subsequent
+reproducibility verdict flows through a single, framework-free comparison engine.
+This is infrastructure, but it is infrastructure with research consequences: it is
+what makes the later findings \emph{auditable} rather than asserted.
+
+\section{The refactor (Phases 0--2): making the instrument legible}
+
+The repository had grown to $\sim$86 modules and $\sim$32.8k lines with 18 console
+scripts, and several ``god modules'' had accreted --- notably
+\file{build\_reports\_summary.py} at 5{,}369 lines / 108 functions. The refactor
+proceeded in phases: root hygiene and finishing an in-flight
+\code{vllm\_service}$\rightarrow$\code{infer\_stack} rename (Phase 0); unifying the
+CLI surface so every console script resolves to a thin \code{eval\_audit.cli.*}
+wrapper (Phase 1); and decomposing the god modules into cohesive subpackages
+(Phase 2).
+
+The methodological point worth recording for the paper's ``reproducible software''
+story is \emph{how} the splits were verified. Rather than hand-moving functions,
+the god modules were split programmatically: AST-parse the module, compute the
+top-level-symbol reference graph, validate the cluster assignment is a DAG,
+generate each submodule with exactly the imports its symbols reference, then assert
+that all top-level symbols are \emph{AST-identical} to \code{HEAD}. This gives a
+machine-checkable ``pure relocation'' guarantee. A recurring subtlety --- that
+monkeypatching a facade module no longer reaches functions that bind their
+collaborators in a new home module --- caused several test fixes and is a lesson
+about characterization tests surviving refactors.
+
+\section{Phase 3 / \code{NormalizedDiff}: one core, many adapters}
+\label{sec:normalizeddiff}
+
+The deeper change was to unify two forked comparison cores. The \textsc{helm} path
+computed agreement and diagnosis through \code{HelmRunDiff} (a 1{,}902-line class);
+the \eeeshort path computed overlapping numbers through \code{normalized/compare.py}.
+Both were invoked from one function, \code{\_build\_pair}, gated by a
+\code{skip\_diagnosis} flag. The agreement math was already framework-free on both
+paths; only the \emph{diagnosis} block and the \file{run\_spec.json} semantic diff
+were \textsc{helm}-specific.
+
+The unification introduced \code{eval\_audit/normalized/diff.py::NormalizedDiff}:
+one framework-free core consuming two \code{NormalizedRun} objects and producing
+agreement rows, agreement curves, quantiles, the facts-grade diagnosis, and the
+judge-dependence metric-class split. The \textsc{helm} and \eeeshort paths became
+\emph{thin adapters} over this one core; \code{HelmRunDiff}'s \code{\_diagnose\_repro}
+was reduced to delegating to \code{normalized.diagnose.diagnose\_repro}.
+
+The design was executed \emph{additive-first}, which is the load-bearing rigor:
+\code{NormalizedDiff} was built next to the incumbent and proven \emph{byte-equal}
+to committed baseline snapshots (fixtures F1--F10, gated at numerical tolerance
+\code{atol}$=10^{-9}$, with the explicit rule that a looser tolerance is ``a
+finding to investigate, not a knob to widen'') \emph{before} any renderer was
+flipped to use it. Inverting the usual order --- build the replacement, prove
+equivalence, then swap --- turned a ``high-risk hinge'' into two routine commits.
+
+\section{The framework-free taxonomy and recipe-facts resolver}
+\label{sec:taxonomy}
+
+Three supporting modules were lifted out of the \textsc{helm}-specific package so
+they carry no framework dependency:
+
+\begin{itemize}[nosep]
+  \item \file{eval\_audit/metrics\_taxonomy.py} --- classifies every metric as
+        \emph{core} vs \emph{bookkeeping} (the metric-scale caveat from
+        \S\ref{sec:inherited}) and, new here, as \emph{judge-dependent} vs
+        \emph{deterministic} (\code{classify\_judge\_dependence}). The latter
+        split lets a report separate the part of a comparison that is a
+        \emph{reproduction control} (deterministic metrics) from the part that is
+        a \emph{substitution measurement} (judge-dependent metrics).
+  \item \file{eval\_audit/normalized/recipe\_facts.py} --- one resolver answering
+        ``what recipe produced this run?'' in priority order: a native
+        \code{recipe\_facts} block (JSON-encoded inside an \eeeshort aggregate's
+        \code{source\_metadata.additional\_details}) $\rightarrow$ a sidecar
+        \file{run\_spec.json} $\rightarrow$ \emph{unknown} (facts collapse to
+        \code{status='unknown'} and the pipeline emits
+        \code{comparability\_unknown:*} warnings). This is the seam through which
+        the later ``unrecorded parameters'' story (Appendix~\ref{app:unrecorded})
+        could be closed without a schema change.
+  \item \file{eval\_audit/normalized/diagnose.py} --- the single input-to-label
+        diagnosis implementation, including declared-substitution re-labeling
+        (\code{intended\_substitution:*}).
+\end{itemize}
+
+\section{The open-judge extension (R2)}
+\label{sec:judge}
+
+A one-hour ``spike'' against the real corpus reshaped a planned feature and
+recorded a genuinely useful finding
+(\file{docs/planning/judge-identity-inventory.md}). The question was: where does
+judge-model identity live for the six closed-judge benchmarks? Three findings:
+
+\begin{enumerate}[nosep]
+  \item \textbf{Judge identity is not in \file{run\_spec.json}.} Annotators carry
+        \emph{empty} args; the judge model is hard-coded inside the \textsc{helm}
+        annotator class as a function of \textsc{helm} version (e.g.\ a GPT-4o +
+        Llama-3.1-405B ensemble). Officials therefore need a curated
+        (annotator class, version)$\rightarrow$judge-models map, implemented as
+        \file{eval\_audit/judge\_registry.py}.
+  \item \textbf{The official ensemble already contains an open judge.} Because
+        \textsc{helm} records per-judge sub-scores (e.g.\ \code{safety\_gpt\_score},
+        \code{safety\_llama\_score}) as separate metrics, a \emph{same-judge
+        reproduction control already exists inside the official data} --- one can
+        compare \code{safety\_llama\_score} official-vs-local without any new run.
+        This reframes substitution as per-metric rather than per-run.
+  \item \textbf{Honesty scoping.} The \code{same\_judge} comparability fact is
+        emitted \emph{only} for declared-substitution comparisons; emitting it
+        everywhere would spray \code{comparability\_unknown:same\_judge} noise over
+        every legacy pair. A crucial design decision recorded here: facts stay
+        honest (\code{same\_judge: no} is never re-labeled to a ``substituted''
+        status); only the \emph{diagnosis} re-labels the difference as
+        \code{intended\_substitution:judge}. A ``substituted'' fact status was
+        rejected as dishonest-by-construction.
+\end{enumerate}
+
+Stage 1 gained \code{--allow-closed-judge-benchmarks}, admitting these runs through
+a distinct \code{judge-substitution} candidate pool that rides
+\code{run\_details}$\rightarrow$manifests$\rightarrow$audit index to the planner.
+
+\section{Why the entry points stayed separate}
+
+A tempting simplification --- collapse the \textsc{helm} and \eeeshort CLIs into
+one auto-detecting command --- was deliberately \emph{rejected}, and the reasoning
+is worth preserving because it recurs. The \eeeshort-only path must remain
+physically capable of building its full report tree \emph{with zero \textsc{helm}
+artifacts on disk} (the ``EEE-only operability'' gate), because one of the paper's
+case-study claims is that the \eeeshort per-instance schema alone suffices for
+reproducibility analysis --- a claim a reviewer will want to verify by
+\code{grep}, not by trusting a code review. Merging the CLIs would import the
+\textsc{helm} adapter into the \eeeshort path and destroy that grep-checkable
+guarantee.
+
+%==============================================================================
+\chapter{The OLMo Campaign}
+\label{chap:olmo}
+%==============================================================================
+
+\emph{Commits: 2026-06-12 onward; status decks of 06-16, 06-23, 06-30, 07-08,
+07-14. The OLMo reproduction is the internship's central case study, and the
+vehicle through which every piece of reproduction machinery was hardened.}
+
+\section{The target grid}
+
+Six open-weight OLMo-family models were chosen as the reproduction subjects
+(Table~\ref{tab:olmogrid}). Four are recent instruct models evaluated on the
+capabilities benchmarks (\code{bbq}, \code{gpqa}, \code{ifeval}, \code{mmlu\_pro});
+two are older base models with broad classic-track coverage. The grid spans both
+\emph{no-chain-of-thought / temperature=0} benchmarks (bbq, commonsense, gsm,
+ifeval, legalbench, med\_qa, mmlu, narrative\_qa, wmt\_14) and \emph{chain-of-thought
+/ temperature=1} benchmarks (gpqa, mmlu\_pro).
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{lY}
+\toprule
+\textbf{Model} & \textbf{Benchmarks reproduced} \\
+\midrule
+\code{olmoe-1b-7b-0125-instruct}   & bbq, gpqa, ifeval, mmlu\_pro \\
+\code{olmo-2-1124-7b-instruct}     & bbq, gpqa, ifeval, mmlu\_pro \\
+\code{olmo-2-1124-13b-instruct}    & bbq, gpqa, ifeval, mmlu\_pro \\
+\code{olmo-2-0325-32b-instruct}    & bbq, gpqa, ifeval, mmlu\_pro \\
+\code{olmo-7b}                     & mmlu (62), math (7), legalbench (5), wmt\_14 (5), \\
+                                   & natural\_qa (2), commonsense (1), gsm (1), \\
+                                   & med\_qa (1), narrative\_qa (1) \\
+\code{olmo-1.7-7b}                 & mmlu (57) \\
+\bottomrule
+\end{tabularx}
+\caption{The six OLMo reproduction subjects and their benchmark coverage. The
+instruct models exercise the chat-template and judge-dependent paths; the base
+models exercise the classic-track, completions path.}
+\label{tab:olmogrid}
+\end{table}
+
+Early smoke tests already surfaced two environment issues that recur:
+a shared-machine configuration-file conflict, and \code{olmo-7b}'s tokenizer
+attempting to run external code (an early symptom of the EOS-append bug diagnosed
+in \S\ref{sec:eosappend}). These were fixed via HELM tokenizer-alias corrections,
+adding \code{sentencepiece}/\code{tiktoken} tokenizer backends as dependencies, and
+loading the OLMo-7B tokenizer through a HELM entry-point plugin.
+
+\section{Chat-template overhead blows the context window}
+
+The first substantive reproducibility bug in the OLMo runs was a
+\code{ContextWindowExceededError}: the chain-of-thought runs
+(\code{num\_output\_tokens=2048}) on the 4096-context chat models were rejected by
+vLLM. The mechanism is subtle and paper-worthy. \textsc{helm}'s
+\code{LocalWindowService} truncates the prompt to
+$\text{max\_seq\_len} - \text{expected\_completion} = 4096 - 2048 = 2048$ tokens,
+but it counts the \emph{raw} prompt, \emph{before} the chat template is applied.
+When the run is routed through vLLM's OpenAI-compatible chat endpoint, the OLMo-2 /
+OLMoE chat template wraps the prompt and adds tokens \textsc{helm} never counted.
+Measured with the actual tokenizers, the single-turn wrapper overhead is
+\textbf{12 tokens (OLMo-2)} and \textbf{13 tokens (OLMoE)}, so
+$2048 + 13 + 2048 = 4109 > 4096$ and vLLM hard-rejects.
+
+The fix reserved a 32-token margin per preset via the sanctioned
+\code{helm\_max\_sequence\_and\_generated\_tokens\_length} knob (already used by the
+Vicuna chat path), and repaired a latent bug where the flat-preset code path
+silently dropped that override. The general lesson --- \emph{when \textsc{helm}
+drives a chat model through an OpenAI-compatible server, its prompt-token budget is
+blind to the chat template the server applies} --- is the first of several
+chat-template-versus-window interactions, and it recurs when the Qwen turbo
+endpoints hit the same wall in July (\S\ref{sec:qwenwindow}).
+
+\section{Data-access failures are filtering reasons, not results}
+
+Several OLMo benchmarks could not be run at all, and classifying them correctly was
+the point:
+
+\begin{itemize}[nosep]
+  \item \code{competition\_math} was disabled on the HF Hub (script-based dataset,
+        401 on the loader).
+  \item \code{natural\_qa}: the public GCS bucket revoked \emph{authenticated}
+        reads (it dropped \code{allAuthenticatedUsers}, not just \code{allUsers}),
+        so no credential unblocks it. An entire staging shim built to work around
+        the assumed ``authenticated reads work'' had to be reverted once the
+        access assumption was falsified by a single test with real credentials.
+        The recorded lesson --- \emph{validate the access assumption before
+        building the plumbing that depends on it} --- is a methodological point for
+        the paper's failure taxonomy.
+  \item \code{gpqa} is a gated HF dataset (requires accepting terms).
+\end{itemize}
+
+Each was disabled as a documented \emph{environment} failure, joining a taxonomy
+that is deliberately kept separate from the reproducibility verdicts.
+
+\section{The canonical-key matching bug: 114 phantom misses}
+\label{sec:canonkey}
+
+The most consequential ``bug'' of the OLMo campaign was not in execution but in
+\emph{pairing}. The planner matched logical-key \emph{strings} by generating
+separator permutations and (under a flag) stripping \code{groups=} tokens, but it
+never canonicalized \emph{token order}. The OLMo MMLU keys are the same token set
+in a different order, so the local and official variant sets had an \emph{empty
+intersection}: all 114 MMLU packets were reported as
+\code{missing\_official\_component} even though the public counterparts existed in
+the index.
+
+The fix (\file{docs/planning/core-report-planner-robust-matching-plan.md}) replaced
+the order-sensitive matcher with a single \code{canonical\_logical\_key} in
+\file{eval\_audit/run\_entries.py}: parse the \code{benchmark:k=v,...} name, drop
+bookkeeping-only tokens (\code{groups}, \code{model\_deployment}), canonicalize
+values (model \code{/}$\leftrightarrow$\code{\_}, \code{mmlu\_pro} \code{subject}
+$\rightarrow$ \code{subset}), and re-serialize with the key--value pairs
+\emph{sorted by key}. Once you sort, the separator-permutation and groups-strip
+variants all fold into one deterministic string, so keeping both matchers would
+have re-created the very ``two competing normalizers'' divergence the fix set out
+to end. The real-data validation expectation: \code{n\_skipped} $114\rightarrow\sim0$,
+\code{n\_built} $35\rightarrow\sim149$.
+
+This is a symmetric equivalence, correct for \emph{grouping}; the asymmetric subset
+test (\code{run\_dir\_matches\_requested}) was deliberately preserved for
+\code{compare\_batch}, which answers the different question ``does this candidate
+satisfy this request.'' The distinction --- symmetric equivalence for grouping vs
+asymmetric subset for satisfaction --- is a reusable design point.
+
+\section{The BBQ prompt drift: a genuine recipe disagreement}
+
+Not every difference is an artifact to be fixed. The BBQ runs surfaced a
+\emph{real} recipe drift: the official run entry carried
+\code{output\_format\_instructions=mcqa} and the prompt began ``Answer with only a
+single letter.'' (followed by the standard preamble) while the locally
+reconstructed run entry dropped that token and produced only ``The following are
+multiple choice questions (with answers).'' The model sees a different prompt and
+produces measurably different output. This is gotcha G5 (\S\ref{app:gotchas}), and
+it is precisely the kind of difference that must be \emph{surfaced} (via the
+\code{same\_instructions} comparability fact), not silently fixed --- and it is one
+of the strongest motivations for the from-spec replay of
+Chapter~\ref{chap:fromspec}: replaying the official \file{run\_spec.json} verbatim
+makes such reconstruction drift vanish by construction.
+
+%==============================================================================
+\chapter{Containerization and GPU Leasing}
+\label{chap:containers}
+%==============================================================================
+
+\emph{Commits: 2026-06-16 through 2026-06-24. Two intertwined infrastructure
+efforts: pinning the execution environment in Docker, and letting many HELM runs
+fan out across GPUs under a lease.}
+
+\section{Why containerize: the environment is a variable}
+
+By default \code{eval-audit-run} executes each \textsc{helm} run-entry in the host
+venv of whatever GPU machine the scheduler lands on, making torch / CUDA /
+transformers / \textsc{helm} versions an \emph{uncontrolled variable} --- exactly
+the kind of drift the audit exists to separate from true reproducibility failures.
+The containerized path runs each run-entry inside a pinned Docker image and records
+\emph{which image, by \code{sha256} digest, produced each run}.
+
+The design (confirmed interactively) is worth recording:
+
+\begin{itemize}[nosep]
+  \item A brand-new, independent multi-stage Dockerfile (CUDA devel$\rightarrow$
+        runtime, \code{uv}-managed standalone CPython, venv at \code{/opt/venv}),
+        built from \emph{pristine committed submodule state} via \code{git archive}
+        at each submodule's gitlink SHA --- no remote dependency, no \code{.git}
+        leakage, SHAs recorded as OCI labels.
+  \item The image tag is resolved to an immutable \code{<repo>@sha256:<digest>}
+        reference \emph{once at schedule time} and every node is pinned to it, so a
+        rebuild automatically re-pins.
+  \item The container runs as root; a thin entrypoint chowns \emph{only} the output
+        dir back to \code{HOST\_UID:HOST\_GID} on exit, so \code{kwdagger} on the
+        host can own results while in-container HF-cache writes still succeed.
+  \item The docker-wrapping \code{kwdagger} node \emph{subclasses} the magnet
+        materialize node and overrides only \code{command}, inheriting the
+        \code{out\_paths}/\code{DONE}-sentinel contract for free --- the reusable
+        lesson being ``wrap an existing scheduler node in a new execution substrate
+        by subclass + override, not reimplementation.''
+\end{itemize}
+
+Several first-real-build bugs are instructive because each could only surface at
+the first genuine build or run and each maps to a general lesson:
+
+\begin{itemize}[nosep]
+  \item \textbf{Dangling interpreter symlink} --- \code{uv}'s managed standalone
+        Python was not copied into the final stage, so \code{/opt/venv/bin/python}
+        was a dangling symlink reporting ``command not found.'' Lesson:
+        \emph{uv-managed Python + multi-stage Docker = copy the interpreter, not
+        just the venv}, and put the import smoke-test in the stage that ships.
+  \item \textbf{HF token not reaching the container} --- \code{kwdagger} runs each
+        job in a fresh tmux pane whose environment is deliberately empty (secrets
+        hygiene), so \code{-e HF\_TOKEN} forwarded nothing; the host-venv path had
+        silently relied on the on-disk \code{huggingface-cli login} token. Fix:
+        write the resolved token to \code{<hf\_cache\_dir>/token} (mode 0600) at
+        schedule time, in the process that \emph{did} inherit the env. Lesson:
+        \emph{a redundant channel that silently carries the load hides the breakage
+        of the primary one}.
+  \item \textbf{Wrong extras and an unpinned hub} --- the image installed
+        \code{crfm-helm[heim]} (image-generation extra) which lacks
+        \code{langdetect} (needed by ifeval), and left \code{huggingface\_hub}
+        unpinned so it floated to a version whose repo-resolution API broke
+        \code{wmt\_14}. Fix: install \code{crfm-helm[all]} and co-pin
+        \code{huggingface\_hub==0.36.2}, asserted in \emph{both} the install layer
+        and the final stage. Lesson: \emph{pin the secrets-of-resolution
+        (transitive floats), not just the top-level package}, and pair a build-time
+        guard with a runtime probe of the resolved artifact (a stale pinned digest
+        is invisible to the build guard).
+\end{itemize}
+
+\section{From profiles to a leasing catalog}
+
+Mid-June the \code{infer\_stack} submodule was rewritten from a
+profile/contract model to a \emph{catalog} (models + endpoints) plus \emph{leasing}
+(\code{acquire}/\code{release}) model. The two in-scope runbooks (phi-2 e2e and the
+six OLMo presets) were migrated: \code{load\_profile\_contract} was replaced with a
+pure static \code{resolve\_serving\_facts} over the catalog; the config dirs were
+reschema'd from \code{config.yaml}+\code{models.yaml} to
+\code{settings.yaml}+\code{catalog.yaml}; and an explicit \code{protocol\_mode}
+(completions for base models, chat for instruct) was made a required preset fact
+rather than a silent default. A subsequent question --- ``do \code{serve} and
+\code{acquire} both need to exist?'' --- collapsed the two verbs into
+\code{acquire} once a one-line grep proved the distinguishing \code{owner='manual'}
+field drove no behavior.
+
+\section{The leasing pipeline: preconditions as job phases}
+
+The deeper design question was how to drive \emph{high-parallelism} reproduction:
+each \textsc{helm} run is a \code{kwdagger} \code{ProcessNode} that must bracket
+itself with a GPU lease (acquire before, release after), where release must run
+after finish \emph{or} crash. The decisive argument, reached across three rounds of
+design discussion, was \emph{co-location}: the lease lives in a node-local ledger
+and the gateway is localhost, so release must run \emph{where} acquire ran. A
+separate cleanup DAG node cannot promise that (and is actively wrong on multi-node
+scheduling), and success-only dependencies (\code{afterok}) skip a release node
+when the run fails --- the exact leak to avoid. The right primitive is a job
+\emph{phase} (setup/teardown), which is also the more general, reusable scheduler
+feature.
+
+The findings that settled the design were verified against source, not assumed:
+\code{cmd\_queue}'s \code{preamble} already gates the main command, so only an
+always-run \code{teardown} trap was new; \code{kwdagger}'s cache guard
+(\code{test -e DONE || cmd}) means a \emph{skipped} job acquires nothing; and a
+blocking acquire's retry loop \emph{reclaims TTL-expired leaks while it waits}, so
+queue-and-wait and leak-recovery become one mechanism --- \emph{iff every pipeline
+lease has a finite TTL}. A subtle bash-precedence trap was caught and closed: a
+setup chain \code{acquire \&\& \{ snapshot \} || true} lets a \emph{failed}
+acquire fall through to \code{|| true}, defeating the gate; the fix scopes
+\code{|| true} inside the snapshot brace so only the snapshot is best-effort.
+
+Two further design moves are worth recording because they generalize:
+
+\begin{itemize}[nosep]
+  \item \textbf{Decoupling leasing from containerization.} The lease bracket was
+        initially bolted onto the docker node only, which would have dragged
+        containerization onto the host-venv vLLM scenarios. It was extracted into a
+        transport-agnostic \code{LeaseBracketMixin} + shared command renderer;
+        leasing and containerization became \emph{orthogonal} axes (a run can be
+        docker+lease, docker+no-lease, or --- briefly --- bare+lease). The lesson:
+        when a capability seems ``coupled'' to a transport, check whether it is the
+        capability that needs the transport or just where someone bolted it on.
+  \item \textbf{Scoped cleanup over global teardown.} Every \code{release --all
+        --evict} was removed from the runnable path in favor of per-run release
+        (\code{reclaim: stop}) plus a scoped \code{infer-stack gc} that reclaims
+        only TTL-expired leaks in this user's ledger --- so the shared docker stack
+        is never torn out from under a co-tenant. A bootstrap that exists only to
+        read a managed secret pays for it with a scoped \code{--env-file} handle,
+        not a global teardown.
+\end{itemize}
+
+By the end of this arc, containerization was made \emph{mandatory} and the
+non-containerized code paths were deleted, with leasing the orthogonal opt-in ---
+so the execution environment is always a pinned, digest-recorded artifact
+(\code{container\_provenance.json}).
+
+%==============================================================================
+\chapter{Faithful Replay: From Run-Entry to Run-Spec}
+\label{chap:fromspec}
+%==============================================================================
+
+\emph{Commits: 2026-06-25 through 2026-06-30; the \code{impl/run-from-run-spec}
+branch on which most subsequent work sits.}
+
+\section{The core methodological principle}
+
+This chapter contains what is arguably the single most important methodological
+decision of the internship, and it should anchor the paper's ``methods'' section.
+
+Public \textsc{helm} runs do not record the CLI run-entry string that produced
+them, nor the exact \textsc{helm} version. What they \emph{do} ship is a fully
+resolved \file{run\_spec.json}: the complete adapter spec, scenario spec, metric
+specs, and annotators, with every default already materialized. The prior approach
+--- and the approach every earlier reproduction took --- was to \emph{reconstruct}
+a run-entry string from the run and re-parse it. But re-parsing re-derives the
+recipe under \emph{today's} library defaults, which silently drifts from the
+recipe that actually produced the official numbers (this is the mechanism behind
+gotchas G1, G5, and the BBQ drift of \S\ref{sec:canonkey}).
+
+\begin{quote}\itshape
+The principle: never reconstruct the recipe. Replay the resolved
+\file{run\_spec.json} \emph{verbatim}.
+\end{quote}
+
+Concretely, a new \code{materialize\_helm\_run\_from\_spec.py} CLI (a faithful-
+replay sibling of the run-entry materializer) reuses the discovery/matching
+scaffolding but swaps the compute step from ``reconstruct a run-entry string
+$\rightarrow$ \code{helm-run} subprocess'' to ``\code{from\_json(run\_spec.json)}
+$\rightarrow$ in-process \code{run\_benchmarking}.'' In discovery mode, the
+run-entry string now does nothing but \emph{locate} the official directory; the
+authoritative resolved recipe drives execution. This memory --- \emph{all
+reproductions must be from-spec} --- became a standing rule, and the older OLMo
+run-entry path was flagged for migration.
+
+\section{Two failure modes, one loud and one silent}
+
+The design carefully distinguishes the two ways a from-spec replay can go wrong,
+because they demand opposite handling (this is gotcha-adjacent and reviewer-
+relevant):
+
+\begin{description}[style=nextline,leftmargin=1.25em]
+  \item[Class drift is loud.] If the \file{run\_spec.json} references a scenario or
+        metric class that does not resolve under the local \textsc{helm}
+        (\code{get\_class\_by\_name} raises \code{ImportError}), the preflight
+        catches it before any instance runs. This is the correct behavior: a class
+        that cannot be resolved is an environment mismatch, and it is surfaced as
+        such. (The preflight's exception net had to be broadened from
+        \code{(ImportError, AttributeError)} to \code{Exception}, because importing
+        a vision--language scenario raises \textsc{helm}'s
+        \code{OptionalDependencyNotInstalled} --- itself a recipe/environment
+        filtering reason, not a crash to propagate.)
+  \item[Field drift is silent.] The cattrs codec ignores unknown keys and fills
+        defaults, so a dropped field produces no error --- only wrong numbers.
+        The guard is a round-trip test: because \textsc{helm} \emph{writes}
+        \file{run\_spec.json} with \code{asdict\_without\_nones} (dropping only
+        \code{None} values), every on-disk key is non-\code{None}, and the
+        re-serializer re-emits every non-\code{None} field --- so a key missing
+        after \code{from\_json}$\rightarrow$\code{to\_json} is an unambiguous silent
+        drop. Ten sampled MMLU specs round-tripped with zero key loss.
+\end{description}
+
+The reusable insight recorded at the time: \emph{writer/serializer asymmetry
+decides whether a diff test is sound} --- the no-key-dropped assertion holds only
+because the writer drops a superset of what the re-serializer drops.
+
+\section{Making the deployment substitution visible}
+
+A from-spec replay serves the model on local hardware, which is by definition a
+\emph{different deployment} than the original (e.g.\ a hosted Together API). The
+subtle danger is that a pure by-name replay would record the \emph{official}
+deployment name in the produced run, so the comparison would report
+\code{same\_deployment=yes} and the single most important difference the audit
+exists to surface --- that the serving engine changed --- would become invisible.
+
+The fix (\file{from-spec-deployment-rewrite-plan.md}) rewrites
+\code{adapter\_spec.model\_deployment} to the \emph{local} name after
+deserialization, via an explicit \code{--model-deployment} argument. Explicit,
+not auto-derived: the whole feature exists to stop \emph{silently} masking the
+substitution, so its own failure mode must be loud --- a wrong name is a
+\textsc{helm} ``deployment not found'' crash \emph{before any instances run},
+whereas auto-derive's failure mode is the silent no-op that fails \emph{toward} the
+very bug it fixes. The produced run then records the served endpoint, and the
+existing diff logic correctly reports \code{same\_deployment=no} with no downstream
+plumbing.
+
+\section{Addressing runs by (root, relative-path) and content-addressed caching}
+
+A further refinement replaced the drift-prone run \emph{name} as the addressing
+mechanism with \emph{host-side} resolution by \code{(precomputed\_root,
+rel\_path)}: resolve the official \file{run\_spec.json} at schedule time, apply
+\emph{raw-JSON} scalar edits (only \code{adapter\_spec.model\_deployment} and
+\code{max\_eval\_instances}, so no cattrs round-trip and therefore no field drift),
+and materialize a substituted copy under a staging directory. Each run rides one
+\code{kwdagger} \emph{submatrix} entry (the verified zip primitive) so the per-run
+tuple travels together without an $N\times N$ cross-product. Two consequences worth
+recording:
+
+\begin{itemize}[nosep]
+  \item \textbf{No image rebuild, no corpus mount.} The runner needs only the tiny
+        staging directory, because substitution happens host-side.
+  \item \textbf{Content-addressed caching.} \code{max\_eval\_instances} is baked
+        into the materialized copy but is not a matrix parameter, so a naive fixed
+        filename (\code{run\_spec.json}) would make \code{kwdagger} \emph{skip} and
+        reuse a stale run after a cap change. The fix appends a content hash to the
+        filename: \code{run\_spec.<sha256(bytes)[:16]>.json}. Because the
+        materialized path \emph{is} the node's algorithm identity, an identical
+        recipe yields the same path (skip) and any changed field yields a new path
+        (recompute). This is the reusable ``content-address generated input files
+        so baked-in changes invalidate the cache'' rule.
+\end{itemize}
+
+An exporter ``auto-freeze'' resolves each preset run-entry to its exact rel-path
+\emph{once} at export time (against the corpus snapshot) and freezes the sources
+into the generated manifests --- the only remaining place token-subset discovery
+runs, pinned where drift cannot occur --- and a dry-check existence mode validates
+that a frozen manifest's rel-paths still resolve.
+
+%==============================================================================
+\chapter{Deployment Matching: The Flagship Investigation}
+\label{chap:deploymatch}
+%==============================================================================
+
+\emph{Commits: 2026-06-30 through 2026-07-10; the \code{dev/tools/deployment\_match/}
+tool and the documents \file{vllm-vs-huggingface-deployment-match.md} and
+\file{helm-unrecorded-deployment-params.md}. This is the scientific heart of the
+internship: the sustained effort to attribute residual disagreement to a specific,
+unrecorded execution parameter.}
+
+\section{The provocation: OLMo-7B produces prompt-independent gibberish}
+\label{sec:eosappend}
+
+The investigation began with a dramatic symptom. During from-spec reproduction of
+\code{narrative\_qa}, local OLMo-7B repeated the same prompt-independent
+boilerplate --- ``The first thing you need to do is to make sure that you have
+a\ldots before you start playing.'' --- for \emph{every} instance, while the
+official \code{together/olmo-7b} conditioned on the prompt correctly. The diff
+showed \code{prompts\_equal=True} (the prompt reached the model) and a hugely
+negative local completion log-prob against the official's $0$: the model ran but
+ignored its input.
+
+The first hypothesis was a documented one: OLMo-1 7B \code{float16} numerical
+instability (activation outliers exceed fp16's range $\rightarrow$ inf/NaN in
+attention $\rightarrow$ collapse to the highest-prior pretraining attractor). A
+minimal deployment matrix was built to test it --- and the hypothesis was
+\emph{refuted}. The true cause was a \emph{tokenizer} issue: \code{OLMo-7B-hf}'s
+tokenizer appends an \code{<|endoftext|>} token to the prompt under vLLM's default
+\code{add\_special\_tokens=True}; the Together deployment did not do this, and
+\textsc{helm} never recorded the difference. The production fix serves the
+OLMo-1.7 tokenizer (whose post-processor omits the append), and the completions
+path forwards \code{add\_special\_tokens=false}.
+
+\finding{This is the paradigm case of the whole project.} A disagreement that
+looked like flat irreproducibility (the model outputs nonsense) was in fact a
+\emph{recipe/environment} failure caused by a single unrecorded request-time
+tokenizer flag. And the first, plausible theory (fp16 instability) was wrong ---
+which is exactly why the response was to build a \emph{sweep} rather than trust a
+single-knob theory. The lesson --- that single-knob theories about deployment
+divergence had by now been wrong twice --- became the design charter for the
+deployment-match tool.
+
+\section{The tool: sweep, don't guess}
+
+\code{dev/tools/deployment\_match/} takes \emph{any} public \textsc{helm} run,
+builds a grid of plausible local deployments for that run's model, evaluates a
+small length-stratified prompt sample, and ranks each cell by closeness to the
+official completions. Because Together stores no log-probs, the objective is
+\emph{agreement with the official completion text} (a composite of quasi-exact-
+match, first-word match, and similarity, with a model-agnostic
+``prompt-independence collapse'' detector). The grid is two-tier: serve-time knobs
+(dtype $\times$ tokenizer $\times$ \code{max\_model\_len}) become distinct
+infer-stack endpoints; request-time knobs (\code{add\_special\_tokens},
+\code{add\_generation\_prompt}, protocol) are probed per request against one
+container. The tool has \code{dry-run} / \code{run} / \code{confirm} / \code{auto}
+phases, and \code{confirm} produces a real one-endpoint catalog you can
+\code{acquire}.
+
+A key design principle, formalized after the fp16 mis-diagnosis, splits ``exclude
+settings beforehand'' into two opposite treatments:
+\begin{itemize}[nosep]
+  \item \textbf{Feasibility pruning (safe).} A recipe that physically cannot serve
+        on this hardware teaches nothing and wastes a full serve cycle, so it is
+        dropped a priori with a typed reason (mirroring the Stage-1 filter
+        pattern). Example: \code{float32} on a MoE model $\rightarrow$
+        \code{infeasible:moe-fp32-shared-mem} (see \S\ref{sec:fp32}).
+  \item \textbf{Relevance pruning (risky) is refused.} ``This knob probably won't
+        change the output'' is exactly what the tool will not guess; such knobs
+        stay in the sweep unless the operator narrows an axis explicitly.
+\end{itemize}
+
+\section{Chat-template version drift: \code{add\_generation\_prompt}}
+\label{sec:addgenprompt}
+
+The next finding is a subtle, real reproducibility trap on OLMoE-instruct, and it
+is a clean example of a \emph{software-version} dependency hiding inside a recipe.
+\textsc{helm}'s \code{get\_prompt} always calls
+\code{apply\_chat\_template(\ldots, add\_generation\_prompt=True)} --- but that flag
+only does anything if the chat template \emph{implements} it
+(\code{\{\% if add\_generation\_prompt \%\}<|assistant|>\textbackslash n\{\% endif \%\}}).
+The OLMoE template shipped with \textsc{helm}'s \emph{older} transformers
+\emph{ignored} the flag, so \code{add\_generation\_prompt} was effectively
+\emph{False} and the model was fed the prompt \emph{without} the trailing
+\code{<|assistant|>\textbackslash n}. Modern transformers/vLLM ship an updated
+template that honors it, so the same call now \emph{appends} the suffix
+$\rightarrow$ a different prompt $\rightarrow$ a different output on every cell.
+Rendering with \code{add\_generation\_prompt=false} on modern transformers moves
+the output back toward the official, confirmed empirically. The tool now sweeps
+\code{add\_generation\_prompt} $\in \{$True, False$\}$ as a cheap request-time knob
+and lets the scorer decide.
+
+\section{The float32 discovery: the flagship result}
+\label{sec:fp32}
+
+The single most consequential finding of the internship concerns model
+\emph{precision}, and it is the one most worth foregrounding in the paper.
+
+\textsc{helm}'s \code{HuggingFaceClient} loads a model with only the kwargs the
+deployment config supplies. For \code{huggingface/olmoe-1b-7b-0125-instruct}, the
+config gives exactly \code{args: \{device\_map: auto\}} --- \emph{no}
+\code{torch\_dtype}. So \code{AutoModelForCausalLM.from\_pretrained(\ldots,
+device\_map="auto")} is called with no dtype, and \emph{every transformers 4.x}
+defaults that to \code{torch.float32} for backward compatibility, \emph{ignoring
+the checkpoint's bf16 config}. (Reading the checkpoint's dtype is a transformers
+v5 change; even late 4.x still hits ``\code{else: set fp32 as the default dtype for
+BC}.'') The OLMoE architecture landed in transformers $\sim$4.45, so a January-2025
+run is squarely in the fp32-default regime. Therefore:
+
+\begin{quote}\itshape
+The official OLMoE run --- and, by the same unpinned-dtype default, \emph{every}
+OLMo HuggingFaceClient run --- executed in \code{float32}.
+\end{quote}
+
+This was confirmed decisively. Reproducing the official on the HF side at
+\code{float32} (\code{transformers.generate()}) reproduces the official completions
+\textbf{exactly} (quasi/exact match $\approx 1.0$), versus $\approx 0.17$ for the
+best fp16 vLLM cell. Table~\ref{tab:fp32} shows the overnight sweep results across
+all four OLMo instruct models: \emph{fp32 wins on whichever engine can serve it
+faithfully}.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Model} & \textbf{HF best} & \textbf{vLLM best} \\
+\midrule
+OLMoE-1B-7B (MoE)  & \textbf{fp32 MATCH 0.971} (quasi 1.0) & fp16 PARTIAL 0.494 \\
+OLMo-2-7B (dense)  & fp32 PARTIAL 0.175 (quasi 0.0) & \textbf{fp32 MATCH 0.915} \\
+OLMo-2-13B (dense) & fp32 PARTIAL 0.324 (quasi 0.0) & \textbf{fp32 MATCH 0.904} \\
+OLMo-2-32B (dense) & fp16 PARTIAL 0.234 (quasi 0.0) & \textbf{fp32-tp2 MATCH 0.961} \\
+\bottomrule
+\end{tabular}
+\caption{Overnight deployment-match sweeps ($n=12$ ifeval instances, scored against
+the official completions). fp32 is the matching precision; the winning
+\emph{engine} depends on architecture. OLMoE is MoE, so vLLM's Triton fused-MoE
+kernel cannot serve fp32 (shared-memory limit) and only HF fp32 reproduces it; the
+dense OLMo-2 models reproduce near-exactly under vLLM fp32.}
+\label{tab:fp32}
+\end{table}
+
+Two aspects make this finding sharp:
+
+\begin{itemize}[nosep]
+  \item \textbf{The matching precision is the one cell that cannot run.} vLLM's
+        Triton fused-MoE kernel needs $\sim$131~KiB of shared memory per block in
+        fp32 --- over the $\sim$99~KiB cap on workstation cards --- so it OOMs at
+        the \emph{kernel} level (not VRAM). Every runnable local vLLM cell for
+        OLMoE is reduced-precision, and none reproduces an fp32 reference. That
+        \emph{fp16 beats bf16} among those cells is itself corroboration: fp16's
+        finer mantissa flips fewer greedy near-ties against a high-precision
+        reference, which says the reference is higher-precision than bf16 ---
+        consistent with fp32. Serving fp32 requires either an H100-class card (big
+        shared memory) or, for dense models, tensor-parallel fp32
+        (\code{--fp32-tensor-parallel-size 2}); for the MoE, HF \code{generate()}
+        at fp32 is the only route.
+  \item \textbf{It reframes the disagreement.} A bf16-vs-official OLMo-2
+        disagreement is a \emph{deployment-boundary artifact} (a precision the
+        local engine could not easily provide), \emph{not} a reproducibility
+        failure --- re-running at fp32 closes it. This is precisely the
+        recipe/environment-vs-reproducibility distinction of \S\ref{sec:distinction},
+        applied to the most consequential single case.
+\end{itemize}
+
+\section{The residual puzzle: the HF probe is broken for dense OLMo-2}
+
+Rigor demanded following up an inconsistency. The HF probe reproduced OLMoE
+\emph{exactly} but gave near-zero quasi-match for the three dense OLMo-2 models,
+even though vLLM fp32 reproduced them. The forensic diagnosis pinned it precisely:
+tokenizing the exact ifeval prompt showed byte-identical tokens across every path
+(so it is \emph{not} the prompt); yet the HF probe's first token disagreed with the
+official (first-token agreement 0.42) while vLLM fp32 matched character-for-
+character (first-token 1.00). A first-token disagreement on a byte-identical prompt
+is a clean litmus: at step 0 there is no accumulated history, so a different first
+token can only mean a different \emph{forward-pass} logit vector. The divergence is
+a fp32 forward-pass difference, not a prompt or precision-class difference ---
+attributable to knobs \textsc{helm} never records: \code{attn\_implementation},
+device placement (\code{device\_map=auto} shards a fits-on-one-GPU model across
+GPUs, changing fp32 reduction order), and the decode path (\textsc{helm}'s
+\code{do\_sample=True, temperature=1e-7} vs the probe's greedy). The probe was
+extended to sweep these forward-pass axes. The interpretation stays clean: all four
+officials reproduce at fp32; ``vLLM beats HF'' for OLMo-2 is the \emph{probe}
+mis-generating, not vLLM being more faithful. The reusable insight: \emph{``same
+engine family'' (transformers$\rightarrow$transformers) does not imply
+reproducible} --- device sharding, attention-implementation drift, and
+sample-vs-greedy each perturb fp32 logits enough to diverge greedy decoding.
+
+\section{Naming the gap: the unrecorded execution substrate}
+\label{sec:substrate}
+
+The investigation crystallized into a taxonomy (\file{helm-unrecorded-deployment-
+params.md}, Appendix~\ref{app:unrecorded}): \textsc{helm} serializes the
+\emph{recipe} and the model's \emph{name} but almost nothing about the
+\emph{execution substrate}. Empirically, of 148 HuggingFaceClient deployments in
+\textsc{helm}'s \code{model\_deployments.yaml}, only 19 pin \code{torch\_dtype}
+(all \code{bfloat16}) and only 7 pin a model \code{revision}. Ranked by effect on a
+greedy output, the unrecorded parameters are: (Tier 1) weight revision, load
+precision, quantization, software-stack versions; (Tier 2) attention implementation,
+matmul/TF32 precision, hardware, device topology, batch composition; (Tier 3)
+tokenizer + chat-template version, \code{add\_special\_tokens}/BOS handling,
+\code{generation\_config.json} defaults, stop-sequence/detokenization semantics.
+The one high-leverage lever is \emph{pinning the model revision (commit SHA)},
+because the tokenizer, chat template, and generation config all live inside the
+model repo --- so \code{model\_revision} + \code{torch\_dtype} +
+\code{transformers\_version} together close the majority of the gap. Crucially,
+these must live in \code{client\_spec.args} / \code{catalog.yaml} / a
+\code{recipe\_facts} block, \emph{not} in the run-spec name or
+\code{model\_deployment} identity string --- a SHA in the pairing key would break
+official$\leftrightarrow$local pairing, whereas a SHA in the provenance block is
+invisible to it.
+
+A companion effort (\code{hf\_inprocess.py} + infer-stack
+\code{acquire --reserve-gpus N}) built the mechanism to reproduce a
+HuggingFaceClient official \emph{the same way it was produced} --- in-process
+\code{transformers.generate()} at pinned fp32, on a GPU held (but not served) by a
+reserve-only lease. The mechanism landed; the routing switch that would make the
+default replay path choose it for a HuggingFaceClient official was scoped but left
+unwired (a replay still defaults to vLLM).
+
+%==============================================================================
+\chapter{Era-Pinned Containers: Reproducing the Pre-v0.5 Corpus}
+\label{chap:eras}
+%==============================================================================
+
+\emph{Commits: 2026-07-08 through 2026-07-13; the
+\code{impl/era-pinned-helm-containers} branch, the \code{docker/era\_shim/}
+package, and gotcha G13.}
+
+\section{The problem: the measurement instrument itself has versions}
+
+A large fraction of the audit corpus --- roughly \textbf{59\%}, the classic-track
+\code{v0.2.4} and \code{v0.3.0} runs --- \emph{cannot} be replayed by the modern
+runner, which pins \textsc{helm} 0.5.x and Python 3.11 and whose from-spec CLI
+imports v0.5+ module paths that do not exist pre-v0.5. This is not a model problem;
+it is a \emph{harness} problem. And it matters for reproducibility science because
+the harness is the measurement instrument: the technical report had already shown
+that the exact \code{pandas} version (2.0.x vs 2.2+) flips per-instance row
+ordering on \code{entity\_matching}, i.e.\ the harness's own dependency versions
+change the recorded instances.
+
+The solution is to freeze the instrument at the era that produced each run: give
+each era its own \emph{CPU-only} Docker image whose \textsc{helm} harness is
+checked out at that era's release commit (v0.2.4 = \code{626d8609}, v0.3.0 =
+\code{8ea285f7}), with era Python (3.10) and era dependency pins, while keeping
+model inference \emph{out-of-process} on a modern vLLM lease. The container thus
+holds only the scoring instrument fixed; the model server is shared with the
+modern path.
+
+\section{The design invariants}
+
+\begin{itemize}[nosep]
+  \item \textbf{One manifest = one era = one image = one measurement instrument.} A
+        mixed-era source set is a hard error at make-manifest time
+        (\code{eval\_audit/eras.py}). Era resolution keys on the path-derived
+        \code{(public\_track, suite\_version)} signal.
+  \item \textbf{Verbatim by-name replay.} A pre-v0.5 \code{adapter\_spec} has no
+        \code{model\_deployment} field, so nothing is rewritten; routing to vLLM is
+        purely by-name (the era shim registers a deployment under the exact official
+        model name), and the materializer \emph{refuses} to insert a
+        \code{model\_deployment} field into an era spec. Consequently
+        \code{same\_deployment} resolves \code{unknown} for era pairs (both sides
+        lack the field) --- the correct behavior, not a bug.
+  \item \textbf{A standalone shim.} \code{docker/era\_shim/helm\_era\_shim/} never
+        imports magnet or eval\_audit; it provides a flag-compatible from-spec CLI
+        (\code{replay.py}) plus a backported OpenAI-compatible completions client, so
+        the era image depends only on era \textsc{helm}.
+  \item \textbf{An era$\leftrightarrow$image guard.} The image carries an
+        \code{org.aiq.era} OCI label, checked against the manifest era at schedule
+        time; a wrong pin fails loud.
+\end{itemize}
+
+\section{The v0.2.4-versus-v0.3.0 API skew}
+
+A multi-angle review (verifying every era-API claim against the era \textsc{helm}
+source via \code{git show <commit>:<path>}) found ten issues, the load-bearing ones
+being cases where the shim had been written against v0.3.0 semantics and broke on
+the older v0.2.4 API. Two are especially instructive:
+
+\begin{itemize}[nosep]
+  \item \textbf{Silent Together fallthrough (v0.2.4).} v0.2.4 lacks the
+        register-deployments-from-path helper, so without an explicit
+        \code{register\_model\_deployments\_from\_path} the deployments route to
+        \code{TogetherClient} --- silently reintroducing the very hosted-API
+        artifact the audit exists to eliminate.
+  \item \textbf{pyhocon dot-splitting (both eras).} pyhocon path-splits credential
+        keys on \code{.}, so a dotted model name like \code{pythia-6.9b} dies at the
+        credential lookup. The fix writes a nested-key \code{credentials.conf} and
+        puts \code{api\_key} in the client-spec args.
+\end{itemize}
+
+\section{A turnkey validation runbook and the 8~GB subject}
+
+The era gates were rebuilt as \code{dev/era-tests/}, mirroring the \code{dev/e2e-
+tests/} conventions, so one model runs end-to-end through both classic eras with
+near-zero setup. The subject was swapped from \code{eleutherai/pythia-6.9b}
+($\sim$14~GB, does not fit 8~GB) to \code{together/redpajama-incite-base-3b-v1},
+the smallest corpus model with a \emph{full 74-run packet at both eras}
+($\sim$2.8B params, $\sim$5.6~GB fp16). A ``validation ladder'' checks the
+instrument in rungs: image sanity; instrument fidelity on a pandas-sensitive
+\code{entity\_matching} run (byte-for-byte instance identity, no model); an
+end-to-end single run; a full packet per era; and a per-scenario HF-fetch audit.
+Several first-real-run bugs (a build-time import that named the wrong module for
+the era; a \code{pandas}/\code{pyarrow} dependency-resolution skew; a fidelity rung
+that diffed a \file{scenario\_state.json} the public corpus never ships --- switched
+to the always-present \file{display\_requests.json}) reinforced the theme that
+some bugs only surface at the first genuine build.
+
+An important taxonomy point resurfaced here: rung 2 originally \emph{failed} on
+scenarios whose data is no longer fetchable (e.g.\ MATH's script loader returns 401
+on the 2026 Hub). That is an \emph{environment} filter, not an instrument failure,
+so the rung was changed to classify data-fetch/auth crashes as SKIP --- the same
+recipe-vs-reproducibility distinction, now applied to a historical-data gate.
+
+\section{G13: a class path that resolves in no released \textsc{helm}}
+\label{sec:g13}
+
+The deepest archaeological finding of the internship concerns the original-paper
+classic models (GPT-J 6B, GPT-NeoX 20B, OPT-66B) and is written up as gotcha G13
+(\S\ref{app:gotchas}). Era-replaying these fails the shim's class preflight: their
+\file{run\_spec.json} names \code{helm.benchmark.basic\_metrics.BasicMetric}, which
+resolves in \emph{no} released \textsc{helm} version. An investigation over a
+blob-less clone of the \textsc{helm} repository established that the stored path is
+a once-migrated hybrid: a bulk \code{benchmark.}$\rightarrow$\code{helm.benchmark.}
+prefix rewrite (at the \code{src/helm/} rename, 2022-11-16) applied to a run-spec
+whose metric class was still \emph{flat} at production time. Reversing the naive
+migration triangulates the producing code to a $\sim$4-week window
+(2022-07-31 to 2022-08-26) of \emph{unreleased pre-v0.1.0 \textsc{helm}} --- after
+scenarios were nested but before metrics were. The class-path \emph{shape} (flat
+vs subpackage) is thus a sharper origin fingerprint than release dates. Because no
+released version resolves these, and building the true origin instrument is
+infeasible, the fix is a self-verifying declared class-path canonicalization in the
+era shim: when a flat \code{helm.benchmark.*} class fails to resolve \emph{and} its
+\code{helm.benchmark.metrics.*} relocation resolves to the same leaf, remap it on
+the in-memory run-spec (recorded as a declared substitution). It fires only for the
+known relocation --- a genuinely wrong era pin still fails loudly.
+
+A related provenance fact was pinned along the way (memory
+\emph{classic-officials-carried-forward}): the gptj/neox/opt/redpajama official
+runs are \emph{byte-identical} across v0.2.4 and v0.3.0 --- carried forward, not
+re-run --- so ``two eras agree'' is one public number measured by two instruments,
+not two independent confirmations.
+
+%==============================================================================
+\chapter{New Model Families: GPT-OSS and Qwen}
+\label{chap:newmodels}
+%==============================================================================
+
+\emph{Commits: 2026-07-11 through 2026-07-14; from-spec runbooks for
+\code{openai/gpt-oss-20b} and a combined Qwen fan-out.}
+
+With the from-spec, containerized, leased pipeline mature, two further model
+families were brought in as reproduction subjects --- and as a test of whether the
+machinery generalizes beyond OLMo.
+
+\section{GPT-OSS-20B and the null-content crash}
+
+The public GPT-OSS-20B rows were served via \code{together/gpt-oss-20b}, a chat
+(harmony) client, so the faithful replay serves \emph{chat}, not the frozen older
+preset's completions workaround. The design tension: GPT-OSS is a reasoning model,
+and a chat turn can return \code{message.content=null} (reasoning-only,
+\code{finish\_reason=length}), which un-patched \textsc{helm} crashes on. The root
+cause was pinned precisely (memory \emph{gpt-oss-null-content-root-cause}): the
+crash is a \emph{null-versus-empty-string serving difference} --- Together returns
+\code{""}, vLLM returns \code{null} --- and normalizing
+\code{null}$\rightarrow$\code{""} is faithful (\code{max\_tokens} and window were
+ruled out as causes). The fix makes the null-safe chat clients normalize
+\code{content:null}$\rightarrow$\code{""}, leaving \textsc{helm} untouched.
+Discovery confirmed all four target run directories resolve 1:1 against the
+84{,}966-run corpus with 0 ambiguities.
+
+\finding{GPT-OSS-20B reproduces well.} The headline aggregate score-drift plot
+(Figure~\ref{fig:gptoss}) shows local and public headline scores agreeing closely
+across all four benchmarks --- \code{bbq} $0.967/0.963$, \code{gpqa} $0.594/0.610$,
+\code{ifeval} $0.732/0.754$, \code{mmlu\_pro} $0.740/0.748$ (public/local) --- with
+squared errors bounded by $\sim\!4\times10^{-4}$, roughly two orders of magnitude
+tighter than the OLMo instruct drift on \code{ifeval}. This contrast is itself a
+result: whether a family reproduces well is model-specific, and GPT-OSS-20B is a
+positive case.
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.92\textwidth}{\centering\small\itshape
+[Figure: ``Headline Aggregate Score Drift'' heatmap for
+\code{experiment\_name=gpt-oss-20b-from-spec}. One model row
+(\code{openai/gpt-oss-20b}) $\times$ four benchmark columns (bbq, gpqa, ifeval,
+mmlu\_pro), each cell annotated \code{P <public> / L <local>}, colored by
+$(\text{local}-\text{public})^2$. Source: 07-14 status deck.]}}
+\caption{GPT-OSS-20B reproduces the public headline metrics closely (squared error
+$\le 4\times10^{-4}$). The rendered artifact is
+\file{aggregate\_score\_diff\_headline.png} produced by
+\code{build\_reports\_summary}.}
+\label{fig:gptoss}
+\end{figure}
+
+\section{Qwen: generalizing the combined fan-out}
+
+The eight public \textsc{helm} Qwen text models were reproduced as a single
+\code{qwen-combined} multi-deployment from-spec fan-out --- the
+\code{allenai-olmo-combined} analogue. The OLMo-specific ``combined preset''
+helpers were generalized into \code{\_combined\_run\_entries} and
+\code{\_build\_combined\_preset} so both families share one code path (safe to
+generalize precisely because the OLMo combined tests pin the old output; regenerate
+and diff the entry count).
+
+Three decisions carried over as reusable rules:
+
+\begin{itemize}[nosep]
+  \item \textbf{Membership rule (the olmo-7b lesson).} Model size is \emph{never} a
+        reason to exclude a member from the fan-out --- large models serialize under
+        the lease while small ones co-host; the \emph{only} thing that forces a
+        member split is discovery \emph{ambiguity} under the shared
+        \code{precomputed\_root}. Propose all members and let the freeze preflight
+        decide.
+  \item \textbf{The whitelist is exactly reconstructible.} Filtering
+        \code{official\_public\_index.csv} to classic-core + capabilities lands on
+        the plan's per-model counts to the row ($85\times5 + 86 + 132\times2 = 775$),
+        with two non-obvious exclusions (\code{banking77}, \code{bigcodebench}). All
+        775 rows resolve with 0 ambiguities, so no member splits.
+  \item \textbf{Protocol is answerable, not ``to confirm.''} \textsc{helm}'s own
+        \code{model\_deployments.yaml} (read from the installed wheel) says base
+        Qwen1.5 = \code{TogetherClient} (completions) and the chat/turbo models =
+        \code{TogetherChatClient} (chat) --- so the serving protocol was resolved
+        from the authoritative source, not guessed.
+\end{itemize}
+
+\section{The Qwen turbo window bug}
+\label{sec:qwenwindow}
+
+The last dated event of this chronology is a clean recurrence of the OLMo
+chat-template-window interaction (Chapter~\ref{chap:olmo}), now on the Qwen turbo
+endpoints. An \code{ifeval} smoke run on
+\code{qwen/qwen2.5-72b-instruct-turbo} died with a
+\code{ContextWindowExceededError}: the endpoint served \code{max\_model\_len:
+4096}, but the two \code{*-instruct-turbo} endpoints are the only Qwen members that
+replay the capabilities whitelist (\code{ifeval}, \code{mmlu\_pro}), whose official
+\file{run\_spec.json} sets \code{max\_tokens=4096}. \textsc{helm}'s window service
+truncates the \emph{prompt} but never clamps \code{max\_tokens}, so 4096 output
+tokens fill the entire 4096 window and vLLM 400s with no room for a single prompt
+token. The official Together serve ran a \code{max\_sequence\_length} of 128k, so
+the overflow never surfaced upstream. The scoped fix raises those two endpoints to
+\code{max\_model\_len: 8192} (4096 output + 4096 prompt headroom). This is a serving
+configuration bug, not a reproducibility failure --- and it is a fitting last
+example of the internship's recurring theme: the recipe under-specifies the
+serving environment, and faithfully replaying the recipe surfaces exactly where
+that under-specification bites.
+
+%==============================================================================
+\chapter{Reporting and Analysis Infrastructure}
+\label{chap:reporting}
+%==============================================================================
+
+\emph{Commits throughout, concentrated 2026-07-08 through 2026-07-14. The reporting
+layer is where reproducibility becomes legible, and much of the final fortnight was
+spent making the aggregate story honest and comparable.}
+
+\section{The pipeline the reports run on}
+
+The analysis pipeline is read-only over audit results that already exist on disk
+(``no model is run; no benchmark is downloaded''). Its stages are: (1) convert both
+public and local runs to the \eeeshort artifact format
+(\code{eval-audit-prepare-eee}); (2) compose a \emph{virtual experiment} from a
+YAML manifest (\code{eval-audit-build-virtual-experiment}), applying a scope and
+computing the coverage funnel; (3) per-packet core analysis
+(\code{eval-audit-analyze-experiment}) through \code{NormalizedDiff}; (4) aggregate
+publication (\code{build\_reports\_summary}). A \emph{virtual experiment} is the
+organizing abstraction --- a declarative slice over existing audit data --- and the
+\emph{packet} is the planner's canonical comparison unit (a bundle of normalized
+components plus the comparisons to render between them).
+
+\subsection{The three-level coverage funnel}
+\label{sec:funnel}
+
+The coverage funnel is the quantitative backbone of any ``fraction reproducible''
+claim and reports three nested levels (Table~\ref{tab:funnel}). The reason all
+three exist is gotcha G1: the raw \code{run\_spec\_hash} yields \emph{zero} matches
+across \textsc{helm} releases even for semantically identical recipes, because
+newer \textsc{helm} populates \code{adapter\_spec} fields older \textsc{helm} left
+absent. The \emph{canonical} recipe hash collapses those known schema-evolution
+fields before hashing; the gap between raw and canonical match is
+\textsc{helm}-version churn, and the gap between canonical and logical match is
+real recipe drift.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{lY}
+\toprule
+\textbf{Level} & \textbf{Meaning} \\
+\midrule
+logical           & same scenario + model + augmentation (order-insensitive canonical key) \\
+recipe-canonical  & + same scenario spec, prompt, decoding, \code{max\_train\_instances}, after schema-collapsing the run spec \\
+recipe-identical  & byte-for-byte \code{run\_spec\_hash} match \\
+\bottomrule
+\end{tabularx}
+\caption{The three-level coverage funnel. The report shows all three so that
+\textsc{helm}-version churn (raw$\to$canonical) is separated from genuine recipe
+drift (canonical$\to$logical).}
+\label{tab:funnel}
+\end{table}
+
+\subsection{Sankey diagrams and the failure taxonomy}
+
+Two Sankey diagrams render the funnel: Sankey~A (Universe$\to$Scope) narrows the
+$13$k+ discovered runs to the in-scope set through ordered gates (structural,
+metadata, open-weight, tag, deployment, size, manifest scope); Sankey~B
+(Scope$\to$Reproduced$\to$Analyzed) carries in-scope rows through logical match,
+recipe-canonical match, analyzed packet, and finally an agreement bucket. Crucially,
+the failure-taxonomy colors and categories were made \emph{honest}: environment/
+recipe exclusions and true reproducibility outcomes are distinct categories, so a
+gated-model exclusion never reads as a reproducibility failure. This is the visual
+realization of \S\ref{sec:distinction}.
+
+\section{The aggregate score-drift heatmaps}
+
+The final fortnight built the plots that summarize reproducibility at a glance ---
+and, tellingly, most of the work was in making them \emph{correct and comparable}
+rather than in drawing them.
+
+\begin{itemize}
+  \item \textbf{Per-metric aggregate-score-difference heatmap.} Instead of
+        instance-level agreement, this shows, per core metric, the difference
+        between the reproduced (local) and official (public) \emph{aggregate}
+        scores; color is the signed difference on a symmetric diverging colormap
+        (so $0$ is the white ``no drift'' midpoint), each cell annotated
+        \code{P <public> / L <local>}. A deliberate data-source decision: read the
+        signed means from the already-written run-level CSV
+        (\code{core\_runlevel\_table.csv}) rather than re-serializing every packet's
+        JSON --- it works on existing outputs with no re-render.
+  \item \textbf{Headline holistic heatmap.} One plot showing every
+        model$\times$benchmark pair, each benchmark using its \emph{headline}
+        metric. \code{eval\_audit} had no primary-metric concept, but \textsc{helm}
+        does (\code{run\_groups[].environment.main\_name} in the schema), so a
+        curated \code{HEADLINE\_METRIC\_BY\_BENCHMARK} map (mmlu$\to$exact\_match,
+        narrativeqa$\to$f1\_score, wmt\_14$\to$bleu\_4, \ldots) is used \emph{iff}
+        that metric is actually present, falling back to a priority list otherwise;
+        the plot names the actually-used metric on each axis tick, so the choice is
+        transparent. The final version colors by squared error
+        $(\text{local}-\text{public})^2$ (non-negative, emphasizes big drifts) and
+        orients models-left / benchmarks-bottom to match the coverage matrix.
+        Figures~\ref{fig:gptoss} and~\ref{fig:olmoheatmap} are instances.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.95\textwidth}{\centering\small\itshape
+[Figure: ``Headline Aggregate Score Drift'' heatmap for
+\code{experiment\_name=olmo-models-combined}. Six model rows (olmo-1.7-7b,
+olmo-2-\{7b,13b,32b\}-instruct, olmo-7b, olmoe-1b-7b-instruct) $\times$ $\sim$12
+benchmark columns. The base \code{olmo-7b} row reproduces the classic benchmarks
+near-exactly (GSM $0.036/0.036$, MMLU $0.295/0.287$, narrative\_qa $0.597/0.595$,
+wmt\_14 $0.097/0.098$); the instruct models show large drift on \code{ifeval}
+(e.g.\ olmoe $0.628/0.731$; the darkest cells) and moderate drift on
+\code{bbq}/\code{gpqa}/\code{mmlu\_pro}. The $\ddagger$ marks instance-level
+fallback. Source: 07-14 status deck.]}}
+\caption{The OLMo reproduction at a glance. Base-model classic benchmarks reproduce
+near-exactly; instruct-model \code{ifeval} shows the largest drift --- consistent
+with the chat-template-version (\code{add\_generation\_prompt}) and fp32-precision
+findings of Chapter~\ref{chap:deploymatch} being most consequential on long-form,
+instruct evaluations.}
+\label{fig:olmoheatmap}
+\end{figure}
+
+\section{Correctness fixes that changed the numbers}
+
+Several late fixes are worth recording because each one is a way the aggregate story
+could have been \emph{silently wrong} --- and each is a lesson about honest
+reporting:
+
+\begin{itemize}[nosep]
+  \item \textbf{Instance-level fallback for CoT benchmarks.} \code{ifeval},
+        \code{gpqa}, and \code{mmlu\_pro} are chain-of-thought scenarios whose core
+        metrics are \emph{instance-only} (\code{ifeval\_strict\_accuracy},
+        \code{chain\_of\_thought\_correctness}); \textsc{helm} emits no run-level
+        aggregate, so those benchmarks were silently \emph{absent} from the drift
+        plot. The fix widens the data contract: fall back to the mean of the
+        per-instance $0/1$ scores (which \emph{is} the accuracy), tagged with a
+        $\ddagger$ so the provenance is visible. Widening the contract beats hacking
+        the plot.
+  \item \textbf{Metric-key granularity trap.} Run-level cells are keyed by full
+        \textsc{helm} stat descriptions (``\code{f1\_score test on narrativeqa}'')
+        while instance-fallback cells are keyed by bare ids
+        (``\code{ifeval\_strict\_accuracy}''), so the curated headline map (bare
+        names) silently failed to match run-level cells and every run-level
+        benchmark fell to alphabetical-first. The fix normalizes to the metric
+        \emph{family} at the matching boundary and selects the representative on the
+        benchmark's \textsc{helm} \code{main\_split} (test vs valid differ, e.g.\
+        narrative\_qa f1 $0.597$ test vs $0.661$ valid).
+  \item \textbf{Stale-local dedupe.} An \code{olmo-7b}/mmlu cell showed a spurious
+        $\sim\!0.15$ aggregate gap (public $0.295$ vs local $0.144$) despite
+        near-exact instance agreement. The cause was not drift: every olmo-7b
+        subject directory carried \emph{two} \code{official\_vs\_local} pairs --- a
+        fresh run plus an un-demoted stale $0.0$ attempt --- so micro-averaging
+        halved the local mean ($124$ rows instead of $62$). The fix restricts the
+        accumulator to the canonical (first) comparison per report, with a warning
+        per dropped attempt so a future genuine multi-local case surfaces instead of
+        vanishing.
+\end{itemize}
+
+\section{The shared-gateway route registry}
+
+A final infrastructure fix addressed a real operational failure: multiple runbooks
+(olmo, qwen, gpt-oss, classic-together) share one standing \code{infer-stack} stack
+but ship disjoint catalogs, and a converge under one catalog stripped another
+runbook's still-live routes from the LiteLLM gateway --- presenting as a
+\code{400 Invalid model name} and (because the minutes-long readiness wait silently
+never passes once a route is stripped) as the operator's known ``failed to acquire
+lease'' events. The fix persists an append-only \emph{route registry} in shared
+state; every converge merges the invoking catalog with all live deployments and
+renders the gateway route table from the \emph{whole} registry, so the rendered
+config is a function of accumulated shared state rather than of which runbook
+invoked converge --- byte-stable renders, so the gateway is never recreated. The
+reusable insight: \emph{when a shared artifact is rebuilt by multiple writers,
+render it from accumulated shared state, never from the invoking writer's
+worldview.}
+
+%==============================================================================
+\chapter{Codebase Stewardship}
+\label{chap:stewardship}
+%==============================================================================
+
+\emph{Commits: 2026-07-02, 2026-07-06, 2026-07-12. Three audit/simplification
+passes interleaved with the research work.}
+
+Reproducibility is a property of software, so the health of the codebase is part of
+the scientific claim: a reviewer who cannot read the pipeline cannot trust its
+verdicts. Three passes are worth recording as evidence of the ``code a researcher
+can trust'' standard.
+
+\begin{description}[style=nextline,leftmargin=1.25em]
+  \item[Correctness audit (2026-07-02/03).] A full codebase audit produced a
+        phased fix plan (P0/P1/P2 findings) implemented over $\sim$35 commits: e.g.\
+        matching/joining on canonical keys rather than raw strings; correcting a
+        perturbed/unperturbed agreement split; filtering non-finite scores at row
+        construction; failure-taxonomy honesty (colors, categories, ordering);
+        content-addressing generated \code{model\_deployments.yaml} filenames;
+        tightening the HF-token permission window. Direct dependencies were declared
+        and \code{transformers} pinned below 5 (a version whose \code{is\_offline\_
+        mode} change breaks the \textsc{helm}$\to$\eeeshort rebuild).
+  \item[Simplicity audit (2026-07-06).] An explicitly orthogonal ``reduce bloat''
+        pass: $\sim$10{,}600 lines deleted (dead POC/oneoff trees, generated
+        manifests, shims), \code{helm/diff.py} halved ($1{,}844\to844$),
+        \code{PRESET\_CONFIGS} moved from a $1{,}154$-line dict to a YAML resource,
+        the planning-doc set consolidated ($22\to11$ live docs), and the legacy
+        agreement half of the comparison core finally retired (R-2), completing the
+        migration onto \code{NormalizedDiff}. The methodological gem: pure-relocation
+        refactors of plot-emitting code were proven correct by first
+        \emph{characterizing the noise floor} (render \code{HEAD} twice, diff, and
+        treat that file set as the only acceptable before/after diff --- necessary
+        because plotly emits random div UUIDs).
+  \item[Fourth simplification pass (2026-07-12).] A post-era ``finish what's in
+        flight'' pass: Batches 1--3 landed in $22$ commits with the full
+        \code{--run-slow} suite green ($638$ passed); \code{helm/} shrank
+        $3{,}336\to\sim1{,}780$, \code{build\_reports\_summary.py} finished its split
+        ($1{,}715\to\sim330$). A recurring review discipline shows through: audit-
+        agent claims about \emph{why} code exists (``kept for tests'') were the ones
+        to re-verify by grep --- liveness claims were reliable, purpose claims less
+        so.
+\end{description}
+
+Two standing engineering disciplines recur across all three passes and are worth
+lifting into the paper's reproducibility-methods note: (1) capture a
+characterization baseline \emph{before} any behavior-changing refactor and gate on
+\code{atol}$=10^{-9}$ equivalence; and (2) submodule hygiene --- land changes in the
+submodule branch first, bump the gitlink as a deliberate separate commit, never
+auto-commit a dirty gitlink.
+
+%==============================================================================
+\chapter{Thread B: Efficient Benchmarking}
+\label{chap:effbench}
+%==============================================================================
+
+\emph{Repositories: \file{mrmr\_eval} and \file{dkps} (sibling repos, outside
+\file{eval\_audit}); active $\sim$2026-06-01 through 2026-06-24; status decks 06-02,
+06-09, 06-16, 06-23. Paused thereafter in favor of the HELM-reproduction thread.}
+
+Running in parallel with the reproduction work for the first month was an
+exploratory statistics thread on \emph{efficient benchmarking}: given that
+evaluating a model on a full benchmark is expensive, can a small, well-chosen
+\emph{coreset} of questions plus a regression predict the model's full-benchmark
+score, and does a Data-Kernel Perspective-Space (\textsc{dkps}) representation help?
+The experiment code lived in two sibling repositories forked from the relevant
+prior work; the LoRA weight-space idea from the literature review
+(Chapter~\ref{chap:litreview}) remained a proposal and produced no code.
+
+\section{The two framings being compared}
+
+\subsection{Feature selection + regression (Bowyer et al.)}
+
+Following \emph{Efficient Benchmarking Is Just Feature Selection and Multiple
+Regression}, the setup is a binary score matrix (models $\times$ questions). Each
+question is a feature vector in $\mathbb{R}^M$ ($M$ source-model scores) and the
+target is each model's overall accuracy. One \emph{selects} an informative coreset
+of questions --- primarily with \textbf{mRMR} (Minimum-Redundancy-Maximum-
+Relevance, in MIQ = relevance/redundancy and MID = relevance$-$redundancy variants)
+--- and \emph{predicts} the full score with ridge or polynomial kernel-ridge
+regression. The \code{benchpred} registry implements $\sim$100 method keys spanning
+mRMR (ridge/kernel heads), IRT (\code{pirt}, \code{gpirt} = Gaussian-process IRT),
+anchor points, Lasso, and random-sampling/search baselines, each optionally
+``backfilled'' (append \code{+}) by re-fitting its coreset with ridge/kernel-ridge.
+
+\subsection{DKPS: a model-centric, transductive predictor}
+
+\textsc{dkps} (Data-Kernel Perspective-Space) is the model-centric alternative.
+Given a pool of source models with known scores and a target model, all identified
+only by their \emph{raw responses} to an aligned set of $N$ queries, the method:
+(1) embeds every $(\text{model}, \text{query})$ response (via a text-embedding API,
+or a one-hot encoding for multiple-choice tasks); (2) forms an inter-model
+``data kernel'' --- a models$\times$models Euclidean distance matrix on the flattened
+per-model response embeddings, normalized by $\sqrt{N}$; (3) computes the
+\emph{perspective space} by classical MDS on that distance matrix (default 8
+components); and (4) fits a linear regression from source coordinates to source
+scalar scores and reads off the target's predicted score. It is \emph{transductive}
+--- the target's responses participate in building the MDS space, so the space is
+re-fit per prediction --- and it requires every model to answer the exact same
+aligned queries under the same embedder.
+
+\section{Experiment design}
+
+The efficient-benchmarking sweeps concentrated on the HELM tasks that carry raw
+responses (so \textsc{dkps} is applicable): \code{legalbench}, \code{math},
+\code{med\_qa}, \code{wmt\_14}, plus \code{arc\_challenge}, \code{ifeval},
+\code{commonsense}. The knobs swept were: number of source (reference) models
+$\{20, 30, 40, 50\}$ (sometimes 60); coreset size $\{1,2,3,4,5,10,15\}\%$; three
+seeds per cell. The reported metrics were MAE, RMSE, Kendall $\tau$, and Spearman
+$\rho$ (Figure~\ref{fig:mrmr}).
+
+\begin{figure}[H]
+\centering
+\fbox{\parbox{0.95\textwidth}{\centering\small\itshape
+[Figure: \code{math} --- \code{mrmr\_eval} tutorial. A $2\times4$ grid of
+RMSE(\%), MAE(\%), Kendall $\tau$, Spearman $\rho$; top row versus coreset size
+(5/10/15\%), bottom row versus number of source models (20--50). Methods overlaid:
+mRMR MIQ (k=5), gp-IRT, Search+, random\_sampling\_and\_learn, Random, AnchorPts,
+Lasso. mRMR/kernel-anchor methods lead on RMSE/MAE; Lasso is the clear worst.
+Source: 06-16 status deck.]}}
+\caption{Representative efficient-benchmarking result on the \code{math} task.
+Coreset-selection methods (mRMR, kernel anchor points) substantially outperform
+Lasso and improve with coreset size; \textsc{dkps}-family predictors are competitive
+only in specific regimes (many source models, tiny coresets).}
+\label{fig:mrmr}
+\end{figure}
+
+\section{The DKPS+mRMR active-selection method}
+
+The internship's own methodological contribution to this thread was an
+\emph{adaptive} coreset selector, \code{dkps\_mrmr} (the realization of the
+``kNN-mRMR online coreset selection'' proposal), building the coreset iteratively
+and \emph{per target model}: seed with one global mRMR pick; then repeatedly
+(a) \textsc{dkps}-embed source $\cup\ \{\text{target}\}$ on the current coreset,
+(b) take the $k$ source models nearest the target in \textsc{dkps} space, and
+(c) restrict the score matrix to those $k$ rows and take one greedy mRMR step to
+append the next question; finally predict with a standard \textsc{dkps} transductive
+regression. It subclasses both \code{MRMRPred} and \code{DKPSPred} to reuse the
+mutual-information machinery and the embedding/regression, and required a new runner
+capability so \code{predict} receives the full response matrix rather than a
+pre-sliced coreset.
+
+\section{Findings}
+
+The concrete results (chiefly the \code{med\_qa} report) are candid, and their
+honesty is itself worth preserving:
+
+\begin{itemize}[nosep]
+  \item \textbf{\textsc{dkps}-family methods are not general winners.} At $\sim$20
+        source models and $\sim$50 queries, the feature-selection-paper methods
+        (kernel anchor points, Search+, kernel-mRMR) outperform \textsc{dkps} and
+        \code{dkps\_mrmr}; on the 40-source-model \code{med\_qa} row,
+        \code{dkps\_mrmr} wins no coreset-size column.
+  \item \textbf{\textsc{dkps} scales with source models where others do not.}
+        \textsc{dkps} accuracy improves as the number of source models grows, which
+        is not necessarily true of the other methods --- and this is where
+        \code{dkps\_mrmr} shines: at a $1\%$ coreset its \code{med\_qa} MAE improves
+        sharply from $9.06$ to $5.19$ as sources go $20\to50$, making it the
+        \emph{single best method at 50 source models} in that corner.
+  \item \textbf{\code{dkps\_mrmr} plateaus and is worst at large budgets.} It peaks
+        early (MAE $\sim\!4.6\%$, $\rho\approx0.93$) and, unlike every other method,
+        does not keep improving to $2.0$--$2.9\%$ MAE at $10$--$15\%$ coresets.
+  \item \textbf{Cost and representation caveats.} Because the coreset is rebuilt per
+        target, one trial costs $\sim$3~s (1\%) to $\sim$2.5~min (15\%), versus
+        sub-second for plain \textsc{dkps}. mRMR is \emph{extremely slow} on
+        continuous-score benchmarks (\code{wmt\_14}). And a one-hot response
+        encoding (used when text embeddings are unavailable) exposes very limited
+        information about a model compared to a text encoding --- for \code{med\_qa},
+        with 5 choices but imperfect answer formatting, the one-hot dimension
+        exceeds 5 and the representation is weak.
+\end{itemize}
+
+\section{What stayed a proposal}
+
+Three lines from the ``directions'' slides were never implemented and are recorded
+as open future work: \emph{variance-based early stopping} for adaptive
+benchmarking; \emph{ensemble} predictors mixing feature-centric (AEA, Scales++) and
+model-centric (\textsc{dkps}, Fluid) methods, e.g.\ re-weighting by \textsc{dkps}
+distance from a reference model; and the entire \emph{LoRA weight-space} (W2T)
+program (SVD canonicalization $\to$ transformer embedding $\to$ attribute
+classification / performance prediction / adapter retrieval, and the exploratory
+idea of learning a distribution over LoRA weights). This thread effectively
+concluded at the end of June 2026 when attention returned fully to HELM
+reproduction.
+
+%==============================================================================
+\chapter{Synthesis: What Is Reproducible, and Why}
+\label{chap:synthesis}
+%==============================================================================
+
+\section{The headline scientific claims}
+
+The internship substantiated the reframed thesis of \S\ref{chap:framing}: a
+carefully defined runnable subset of \textsc{helm} \emph{is} reproducible under a
+corrected local open-weight recipe, with clearly documented failure modes. The
+supporting evidence, in order of strength:
+
+\begin{enumerate}
+  \item \textbf{Base-model classic benchmarks reproduce near-exactly.} The
+        \code{olmo-7b} base model matches the public headline scores across GSM,
+        MMLU, commonsense, med\_qa, narrative\_qa, and wmt\_14 to within a few
+        thousandths (Figure~\ref{fig:olmoheatmap}); GPT-OSS-20B reproduces all four
+        of its benchmarks with squared error $\le 4\times10^{-4}$
+        (Figure~\ref{fig:gptoss}). These are positive reproducibility results on
+        genuinely local open-weight execution.
+  \item \textbf{Precision is the dominant hidden variable.} The most consequential
+        single finding is that every unpinned-dtype \textsc{helm}
+        \code{HuggingFaceClient} run executed in \code{float32}, and reproducing at
+        \code{float32} matches the official completions \emph{exactly} while
+        bf16/fp16 do not (\S\ref{sec:fp32}). Many apparent ``irreproducibilities''
+        of OLMo instruct models are precision-boundary artifacts, not
+        reproducibility failures.
+  \item \textbf{Most large-grid ``failures'' are environment/recipe failures.} Of
+        the original broad candidate grid, roughly half the jobs failed --- but the
+        failures cluster into gated datasets, revoked download access, missing
+        credentials, model-packaging issues, and resource contention. These are
+        \emph{filtering reasons}, and conflating them with a reproducibility verdict
+        would produce a spurious blanket negative.
+  \item \textbf{The residual true-reproducibility drift is concentrated and
+        explainable.} Where local and public genuinely differ under a matched
+        recipe (e.g.\ instruct-model \code{ifeval}), the difference traces to
+        \emph{specific}, named, unrecorded parameters --- the chat-template version
+        (\code{add\_generation\_prompt}), the tokenizer's special-token append, the
+        attention/device forward-pass numerics on long-form greedy generation ---
+        not to inherent benchmark instability.
+\end{enumerate}
+
+\section{The reusable methodology}
+
+Independently of the specific numbers, the internship produced a reusable
+methodology for reproducibility auditing that the paper can present as a
+contribution:
+
+\begin{itemize}[nosep]
+  \item \textbf{Replay the resolved recipe, never reconstruct it}
+        (Chapter~\ref{chap:fromspec}): from-spec replay of \file{run\_spec.json}
+        eliminates a whole class of silent reconstruction drift.
+  \item \textbf{Freeze the measurement instrument by era}
+        (Chapter~\ref{chap:eras}): version-pinned harness containers make the
+        scoring code a controlled variable, separable from the model.
+  \item \textbf{Sweep, don't guess} (Chapter~\ref{chap:deploymatch}): for unrecorded
+        execution parameters, an empirical sweep with feasibility-pruning (but not
+        relevance-pruning) is the honest analogue of matching a recipe.
+  \item \textbf{Classify every disagreement} (\S\ref{sec:distinction}): the
+        recipe/environment-vs-reproducibility distinction, enforced through typed
+        exclusion reasons, honest failure-taxonomy colors, and
+        \code{comparability\_unknown:*} signals rather than silent fallbacks.
+  \item \textbf{Report a distribution, not a point}: same-machine, cross-machine,
+        and official-vs-local agreement, with per-metric tolerance sweeps, so that
+        ``reproducible'' is quantified rather than asserted.
+\end{itemize}
+
+\section{The provenance recommendation for the field}
+
+The clearest actionable output for the broader community is that \textsc{helm} (and
+any benchmark harness) should record the \emph{execution substrate}, not just the
+recipe and the model name. Three fields --- \code{model\_revision} (commit SHA),
+\code{torch\_dtype}, and \code{transformers\_version} --- transitively close the
+majority of the reproducibility gap, because the revision fixes the
+tokenizer/template/generation-config state and the transformers version fixes the
+precision default and the chat-template behavior. These belong in a machine-readable
+provenance block (the existing \code{recipe\_facts} slot suffices with no schema
+change), kept \emph{out} of the run-spec identity string so they do not break
+official$\leftrightarrow$local pairing (Appendix~\ref{app:unrecorded}).
+
+\section{Open threads at the close of this chronology}
+
+Several items were scoped or built but not fully landed, and are the natural
+next steps for the paper's experiments:
+
+\begin{itemize}[nosep]
+  \item The HuggingFace-in-process \emph{routing switch} --- the mechanism exists
+        (reserve-only lease + fp32 \code{HuggingFaceClient}), but the default replay
+        path does not yet auto-route a HuggingFaceClient official to it.
+  \item GPU-host acceptance runs for several pipelines (era images, the qwen and
+        gpt-oss fan-outs, the HF-in-process OLMoE exact-match test) were prepared but
+        remained pending real GPU execution.
+  \item Regenerating the stale on-disk OLMo report store so the corrected drift
+        plots (instance-level fallback, metric-family resolver, stale-local dedupe)
+        populate the published artifacts.
+  \item Pinning model revisions through \code{eval\_audit}'s bundle boundary (a
+        $\sim$3--4 file change) so generated bundles carry the SHA automatically.
+\end{itemize}
+
+%==============================================================================
+\appendix
+\chapter{The \textsc{helm} Gotchas Catalogue (G1--G13)}
+\label{app:gotchas}
+%==============================================================================
+
+This appendix condenses the running ledger of undocumented or hard-to-see
+\textsc{helm} behaviors accumulated while building the audit pipeline
+(\file{docs/helm-gotchas.md}). Each is a concrete, reviewer-anticipating pitfall
+that a reproducibility paper's appendix should address.
+
+\begin{description}[style=nextline,leftmargin=1em]
+  \item[\textbf{G1. \file{run\_spec.json} schema evolves silently between releases.}]
+    Newer \textsc{helm} populates \code{adapter\_spec} fields older \textsc{helm}
+    omitted (\code{chain\_of\_thought\_prefix}, \code{global\_suffix},
+    \code{num\_trials}, \code{model\_deployment}, top-level \code{metric\_specs} /
+    \code{groups} / \code{annotators}), so byte-for-byte hashing yields $0/N$
+    matches across releases even for identical recipes. Workaround: a
+    schema-collapsed \emph{canonical recipe hash} (\S\ref{sec:funnel}).
+  \item[\textbf{G2. The local \code{suite} field is the experiment name, not a
+    public-track version.}] A versioned join on \code{logical\_key + suite\_version}
+    yields $0$ matches; the funnel detects a non-version-shaped local suite and
+    reports the versioned join as not meaningful (\code{N/A}) rather than $0$.
+  \item[\textbf{G3. The \code{huggingface/<model>} deployment alias does not always
+    exist.}] Many open-weight runs were executed through the HF API, but
+    \textsc{helm}'s registry ships deployment YAMLs for only a subset; a missing
+    alias forces a different stack (vLLM/etc.), introducing deployment-substitution
+    drift. Workaround: register a custom local deployment.
+  \item[\textbf{G4. \code{model\_deployment} semantics differ across versions.}]
+    Older \textsc{helm} did not record the field (defaulting to ``the HF API'');
+    newer does. A local \code{huggingface/<model>} and an official
+    \code{<MISSING>} are semantically identical but hash differently ---
+    schema-evolution, dropped from the canonical hash.
+  \item[\textbf{G5. \code{adapter\_spec.instructions} differs between releases on
+    identical scenarios.}] MMLU official prepends ``Answer with only a single
+    letter.''; several LegalBench scenarios prepend a list-the-allowed-labels
+    preamble. This is \emph{genuine} recipe drift (a different prompt), surfaced via
+    the \code{same\_instructions} fact --- not to be silently normalized. (The BBQ
+    \code{output\_format\_instructions=mcqa} drift of \S\ref{sec:canonkey} is the
+    same species.)
+  \item[\textbf{G6. The \code{classic} corpus moved bucket prefixes.}] Classic runs
+    migrated from the bucket root to \code{classic/benchmark\_output/runs/<ver>/},
+    mirroring every other suite; a special-case in the downloader was removed.
+  \item[\textbf{G7. Same weights $\ne$ same output across serving stacks.}] Even
+    greedy, HF \code{generate()} and vLLM differ in kernels, tokenizer batching,
+    stop-sequence handling, unspecified sampling defaults, and EOS/pad handling ---
+    a $3$--$6\%$ per-instance flip rate on multiple-choice, $\sim$30--40\% on
+    long-form. Mitigations: match the original client, pin decoding, or document as
+    \code{deployment\_drift}. (Chapter~\ref{chap:deploymatch} is the deep dive.)
+  \item[\textbf{G8. \code{metric\_specs} schema evolution.}] Top-level
+    \code{metric\_specs} differ on the majority of packets from restructuring, not a
+    recipe change; excluded from the canonical hash --- compare the metric
+    \emph{output}, not the declaration.
+  \item[\textbf{G9. Local index \code{model\_deployment} is audit-specific.}] Custom
+    local deployment names (e.g.\ \code{kubeai/vicuna-...-no-chat-template-local})
+    do not appear in the public run spec; the logical-key join collapses across
+    deployments and \code{same\_deployment} correctly reports \code{no}.
+  \item[\textbf{G10. Public-track \code{suite\_version} is not the \textsc{helm}
+    release version.}] The same \file{run\_spec.json} can appear identically in
+    \code{v0.2.4} and \code{v0.3.0}; use \code{run\_spec\_hash} to detect
+    recipe-identical duplicates across suites. (The era-replay containers key the
+    \emph{instrument} on \code{(public\_track, suite\_version)}, which is the right
+    granularity for the classic track --- see Chapter~\ref{chap:eras}.)
+  \item[\textbf{G11. \file{per\_instance\_stats.json} corruption on giant runs.}]
+    Certain msmarco runs were truncated mid-write during upload (consistent
+    byte-offset \code{JSONDecodeError}); recently re-uploaded versions parse cleanly.
+    Redownload on a size mismatch.
+  \item[\textbf{G12. \code{run\_spec\_hash} canonicalization differs by release.}]
+    \textsc{helm}'s own canonicalization is version-dependent, so semantically
+    identical specs hash differently across releases; the coverage-side canonical
+    hash applies a stable normalization on top.
+  \item[\textbf{G13. Classic-corpus \code{class\_name} paths resolve in \emph{no}
+    \textsc{helm} version.}] The stored \code{helm.benchmark.basic\_metrics.BasicMetric}
+    (helm-prefix + flat) is a once-migrated hybrid --- a naive
+    \code{benchmark.}$\to$\code{helm.benchmark.} rewrite of a still-flat production
+    path --- pinning the producing code to unreleased pre-v0.1.0 \textsc{helm}
+    (2022-07-31 to 08-26). Class-path \emph{shape} is the origin fingerprint; fixed
+    by a self-verifying declared class-path canonicalization in the era shim
+    (\S\ref{sec:g13}).
+\end{description}
+
+%==============================================================================
+\chapter{The Unrecorded-Parameter Taxonomy}
+\label{app:unrecorded}
+%==============================================================================
+
+Condensed from \file{docs/helm-unrecorded-deployment-params.md}. \textsc{helm}
+serializes the recipe and the model's name but almost nothing about \emph{how} the
+numbers were computed. Empirically, of 148 HuggingFaceClient deployments in
+\textsc{helm}'s \code{model\_deployments.yaml}, only \textbf{19 pin
+\code{torch\_dtype}} (all \code{bfloat16}) and only \textbf{7 pin a model
+\code{revision}}. The parameters, ranked by effect on a greedy (temperature-0)
+output:
+
+\begin{longtable}{@{}p{0.02\textwidth}p{0.30\textwidth}p{0.60\textwidth}@{}}
+\toprule
+\textbf{Tier} & \textbf{Parameter} & \textbf{Why it matters} \\
+\midrule
+\endhead
+1 & Model weight revision (SHA) & Same name $\ne$ same weights; authors re-upload
+    checkpoints/configs/tokenizers. The single highest-leverage field --- fixes the
+    tokenizer, chat template, and generation config as-of-then. \\
+1 & Load precision / dtype & Unpinned $\Rightarrow$ transformers-version-dependent
+    default (pre-v5 = float32). \emph{Confirmed decisive}: HF fp32 reproduces OLMoE
+    exactly (\S\ref{sec:fp32}). \\
+1 & Quantization & GPTQ/AWQ/fp8/bnb change the weights outright. \\
+1 & Software-stack versions & The meta-parameter: transformers sets the fp32-vs-bf16
+    default \emph{and} whether the chat template honors \code{add\_generation\_prompt};
+    engine/flash-attn versions change kernels. Nowhere in the run dir. \\
+\midrule
+2 & Attention implementation & eager/sdpa/flash/PagedAttention change reduction order
+    $\Rightarrow$ different logits at temp 0. \\
+2 & Matmul / TF32 precision & For fp32 especially, true-fp32 vs TF32 matmuls differ. \\
+2 & Hardware / GPU model & Determines kernels, TF32 behavior, whether fp32 MoE fits. \\
+2 & Device topology / TP & Multi-GPU all-reduce order differs from single-GPU. \\
+2 & Batch composition & Kernels are not batch-invariant; same prompt, different
+    batch neighbors, different logits. \\
+\midrule
+3 & Tokenizer + chat-template version & The \code{add\_generation\_prompt} drift
+    (\S\ref{sec:addgenprompt}); the templated prompt is never stored. \\
+3 & \code{add\_special\_tokens} / BOS & The OLMo-7B EOS-append case
+    (\S\ref{sec:eosappend}). \\
+3 & \code{generation\_config.json} defaults & Injects unspecified fields
+    (repetition penalty, eos/pad ids). \\
+3 & Stop-sequence / detokenization & HF stops on token ids, vLLM on string match
+    $\Rightarrow$ different truncation and scored text. \\
+\midrule
+4 & RNG seed; KV-cache dtype & Mostly for sampling (temperature $>0$) and
+    serving-engine reproductions. \\
+\bottomrule
+\end{longtable}
+
+\noindent\textbf{The one non-obvious lever.} Several Tier-3 gaps collapse into
+Tier-1: the tokenizer, chat template, and generation config all live \emph{inside}
+the model repo, so pinning the model revision recovers all of them as-of-then.
+\code{model\_revision} + \code{torch\_dtype} + \code{transformers\_version} close
+the majority of the gap. Both weight-loading engines already accept \code{revision}
+as a data-only edit (infer-stack \code{catalog.yaml}; \textsc{helm}'s
+\code{client\_spec.args}); the only code gap is that \code{eval\_audit}'s bundle
+boundary drops it (a $\sim$3--4 file fix). These fields must live in the
+\code{recipe\_facts}/provenance block, \emph{not} the run-spec identity string, or a
+SHA in the pairing key would break official$\leftrightarrow$local pairing.
+
+%==============================================================================
+\chapter{Deliverables and Timeline}
+\label{app:deliverables}
+%==============================================================================
+
+\section{Internship timeline at a glance}
+
+\begin{longtable}{@{}p{0.16\textwidth}p{0.80\textwidth}@{}}
+\toprule
+\textbf{Dates (2026)} & \textbf{Work} \\
+\midrule
+\endhead
+May 15 -- Jun 2  & Onboarding; literature review (LoRA/W2T, efficient benchmarking).
+    Thread B begins. \\
+Jun 3 -- Jun 4   & First commits: e2e adapter config and tests (Chapter~\ref{chap:e2e}). \\
+Jun 9            & Corpus cartography / filter statistics (Chapter~\ref{chap:cartography}). \\
+Jun 11 -- Jun 12 & Repo refactor (Phases 0--2) and the unified comparison core
+    (Phase 3 / \code{NormalizedDiff}, judge registry) (Chapter~\ref{chap:core}). \\
+Jun 12 -- Jun 18 & OLMo campaign begins: tokenizers, chat-template window budget,
+    the 114-packet canonical-key fix (Chapter~\ref{chap:olmo});
+    Thread~B \code{dkps\_mrmr} lands (Jun 24). \\
+Jun 16 -- Jun 24 & Containerized HELM execution and the infer-stack leasing pipeline
+    (Chapter~\ref{chap:containers}). \\
+Jun 25 -- Jun 30 & From-spec replay: run-spec verbatim replay, deployment rewrite,
+    rel-path addressing, content-addressed caching (Chapter~\ref{chap:fromspec}). \\
+Jun 30 -- Jul 10 & Deployment matching: OLMo-7B EOS-append, the deployment-match
+    tool, \code{add\_generation\_prompt} drift, the float32 discovery, the
+    unrecorded-parameter taxonomy (Chapter~\ref{chap:deploymatch}). \\
+Jul 2 / 6 / 12   & Three codebase audit / simplification passes
+    (Chapter~\ref{chap:stewardship}). \\
+Jul 8 -- Jul 13  & Era-pinned containers, the shim, redpajama-3b runbook, classic
+    Together models, the G13 archaeology (Chapter~\ref{chap:eras}). \\
+Jul 11 -- Jul 14 & GPT-OSS-20B and Qwen fan-outs (Chapter~\ref{chap:newmodels});
+    aggregate score-drift reporting fixes, route registry
+    (Chapter~\ref{chap:reporting}). \\
+\bottomrule
+\end{longtable}
+
+By commit count: 452 authored commits, distributed as 181 in June and 271 in July;
+the busiest days were 2026-07-06 (50 commits, the simplicity audit) and 2026-07-12
+(39, the fourth simplification pass).
+
+\section{Key artifacts produced}
+
+\paragraph{Reproduction runbooks} (\file{reproduce/}, \file{dev/}):
+\code{olmo\_models\_combined}, \code{gpt\_oss\_20b\_from\_spec},
+\code{qwen\_models\_combined}, \code{classic\_together\_combined},
+\code{dev/e2e-tests} (phi-2), \code{dev/era-tests} (redpajama-3b).
+
+\paragraph{Tools and libraries}: \code{dev/tools/deployment\_match/} (the
+serve-and-probe deployment matcher with \code{hf-probe}, \code{hf-match},
+fp32-TP, and \code{compare\_prompt.py}); \code{docker/era\_shim/} (the standalone
+era from-spec replay CLI + OpenAI-compatible client); \code{eval\_audit/eras.py}
+and \code{docker/eras.yaml} (era registry); \code{eval\_audit/hf\_inprocess.py}
+(reserve-GPU in-process reproduction); \code{eval\_audit/normalized/diff.py}
+(\code{NormalizedDiff}, the unified comparison core);
+\code{eval\_audit/judge\_registry.py} and \code{eval\_audit/metrics\_taxonomy.py}.
+
+\paragraph{Documentation} (the intended paper appendix material):
+\file{helm-gotchas.md} (G1--G13), \file{vllm-vs-huggingface-deployment-match.md},
+\file{helm-unrecorded-deployment-params.md}, \file{eee-vs-helm-metadata.md},
+\file{pipeline.md}, \file{architecture.md}, \file{container-execution.md}, and the
+19 planning documents under \file{docs/planning/}.
+
+\paragraph{Thread~B} (sibling repos): \file{mrmr\_eval} (the \code{benchpred}
+efficient-benchmarking harness with the \code{dkps}/\code{dkps\_mrmr} methods and the
+\code{med\_qa} report) and \file{dkps} (the vendored DKPS library and HELM example
+runners).
+
+\section{A note on method and provenance of this document}
+
+This chronology was reconstructed after the fact from the primary sources listed in
+Chapter~\ref{chap:framing}. Where numbers are quoted (agreement ratios, token
+counts, corpus statistics, the fp32 sweep table, the efficient-benchmarking results)
+they are taken directly from the status decks, the developer journals, or the
+committed reports; where a claim is a design decision or a lesson, it is drawn from
+the corresponding journal entry or planning document. The development was carried
+out with heavy use of an AI pair-programming harness (recorded in the first-person
+developer journals); the research direction, design decisions, GPU-host execution,
+and interpretation are the author's. Readers preparing the academic manuscript
+should treat the \S-cross-referenced figures and tables here as pointers into those
+primary artifacts, which remain the ground truth.
+
+\end{document}
