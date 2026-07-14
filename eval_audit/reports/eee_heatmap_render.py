@@ -783,8 +783,14 @@ def _render_diff_heatmap(
     n_models = len(models)
 
     if transpose:
+        # cols = benchmarks, rows = models. Height scales per model row
+        # plus a fixed allowance for the (up to 3-line) title and the long
+        # rotated benchmark tick labels, so a 1–2 model grid keeps enough
+        # vertical room; set_aspect("equal") after _finish_grid_axes then
+        # keeps every cell square regardless of the model/benchmark counts
+        # (without it a single model row collapses into thin wide strips).
         fig_w = max(10.0, 0.85 * n_bench + 2.5)
-        fig_h = max(2.8, 0.62 * n_models + 1.1)
+        fig_h = 1.4 * n_models + 3.6
     else:
         fig_w = max(6.0, 2.4 * n_models + 2.0)
         fig_h = max(5.0, 0.55 * n_bench + 1.5)
@@ -910,6 +916,13 @@ def _render_diff_heatmap(
         transpose=transpose,
         bench_label=_bench_label,
     )
+    if transpose:
+        # Square cells: with rows = models, a small model count would
+        # otherwise let each cell stretch to fill the axes width, squashing
+        # the row(s) into thin wide strips (e.g. a 1-model × 4-benchmark
+        # gpt-oss grid). 'box' shrinks the axes to the data aspect; the
+        # tight bbox at save trims the surrounding whitespace.
+        ax.set_aspect("equal", adjustable="box")
 
     if squared:
         cbar_label = (
