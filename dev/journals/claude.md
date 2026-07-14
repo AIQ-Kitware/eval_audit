@@ -1688,3 +1688,55 @@ archaeology over a slow link — trees included, blobs lazy, rename-aware `git l
 
 **Loose end (not mine).** `submodules/infer_stack` gitlink shows modified; I did NOT
 touch it and left it unstaged (per the no-auto-commit-gitlink rule) — flag to user.
+
+## 2026-07-14 09:55:00 -0700
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code CLI.
+
+**User intent:** The new "Headline Aggregate Score Drift" plot omits ifeval, gpqa,
+and mmlu_pro for the olmo instruct models. Explain why, then fall back to the
+instance-level mean and make the fallback visible.
+
+**Root cause (verified on /data/.../virtual-experiments/olmo-models).** Not a filter,
+not a failed run. Those three are capabilities-track (v1.8.0) CoT scenarios whose core
+metrics are *instance-only*: ifeval → `ifeval_strict_accuracy`, gpqa/mmlu_pro →
+`chain_of_thought_correctness`. HELM emits no run-level aggregate stat for them, so the
+run-level comparison intersection is empty (`run_level_n: 0`, `instance_level_n: 541/446/1000`),
+`core_runlevel_table.csv` is a single blank line, and `_accumulate_aggregate_diff_cells`
+(which reads only that CSV) produced no cell → benchmark silently absent. bbq
+(multiple_choice_joint, run-level exact_match family) populates normally, which is why it
+shows. Local runs succeeded fully (541/446/1000 completions, empty_rate 0.0) — this is a
+metric-shape gap, categorically distinct from recipe/env or reproducibility failures.
+
+**Fix (3 seams).** (1) `normalized/diff.py::metric_quantiles` now attaches per-side
+aggregate scores `a_mean`(official)/`b_mean`(local) to every `by_metric` entry — for
+instance rows that's the mean of per-instance scores = the aggregate accuracy. Lands in
+`instance_level.by_metric` of the report JSON. (2) `_accumulate_aggregate_diff_cells`
+accumulates run-level and instance-level in separate buckets and merges with run-level
+priority (`_finalize` tags `source`); instance-level fills only cells run-level never
+produced. a↔official confirmed via `core_metric_curves._build_pair` (nrun_a=OFFICIAL).
+(3) Renderers flag `source=="instance_level"` cells: "‡" in the PNG cell corner + a
+subtitle footnote (only when a fallback cell is drawn), and a legend line + "‡" suffix in
+both text tables. JSON sidecars carry `source` via the existing spread.
+
+**Verification.** Unit test (new `tests/test_aggregate_diff_instance_fallback.py`): fallback
+fires on empty runlevel, run-level wins when both present, missing means → no cell.
+`metric_quantiles` a_mean/b_mean confirmed by direct call. Full render exercised end-to-end
+(PNG visually shows ‡ on gpqa/ifeval, none on bbq; footnote present). phase3 baselines
+regenerated — diff is *purely additive* (only a_mean/b_mean lines, 0 removed), which the
+capture_baseline docstring explicitly permits. All affected tests green.
+
+**Design insights.** (a) The drift plot's data contract was "run-level means only"; the
+right fix widens the contract (add instance-mean fallback) rather than hacking the plot —
+the aggregate of a 0/1 instance metric *is* the accuracy, so it's the same quantity, just
+sourced differently. Tagging `source` keeps the provenance honest. (b) Persist derived
+values where the raw rows live (metric_quantiles), not at plot time — the collector already
+loads the JSON, so no new artifact needed.
+
+**Loose end (not mine).** Existing on-disk olmo reports predate the a_mean/b_mean keys, so
+the fallback won't populate until they're regenerated. `rebuild_core_report` currently fails
+for them (`HELM run path is not a directory` — the local HELM run dirs under
+/data/crfm-helm-audit/audit-*-full/ were pruned; the planner component is tagged
+artifact_format=helm, not routed to --local-eee-root). Regenerating the olmo store (matches
+the pre-existing "olmo store stale" note) is needed to see ifeval/gpqa/mmlu_pro in the real
+report — out of scope for this code fix. Flagged to user.
