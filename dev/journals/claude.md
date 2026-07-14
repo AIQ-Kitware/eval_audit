@@ -1826,3 +1826,60 @@ coverage annotations). era-redpajama refreshable here (writes shared /data); olm
 needs its machine (pruned local run dirs). Canonical `_MODEL_ORDER`/`_BENCHMARK_ORDER`
 lists are stale for the olmo corpus (no olmo models; `narrativeqa`/`sythetic_*`
 key mismatches) so the shared order is mostly alphabetical — offered to refresh.
+
+## 2026-07-14 12:14:12 -0400
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code.
+
+**User intent:** Explain why olmo-7b/mmlu shows a ~0.15 aggregate score
+gap (public exact_match 0.295 vs local 0.144) despite near-exact
+instance agreement; then implement a dedupe fix.
+
+**What happened.** The 0.15 gap was not real drift. Diagnosis walked
+through three artifacts in sequence: (1) the original `olmo-models`
+store (Jun 23) predated planner fix a25aac9 and its local run-level
+aggregate read a flat 0.0, making every subject's aggregate delta ≈ the
+official accuracy; (2) the user had already regenerated into a NEW
+experiment dir `olmo-models-combined` (Jul 14) where the per-subject
+core reports are healthy (philosophy local 0.338 vs 0.325); (3) but the
+`aggregate_score_diff` *plot* still showed 0.144 because
+`_accumulate_aggregate_diff_cells` micro-averages raw
+`core_runlevel_table.csv` rows and every olmo-7b subject dir carries TWO
+`official_vs_local` pairs — the fresh run plus an un-demoted stale
+`dr924lfhhilg` 0.0 run. 62 fresh + 62 stale-0.0 → local halved to 0.1435
+(reproduced to 15 dp), while official (same on both rows) stayed 0.2955.
+
+**Scope.** Only `allenai/olmo-7b` is polluted — across mmlu (57
+subjects), legalbench (5), med_qa, openbookqa, gsm, narrative_qa. wmt_14
+(olmo-7b) and every other model (olmo-1.7-7b, olmo-2-*-instruct, olmoe)
+are clean single-attempt. narrative_qa's stale run is a degenerate
+near-zero run (bleu_4 ≈ 1e-308), not a clean 0.0, but drops the same way.
+
+**Fix (commit 93849b09).** Restrict both the run-level CSV loop and the
+instance-level fallback loop to the canonical (first) `official_vs_local`
+comparison_id per report — the same pair `_find_pair` returns, so the
+drift plot now agrees with the per-pair reports and
+reproducibility_rows.csv (which already dedupe). Chose "keep first" over
+a "drop zeros" heuristic because (a) it matches the pipeline's existing
+canonical selection rather than inventing a new policy, and (b) it's
+robust to a legitimate nonzero stale like narrative_qa. Empirically 0
+reports have two genuinely-distinct nonzero locals, so nothing real is
+dropped; a `logger.warning` fires per dropped attempt so a future
+multi-local case surfaces instead of vanishing silently. Guard is a
+no-op when comparison_id is absent (older report shape) — the 3 existing
+fallback tests pass unchanged; added 2 tests (run-level + instance
+paths). Verified against the live store: olmo-7b/mmlu local 0.144→0.287,
+diff −0.152→−0.009, n 124→62; controls byte-identical.
+
+**Next steps / caveats.**
+- The on-disk plot is stale until Stage 6 (`build_reports_summary`) is
+  re-run for `olmo-models-combined` with this code — the fix changes the
+  accumulator, not the already-materialized PNG/JSON.
+- Residual: n=62 not 57. Five mmlu subjects (abstract_algebra,
+  college_chemistry, computer_security, econometrics, us_foreign_policy)
+  have TWO report dirs each — a cross-report duplication the within-report
+  dedupe can't touch. Value still lands ~0.287 but the physical store
+  prune (drop the stale `dr924lfhhilg`/degenerate runs + duplicate dirs)
+  is the real cleanup; deferred, flagged to user.
+- Better upstream fix would be the planner demoting stale attempts to
+  local_repeat (or dropping them) so no consumer re-hits this.
