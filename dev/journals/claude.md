@@ -1783,3 +1783,46 @@ not at each call site. Recorded as [[metric-key-granularity-runlevel-vs-instance
 to reflect the fix. era-redpajama can be refreshed here (runs intact) but writes
 to the shared /data store; olmo can't (pruned local run dirs). Flagged to user;
 did NOT auto-regenerate the shared store.
+
+## 2026-07-14 12:05:00 -0700
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code CLI.
+Same session continuation.
+
+**User intent:** Make the coverage matrix and the aggregate score-drift plot
+comparable at a glance: (a) same model/benchmark order, (b) show which
+instance-level stat the coverage grid uses to decide a "match", (c) fix the
+model order being flipped between the two grids.
+
+**Work (commits ca885180, d4bf29d7).**
+1. *Shared axis order* — factored canonical ordering out of
+   `_order_aggregate_diff_axes` into `order_models`/`order_benchmarks`; routed the
+   coverage matrix (was pure `sorted()`) through them. Same input set → identical
+   order by construction.
+2. *Model-order flip* — root cause: matplotlib drift heatmaps call
+   `ax.invert_yaxis()` (models[0] top); plotly coverage matrix defaulted to
+   models[0] bottom. Fixed with `yaxis autorange="reversed"` (layout + static
+   update_yaxes). Verified via rendered HTML figure config.
+3. *Match-stat display* — the coverage cell's agreement % pools ALL of a
+   benchmark's core instance-level metrics (`instance_level.agreement_vs_abs_tol`
+   at abs_tol=0.05); `repro.core_metrics` carries that set. Annotated each
+   benchmark column label (`_format_match_metrics`, wrapped 3/line), hover, and
+   JSON (`benchmark_match_metrics`). NOTE this is a *set*, not one stat — the
+   honest display lists all (narrative_qa → 6).
+
+**Design insight.** "Same order" between two plots is two separate concerns: the
+*list* order (data — shared helper) AND the *render direction* (matplotlib
+invert_yaxis vs plotly default). Both must agree. Recorded the axis-order helper
+as the single source of truth.
+
+**Env note.** Hit the documented VM FD-exhaustion mid-task (escalated to Python
+failing at `init_import_site`); user recycled; verification completed after.
+Static JPG export needs chrome/kaleido (absent here) — HTML render + figure-config
+inspection used instead; JPG will render in the real pipeline env.
+
+**Loose ends (unchanged from prior entries).** Headline/coverage artifacts are
+cached — regenerate to reflect all of today's fixes (metric resolver, axis order,
+coverage annotations). era-redpajama refreshable here (writes shared /data); olmo
+needs its machine (pruned local run dirs). Canonical `_MODEL_ORDER`/`_BENCHMARK_ORDER`
+lists are stale for the olmo corpus (no olmo models; `narrativeqa`/`sythetic_*`
+key mismatches) so the shared order is mostly alphabetical — offered to refresh.
