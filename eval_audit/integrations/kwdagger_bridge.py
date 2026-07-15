@@ -662,14 +662,19 @@ def _prepare_container_execution(
     return resolved_image, provenance
 
 
-def kwdagger_schedule_argv(request: KWDaggerScheduleRequest) -> list[str]:
-    # FIXME(kwdagger): kwdagger currently makes this integration awkward because
-    # --params may be either inline YAML text or a YAML file path.
+def kwdagger_schedule_argv(
+    request: KWDaggerScheduleRequest, *, params_ref: str | None = None
+) -> list[str]:
+    # kwdagger's --params may be either inline YAML text OR a path to an existing
+    # .yaml file (kwutil.Yaml.coerce, path_policy='existing_file_with_extension').
+    # Callers that pass ``params_ref`` (an on-disk params path) opt into the file
+    # form; the default keeps the inline text so the preview/argv stay human-
+    # readable. Execution MUST use the file form — see run_kwdagger_schedule.
     argv = [
         "kwdagger",
         "schedule",
         f"--queue_name={request.runtime.queue_name}",
-        f"--params={request.params_text}",
+        f"--params={params_ref if params_ref is not None else request.params_text}",
         f"--devices={request.runtime.devices}",
         f"--tmux_workers={request.runtime.tmux_workers}",
         f"--root_dpath={request.runtime.root_dpath}",
@@ -704,8 +709,17 @@ def run_kwdagger_schedule(request: KWDaggerScheduleRequest) -> subprocess.Comple
     # digest) alongside the results so the image is auditable after the fact.
     if request.container_provenance is not None:
         write_container_provenance(request.runtime.root_dpath, request.container_provenance)
+    # Spill the params grid to a file and pass its PATH, not the inline YAML. A
+    # large fan-out (hundreds of run rows — e.g. the qwen-combined full grid) makes
+    # the inline `--params=<yaml>` argument overflow the OS ARG_MAX ceiling, which
+    # surfaces as `OSError: [Errno 7] Argument list too long: 'kwdagger'` at
+    # subprocess spawn. The `.yaml` extension is load-bearing: kwdagger reads
+    # --params via kwutil.Yaml.coerce(path_policy='existing_file_with_extension'),
+    # which only treats the value as a file when it exists AND carries an extension.
+    params_fpath = request.runtime.root_dpath / "kwdagger_params.yaml"
+    params_fpath.write_text(request.params_text)
     return subprocess.run(
-        kwdagger_schedule_argv(request),
+        kwdagger_schedule_argv(request, params_ref=str(params_fpath)),
         check=True,
         text=True,
     )

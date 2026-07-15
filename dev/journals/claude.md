@@ -1932,3 +1932,51 @@ vLLM refuses to start, the catalog header names the fallback. Also: raising the 
 window makes any *previously prompt-truncated* turbo row more faithful (official window
 was 128k), so if full turbo data already exists it should be regenerated — but at these
 short prompts nothing was being truncated, so no silent metric shift expected.
+
+## 2026-07-15 10:05:26 -0400
+
+**Model/harness:** claude-opus-4-8[1m] via Claude Code.
+
+**User intent:** After the qwen window fix let the smoke grid run, the FULL
+qwen-combined grid died at schedule time with
+`OSError: [Errno 7] Argument list too long: 'kwdagger'` (tmux_workers=4). Fix.
+
+**Root cause.** `kwdagger_bridge.kwdagger_schedule_argv` passed the ENTIRE params
+grid inline as one argv token: `--params={request.params_text}`. The smoke grid (40
+rows) fit under ARG_MAX; the full grid (~775 run rows across the 8 members) does not,
+so `subprocess.run(argv)` raises E2BIG at spawn. This is `Errno 7` (E2BIG), NOT the VM's
+`Errno 24` too-many-open-files issue — a genuine command-length bug that only trips at
+full-grid scale, which is why it slipped past smoke. The existing FIXME already noted
+`--params` accepts inline YAML *or a file path*.
+
+**Fix.** Spill the grid to a file and pass its path at execution:
+- `kwdagger_schedule_argv(request, *, params_ref=None)` — new keyword. Default keeps the
+  inline text (preview/argv stay readable; every existing argv/params_text test unchanged,
+  incl. the preview-vs-execute argv-equality test). `params_ref` selects the file form.
+- `run_kwdagger_schedule` writes `params_text` to `<root_dpath>/kwdagger_params.yaml`
+  (alongside the existing container-provenance write) and calls argv with
+  `params_ref=str(that_path)`.
+
+The `.yaml` extension is load-bearing: kwdagger reads --params via
+`kwutil.Yaml.coerce(path_policy='existing_file_with_extension')`, which only treats the
+value as a file when it exists AND has an extension (verified by reading the vendored
+kwutil source + kwdagger/schedule.py:191). An extensionless temp file would be parsed as
+inline YAML and silently mangle the grid.
+
+**Why file-only at execution, inline at preview:** preview's `command`/`argv` are
+informational and every test compares them as inline; execution is the only path that
+spawns the subprocess, so it's the only one that must dodge ARG_MAX. Keeping the split
+is minimal-blast-radius. (A huge grid's preview command is unusably long regardless —
+acceptable; not a crash.)
+
+**Validation.** New regression `test_run_kwdagger_schedule_spills_params_to_file`
+stubs `subprocess.run`, asserts the executed argv carries a single `--params=<...yaml>`
+pointing at an on-disk file whose contents == `params_text`, and that the inline grid
+text never appears in argv. Full schedule group green: test_run_surface +
+test_from_spec_materialized_schedule + test_lease_bracket + test_container_execution =
+52 passed.
+
+**Next step.** GPU-side: re-launch the qwen-combined full fan-out; the schedule step
+should now clear. Watch that kwdagger actually loads the spilled params file (a stale
+same-named file in an earlier root would be overwritten — each experiment has its own
+root_dpath, so no cross-run collision expected).

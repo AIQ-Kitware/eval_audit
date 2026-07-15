@@ -4,9 +4,11 @@ from pathlib import Path
 
 import pytest
 
+from eval_audit.integrations import kwdagger_bridge
 from eval_audit.integrations.kwdagger_bridge import (
     kwdagger_schedule_argv,
     prepare_schedule_request,
+    run_kwdagger_schedule,
 )
 from eval_audit.infra.paths import repo_root
 from eval_audit.manifests import builders as manifest_builders
@@ -91,6 +93,46 @@ def test_run_from_manifest_execute_calls_runner(tmp_path: Path, monkeypatch: pyt
     assert info["returncode"] == 0
     assert "--run=1" in info["argv"]
     assert called["count"] == 1
+
+
+def test_run_kwdagger_schedule_spills_params_to_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Execution must pass --params as an on-disk .yaml path, not inline YAML.
+
+    A large fan-out overflows ARG_MAX when the whole grid rides inline in argv
+    (OSError [Errno 7] Argument list too long). Regression guard: the executed
+    argv references a kwdagger_params.yaml file whose contents equal the request's
+    params_text, and the (potentially huge) inline YAML never appears in argv.
+    """
+    manifest_fpath = _write_manifest(tmp_path)
+    root_dpath = tmp_path / "results"
+    request = prepare_schedule_request(manifest_fpath, run=True, root_dpath=root_dpath)
+
+    captured: dict[str, list[str]] = {}
+
+    class _Proc:
+        returncode = 0
+
+    def _fake_subprocess_run(argv, **kwargs):
+        captured["argv"] = argv
+        return _Proc()
+
+    monkeypatch.setattr(kwdagger_bridge.subprocess, "run", _fake_subprocess_run)
+    run_kwdagger_schedule(request)
+
+    argv = captured["argv"]
+    params_flags = [a for a in argv if a.startswith("--params=")]
+    assert len(params_flags) == 1
+    params_value = params_flags[0][len("--params=") :]
+    params_fpath = Path(params_value)
+    # A real, existing .yaml path (the extension is load-bearing for kwdagger's
+    # existing_file_with_extension coercion) — never the inline grid text.
+    assert params_fpath.suffix == ".yaml"
+    assert params_fpath.is_file()
+    assert params_fpath.parent == request.runtime.root_dpath
+    assert params_fpath.read_text() == request.params_text
+    assert request.params_text not in "".join(argv)
 
 
 def test_choose_model_override_for_qwen_and_vicuna():
