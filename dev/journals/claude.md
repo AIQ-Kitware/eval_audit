@@ -1980,3 +1980,62 @@ test_from_spec_materialized_schedule + test_lease_bracket + test_container_execu
 should now clear. Watch that kwdagger actually loads the spilled params file (a stale
 same-named file in an earlier root would be overwritten — each experiment has its own
 root_dpath, so no cross-run collision expected).
+
+## 2026-07-15 14:39:22 -0400
+
+**Model/harness:** Claude Opus 4.8 (1M context), Claude Code.
+
+**User intent:** Iterate the collaborative HELM-internship master reference with an
+external reviewer (ChatGPT). This session: review the reviewer's consensus package
+(`Master_Collaborative_Reference_Consensus_2026-07-15c.zip`), accept/reject each change
+and concern, run my own review, and draft a reply — reporting consensus if reached.
+Update local docs to match the consensus package.
+
+**Outcome: consensus reached.** Accepted all of the reviewer's changes without
+reservation — the evidentiary relabel ("collaborator-verified; artifact not packaged"),
+report-freshness-≠-result-acceptance, the three-freshness store ledger, the three
+orthogonal reproduction *targets* (artifact reconstruction / procedural / claim-level)
+as orthogonal to the six-category *cause* taxonomy, non-identifiability scoped to the
+surviving evidence examined, and the B4/B5/B6 structural cleanups. No rejections; the
+reviewer's downgrades of my "Established"/"preservation-only" framings were epistemically
+correct given the packaged-artifact standard.
+
+**My own review contributed a real, disk-verified finding — the run-artifact acceptance
+audit.** Report freshness does not imply run-artifact freshness, and the two flagship
+modern stores prove it the hard way: `gpt-oss-20b-from-spec` and `olmo-models-combined`
+retain **no raw run artifacts** (pruned; `scenario_state`/`display_requests`/EEE inputs
+all gone) — only derived `analysis/`+`reports/` survive. So "regenerate" = **re-run**,
+not a report refresh; the OLMo `olmo-7b` halving (0.295/0.144…) is baked into the
+surviving aggregate whose inputs no longer exist. `era-redpajama` (both eras) is the
+**only** flagship store with surviving raw runs (Jul 12) → genuinely copy+hash-able. The
+non-obvious inversion: freshest reports (GPT-OSS) sit on the least-preserved inputs;
+best-preserved raw runs (RedPajama) have older reports. Recorded to memory
+(`flagship-store-run-artifacts-pruned`).
+
+**Furnished evidence to promote "collaborator-verified" toward packaged:** full commit
+SHA for `86ec84af` (`86ec84af09…`, tree `a3734de5…`) as the content-addressed immutable
+reference, and sha256 of the GPT-OSS/OLMo/RedPajama store provenance/manifest/headline
+artifacts. Governance call: did **not** export a full git bundle to the external
+reviewer (private Kitware repo) — the bundle/tag belongs in the eventual artifact release
+under Kitware control; the SHA is the verifiable reference.
+
+**Design insights.** (1) When two collaborators have asymmetric evidence access, tag
+live-only facts as *collaborator-verified* and close the gap by furnishing hashes/SHAs,
+not by promoting testimony to "packaged." (2) A store's report timestamp is a decoy;
+the acceptance question is run-artifact + comparison provenance, and pruning can make a
+fresh-looking store unciteable without a re-run. (3) One soft, non-blocking rec left for
+the *paper* (not the chronicle): foreground one conceptual spine (F-model → six causes →
+three targets → identifiability map) and push the operational vocabularies (freshness
+dimensions, workflow-status levels) to an appendix, so reviewers meet one framework.
+
+**Repo state:** no code changes this session. Local chronology removal (prior turn) is
+`7a3e728e`. Consensus tree extracted to `docs/Master_Collaborative_Reference_2026-07-15c/`
+(32/32 SOURCE_HASHES verify OK); reply at
+`docs/Master_Collaborative_Reference_Consensus_ACCEPTED_2026-07-15d.zip` and mirrored under
+the tree's `validation/claude_consensus_acceptance/`. External-artifact zips left
+untracked, matching prior rounds.
+
+**Next step.** Operational only (agreed with reviewer): re-run OLMo and GPT-OSS then
+preserve+hash; copy+hash RedPajama and the deployment-match sweeps; complete or document
+the ordinary-path OLMo confirmation on held-out instances; regenerate the corpus-wide
+denominator from a checked-in manifest.
