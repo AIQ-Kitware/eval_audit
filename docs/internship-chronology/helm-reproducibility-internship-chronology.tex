@@ -1477,8 +1477,9 @@ Discovery confirmed all four target run directories resolve 1:1 against the
 (Figure~\ref{fig:gptoss}) shows local and public headline scores agreeing closely
 across all four benchmarks --- \code{bbq} $0.967/0.963$, \code{gpqa} $0.594/0.610$,
 \code{ifeval} $0.732/0.754$, \code{mmlu\_pro} $0.740/0.748$ (public/local) --- with
-squared errors bounded by $\sim\!4\times10^{-4}$, roughly two orders of magnitude
-tighter than the OLMo instruct drift on \code{ifeval}. This contrast is itself a
+squared errors bounded by $\sim\!4\times10^{-4}$, more than an order of magnitude
+($\approx\!30\times$) tighter than the OLMo instruct drift on \code{ifeval}
+($\sim\!1$--$1.6\times10^{-2}$). This contrast is itself a
 result: whether a family reproduces well is model-specific, and GPT-OSS-20B is a
 positive case.
 
