@@ -18,35 +18,93 @@ complete, substantial academic paper?**
   reproducibility gaps" as its Case Study 3 (3-model slim slice; entity-matching /
   SR-natural / wikifact). The internship's work is a **different, larger** paper:
   the TMLR "Systematic Analysis." Do not re-tell Case Study 3.
-- **The thesis:** *A carefully defined runnable subset of public HELM is
-  reproducible under a corrected local open-weight recipe; most apparent
-  irreproducibility is not benchmark noise but an unrecorded execution substrate,
-  and once you control it (precision, tokenizer/chat-template, revision, harness
-  era) the residual gap collapses.* The paper's job is to **attribute and close**
-  the gaps the EEE paper could only detect.
-- **The single biggest gap is experimental completeness, not methods.** The
-  machinery exists and is unit-tested; the *systematic results table* across model
-  families at controlled precision — with tolerance sweeps and at least one
-  cross-machine axis — largely still needs to be **run on GPUs and collected**.
-- **Second biggest gap is scientific framing:** a precise denominator ("reproducible
-  subset of *what*"), controls/ablations that isolate each cause, and a clean
-  positive-vs-negative results story.
+- **The thesis (revised 2026-07-15 after external review):** *Reproducing an LLM
+  benchmark is a layered **system-identification** problem. A public recipe is not
+  a complete experimental record; the producing instrument spans the recipe, model
+  deployment, software stack, hardware-sensitive numerics, and artifact-processing
+  history. Controlled reconstruction can **attribute** and sometimes **close**
+  apparent gaps — but where provenance was lost or transformed, the original
+  experiment may be **non-identifiable**.* The paper's arc is EEE **detects** →
+  this work **attributes / closes / bounds identifiability**. (The earlier
+  "most residual disagreement is small and attributable" framing is demoted to a
+  *hypothesis* — it depends on experiments not yet complete; see §0.5.)
+- **The strongest conceptual result is a contrast, not a positive story:** OLMo is
+  the **recoverable** case (missing dtype/tokenizer/template can be reconstructed and
+  measured); GPT-J/NeoX/OPT are the **non-identifiable** case (G13: the run-spec
+  class path resolves in no released HELM, so the producing instrument can't be
+  uniquely rebuilt). Recoverable-vs-underdetermined beats "we closed the gaps."
+- **The single biggest gap is experimental completeness, not methods** — and within
+  that, the top item is **end-to-end OLMo confirmation** (§5): the fp32 result is
+  currently a *deployment-match probe* (discovery), not a confirmed HELM
+  reproduction on held-out instances.
+- **Given the weeks remaining, the realistic near-term product is a hybrid
+  position/systems paper** (§5.0) anchored by *one* end-to-end modern case (OLMo) and
+  *one* historical forensic case (classic HELM), not the full empirical grid.
 
 ---
 
 ## 1. The thesis and the story
 
-### 1.1 The one-sentence thesis
+### 0.5 Response to the external review (2026-07-15)
 
-> Public LLM benchmark results are far more reproducible than a naive re-run
-> suggests — but only once the **unrecorded execution substrate** (load precision,
-> tokenizer and chat-template version, model revision, and the harness era itself)
-> is treated as a first-class part of the recipe. We build a pipeline that replays
-> a public HELM run's resolved `run_spec.json` verbatim under an explicitly
-> controlled deployment, apply it systematically across open-weight model families,
-> and show that the residual disagreement is small, concentrated, and almost
-> always attributable to a specific unrecorded parameter rather than to inherent
-> benchmark non-determinism.
+An external review of the chronology and this plan was evaluated point by point.
+**Accepted (and folded in here + into the chronology's new interpretive-revision
+appendix):**
+(a) demote the "far more reproducible / residual gap small & attributable" thesis to
+a hypothesis and adopt the system-identification / **identifiability** framing;
+(b) the fp32 result is **configuration discovery** (an oracle-scored probe over
+~12 ifeval instances, using a non-default `add_special_tokens=False` knob), **not** a
+completed HELM reproduction — do not say "the official was float32 / fp32 reproduced
+the official"; require the end-to-end **confirm** step with **discovery/held-out
+separation**;
+(c) reframe the OLMo-2 HF divergence from "a broken probe, not science" to **an
+unresolved systematic divergence under prompt-token equivalence** (itself
+execution-sensitivity evidence);
+(d) replace the binary failure taxonomy with the finer **six-category** taxonomy and
+avoid "true reproducibility failure" when provenance is incomplete;
+(e) make the **recoverable (OLMo) vs non-identifiable (GPT-J/NeoX)** contrast the
+conceptual spine;
+(f) adopt the **hybrid position/systems paper** as the near-term product and make
+**OLMo end-to-end confirmation** — not a broad Qwen grid — the top experiment;
+(g) reframe Qwen as a bounded **signal-vs-noise** demonstration;
+(h) reconcile "GPU pending" runbooks against later decks/stores explicitly rather
+than taking the strongest reading (done in §6 and the chronology appendix).
+
+**Nuanced / partially rebutted (kept, with the reviewer's caution incorporated):**
+- *The fp32 dtype claim is not merely a probe-fit.* It has a distinct **deductive**
+  leg — reading HELM's loader source + the `transformers` version-dependent default
+  ("won't rely on config.dtype till v5") — which is stronger than fitting a config to
+  outputs. It remains *conditional* on the unrecorded `transformers` version, so it is
+  "most likely fp32," not "proven." The review's non-identifiability caution applies
+  most to the *full deployment*; **identifiability is per-parameter** (dtype default
+  and client class are code/config-readable; tokenizer append is repo-readable; exact
+  version/hardware/batch are not). The paper should present identifiability as a
+  *spectrum over substrate parameters*, which strengthens the review's own framing.
+- *The classic/historical case is more in-hand than the review assumes.* The
+  `redpajama-3b` classic replay already ran end-to-end for both eras (reports on disk,
+  Jul 12), and its `synthetic_reasoning_natural` result recovers ~14% where the public
+  number is 0 — but note this is a **forensic recovery** (the public number is itself
+  a serving artifact), not a clean reproduction match. So the recoverable-vs-
+  non-identifiable contrast exists *within the classic era*: redpajama recoverable
+  (post-refactor, resolves natively) vs GPT-J/NeoX/OPT non-identifiable (G13). The
+  historical forensic case is therefore partially available now, which makes the
+  hybrid paper more achievable than "classic is unrun" implies.
+
+### 1.1 The thesis statement
+
+> Reproducing a public LLM benchmark result is a layered **system-identification**
+> problem, not a re-run. A public HELM recipe fixes what to generate but not *how the
+> numbers were computed* — the load precision, model revision, tokenizer and
+> chat-template version, attention kernel, software-stack versions, and the harness
+> era that processed the artifacts. We build a pipeline (EvalAudit) that replays a
+> run's resolved `run_spec.json` verbatim under an explicitly controlled, provenance-
+> recorded deployment, and that reconstructs the historical scoring instrument itself
+> when needed. Applied to open-weight model families, controlled reconstruction lets
+> us **attribute** apparent reproducibility gaps to specific substrate parameters and
+> **close** some of them; but we also show cases where the surviving artifacts and
+> releases do **not uniquely identify** what faithful reproduction would mean. The
+> practical consequence is a proposed **minimum provenance record** that a benchmark
+> publication would need for its results to be reconstructible at all.
 
 ### 1.2 Why this is the right story (positioning against the EEE paper)
 
@@ -126,17 +184,32 @@ So the narrative arc is clean and publishable:
    deployment rewrite (so `same_deployment=no` is honest), era-pinned harness
    containers (so the scoring instrument is a controlled variable), and a
    deployment-match sweep that *attributes* residual disagreement.
-3. **The float32 result**: the decisive, quantified demonstration that unpinned
-   `torch_dtype` → fp32 default is the dominant hidden variable, with an exact-match
-   reproduction of OLMoE and a scope argument covering all OLMo HF-client runs.
-4. **A systematic reproducibility characterization** across N open-weight model
-   families / M benchmarks, reported as a distribution (same-machine, cross-machine,
-   official-vs-local) with per-metric tolerance sweeps and a failure taxonomy that
-   separates environment/recipe filters from true reproducibility failures.
-5. **A catalogue of concrete HELM reproduction pitfalls (G1–G13)** — the appendix a
+3. **A precision-attribution case study (OLMo)**: a *deductive* argument that HELM's
+   unpinned-`torch_dtype` loader defaults to fp32 under the run-consistent
+   `transformers` versions, an oracle-scored discovery sweep showing fp32 candidates
+   best match the sampled officials, and — the deliverable that makes it citable — an
+   **end-to-end confirmed reproduction on held-out instances** (§5.1). Reported as an
+   attribution result with its identifiability caveats, *not* "the official was fp32."
+4. **The recoverable-vs-non-identifiable contrast** (the conceptual spine): OLMo =
+   provenance experimentally recoverable; GPT-J/NeoX = provenance underdetermined by
+   surviving artifacts/releases (G13). Plus a **per-parameter identifiability map**
+   (which substrate parameters are code/repo-recoverable vs bounded vs non-identifiable).
+5. **A six-category disagreement taxonomy** (recipe / deployment / execution-instrument
+   / artifact-migration / residual-under-controlled-equivalence / non-identifiable),
+   with the upstream run-vs-not-run eligibility gate kept separate — the results-
+   organizing device.
+6. **A faithful-reconstruction methodology**: verbatim `run_spec.json` replay with
+   honest `same_deployment=no`, era-pinned "execution-capsule" containers (the scoring
+   instrument as a controlled variable), and a sweep-don't-guess deployment matcher.
+7. **A catalogue of concrete HELM reproduction pitfalls (G1–G13)** — the appendix a
    reviewer will value, including the pre-v0.1.0 class-path archaeology (G13).
-6. **A concrete provenance recommendation** (three fields, where they live) that the
-   HELM/harness community can adopt.
+8. **A proposed minimum provenance record** for benchmark publication (`model_revision`
+   + `torch_dtype` + `transformers_version` at minimum, and where they must live so
+   they don't break official↔local pairing) — the actionable recommendation.
+
+*(A broad multi-family systematic characterization as a distribution — same-machine /
+cross-machine / official-vs-local, with tolerance sweeps — is the **follow-on** paper's
+contribution, §5.4, not a near-term claim.)*
 
 ---
 
@@ -219,21 +292,38 @@ Organized worst-first. Each item tagged **[BLOCKER]**, **[MAJOR]**, or **[POLISH
 
 ### 3.3 Framing / scoping gaps
 
-- **[MAJOR] Decide the model roster and freeze it.** Candidate families: OLMo (6),
-  GPT-OSS-20B, Qwen (8), classic Together (gptj/neox/opt/redpajama), Pythia/Vicuna/
-  Falcon (the EEE slim slice — reuse or cede to EEE?). Recommendation: lead with OLMo
-  (the deepest, cleanest case incl. the fp32 result), add GPT-OSS-20B as the positive
-  contrast, Qwen as the scale/breadth axis, and the classic era models as the
-  "instrument-provenance" axis. Cede Pythia/Vicuna/Falcon to the EEE paper to avoid
-  overlap (or reuse only as the cross-paper bridge).
+- **[MAJOR] Decide the model roster and freeze it (revised per review).** Strongest
+  focused roster: **OLMo** = the deep modern *attribution/recoverable* case;
+  **GPT-OSS-20B** = an artifact-semantics contrast (the null-vs-empty-string chat
+  case) and a positive-control-ish comparison; a **verified Qwen subset** = the
+  modern breadth / signal-vs-noise application (§5.1, *not* a full 8-model grid);
+  **GPT-J + GPT-NeoX** = the historical *non-identifiable* instrument-provenance case
+  (G13). **OPT-66B optional** — do not let it consume disproportionate time.
+  **Redpajama-3b** = the recoverable historical case that already ran end-to-end
+  (the bridge between OLMo and the non-identifiable classics). **Cede
+  Pythia/Vicuna/Falcon to the EEE paper** (use only as inherited baselines if at all).
+- **[MAJOR] Replace the reproducibility-"grade" vocabulary with the six-category
+  disagreement taxonomy (per review).** Do **not** use "true reproducibility failure"
+  when provenance is incomplete. Keep the upstream **run-vs-not-run gate**
+  (non-runnable = eligibility/filtering reason). For observed disagreements, classify
+  each cell into exactly one of: **(1) recipe mismatch, (2) deployment mismatch,
+  (3) execution-instrument mismatch, (4) artifact-interpretation/migration mismatch,
+  (5) residual disagreement under controlled equivalence, (6) historically
+  non-identifiable reproduction.** Only (5) resembles conventional repeatability
+  failure; (6) is qualitatively different (the reproduction target is
+  underdetermined). This taxonomy *is* the paper's results-organizing device.
 - **[MAJOR] Define the benchmark roster and the headline metric per benchmark.** The
   headline-metric resolver (HELM `main_name`/`main_split`) exists; the paper needs the
   curated map stated and justified, and the CoT/instance-only benchmarks (ifeval, gpqa,
-  mmlu_pro) handled explicitly (the instance-level-fallback ‡ mechanism).
-- **[POLISH] Name the reproducibility "grades."** Define the vocabulary the paper will
-  use for a cell outcome: `recipe-clean reproduction`, `deployment-boundary artifact`
-  (fixable by controlling the substrate), `environment/recipe filter` (not a
-  reproducibility result), `genuine-drift`. Map every cell to one grade.
+  mmlu_pro) handled explicitly (the instance-level-fallback ‡ mechanism). Report
+  **output-level** and **task-level** agreement *separately* (they can diverge — two
+  valid different completions can both pass, or both fail).
+- **[MAJOR] Map identifiability per substrate parameter.** A deliverable table: for
+  each unrecorded parameter (dtype, revision, tokenizer/template, attn impl, device
+  map, versions, hardware, batch), whether it is **code/config-recoverable**,
+  **repo-recoverable**, **inferable-but-bounded**, or **non-identifiable** from the
+  surviving artifacts. This operationalizes the identifiability thesis and directly
+  yields the minimum-provenance-record recommendation.
 
 ### 3.4 Writing gaps (the draft itself)
 
@@ -274,8 +364,10 @@ Organized worst-first. Each item tagged **[BLOCKER]**, **[MAJOR]**, or **[POLISH
    colored by drift. [have for OLMo + GPT-OSS; need Qwen + classic + regeneration]
 4. **The factorial ablation grid** — agreement vs {dtype} × {template} × {EOS} for a
    representative cell. [NEW — needs runs]
-5. **The fp32 exact-match table** — the four OLMo instruct models, best HF vs best
-   vLLM, at full benchmark size. [have n=12 version; need full]
+5. **The fp32 attribution + confirmation table** — clearly split into a *discovery*
+   column (the n≈12 ifeval probe sweep, HF vs vLLM per model — have) and a
+   *confirmation* column (end-to-end HELM reproduction on held-out instances, §5.1 —
+   NEEDS RUN). Label the probe rows as discovery, not reproduction.
 6. **The cross-machine table** — one family × ≥2 architectures. [NEW — needs runs]
 7. **The era-replay fidelity result** — pandas-version instance-identity + the
    redpajama-3b recovery. [NEW — needs GPU ladder run]
@@ -287,39 +379,79 @@ Organized worst-first. Each item tagged **[BLOCKER]**, **[MAJOR]**, or **[POLISH
 
 ## 5. Prioritized work plan
 
-**Phase A — make the existing results citable (days).**
-- A1. Audit `/data` stores; enumerate which experiments have current, non-stale report
-  trees (in progress). Regenerate `olmo-models-combined` and any stale store with
-  current code so the drift plots reflect the dedupe / metric-resolver / instance-
-  fallback fixes.
-- A2. Freeze the model + benchmark roster and the reproducibility-grade vocabulary
-  (§3.3). Write the denominator/funnel numbers.
+### 5.0 The realistic near-term product: a hybrid position + systems paper
 
-**Phase B — close the headline experiments (weeks, GPU-bound).**
-- B1. Full-benchmark fp32 reproductions for the four OLMo instruct models (the headline
-  §5 table); wire + run the HF-in-process routing switch and the OLMoE exact-match
-  acceptance test.
-- B2. GPU-run `gpt_oss_20b_from_spec` and `qwen_models_combined` to completion; build
-  their reports. GPT-OSS is the positive-contrast result; Qwen is breadth.
-- B3. Walk the era-replay validation ladder on a GPU host; produce the pandas-identity
-  fidelity result and the redpajama-3b recovery number.
+With only weeks remaining, **do not make the paper depend on the full empirical
+program below.** There is already enough for a strong **position / systems-experience
+paper**, provided the claims are scoped per §0.5. Recommended structure (per review):
 
-**Phase C — rigor experiments (weeks, GPU-bound).**
-- C1. The factorial ablation grid (dtype × template × EOS) for ≥2 representative cells.
-- C2. The cross-machine axis: one family on ≥2 GPU architectures + a local-vs-local
-  repeat baseline.
-- C3. Surface the agreement confounds inline (per-cell tuple) and adopt the Bernoulli
-  floor for temperature>0 benchmarks.
+1. EEE exposed residual benchmark disagreement but could not *attribute* it.
+2. We built **EvalAudit** to reconstruct and preserve the missing execution substrate.
+3. The HELM reproduction effort revealed a **layered taxonomy of disagreement**
+   (the six categories, §3.3).
+4. **OLMo** demonstrates *recoverable* deployment/precision ambiguity (one end-to-end
+   confirmed case — §5.1).
+5. **Historical HELM** (GPT-J/NeoX via G13; redpajama as the recoverable bridge)
+   demonstrates *non-identifiable* provenance (one forensic case — largely in hand).
+6. EvalAudit **operationalizes** exact-spec replay, execution capsules (era
+   containers), layered comparison, and controlled reconstruction.
+7. A proposed **minimum provenance record** for benchmark publication.
 
-**Phase D — write (parallel with B/C).**
-- D1. Draft `main.tex` from the chronology + these findings; lift `helm-gotchas.md` and
-  `helm-unrecorded-deployment-params.md` as appendices.
-- D2. Produce the eight display items (§4).
-- D3. Related work + threats-to-validity + the provenance recommendation.
+This needs exactly two experiments landed cleanly (§5.1, §5.2) plus writing — not the
+full grid. The larger empirical paper (§5.3–5.4) is the follow-on once those complete.
 
-**Cross-cutting:** pin model revisions for headline runs; keep the `same_deployment`
-honesty and the environment-vs-reproducibility taxonomy front-and-center; every number
-from a regenerated store.
+### 5.1 THE top experiment: end-to-end OLMo confirmation (not a broad grid)
+
+The highest-priority run is **not** a Qwen grid; it is converting the fp32 *discovery*
+into a *confirmed* reproduction, with discovery and confirmation separated:
+
+1. Select a candidate config on a **discovery** subset (the deployment-match winner).
+2. Reproduce its tokenizer + request behavior **in the ordinary HELM path** (land the
+   `add_special_tokens`/`--tokenizer` behavior HELM-natively — no probe-only knobs).
+3. Execute the **exact public `run_spec.json`** verbatim.
+4. Produce **normal HELM artifacts** (`scenario_state.json`/`stats.json`).
+5. Compare via the **standard pair-report pipeline**.
+6. Evaluate on **held-out instances/benchmarks** (not the discovery sample).
+7. Report **output-level** and **task-level** agreement **separately**.
+
+Then a small **staged ablation** over {dtype: bf16/fp16/fp32} × {chat-template:
+on/off} × {special-token: on/off} on ≥1 representative cell converts the anecdotes
+into quantitative marginal effects. This is the experiment that makes the fp32 claim
+citable.
+
+### 5.2 The historical forensic case (largely in hand)
+
+- Verify/refresh the **redpajama-3b** end-to-end era result (recoverable case; already
+  ran, reports on disk — confirm the pandas instance-identity fidelity rung and note
+  the `synthetic_reasoning_natural` result is a *forensic recovery from a public-side
+  serving artifact*, not a clean match).
+- Write up **GPT-J/NeoX (G13)** as the non-identifiable case from the existing
+  archaeology (no new large run required; the class-path lineage *is* the result).
+
+### 5.3 Make the existing results citable (days, prerequisite to any write-up)
+
+- Regenerate `olmo-models-combined` (and any stale store) with current code so the
+  dedupe / metric-resolver / instance-fallback fixes take effect; **every cited number
+  from a freshly regenerated store.**
+- Freeze the model/benchmark roster (§3.3) and write the denominator/funnel numbers.
+
+### 5.4 The larger empirical program (follow-on paper, not the near-term deadline)
+
+- Qwen as a **bounded signal-vs-noise demonstration**, not a leaderboard: measure the
+  Qwen *generational* improvement and compare it to the *variation induced by plausible
+  evaluation configurations*. The scientific question: **is the model improvement
+  larger than the uncertainty the evaluation system introduces?** This ties the
+  historical reproduction work to a current motivation without a second unrelated paper.
+- GPU-run `gpt_oss_20b_from_spec` to completion (artifact-semantics contrast).
+- The cross-machine axis (one family × ≥2 GPU architectures) + a local-vs-local repeat
+  baseline (the effect-size floor).
+- Full-benchmark fp32 across the four OLMo instruct models + ≥1 non-ifeval benchmark.
+- Surface agreement confounds inline (per-cell tuple) and adopt the Bernoulli floor for
+  temperature>0 benchmarks.
+
+**Cross-cutting:** pin model revisions for headline runs; keep `same_deployment`
+honesty and the six-category taxonomy front-and-center; separate discovery from
+held-out confirmation; every number from a regenerated store.
 
 ---
 

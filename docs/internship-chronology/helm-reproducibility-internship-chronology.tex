@@ -265,6 +265,17 @@ Chapters~\ref{chap:deploymatch} and~\ref{chap:eras} are, in large part, the stor
 of moving specific disagreements out of the ``irreproducible'' bucket and into the
 ``environment/recipe'' bucket once their true cause was found.
 
+\emph{Refinement (interpretive revision, Appendix~\ref{app:revision}).} This binary
+is the right first cut, but it is too coarse for the paper, and the phrase ``true
+reproducibility failure'' should be avoided wherever execution provenance is
+incomplete. Keep the upstream run-vs-not-run gate (non-runnable is an eligibility
+reason, not a disagreement), but resolve observed disagreements into a finer
+six-category taxonomy --- recipe / deployment / execution-instrument /
+artifact-migration mismatch, residual disagreement under controlled equivalence, and
+\emph{historically non-identifiable reproduction}. Only the fifth resembles
+conventional repeatability failure; the sixth is qualitatively different (the target
+of ``faithful reproduction'' is underdetermined). See Appendix~\ref{app:revision}.
+
 \section{The inherited baseline: what was already known}
 \label{sec:inherited}
 
@@ -1157,19 +1168,29 @@ defaults that to \code{torch.float32} for backward compatibility, \emph{ignoring
 the checkpoint's bf16 config}. (Reading the checkpoint's dtype is a transformers
 v5 change; even late 4.x still hits ``\code{else: set fp32 as the default dtype for
 BC}.'') The OLMoE architecture landed in transformers $\sim$4.45, so a January-2025
-run is squarely in the fp32-default regime. Therefore:
+run is squarely in the fp32-default regime. This is a \emph{deductive} claim ---
+read off the loader source and the library's version-dependent default, not fit to
+outputs --- so it is stronger than an observational match. Its residual is the one
+parameter it depends on: the exact \code{transformers} version, which the run dir
+does not record (only bounds). Under that reading:
 
 \begin{quote}\itshape
-The official OLMoE run --- and, by the same unpinned-dtype default, \emph{every}
-OLMo HuggingFaceClient run --- executed in \code{float32}.
+The code path \textsc{helm} used loads the weights in \code{float32} under every
+\code{transformers} version consistent with the OLMoE run's date --- so the
+official most likely ran \code{float32}. (Conditional on \code{transformers}$<$5;
+a run produced under \,$\geq$5 would default to bf16 and move this conclusion.)
 \end{quote}
 
-This was confirmed decisively. Reproducing the official on the HF side at
-\code{float32} (\code{transformers.generate()}) reproduces the official completions
-\textbf{exactly} (quasi/exact match $\approx 1.0$), versus $\approx 0.17$ for the
-best fp16 vLLM cell. Table~\ref{tab:fp32} shows the overnight sweep results across
-all four OLMo instruct models: \emph{fp32 wins on whichever engine can serve it
-faithfully}.
+A small oracle-scored \emph{probe} corroborates this: reproducing the official on
+the HF side at \code{float32} (\code{transformers.generate()}) reaches quasi/exact
+match $\approx 1.0$ on the sampled instances, versus $\approx 0.17$ for the best
+fp16 vLLM cell. Table~\ref{tab:fp32} shows the overnight probe sweeps across the
+four OLMo instruct models. \textbf{This is deployment-\emph{matching} evidence, not
+a completed HELM reproduction} (see the epistemic-status note below): the scores are
+composites over $n\approx12$ ifeval instances, scored against the sampled official
+completions, and the winning cells additionally rely on a probe-only
+\code{add\_special\_tokens=False} request knob that an ordinary \textsc{helm} run
+does not send.
 
 \begin{table}[H]
 \centering
@@ -1192,6 +1213,27 @@ dense OLMo-2 models reproduce near-exactly under vLLM fp32.}
 \label{tab:fp32}
 \end{table}
 
+\par\medskip\noindent\fbox{\parbox{0.97\textwidth}{\small
+\textbf{Epistemic status of the fp32 result (interpretive revision, 2026-07-15).}
+This table is a \emph{configuration-discovery} result, not a reproduction result.
+Read it as: \emph{among the deployment configurations tested, \code{float32}
+candidates produced the highest agreement with the sampled public OLMo outputs.}
+It does \emph{not} yet establish ``the historical deployment was \code{float32}''
+as an identified fact, nor ``\code{float32} reproduced the official \textsc{helm}
+result,'' for three reasons: (i) matching a small oracle sample does not uniquely
+identify the producing deployment --- multiple latent configurations can be
+observationally equivalent on $n\approx12$; (ii) the winning cells use a probe-only
+\code{add\_special\_tokens=False} knob not sent by an ordinary \textsc{helm} run;
+(iii) the ``confirm'' step --- land the winning config on the real \textsc{helm}
+execution path, run the exact public \file{run\_spec.json}, and compare through the
+standard pair-report pipeline on \emph{held-out} instances --- has not been run for
+any model. The \emph{deductive} dtype-default argument above is the stronger leg and
+survives these caveats (it reads the loader, not the outputs), but it too is
+conditional on the unrecorded \code{transformers} version. See
+Appendix~\ref{app:revision} for the consolidated epistemic status and the corrected
+disagreement taxonomy.}}
+
+\par\medskip
 Two aspects make this finding sharp:
 
 \begin{itemize}[nosep]
@@ -1231,11 +1273,21 @@ attributable to knobs \textsc{helm} never records: \code{attn\_implementation},
 device placement (\code{device\_map=auto} shards a fits-on-one-GPU model across
 GPUs, changing fp32 reduction order), and the decode path (\textsc{helm}'s
 \code{do\_sample=True, temperature=1e-7} vs the probe's greedy). The probe was
-extended to sweep these forward-pass axes. The interpretation stays clean: all four
-officials reproduce at fp32; ``vLLM beats HF'' for OLMo-2 is the \emph{probe}
-mis-generating, not vLLM being more faithful. The reusable insight: \emph{``same
-engine family'' (transformers$\rightarrow$transformers) does not imply
-reproducible} --- device sharding, attention-implementation drift, and
+extended to sweep these forward-pass axes. \textbf{Interpretive revision: this is a
+finding, not merely a broken probe.} An earlier framing dismissed the OLMo-2 HF
+divergence as ``not a science problem'' (a defect in our tool, since vLLM fp32 did
+match). The sharper reading, which the paper should adopt: a \emph{current}
+\code{transformers.generate()} at fp32 does \emph{not} reproduce an
+\emph{apparently} HF-produced historical result \emph{even under byte-identical
+prompt tokens}. That is precisely an \emph{unresolved systematic divergence under
+prompt-token equivalence} --- direct evidence of execution-stack sensitivity, and a
+core datum for the thesis, not an artifact to wave away. Its cause is not yet
+isolated (candidates: model/tokenizer revision, \code{transformers}/\code{torch}
+version, attention implementation, generation defaults, device placement, numerical
+precision, CUDA behavior). That vLLM fp32 happens to match is a separate fact and
+does not make the HF$\to$HF gap uninteresting. The reusable insight stands and is
+sharper for it: \emph{``same engine family'' (transformers$\rightarrow$transformers)
+does not imply reproducible} --- device sharding, attention-implementation drift, and
 sample-vs-greedy each perturb fp32 logits enough to diverge greedy decoding.
 
 \section{Naming the gap: the unrecorded execution substrate}
@@ -1858,39 +1910,64 @@ reproduction.
 
 \section{The headline scientific claims}
 
-The internship substantiated the reframed thesis of \S\ref{chap:framing}: a
-carefully defined runnable subset of \textsc{helm} \emph{is} reproducible under a
-corrected local open-weight recipe, with clearly documented failure modes. The
-supporting evidence, in order of strength:
+\emph{This section was revised on 2026-07-15 (see Appendix~\ref{app:revision}) to
+scope its claims to the evidence actually in hand. The original draft asserted a
+positive result --- ``a runnable subset of \textsc{helm} \emph{is} reproducible,
+with residual drift that is small, concentrated, and attributable.'' That is a
+plausible and motivating \emph{hypothesis}, but the experiments that would
+establish it (a frozen population, freshly regenerated stores, end-to-end OLMo
+confirmation on held-out instances, completed Qwen/classic runs, cross-machine
+measurements, and a controlled ablation) are not all done. The claims below are the
+defensible ones.}
+
+\medskip
+The more defensible thesis --- and the more scientifically interesting one --- is
+that \emph{reproducing an \textsc{llm} benchmark is a layered system-identification
+problem.} A public recipe is not a complete experimental record; the producing
+measurement instrument spans the recipe, the model deployment, the software stack,
+hardware-sensitive numerical behavior, and the artifact-processing history.
+Controlled reconstruction can \emph{attribute} and sometimes \emph{close} apparent
+reproducibility gaps; but when provenance has been lost or transformed, the original
+experiment can be \emph{non-identifiable}. What the internship established, at the
+evidence level actually reached:
 
 \begin{enumerate}
-  \item \textbf{Base-model classic benchmarks reproduce near-exactly.} The
-        \code{olmo-7b} base model matches the public headline scores across GSM,
-        MMLU, commonsense, med\_qa, narrative\_qa, and wmt\_14 to within a few
-        thousandths (Figure~\ref{fig:olmoheatmap}); GPT-OSS-20B reproduces all four
-        of its benchmarks with squared error $\le 4\times10^{-4}$
-        (Figure~\ref{fig:gptoss}). These are positive reproducibility results on
-        genuinely local open-weight execution.
-  \item \textbf{Precision is the dominant hidden variable.} The most consequential
-        single finding is that every unpinned-dtype \textsc{helm}
-        \code{HuggingFaceClient} run executed in \code{float32}, and reproducing at
-        \code{float32} matches the official completions \emph{exactly} while
-        bf16/fp16 do not (\S\ref{sec:fp32}). Many apparent ``irreproducibilities''
-        of OLMo instruct models are precision-boundary artifacts, not
-        reproducibility failures.
-  \item \textbf{Most large-grid ``failures'' are environment/recipe failures.} Of
-        the original broad candidate grid, roughly half the jobs failed --- but the
-        failures cluster into gated datasets, revoked download access, missing
-        credentials, model-packaging issues, and resource contention. These are
-        \emph{filtering reasons}, and conflating them with a reproducibility verdict
-        would produce a spurious blanket negative.
-  \item \textbf{The residual true-reproducibility drift is concentrated and
-        explainable.} Where local and public genuinely differ under a matched
-        recipe (e.g.\ instruct-model \code{ifeval}), the difference traces to
-        \emph{specific}, named, unrecorded parameters --- the chat-template version
-        (\code{add\_generation\_prompt}), the tokenizer's special-token append, the
-        attention/device forward-pass numerics on long-form greedy generation ---
-        not to inherent benchmark instability.
+  \item \textbf{The unrecorded execution substrate is real and consequential
+        (established).} \textsc{helm} records the recipe and the model name but not
+        the dtype, revision, tokenizer/template version, attention kernel, or
+        software-stack versions (of 148 HF-client deployments, 19 pin dtype, 7 pin
+        revision; Appendix~\ref{app:unrecorded}). Individual substrate parameters are
+        \emph{identifiable to varying degrees}: the loader's dtype default and the
+        deployment client class are readable from source/config; the tokenizer's
+        special-token append is readable from the repo; the exact
+        \code{transformers}/\code{torch}/CUDA versions and hardware are not.
+  \item \textbf{Attribution pilot on OLMo (partly established, partly pending).} On a
+        small ifeval sample, \code{float32} candidates best match the sampled public
+        OLMo outputs, consistent with the deductive dtype-default argument
+        (\S\ref{sec:fp32}); the OLMo-7B prompt-independent gibberish is attributable
+        to a tokenizer EOS-append; OLMoE-instruct disagreement is attributable to
+        \code{add\_generation\_prompt} chat-template drift. These are \emph{probe-} and
+        \emph{mechanism-level} attributions on a pilot, \textbf{not} yet end-to-end
+        \textsc{helm} reproductions confirmed on held-out instances (the ``confirm''
+        step remains the top open experiment; \S\ref{chap:reporting} and the paper
+        plan). ``Precision is \emph{the} dominant variable'' is a hypothesis
+        supported within this pilot, not established across benchmarks or families.
+  \item \textbf{A recoverable-vs-non-identifiable contrast (the strongest conceptual
+        result).} OLMo is the \emph{recoverable} case: the missing provenance (dtype,
+        tokenizer, template) can be reconstructed and its effect measured. The
+        original-paper classic models (GPT-J, GPT-NeoX, OPT) are the
+        \emph{non-identifiable} case: their run-specs name a class path that resolves
+        in no released \textsc{helm} and triangulates to unreleased pre-v0.1.0 code
+        (G13, \S\ref{sec:g13}), so the producing instrument cannot be uniquely
+        identified or rebuilt. This contrast --- some lost provenance is
+        experimentally recoverable, some is fundamentally underdetermined --- is a
+        sharper contribution than a uniformly positive ``we closed the gaps'' story.
+  \item \textbf{Non-runnable cases are a separate gate, not a reproducibility
+        verdict.} Roughly half of the original broad grid could not be \emph{run at
+        all} (gated datasets, revoked download access, missing credentials, packaging,
+        resource contention). These are \emph{filtering/eligibility} reasons upstream
+        of any disagreement measurement --- they answer ``can we run this?'', not
+        ``did it reproduce?'' --- and must not be folded into a negative result.
 \end{enumerate}
 
 \section{The reusable methodology}
@@ -2175,5 +2252,118 @@ developer journals); the research direction, design decisions, GPU-host executio
 and interpretation are the author's. Readers preparing the academic manuscript
 should treat the \S-cross-referenced figures and tables here as pointers into those
 primary artifacts, which remain the ground truth.
+
+%==============================================================================
+\chapter{Interpretive Revision (2026-07-15): Epistemic Status of the Central Claims}
+\label{app:revision}
+%==============================================================================
+
+The body of this chronology reconstructs, in a single after-the-fact narrative
+voice, what was believed and reported across the internship. Some of those claims
+--- especially around the \code{float32} result --- were stated more strongly than
+the evidence currently supports. Rather than rewrite the dated narrative (which
+would erase what was believed at each point), this appendix records the corrected
+epistemic status in one place. It was prompted by an external review of the
+chronology and the paper plan, and its conclusions are folded into
+[`docs/planning/tmlr-paper-plan.md`](../planning/tmlr-paper-plan.md).
+
+\section{A workflow-status vocabulary}
+
+Claims in the body should be read against \emph{where in the pipeline} their
+evidence sits. These are not interchangeable, and the body sometimes chose the
+strongest available interpretation:
+
+\begin{enumerate}[nosep]
+  \item \textbf{Infrastructure implemented} --- code exists, unit-tested on a CPU host.
+  \item \textbf{Smoke-tested execution} --- ran end-to-end on a tiny input, once.
+  \item \textbf{Deployment-match probe} --- an oracle-scored config sweep over a small
+        sample, possibly using non-default request knobs. \emph{Discovery, not
+        confirmation.}
+  \item \textbf{Exact-spec run} --- the official \file{run\_spec.json} executed
+        verbatim on the real path.
+  \item \textbf{Complete \textsc{helm} artifact generation} --- normal
+        \file{scenario\_state.json}/\file{stats.json} produced.
+  \item \textbf{Final comparison report} --- run through the standard pair-report
+        pipeline.
+  \item \textbf{Fresh vs.\ stale store} --- regenerated with current code vs.\ a store
+        predating a relevant fix.
+\end{enumerate}
+
+The single most important correction: the \code{float32} result (\S\ref{sec:fp32})
+sits at level~3 (probe / discovery), not levels~4--6. The ``confirm'' step that
+would move it to a reproduction result --- land the winning config on the ordinary
+\textsc{helm} path, run the exact public \file{run\_spec.json}, generate normal
+artifacts, compare via pair-report, and evaluate on \emph{held-out} instances --- has
+not been run for any model. Configuration discovery and held-out confirmation must be
+separated, or a config fit to a small sample is reported as if it were an identified
+fact.
+
+\section{A finer disagreement taxonomy}
+
+\S\ref{sec:distinction}'s binary --- ``recipe/environment failure'' vs.\ ``true
+reproducibility failure'' --- is too coarse, and the phrase ``true reproducibility
+failure'' should be \emph{avoided} whenever execution provenance is incomplete. Keep
+the upstream run-vs-not-run gate (non-runnable = a filtering/eligibility reason, not
+a disagreement), and for observed disagreements use:
+
+\begin{enumerate}[nosep]
+  \item \textbf{Recipe mismatch} --- the prompts/decoding/scenario differ (e.g.\ the
+        BBQ \code{output\_format\_instructions} drift, G5).
+  \item \textbf{Deployment mismatch} --- serving engine / client class differs (vLLM
+        vs.\ hosted API; \code{HuggingFaceClient} vs.\ vLLM).
+  \item \textbf{Execution-instrument mismatch} --- precision, tokenizer/template
+        version, attention kernel, device placement, software-stack versions.
+  \item \textbf{Artifact-interpretation or migration mismatch} --- the pandas
+        row-order / instance-id case (EEE Case~A); the G13 class-path migration.
+  \item \textbf{Residual disagreement under controlled equivalence} --- the only
+        category that resembles conventional repeatability failure: everything
+        controllable is matched and a gap remains.
+  \item \textbf{Historically non-identifiable reproduction} --- the surviving
+        artifacts and releases do not uniquely specify what faithful reproduction
+        would even mean (GPT-J / GPT-NeoX / OPT via G13). Qualitatively different from
+        (5): not ``it failed to repeat'' but ``the target is underdetermined.''
+\end{enumerate}
+
+Most of what the body called ``deployment-boundary artifacts'' are categories
+(2)--(4) --- recoverable by controlling the substrate. Category (6) is the negative
+counterpart and is a first-class result, not a gap to be closed.
+
+\section{Corrected-claims table}
+
+\begin{longtable}{@{}p{0.42\textwidth}p{0.54\textwidth}@{}}
+\toprule
+\textbf{As stated in the body} & \textbf{Corrected status} \\
+\midrule
+\endhead
+``The official OLMoE run --- and every OLMo HF-client run --- executed in
+\code{float32}.'' & The \emph{loader code path} defaults to fp32 under every
+\code{transformers} version consistent with the run date (a deductive claim, the
+stronger leg), \emph{conditional} on the unrecorded \code{transformers}$<$5. Likely,
+not proven. \\
+``fp32 reproduces the official completions \emph{exactly}.'' & Among tested configs,
+fp32 candidates \emph{best matched the sampled} public outputs ($n\approx12$ ifeval),
+using a probe-only \code{add\_special\_tokens=False} knob. Not an end-to-end HELM
+reproduction; not held-out. \\
+``all four officials reproduce at fp32.'' & Probe-level, ifeval-only, instruct-only.
+OLMoE via HF fp32; dense OLMo-2 via vLLM fp32; the HF probe does \emph{not} reproduce
+OLMo-2 (an open execution-sensitivity finding, below). \\
+``Precision is the dominant hidden variable.'' & Supported \emph{within} the OLMo
+ifeval pilot; not established across benchmarks or model families. \\
+``the OLMo-2 HF divergence is the probe mis-generating, not science.'' & Reframed: a
+\emph{current} HF stack failing to reproduce an \emph{apparently} HF-produced
+historical result under byte-identical prompt tokens is itself an unresolved
+systematic divergence under prompt-token equivalence --- evidence for the thesis. \\
+``residual drift is small, concentrated, and almost always attributable.'' & A
+motivating \emph{hypothesis}, pending the confirm step, fresh stores, cross-machine
+data, and a controlled ablation. Not yet established. \\
+OLMo/GPT-OSS heatmaps ``exist''. & Report stores exist (Jul 14) but carry
+stale-local numbers on disk; must be regenerated with current code before citing. \\
+\bottomrule
+\end{longtable}
+
+None of these corrections weaken the \emph{methodological} contributions (from-spec
+replay, era-pinned instruments, sweep-don't-guess attribution, the provenance
+taxonomy) or the \emph{conceptual} contribution (recoverable vs.\ non-identifiable
+provenance). They scope the \emph{empirical} claims to what has actually been run.
 
 \end{document}
