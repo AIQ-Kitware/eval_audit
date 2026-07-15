@@ -1,0 +1,167 @@
+% ---------------------------------------------------------------------------
+% references.bib for the TMLR draft. Entries marked "% VERIFY" have details
+% (venue/year) that should be checked against the source before camera-ready.
+% ---------------------------------------------------------------------------
+
+@article{liang2023helm,
+  title   = {Holistic Evaluation of Language Models},
+  author  = {Liang, Percy and Bommasani, Rishi and Lee, Tony and others},
+  journal = {Transactions on Machine Learning Research (TMLR)},
+  year    = {2023},
+  note    = {arXiv:2211.09110}
+}
+
+@techreport{eee2026,
+  title       = {Every Eval Ever: A Normalized Representation for Detecting
+                 Benchmark Reproducibility Discrepancies},
+  author      = {Crall, Jon and {Kitware EvalAudit contributors}},
+  institution = {Kitware, Inc.},
+  year        = {2026},
+  note        = {Internal technical report / NeurIPS 2026 submission (in prep). % VERIFY}
+}
+
+@misc{eval-harness,
+  title  = {A Framework for Few-Shot Language Model Evaluation},
+  author = {Gao, Leo and Tow, Jonathan and Biderman, Stella and others},
+  year   = {2023},
+  howpublished = {EleutherAI lm-evaluation-harness, Zenodo},
+  note   = {% VERIFY version/DOI}
+}
+
+@article{pineau2021checklist,
+  title   = {Improving Reproducibility in Machine Learning Research
+             (A Report from the {NeurIPS} 2019 Reproducibility Program)},
+  author  = {Pineau, Joelle and Vincent-Lamarre, Philippe and Sinha, Koustuv and others},
+  journal = {Journal of Machine Learning Research (JMLR)},
+  year    = {2021}
+}
+
+@inproceedings{dodge2019show,
+  title     = {Show Your Work: Improved Reporting of Experimental Results},
+  author    = {Dodge, Jesse and Gururangan, Suchin and Card, Dallas and
+               Schwartz, Roy and Smith, Noah A.},
+  booktitle = {EMNLP},
+  year      = {2019}
+}
+
+@inproceedings{sclar2024quantifying,
+  title     = {Quantifying Language Models' Sensitivity to Spurious Features
+               in Prompt Design},
+  author    = {Sclar, Melanie and Choi, Yejin and Tsvetkov, Yulia and Suhr, Alane},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2024}
+}
+
+@article{mizrahi2024state,
+  title   = {State of What Art? A Call for Multi-Prompt {LLM} Evaluation},
+  author  = {Mizrahi, Moran and Kaplan, Guy and Malkin, Dan and others},
+  journal = {Transactions of the Association for Computational Linguistics (TACL)},
+  year    = {2024}
+}
+
+@inproceedings{wolf2020transformers,
+  title     = {Transformers: State-of-the-Art Natural Language Processing},
+  author    = {Wolf, Thomas and Debut, Lysandre and Sanh, Victor and others},
+  booktitle = {EMNLP: System Demonstrations},
+  year      = {2020}
+}
+
+@inproceedings{kwon2023vllm,
+  title     = {Efficient Memory Management for Large Language Model Serving
+               with {PagedAttention}},
+  author    = {Kwon, Woosuk and Li, Zhuohan and Zhuang, Siyuan and others},
+  booktitle = {ACM SOSP},
+  year      = {2023}
+}
+
+@inproceedings{biderman2023pythia,
+  title     = {Pythia: A Suite for Analyzing Large Language Models Across
+               Training and Scaling},
+  author    = {Biderman, Stella and Schoelkopf, Hailey and Anthony, Quentin and others},
+  booktitle = {ICML},
+  year      = {2023}
+}
+
+@inproceedings{mitchell2019modelcards,
+  title     = {Model Cards for Model Reporting},
+  author    = {Mitchell, Margaret and Wu, Simone and Zaldivar, Andrew and others},
+  booktitle = {ACM FAT*},
+  year      = {2019}
+}
+
+@article{gebru2021datasheets,
+  title   = {Datasheets for Datasets},
+  author  = {Gebru, Timnit and Morgenstern, Jamie and Vecchione, Briana and others},
+  journal = {Communications of the ACM},
+  year    = {2021}
+}
+
+@misc{bowyer2026efficient,
+  title  = {Efficient Benchmarking Is Just Feature Selection and Multiple Regression},
+  author = {Bowyer, Sam and Locatelli, Davide and Cao, Yiming},
+  year   = {2026},
+  note   = {% VERIFY -- preprint reviewed in the internship literature survey}
+}
+
+% --- models under study (add \citep at first mention) ---
+@inproceedings{groeneveld2024olmo,
+  title     = {{OLMo}: Accelerating the Science of Language Models},
+  author    = {Groeneveld, Dirk and Beltagy, Iz and Walsh, Pete and others},
+  booktitle = {ACL},
+  year      = {2024}
+}
+
+@misc{olmo2_2024,
+  title  = {{OLMo} 2: Furious},
+  author = {{Allen Institute for AI}},
+  year   = {2024},
+  note   = {Technical report. % VERIFY}
+}
+
+@misc{muennighoff2024olmoe,
+  title  = {{OLMoE}: Open Mixture-of-Experts Language Models},
+  author = {Muennighoff, Niklas and Soldaini, Luca and Groeneveld, Dirk and others},
+  year   = {2024},
+  note   = {arXiv:2409.02060 % VERIFY}
+}
+
+@misc{together2023redpajama,
+  title  = {{RedPajama-INCITE}: Open Models Trained on the RedPajama Dataset},
+  author = {{Together Computer}},
+  year   = {2023},
+  howpublished = {\url{https://www.together.ai}}
+}
+
+@misc{wang2021gptj,
+  title  = {{GPT-J-6B}: A 6 Billion Parameter Autoregressive Language Model},
+  author = {Wang, Ben and Komatsuzaki, Aran},
+  year   = {2021}
+}
+
+@inproceedings{black2022gptneox,
+  title     = {{GPT-NeoX-20B}: An Open-Source Autoregressive Language Model},
+  author    = {Black, Sid and Biderman, Stella and Hallahan, Eric and others},
+  booktitle = {ACL Workshop on Challenges \& Perspectives in Creating Large Language Models},
+  year      = {2022}
+}
+
+@misc{zhang2022opt,
+  title  = {{OPT}: Open Pre-trained Transformer Language Models},
+  author = {Zhang, Susan and Roller, Stephen and Goyal, Naman and others},
+  year   = {2022},
+  note   = {arXiv:2205.01068}
+}
+
+@inproceedings{hendrycks2021mmlu,
+  title     = {Measuring Massive Multitask Language Understanding},
+  author    = {Hendrycks, Dan and Burns, Collin and Basart, Steven and others},
+  booktitle = {ICLR},
+  year      = {2021}
+}
+
+@article{zhou2023ifeval,
+  title   = {Instruction-Following Evaluation for Large Language Models},
+  author  = {Zhou, Jeffrey and Lu, Tianjian and Mishra, Swaroop and others},
+  journal = {arXiv:2311.07911},
+  year    = {2023}
+}

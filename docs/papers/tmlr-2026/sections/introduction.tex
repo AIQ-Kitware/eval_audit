@@ -1,0 +1,102 @@
+\section{Introduction}
+\label{sec:intro}
+
+Large-scale benchmark suites such as \helm \citep{liang2023helm} have become the
+shared substrate on which the community compares language models. A central
+promise of these suites is transparency: for many (scenario, model) pairs the
+public corpus ships the exact prompts sent to the model, the completions it
+returned, and the metrics computed from them. This apparent completeness invites
+a natural reproducibility question --- \emph{re-run the evaluation locally and
+check that the numbers match} --- and a natural expectation that open-weight
+models, whose weights anyone can download, should reproduce cleanly.
+
+Our starting point was exactly this program: reproduce a large slice of public
+\helm on local open-weight hardware. It did not survive contact with the data,
+and \emph{the way it failed is the contribution of this paper.} Two facts
+dominate. First, a large fraction of the open-weight corpus was originally served
+not by the harness itself but through a hosted inference provider (frequently
+Together AI), whose software and hardware stack the public record does not
+describe. Second, and more fundamentally, the artifact that \emph{does} survive
+--- the resolved \file{run\_spec.json} --- captures \emph{what} to generate
+(scenario, prompts, decoding parameters, metrics) and the \emph{name} of the
+model and its deployment, but almost nothing about the \emph{execution substrate}:
+the precision the weights were loaded at, the exact checkpoint revision, the
+attention kernel, the tokenizer and chat-template versions, and the software-stack
+versions. A benchmark recipe, in other words, is not a complete experimental
+record.
+
+Once this is taken seriously, ``did it reproduce?'' fractures into three distinct
+questions that the literature often conflates: (i) \emph{can the evaluation be run
+at all?} (gated models and datasets, revoked download endpoints, packaging
+incompatibilities, unavailable judges --- these are eligibility and environment
+filters, not reproduction outcomes); (ii) \emph{can a faithful local execution be
+reconstructed} when the key execution parameters were never written down and the
+original may have been served by an external provider; and (iii) when local and
+public numbers differ, \emph{to what is the difference attributable} --- a genuine
+recipe disagreement, a controllable execution-substrate parameter, an
+artifact-processing effect, or an irreducibly lost provenance?
+
+\paragraph{Thesis.} We therefore reframe benchmark reproduction as a layered
+\emph{system-identification} problem. The measured score is a function
+$Y = F(R, D, I, A, U)$ of the recorded recipe $R$, the deployment $D$, the
+execution instrument $I$, the artifact-interpretation history $A$, and residual
+stochastic/numerical influences $U$ (\S\ref{sec:model}). The public record
+exposes only a projection of these variables. Controlled reconstruction can
+\emph{attribute} an observed disagreement to a specific layer, and can sometimes
+\emph{close} it by supplying the missing parameter; but when provenance has been
+lost or transformed, the original measurement can be \emph{non-identifiable from
+the surviving evidence examined}. This is a more defensible and more scientifically
+interesting claim than a blanket ``open-weight \helm is (ir)reproducible.''
+
+\paragraph{Contributions.} Concretely, this paper contributes:
+\begin{enumerate}[nosep,leftmargin=1.4em]
+  \item \textbf{A measurement model and a disagreement taxonomy}
+        (\S\ref{sec:model}). We factor a benchmark result into recipe,
+        deployment, execution-instrument, artifact-interpretation, and residual
+        layers; classify observed disagreements into six causes; and separate
+        that ``why'' taxonomy from three orthogonal reproduction \emph{targets}
+        --- artifact reconstruction, procedural reproduction, and claim-level
+        robustness --- clarifying what ``reproduction'' should even mean.
+  \item \textbf{\textsc{EvalAudit}, a reproducibility-auditing system}
+        (\S\ref{sec:system}): exact \file{run\_spec.json} replay (never recipe
+        reconstruction), an execution-substrate reconstruction and search tool,
+        version-pinned ``era'' scoring containers that freeze the measurement
+        instrument, and a framework-free layered comparison core.
+  \item \textbf{Attribution case studies on modern open-weight models}
+        (\S\ref{sec:olmo}). On OLMo-family models we attribute concrete
+        disagreements to a tokenizer special-token append, to a chat-template
+        \code{add\_generation\_prompt} flag whose behavior depends on the
+        \code{transformers} version, and to load precision --- while being
+        explicit that the precision result is at present a configuration
+        \emph{discovery} awaiting ordinary-path confirmation, and that one dense
+        OLMo-2 divergence remains unresolved.
+  \item \textbf{A recoverable-vs-non-identifiable contrast}
+        (\S\ref{sec:redpajama}--\ref{sec:classic}). RedPajama-3B demonstrates
+        end-to-end execution under declared historical proxy instruments, whereas
+        the original-paper classic models (GPT-J, GPT-NeoX, OPT) carry a metric
+        class path that resolves in \emph{no} released \helm version and
+        triangulates to unreleased pre-v0.1.0 code, making the producing
+        instrument non-identifiable from surviving evidence.
+  \item \textbf{A minimal provenance standard} (\S\ref{sec:provenance}). We show
+        that three recorded fields --- \code{model\_revision},
+        \code{torch\_dtype}, and \code{transformers\_version} --- transitively
+        close most of the identifiability gap, and give a backward-compatible way
+        to record them (outside the run-spec identity string, so official$
+        \leftrightarrow$local pairing is preserved), plus an artifact-release
+        checklist.
+\end{enumerate}
+
+\paragraph{Scope and honesty about evidence.} This paper is deliberately explicit
+about the maturity of each empirical claim. Several results rest on
+configuration-discovery probes rather than completed end-to-end reproductions;
+we mark these throughout and describe the confirmation experiment that would
+promote them (\S\ref{sec:olmo-confirm}). The system, the conceptual framework,
+and the recoverable-vs-non-identifiable contrast stand independently of whether
+any single confirmation succeeds.
+
+This work builds directly on \eee \citep{eee2026}, a normalized artifact
+representation that \emph{detects} reproducibility discrepancies but, by its
+authors' own statement, cannot separate checkpoint, quantization, precision,
+tokenizer, and generation-kernel effects. Our positioning is complementary and
+one sentence long: \emph{\eee detects reproducibility gaps; this work studies
+their attribution, possible closure, and identifiability.}

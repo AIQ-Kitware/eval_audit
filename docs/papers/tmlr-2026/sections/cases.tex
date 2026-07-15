@@ -1,0 +1,218 @@
+\section{Case Studies: From Attribution to Non-Identifiability}
+\label{sec:cases}
+
+The three case studies instantiate the two regimes of \S\ref{sec:model}. OLMo is
+the \emph{partially recoverable} modern case: several disagreements attribute to
+named unrecorded parameters (\S\ref{sec:olmo}). RedPajama-3B demonstrates
+end-to-end execution under \emph{declared proxy} historical instruments
+(\S\ref{sec:redpajama}). The original-paper classic models are the
+\emph{non-identifiable} case: their producing instrument cannot be recovered from
+surviving evidence (\S\ref{sec:classic}).
+
+\subsection{OLMo: attributing modern disagreements to unrecorded parameters}
+\label{sec:olmo}
+
+We study six OLMo-family models
+\citep{groeneveld2024olmo,olmo2_2024,muennighoff2024olmoe} --- four recent instruct models
+(\code{olmoe-1b-7b-0125-instruct}, \code{olmo-2-1124-7b/13b-instruct},
+\code{olmo-2-0325-32b-instruct}) on capability benchmarks
+(\code{bbq}, \code{gpqa}, \code{ifeval} \citep{zhou2023ifeval},
+\code{mmlu\_pro} \citep{hendrycks2021mmlu}) and two older base
+models with broad classic-track coverage. Three attributions and one open puzzle
+emerge.
+
+\paragraph{(a) A tokenizer special-token append (confirmed).} During from-spec
+reproduction of \code{narrative\_qa}, local OLMo-7B emitted the same
+prompt-independent boilerplate for \emph{every} instance while the official
+conditioned correctly, with \code{prompts\_equal=True} at the string level. The
+first hypothesis --- fp16 numerical instability --- was \emph{refuted} by a
+deployment sweep. The cause was a tokenizer issue: \code{OLMo-7B-hf}'s tokenizer
+appends an \code{<|endoftext|>} token to the prompt under vLLM's default
+\code{add\_special\_tokens=True}, which the original deployment did not do and
+which \helm never recorded. Serving the append-free tokenizer and forwarding
+\code{add\_special\_tokens=false} restores prompt conditioning. This is the
+paradigm case: an apparent flat irreproducibility was a single unrecorded
+request-time flag --- an execution-instrument mismatch (Table~\ref{tab:identifiability},
+row ``tokenizer special-token behavior''), fully recoverable.
+
+\paragraph{(b) A chat-template version dependency (confirmed).} \helm always calls
+\code{apply\_chat\_template(\ldots, add\_generation\_prompt=True)}, but that flag
+is a no-op unless the chat template \emph{implements} it. The OLMoE template
+shipped with \helm's older \code{transformers} ignored the flag --- so the model
+was fed the prompt \emph{without} the trailing assistant-turn marker --- whereas a
+modern \code{transformers}/vLLM ships an updated template that honors it and
+\emph{appends} the marker, changing the prompt and the output. Rendering with
+\code{add\_generation\_prompt=false} on the modern stack moves the output back
+toward the official, confirmed empirically. The attribution is to the
+\emph{tokenizer/chat-template version} coordinate, whose effective behavior
+depends on the (unrecorded) \code{transformers} version --- a clean example of a
+software-version dependency hiding inside a recipe.
+
+\paragraph{(c) Load precision: a discovery, with a deductive leg (not yet
+confirmed).} \helm's \code{HuggingFaceClient} loads a model with only the kwargs
+the deployment config supplies; for the OLMo instruct deployments that is
+\code{device\_map=auto} and \emph{no} \code{torch\_dtype}. Under every
+\code{transformers} 4.x, an unpinned load defaults to \code{float32}, ignoring the
+checkpoint's bf16 config (reading the checkpoint dtype is a v5 change). Since the
+OLMoE architecture landed in \code{transformers}${\sim}$4.45, a January-2025 run
+sits squarely in the fp32-default regime. This is a \emph{deductive} argument ---
+read off the loader source and the version-dependent default, not fit to outputs
+--- and is the stronger leg; its residual is the one parameter it depends on, the
+exact \code{transformers} version, which the run directory bounds but does not
+record.
+
+A separate, small \emph{discovery probe} corroborates it: an oracle-scored
+deployment-match sweep over $n\approx 12$ \code{ifeval} instances finds float32
+candidate cells with the highest agreement to the sampled public completions
+(Table~\ref{tab:fp32}). The winning \emph{engine} depends on architecture:
+OLMoE is MoE, so vLLM's fused-kernel float32 path is infeasible on workstation
+cards and only in-process \code{transformers} float32 reproduces the sampled
+OLMoE outputs, whereas the dense OLMo-2 samples matched most closely under vLLM
+float32.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Model} & \textbf{HF best} & \textbf{vLLM best} \\
+\midrule
+OLMoE-1B-7B (MoE)   & \textbf{fp32 match 0.971} (quasi 1.0) & fp16 partial 0.494 \\
+OLMo-2-7B (dense)   & fp32 partial 0.175 (quasi 0.0)       & \textbf{fp32 match 0.915} \\
+OLMo-2-13B (dense)  & fp32 partial 0.324 (quasi 0.0)       & \textbf{fp32 match 0.904} \\
+OLMo-2-32B (dense)  & fp16 partial 0.234 (quasi 0.0)       & \textbf{fp32-tp2 match 0.961} \\
+\bottomrule
+\end{tabular}
+\caption{Deployment-match \emph{discovery} probe ($n\approx 12$ \code{ifeval}
+instances, scored against sampled public completions; winning cells additionally
+use a probe-only \code{add\_special\_tokens=false} knob). Float32 is the
+highest-agreement tested precision. \textbf{This is configuration discovery, not a
+completed reproduction}: matching a small oracle sample does not uniquely identify
+the producing deployment, and the confirmation step of \S\ref{sec:olmo-confirm}
+has not been run. The deductive dtype argument (text) is the stronger leg.}
+\label{tab:fp32}
+\end{table}
+
+\paragraph{(d) An unresolved dense-OLMo-2 Hugging Face divergence.} Rigor demanded
+following up an inconsistency: the in-process \code{transformers} float32 probe
+exactly matched the sampled OLMoE outputs but gave near-zero quasi-match for the
+dense OLMo-2 models, even though those officials are \emph{recorded as}
+\code{HuggingFaceClient} deployments. Tokenizing the exact prompt showed
+byte-identical tokens across paths, so it is not a prompt difference; yet the
+current-\code{transformers} float32 first token disagreed with the official while
+vLLM float32 matched. A first-token disagreement on byte-identical prompt tokens
+localizes the divergence to the forward pass. We report this as an
+\emph{unresolved systematic divergence under prompt-token equivalence} --- direct
+evidence of execution-stack sensitivity --- and are explicit that its cause is not
+yet isolated: candidates include the model/tokenizer revision, the
+\code{transformers}/\code{torch} version, the attention implementation, device
+placement, and generation defaults, \emph{and}, not yet ruled out, a defect in our
+own dense-model probe path. We reject only the premature dismissal of the
+divergence, not the possibility that our tooling contributes to it.
+
+\paragraph{Store status (honest reporting).} The aggregate OLMo drift report on
+disk is \emph{stale}: the base-model \code{olmo-7b} classic cells carry an
+un-deduplicated local-halving artifact (e.g.\ MMLU public/local $0.295/0.144$),
+whereas the corrected value is $0.295/0.287$. The code fix is committed but the
+store was not regenerated, and --- because the raw run artifacts were pruned --- a
+correct report requires a \emph{re-run}, not merely a re-render. We therefore do
+not cite base-model OLMo aggregates as results in this draft.
+\scaffold{Insert the \emph{regenerated} OLMo aggregate score-drift heatmap
+(6 models $\times$ ${\sim}12$ benchmarks) after a fresh run with the current
+reporting code. Expected qualitative pattern: base-model classic benchmarks
+reproduce near-exactly; instruct-model \code{ifeval} shows the largest drift,
+consistent with the chat-template and precision findings above.}
+
+\subsubsection{The confirmation experiment (design, pending)}
+\label{sec:olmo-confirm}
+
+The precision result is at level ``deployment-match probe'' and must be promoted
+to a confirmed reproduction before it can carry a positive attribution claim. The
+protocol separates discovery from held-out confirmation:
+\begin{enumerate}[nosep,leftmargin=1.6em]
+  \item freeze the discovery instances and the winning candidate configuration;
+  \item determine whether the win requires the probe-only
+        \code{add\_special\_tokens=false} behavior, and if so implement it through
+        the ordinary tokenizer/client path;
+  \item execute the exact public \file{run\_spec.json} through the normal \helm
+        path (not the probe), generating standard artifacts;
+  \item compare through the standard pair-report pipeline;
+  \item evaluate on \emph{held-out} instances and, preferably, a second benchmark;
+  \item preserve the full candidate surface, not only the winner.
+\end{enumerate}
+A success supports a concrete attribution-and-closure claim; a failure is itself
+publishable --- it would show that output-matching probes do not automatically
+translate into faithful benchmark execution.
+\scaffold{Insert the confirmation results table: for one dense and one MoE model
+$\times$ two benchmarks, report \{naive, exact-recipe, reconstructed-deployment\}
+agreement on held-out instances, with exact-token, normalized-text, first-divergent-token,
+common-prefix-length, and task-metric columns. \pending{ordinary-path OLMo run}}
+
+\subsubsection{Generalization probe: GPT-OSS-20B (candidate)}
+\label{sec:gptoss}
+As a test that the machinery generalizes beyond OLMo, we replayed the four
+ungated-judge public \code{gpt-oss-20b} rows (\code{bbq}, \code{gpqa},
+\code{ifeval}, \code{mmlu\_pro}) from spec, after diagnosing and fixing a
+null-content chat crash (a null-vs-empty-string serving difference between the
+hosted and local engines; normalizing null$\to$``'' is faithful). The regenerated
+report shows local and public headline scores agreeing closely (squared error
+${\le}4{\times}10^{-4}$, more than an order of magnitude --- ${\approx}30\times$
+--- tighter than the OLMo instruct \code{ifeval} drift). We report this as a
+\emph{promising candidate}, not a result: the report layer is current-code, but
+the underlying run artifacts were pruned, so run-artifact and comparison
+provenance must be re-established (re-run, preserve, hash, and pass a
+manifest-based acceptance audit) before the numbers are cited.
+\scaffold{Promote GPT-OSS to a result after re-running and preserving the store;
+insert the four-cell public-vs-local headline comparison with a preservation
+manifest.}
+
+\subsection{RedPajama-3B: execution under declared proxy-era instruments}
+\label{sec:redpajama}
+
+Not every historical run is unrecoverable. \code{redpajama-incite-base-3b-v1}
+\citep{together2023redpajama} was run end-to-end through \emph{both} classic-era instruments (v0.2.4 and v0.3.0
+scoring containers, \S\ref{sec:eras}) on a small workstation, exercising a
+validation ladder: image sanity, instrument fidelity on a \code{pandas}-sensitive
+scenario (byte-for-byte instance identity, no model), an end-to-end single run, a
+full per-era packet, and a per-scenario data-availability audit (data-fetch/auth
+failures are classified as environment SKIPs, not instrument failures). This
+demonstrates \emph{procedural reproduction under a declared proxy instrument}
+(\S\ref{sec:targets}): the era container reproduces \emph{a} faithful scoring
+environment for the classic recipe. We are careful to distinguish this from
+reconstructing the \emph{original} producing instrument --- the two later eras
+carry byte-identical public artifacts for the shared runs (carried forward, not
+re-run), so ``two eras agree'' is one public number measured by two instruments,
+not two independent confirmations.
+\scaffold{Insert the RedPajama validation-ladder table (per-era packet coverage,
+instrument-fidelity byte match, environment-SKIP counts) from the preserved
+\code{era-redpajama} stores; this is the one case whose raw run artifacts survive
+and are directly packageable.}
+
+\subsection{GPT-J, GPT-NeoX, OPT: origin-instrument non-identifiability}
+\label{sec:classic}
+
+The original-paper classic models
+\citep{wang2021gptj,black2022gptneox,zhang2022opt} are the negative counterpart.
+Era-replaying them
+fails the shim's class preflight: their \file{run\_spec.json} names
+\code{helm.benchmark.basic\_metrics.BasicMetric}, a class path that resolves in
+\emph{no} released \helm version. An investigation over a blob-less clone of the
+\helm history establishes that the stored path is a once-migrated hybrid --- a bulk
+\code{benchmark.}$\to$\code{helm.benchmark.} prefix rewrite (applied at the
+\code{src/helm/} rename) of a run-spec whose metric class was still \emph{flat} at
+production time. Reversing the naive migration triangulates the producing code to
+an ${\sim}$4-week window of \emph{unreleased pre-v0.1.0} \helm (after scenarios
+were nested but before metrics were). The class-path \emph{shape} (flat vs.\
+subpackage) is thus a sharper origin fingerprint than release dates.
+
+\finding{The producing instrument for GPT-J / GPT-NeoX / OPT is
+\emph{non-identifiable from the surviving public and repository evidence
+examined}: no released version resolves the recorded class, and the triangulated
+origin is unreleased.}
+This is category (6) of \S\ref{sec:taxonomy}, not a repeatability failure. Because
+building the true origin instrument is infeasible, we treat any later-era run as a
+\emph{declared proxy} and make the substitution explicit: a self-verifying
+class-path canonicalization remaps the migrated class only when its known
+relocation resolves to the same leaf (a genuinely wrong era pin still fails
+loudly). We scope the claim carefully --- non-identifiable \emph{relative to
+surviving evidence}, not an absolute impossibility statement about hypothetical
+private provider archives.

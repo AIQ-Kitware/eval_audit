@@ -1,0 +1,120 @@
+\section{The \helm Gotchas Catalogue (condensed)}
+\label{app:gotchas}
+
+A reviewer-anticipating ledger of undocumented or hard-to-see \helm behaviors
+encountered while building the audit. Each is a concrete pitfall a reproduction
+paper's appendix should address; we list the load-bearing ones.
+
+\begin{description}[leftmargin=1em,itemsep=2pt]
+  \item[G1. \file{run\_spec.json} schema evolves silently.] Newer \helm populates
+    \code{adapter\_spec} fields older \helm omitted, so byte-for-byte hashing yields
+    $0/N$ matches across releases even for identical recipes. Workaround: a
+    schema-collapsed \emph{canonical recipe hash}.
+  \item[G5. \code{instructions} differ across releases on identical scenarios.]
+    E.g.\ MMLU prepends ``Answer with only a single letter.''; a genuine recipe
+    drift (a different prompt), surfaced via a comparability fact rather than
+    silently normalized.
+  \item[G7. Same weights $\neq$ same output across serving stacks.] Even greedy,
+    \code{transformers.generate()} and vLLM differ (kernels, batching,
+    stop-sequence handling, EOS/pad) --- a few-percent per-instance flip rate on
+    multiple-choice, tens of percent on long-form.
+  \item[G10. Public-track \code{suite\_version} is not the \helm release version.]
+    The same spec can appear identically in \code{v0.2.4} and \code{v0.3.0}; era
+    replay keys the instrument on \code{(public\_track, suite\_version)}.
+  \item[G13. Classic \code{class\_name} paths resolve in \emph{no} \helm version.]
+    \code{helm.benchmark.basic\_metrics.BasicMetric} is a once-migrated hybrid
+    (a naive \code{benchmark.}$\to$\code{helm.benchmark.} rewrite of a still-flat
+    production path), pinning the producing code to unreleased pre-v0.1.0 \helm.
+    Class-path \emph{shape} is the origin fingerprint (\S\ref{sec:classic}).
+\end{description}
+\scaffold{Expand to the full G1--G13 table for the camera-ready, with a
+one-line repro pointer for each.}
+
+\section{The Unrecorded-Parameter Taxonomy}
+\label{app:unrecorded}
+
+\helm serializes the recipe and the model name but almost nothing about \emph{how}
+the numbers were computed. Parameters ranked by effect on a greedy (temperature-0)
+output:
+
+\begin{table}[h]
+\centering\small
+\begin{tabularx}{\linewidth}{@{}p{0.05\linewidth}p{0.30\linewidth}Y@{}}
+\toprule
+\textbf{Tier} & \textbf{Parameter} & \textbf{Why it matters} \\
+\midrule
+1 & Model weight revision (SHA) & Same name $\neq$ same weights; fixes tokenizer,
+    template, generation config as-of-then. Highest leverage. \\
+1 & Load precision / dtype & Unpinned $\Rightarrow$ \code{transformers}-version
+    default (pre-v5 $=$ float32). \\
+1 & Quantization & GPTQ/AWQ/fp8/bnb change weights outright. \\
+1 & Software-stack versions & Sets the fp32-vs-bf16 default \emph{and} chat-template
+    behavior; nowhere in the run dir. \\
+2 & Attention implementation & eager/sdpa/flash/paged change reduction order
+    $\Rightarrow$ different logits at temp 0. \\
+2 & Hardware / device topology & determines kernels, TF32, and whether fp32 fits;
+    multi-GPU reduction order differs. \\
+2 & Batch composition & kernels are not batch-invariant. \\
+3 & Tokenizer $+$ chat-template version & the \code{add\_generation\_prompt} drift. \\
+3 & \code{add\_special\_tokens} / BOS & the OLMo-7B append case. \\
+3 & \code{generation\_config.json} defaults & injects unspecified fields. \\
+\bottomrule
+\end{tabularx}
+\caption{Unrecorded execution parameters (of 148 \code{HuggingFaceClient}
+deployments, 19 pin dtype, 7 pin revision). Several Tier-3 gaps collapse into
+Tier-1: pinning the model revision recovers the tokenizer, template, and
+generation config together.}
+\label{tab:unrecorded}
+\end{table}
+
+\section{Publication-Grade Preservation Checklist}
+\label{app:checklist}
+
+A paper artifact should preserve: source commit and dirty state; container
+digests; Python/\code{transformers}/\code{torch}/CUDA/driver versions; GPU model
+and topology; model and tokenizer commit SHAs; effective dtype, quantization,
+attention backend, TF32/matmul flags, batching, caching, tensor parallelism; raw,
+rendered, and tokenized prompts; complete generation configuration; frozen public
+run specs and hashes; raw local and public outputs; \emph{every} deployment-search
+candidate (not only the winner); compatibility rewrites; report-generation
+version; seeds and repeated-run manifests; and all analysis/figure scripts. Each
+experiment additionally records its reproduction \emph{target} and its
+run-artifact / comparison / report freshness (\S\ref{sec:provenance}).
+
+\section{Claim--Evidence--Status Ledger (excerpt)}
+\label{app:ledger}
+
+The camera-ready should carry a single machine-readable claim ledger as the
+source of truth for every empirical statement; prose tables are snapshots of it.
+An excerpt of the current statuses:
+
+\begin{table}[h]
+\centering\small
+\begin{tabularx}{\linewidth}{@{}p{0.42\linewidth}p{0.20\linewidth}Y@{}}
+\toprule
+\textbf{Claim} & \textbf{Status} & \textbf{Required action} \\
+\midrule
+Reproduction is a layered system-identification problem & established & --- \\
+OLMo-7B gibberish caused by tokenizer EOS-append & established & --- \\
+\code{ifeval} sensitive to \code{add\_generation\_prompt} & established & --- \\
+Historical OLMo dtype most likely float32 & conditional & preserve deployment
+    metadata; state version bounds \\
+Float32 best-matches sampled OLMo outputs & preliminary (probe) & ordinary-path
+    held-out confirmation \\
+Dense OLMo-2 HF divergence has a single known cause & unresolved & test substrate
+    axes \emph{and} the probe-artifact hypothesis \\
+GPT-J/NeoX/OPT identify a unique released producing harness & false & call later
+    eras declared proxies \\
+Classic origin interval is unreleased pre-v0.1.0 & established (scoped) & preserve
+    source-history search scope \\
+OLMo/GPT-OSS aggregates are publication-ready & not yet & regenerate + preserve +
+    acceptance-audit \\
+Most residual gaps are small and attributable & hypothesis & frozen denominator,
+    fresh stores, confirmation, ablations \\
+\bottomrule
+\end{tabularx}
+\caption{Excerpt of the claim--evidence--status ledger. Empirical claims are
+scoped to what has actually been run; several are explicitly pending the
+experiments of \S\ref{sec:limitations}.}
+\label{tab:ledger}
+\end{table}

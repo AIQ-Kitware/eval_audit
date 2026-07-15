@@ -1,51 +1,117 @@
 \documentclass[10pt]{article}
 
 % -----------------------------------------------------------------------
-% TMLR paper: Reproducibility of Open-Weight Model Evaluation on HELM
+% TMLR paper (DRAFT): A Benchmark Recipe Is Not an Experiment
 % Target: Transactions on Machine Learning Research (TMLR)
-% Goal: Expand reproducibility analysis across broader HELM suite,
-%       focusing on models deployable on-site without external providers.
+%
+% This is a scaffolded first draft generated from the master collaborative
+% reference (docs/Master_Collaborative_Reference_2026-07-15c/). Content that
+% depends on experiments not yet run is wrapped in \scaffold{...} or marked
+% \pending; every such marker is a concrete TODO for the empirical program.
+%
+% COMPILE: drops in the official TMLR style if tmlr.sty is present; otherwise
+% falls back to an article layout so the draft compiles as-is.
 % -----------------------------------------------------------------------
 
-\usepackage{tmlr}
-\usepackage{hyperref}
-\usepackage{url}
-\usepackage{booktabs}
-\usepackage{graphicx}
-
-\title{Reproducibility of Open-Weight Model Evaluation on HELM:\\
-A Systematic Analysis}
-
-\author{%
-  % Authors TBD
+\IfFileExists{tmlr.sty}{%
+  \usepackage{tmlr}%
+}{%
+  % --- fallback so the draft compiles without the TMLR class ---
+  \usepackage[margin=1in]{geometry}%
+  \usepackage{fancyhdr}%
+  \usepackage{natbib}%          % tmlr.sty provides natbib itself; load only in fallback
+  \pagestyle{fancy}\fancyhf{}\fancyhead[C]{\small\itshape Draft --- not for distribution}\fancyfoot[C]{\thepage}%
 }
 
-\begin{document}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{xspace}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue]{hyperref}
+\usepackage{url}
+\usepackage{xurl}
 
+% ---- column types & shorthands ----
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\eee}{\textit{Every Eval Ever}\xspace}
+\newcommand{\eeeshort}{\textsc{eee}\xspace}
+\newcommand{\helm}{\textsc{helm}\xspace}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\file}[1]{\texttt{#1}}
+\newcommand{\finding}[1]{\par\smallskip\noindent\textbf{Finding.}~\emph{#1}\par\smallskip}
+
+% ---- scaffolding markers: make "missing" visible ----
+\definecolor{scaffoldbg}{RGB}{255,249,230}
+\definecolor{scaffoldbd}{RGB}{200,160,40}
+\newcommand{\pending}[1]{{\color{scaffoldbd}\textsf{\small[\textsc{pending}: #1]}}}
+\newcommand{\scaffold}[1]{%
+  \par\smallskip\noindent\fcolorbox{scaffoldbd}{scaffoldbg}{%
+  \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\;#1\end{minipage}}\par\smallskip}
+
+\title{A Benchmark Recipe Is Not an Experiment:\\
+Attribution and Identifiability in the Reproduction of Open-Weight LLM Evaluations}
+
+\author{%
+  Edward Wang\thanks{Kitware, Inc. Correspondence: \texttt{edward.wang@kitware.com}.}
+  \quad\textnormal{\pending{co-authors / advisor}}\\
+  Kitware, Inc.
+}
+
+\date{Draft compiled \today}
+
+\begin{document}
 \maketitle
 
 \begin{abstract}
-  % TODO: draft abstract
+Public large-language-model benchmarks such as \helm publish, for each
+(scenario, model) pair, the prompts sent, the completions returned, and the
+computed metrics. It is tempting to treat these artifacts as a complete
+experimental record and to ask, simply, whether a locally re-run evaluation
+reproduces the published number. We argue --- and demonstrate on the \helm
+corpus --- that this framing is ill-posed: a benchmark \emph{recipe} (scenario,
+prompt construction, decoding, scorer) does not identify the \emph{execution
+instrument} that produced a score. The surviving record routinely omits the
+model and tokenizer revision, the load precision, the chat-template version, the
+serving engine and its kernels, hardware-sensitive numerical settings, the
+harness version, and the artifact-migration history. Reproduction is therefore
+better cast as a layered \emph{system-identification} problem. We present
+\textsc{EvalAudit}, a system for exact recipe replay, execution-substrate
+reconstruction, version-pinned (``era'') scoring instruments, and layered
+differential comparison, and we use it to (i) attribute concrete disagreements on
+modern open-weight models (OLMo) to specific unrecorded parameters --- a tokenizer
+special-token append, a chat-template flag, and load precision --- while being
+explicit about which attributions are confirmed and which remain discovery-stage;
+and (ii) exhibit the opposite regime, in which the producing instrument of the
+original-paper classic models (GPT-J, GPT-NeoX, OPT) is \emph{non-identifiable}
+from the surviving public and repository evidence. From this contrast we derive a
+minimal, backward-compatible provenance standard --- three recorded fields
+(\code{model\_revision}, \code{torch\_dtype}, \code{transformers\_version}) close
+the majority of the identifiability gap --- and an artifact-release checklist for
+auditable evaluation.
 \end{abstract}
 
-\section{Introduction}
-% TODO
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/framework}
+\input{sections/system}
+\input{sections/cases}
+\input{sections/provenance}
+\input{sections/limitations}
+\input{sections/conclusion}
 
-\section{Related Work}
-% TODO
+\appendix
+\input{sections/appendix}
 
-\section{Methodology}
-% TODO
-
-\section{Results}
-% TODO
-
-\section{Discussion}
-% TODO
-
-\section{Conclusion}
-% TODO
-
-\bibliography{references}
+\bibliographystyle{plainnat}
+\IfFileExists{references.bib}{\bibliography{references}}{%
+  \pending{run bibtex --- references.bib present but bibliography backend not configured in fallback mode}}
 
 \end{document}

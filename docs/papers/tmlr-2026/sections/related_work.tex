@@ -1,0 +1,58 @@
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Holistic benchmarking and its artifacts.} \helm
+\citep{liang2023helm} standardized multi-metric, multi-scenario LLM evaluation
+and, importantly for us, publishes per-instance request/response artifacts and
+resolved run specifications. We treat those artifacts as the object of study
+rather than as ground-truth-by-construction, and we distinguish the released
+official artifact (the historical record of what \helm reported) from a local
+rerun (a test of procedural stability). Related evaluation frameworks
+\citep{eval-harness} share the property that a compact recipe stands in for a
+much larger latent execution configuration.
+
+\paragraph{Reproducibility of ML evaluation.} A substantial literature documents
+that reported model comparisons can be sensitive to implementation and
+environment details \citep{pineau2021checklist,dodge2019show}, and recent work
+specifically finds that LLM benchmark scores shift with prompt formatting,
+few-shot ordering, and decoding \citep{sclar2024quantifying,mizrahi2024state}.
+Our contribution is orthogonal to prompt-sensitivity studies: we hold the
+\emph{recipe} fixed by replaying the resolved specification verbatim, and isolate
+the \emph{execution substrate} --- precision, tokenizer/template version, serving
+engine, kernels, hardware --- as the locus of residual disagreement, then ask
+which of those parameters are recoverable.
+
+\paragraph{Serving-stack and numerical nondeterminism.} That different serving
+stacks can produce different outputs from the same weights is known in folklore
+and in engine documentation: greedy decoding through Hugging Face
+\code{transformers} \citep{wolf2020transformers} and through vLLM
+\citep{kwon2023vllm} differ in kernels, batching, tokenizer handling, and
+stop-sequence semantics; low-precision inference and attention-kernel choice
+change logits enough to flip near-ties. We make this quantitative at the level of
+benchmark metrics, tie specific flips to named unrecorded parameters, and
+formalize which are identifiable from surviving evidence.
+
+\paragraph{Detection vs.\ attribution: the \eeeshort line.} The immediate
+predecessor of this work, \eee \citep{eee2026}, introduces a normalized
+per-instance representation that makes official-vs-local discrepancies
+\emph{visible} across heterogeneous harness versions, and reports case studies of
+detected gaps on Pythia-6.9B \citep{biderman2023pythia}, Vicuna-7B, and
+Falcon-7B. Its appendix explicitly leaves open whether a residual difference
+arises from checkpoint, quantization, precision, tokenizer, or generation-kernel
+choices. The present paper takes that open question as its subject: we supply the
+machinery to attribute and sometimes close such gaps, and we characterize when
+the answer is fundamentally underdetermined.
+
+\paragraph{Provenance and artifact preservation.} Our provenance recommendation
+(\S\ref{sec:provenance}) is in the spirit of model and dataset documentation
+efforts \citep{mitchell2019modelcards,gebru2021datasheets} but targets the
+\emph{execution} rather than the model or data: what must be recorded so that a
+benchmark score is reconstructible. The closest operational analogue is
+containerized, digest-pinned execution; we extend it with version-pinned scoring
+instruments for historical corpora and a per-parameter identifiability analysis.
+
+\paragraph{Efficient benchmarking (peripheral).} A separate thread explored
+whether a small, well-chosen coreset of questions plus regression can predict
+full-benchmark scores \citep{bowyer2026efficient} and whether model-centric
+representations help. That thread is not required for the claims here and is
+summarized only as future work (\S\ref{sec:limitations}).

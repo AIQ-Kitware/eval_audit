@@ -1,0 +1,132 @@
+\section{A Measurement Model for Benchmark Reproduction}
+\label{sec:model}
+
+\subsection{The generative model of a score}
+
+Let a measured benchmark result be
+\begin{equation}
+Y \;=\; F(R,\,D,\,I,\,A,\,U),
+\label{eq:model}
+\end{equation}
+where
+\begin{itemize}[nosep,leftmargin=1.4em]
+  \item $R$ --- the \textbf{recorded recipe}: scenario, dataset, prompt
+        construction, in-context examples, decoding parameters, and scorer;
+  \item $D$ --- the \textbf{deployment}: weights, model and tokenizer revisions,
+        chat template, load precision (dtype), and quantization;
+  \item $I$ --- the \textbf{execution instrument}: harness version, serving
+        engine, package and kernel versions, hardware, device topology, and
+        batching/caching;
+  \item $A$ --- the \textbf{artifact interpretation}: storage schema, migration,
+        canonicalization, and carried-forward outputs; and
+  \item $U$ --- \textbf{residual} stochastic and numerical influences.
+\end{itemize}
+The public \helm record exposes $R$ and the \emph{names} within $D$, but only a
+projection of $D$'s values and almost nothing of $I$, $A$, or $U$. Reproduction
+is thus an inverse problem: infer whether a locally chosen $(\hat D, \hat I)$
+yields $F(R,\hat D,\hat I,\hat A,U)\approx Y$, and if not, \emph{which coordinate}
+is responsible. We say a run is \emph{identifiable at tolerance $\epsilon$} when
+all materially compatible configurations produce equivalent results under a
+declared output-, metric-, or conclusion-level criterion.
+
+\subsection{Two gates, then six causes}
+\label{sec:taxonomy}
+
+\paragraph{Eligibility gate (upstream).} Before any disagreement is measured, a
+run must be executable. Gated models or datasets, revoked download access,
+missing credentials, unsupported packaging, unavailable judges, and infeasible
+resource requirements are \emph{eligibility/environment filters}. They answer
+``can we run this?'', not ``did it reproduce?'', and must never be folded into a
+negative reproduction result. Making this gate explicit --- every excluded run
+carries a typed exclusion reason --- is what allows a defensible
+``$X$ of $Y$ runnable runs'' denominator.
+
+\paragraph{Disagreement causes (for runs that execute).} For a run that executes
+and can be compared, we classify an observed disagreement into one of six causes:
+\begin{enumerate}[nosep,leftmargin=1.6em]
+  \item \textbf{Recipe mismatch} --- $R$ differs (prompt construction, examples,
+        decoding, scorer).
+  \item \textbf{Deployment mismatch} --- $D$'s client/endpoint/engine identity
+        differs (hosted API vs.\ local; in-process \code{transformers} vs.\ vLLM).
+  \item \textbf{Execution-instrument mismatch} --- $I$ differs (precision,
+        tokenizer/template version, attention kernel, device placement,
+        software-stack versions).
+  \item \textbf{Artifact-interpretation/migration mismatch} --- $A$ differs
+        (row reordering, schema migration, carried-forward outputs).
+  \item \textbf{Residual disagreement under controlled equivalence} --- all
+        controllable layers are matched and a gap remains. This is the only
+        category analogous to conventional repeatability failure.
+  \item \textbf{Historically non-identifiable reproduction} --- surviving
+        evidence does not uniquely specify what execution should count as
+        faithful. Qualitatively different from (5): not ``it failed to repeat''
+        but ``the target is underdetermined.''
+\end{enumerate}
+We deliberately avoid the phrase ``true reproducibility failure'' whenever
+execution provenance is incomplete; categories (1)--(4) are usually recoverable
+by controlling the substrate, and (6) is a first-class result, not a gap to be
+closed.
+
+\subsection{Three orthogonal reproduction targets}
+\label{sec:targets}
+
+The six causes answer \emph{why} two executions disagree. A separate,
+\emph{orthogonal} axis answers \emph{what} is being reproduced, and the two must
+not be collapsed:
+\begin{enumerate}[nosep,leftmargin=1.6em]
+  \item \textbf{Artifact reconstruction}: recompute the published aggregates from
+        the released prompts, completions, and metric records \emph{without}
+        rerunning a model. Tests $A$ and the scorer only.
+  \item \textbf{Procedural reproduction}: execute the recorded recipe under a
+        pinned or explicitly equivalent instrument and compare instance-level
+        outputs and metrics. Tests $D$ and $I$.
+  \item \textbf{Claim-level robustness}: determine whether the substantive
+        conclusion (a ranking, or a model-generation improvement) survives
+        plausible execution substrates even when byte-identical outputs do not.
+\end{enumerate}
+Released official artifacts remain the historical ground truth for what \helm
+reported; a rerun assesses the \emph{stability and identifiability} of the
+procedure that produced them, and does not overwrite the record. This distinction
+is what licenses us to report a differing rerun as evidence about $I$ rather than
+as a correction of the official number.
+
+\subsection{Per-parameter identifiability}
+\label{sec:identifiability}
+
+Identifiability is not a binary property of an entire run: each latent parameter
+of $(D,I)$ has its own status, and the paper's per-case analysis assigns one to
+each (Table~\ref{tab:identifiability}). This refinement is what makes both the
+positive attributions and the non-identifiability result precise: we never claim
+to identify a whole historical deployment, only specific coordinates, each with
+its own evidentiary basis.
+
+\begin{table}[t]
+\centering\small
+\begin{tabularx}{\linewidth}{@{}p{0.26\linewidth}p{0.20\linewidth}Y@{}}
+\toprule
+\textbf{Parameter} & \textbf{Typical status} & \textbf{Basis / limitation} \\
+\midrule
+Run specification ($R$) & identifiable & frozen public \file{run\_spec.json};
+migration can still alter interpretation. \\
+Client / deployment class & often identifiable & recorded deployment name and
+harness config; hosted-provider internals remain opaque. \\
+Load dtype & conditional & explicit when pinned; else inferable only from loader
+source $+$ package-version bounds. \\
+Tokenizer special-token behavior & often recoverable & repo/config inspection and
+token-level prompt comparison. \\
+Chat template / generation prompt & often recoverable & revisioned tokenizer files
+or controlled rendering sweeps; effective behavior depends on package version. \\
+Model / tokenizer revision & frequently missing & rarely pinned; mutable aliases
+prevent unique historical recovery. \\
+Engine / package / kernel versions & often missing & client family may be known;
+exact versions/kernels usually not. \\
+Batching, cache, topology, hardware & usually missing historically & measure
+robustness rather than promise exact replay. \\
+Harness era & tagged or proxy-only & tagged releases containerizable; migrated
+paths may admit only declared proxy instruments. \\
+\bottomrule
+\end{tabularx}
+\caption{Per-parameter identifiability in the studied cases. The status is
+\emph{per coordinate}, not per run; \S\ref{sec:cases} assigns each case's
+disagreement to a coordinate and its status here.}
+\label{tab:identifiability}
+\end{table}

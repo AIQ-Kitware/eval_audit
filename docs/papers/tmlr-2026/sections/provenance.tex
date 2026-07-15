@@ -1,0 +1,47 @@
+\section{Toward Auditable Evaluation: A Minimal Provenance Standard}
+\label{sec:provenance}
+
+The clearest actionable output of this study is a recommendation to the community:
+a benchmark harness should record the \emph{execution substrate}, not just the
+recipe and the model name. Our investigation of \helm's own deployment metadata
+quantifies the gap: of 148 \code{HuggingFaceClient} deployments in \helm's
+\code{model\_deployments.yaml}, only 19 pin \code{torch\_dtype} (all
+\code{bfloat16}) and only 7 pin a model \code{revision}. The parameters that most
+change a greedy output are precisely the ones least often recorded
+(Appendix~\ref{app:unrecorded}).
+
+\paragraph{Three fields close most of the gap.} The high-leverage observation is
+that many parameters collapse into one:
+\begin{quote}
+\code{model\_revision} $+$ \code{torch\_dtype} $+$ \code{transformers\_version}
+\end{quote}
+transitively close the majority of the identifiability gap. The revision fixes the
+tokenizer, chat template, and generation config \emph{as of then} (they all live
+inside the model repository); the \code{transformers} version fixes both the
+precision default and whether the chat template honors
+\code{add\_generation\_prompt}; the dtype pins the load precision directly. Each of
+the confirmed OLMo attributions (\S\ref{sec:olmo}) reduces to one of these three
+fields.
+
+\paragraph{Record them out of the identity string.} These fields must live in a
+machine-readable provenance block (\helm's existing recipe-facts slot suffices ---
+no schema change), \emph{not} in the run-spec identity or the
+\code{model\_deployment} name. A revision SHA in the pairing key would break
+official$\leftrightarrow$local matching, whereas a SHA in the provenance block is
+invisible to pairing and fully recoverable. Both weight-loading engines already
+accept \code{revision} as a data-only field; the only code gap is a bundle
+boundary that currently drops it.
+
+\paragraph{A reproduction-target-aware release checklist.} Beyond the three
+fields, a paper-grade evaluation artifact should preserve (Appendix~\ref{app:checklist}):
+source commit and container digest; dataset and scorer versions; model and
+tokenizer commit SHAs; chat-template text/hash and tokenized-prompt hash; dtype,
+quantization, engine, attention implementation, and generation config; batching,
+cache, tensor-parallel, and numerical/hardware settings; raw requests, token ids,
+responses, metrics, and artifact-transformation history; \emph{every}
+deployment-search candidate, not only the winner; and all analysis/figure scripts.
+Crucially, the release should record, for each experiment, its reproduction
+\emph{target} (\S\ref{sec:targets}) and three independent freshness facts ---
+run-artifact, comparison, and report freshness --- so that a recent report
+timestamp is never mistaken for an acceptance criterion (a lesson learned the hard
+way when reports outlived the raw runs they summarized).
