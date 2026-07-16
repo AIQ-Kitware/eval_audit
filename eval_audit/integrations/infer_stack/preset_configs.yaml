@@ -2153,3 +2153,59 @@
     'container_network': 'host'
     'hf_cache_dir': '~/.cache/eval-audit-hf'
     'container_gpus': 'none'
+
+# --- Qwen3.5-9B-Base extension (COMPUTE, not reproduction) -----------------------
+# First net-new benchmark target: qwen/qwen3.5-9b-base has NO public HELM run to
+# replay, so this preset is plain compute (no from-spec / freeze; precomputed_root
+# stays null) — the qwen36-core-new-results-plan.md shape, single non-thinking
+# member (a base model has no thinking toggle). Serving rides the runbook-local
+# infer-stack catalog (reproduce/qwen35_vllm/config/infer_stack/): endpoint
+# qwen3-5-9b-base-single, protocol completions, dtype float16 pinned for
+# pre-Ampere cards.
+#
+# The model id is registered via REGISTRY SIDECARS (model_metadata_fpath /
+# tokenizer_configs_fpath below): the exporter widens its alias assert with them
+# and forwards both paths into the generated manifests; the materializer copies
+# them into prod_env, where HELM's register_configs_from_directory merges them —
+# no HELM-source edit, no runner-image rebuild.
+'qwen35_9b_base_vllm':
+  'profile': 'qwen3-5-9b-base-single'
+  'bundle_name': 'qwen35_9b_base_vllm'
+  'backend': 'compose'
+  'access_kind': 'openai-compatible'
+  'model_deployment_name': 'vllm/qwen3.5-9b-base-local'
+  'helm_model_name': 'qwen/qwen3.5-9b-base'
+  'helm_tokenizer_name': 'qwen/qwen3.5-9b-base'
+  # Base (pre-trained) model -> completions. Chat would wrap prompts in a
+  # nonexistent chat template (the OLMo-7B "The" failure mode).
+  'protocol_mode': 'completions'
+  # Serve 4096 (catalog max_model_len); reserve headroom below it (OLMo pattern).
+  'helm_max_sequence_and_generated_tokens_length': 4064
+  'model_metadata_fpath': 'configs/local_models/qwen35_9b_vllm/model_metadata.yaml'
+  'tokenizer_configs_fpath': 'configs/local_models/qwen35_9b_vllm/tokenizer_configs.yaml'
+  'smoke_manifest':
+    'experiment_name': 'audit-qwen35-9b-base-vllm-smoke'
+    'description': 'Smoke-test HELM batch for qwen/qwen3.5-9b-base through the leased local vLLM service.'
+    'run_entries':
+    - 'mmlu:subject=anatomy,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base'
+    - 'boolq:model=qwen/qwen3.5-9b-base,data_augmentation=canonical'
+    'suite': 'audit-qwen35-vllm-smoke'
+    'max_eval_instances': 5
+    'container_network': 'host'
+    'hf_cache_dir': '~/.cache/eval-audit-hf'
+    'container_gpus': 'none'
+  # PLACEHOLDER full grid: same two entries at full instance count. The real
+  # breadth target is the authored ~85-entry classic/Lite core (see
+  # docs/planning/qwen36-core-new-results-plan.md §6.1) — swap these run_entries
+  # for the model-swapped core list once the smoke path is proven on GPUs.
+  'full_manifest':
+    'experiment_name': 'audit-qwen35-9b-base-vllm-full'
+    'description': 'Full HELM batch for qwen/qwen3.5-9b-base through the leased local vLLM service (placeholder scope).'
+    'run_entries':
+    - 'mmlu:subject=anatomy,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base'
+    - 'boolq:model=qwen/qwen3.5-9b-base,data_augmentation=canonical'
+    'suite': 'audit-qwen35-vllm-full'
+    'max_eval_instances': 1000
+    'container_network': 'host'
+    'hf_cache_dir': '~/.cache/eval-audit-hf'
+    'container_gpus': 'none'

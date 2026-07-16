@@ -199,7 +199,21 @@ def _helm_config_paths() -> tuple[Path, Path]:
     return helm_root / "model_metadata.yaml", helm_root / "tokenizer_configs.yaml"
 
 
-def _assert_helm_aliases_exist(model_name: str, tokenizer_name: str) -> None:
+def _assert_helm_aliases_exist(
+    model_name: str,
+    tokenizer_name: str,
+    *,
+    model_metadata_fpath: str | None = None,
+    tokenizer_configs_fpath: str | None = None,
+) -> None:
+    """Assert the HELM model/tokenizer aliases resolve at export time.
+
+    The universe is the vendored HELM's builtin registry UNION the preset's
+    optional registry sidecars (``model_metadata_fpath`` /
+    ``tokenizer_configs_fpath``) — the same union helm-run itself sees once the
+    materializer copies the sidecars into ``--local-path``. Net-new ids
+    therefore need only sidecar files, never a HELM-source edit.
+    """
     import yaml
 
     model_metadata_path, tokenizer_configs_path = _helm_config_paths()
@@ -207,13 +221,27 @@ def _assert_helm_aliases_exist(model_name: str, tokenizer_name: str) -> None:
     tokenizer_docs = yaml.safe_load(tokenizer_configs_path.read_text(encoding="utf-8")) or {}
     known_models = {item.get("name") for item in model_docs.get("models", []) or []}
     known_tokenizers = {item.get("name") for item in tokenizer_docs.get("tokenizer_configs", []) or []}
+    if model_metadata_fpath:
+        sidecar_path = repo_root() / model_metadata_fpath
+        sidecar_docs = yaml.safe_load(sidecar_path.read_text(encoding="utf-8")) or {}
+        known_models |= {item.get("name") for item in sidecar_docs.get("models", []) or []}
+    if tokenizer_configs_fpath:
+        sidecar_path = repo_root() / tokenizer_configs_fpath
+        sidecar_docs = yaml.safe_load(sidecar_path.read_text(encoding="utf-8")) or {}
+        known_tokenizers |= {
+            item.get("name") for item in sidecar_docs.get("tokenizer_configs", []) or []
+        }
     if model_name not in known_models:
         raise ValueError(
-            f"HELM model alias missing for {model_name!r}; update the benchmark export override before launching the run."
+            f"HELM model alias missing for {model_name!r}; register it in the vendored "
+            "HELM or ship a model_metadata.yaml sidecar (preset model_metadata_fpath) "
+            "before launching the run."
         )
     if tokenizer_name not in known_tokenizers:
         raise ValueError(
-            f"HELM tokenizer alias missing for {tokenizer_name!r}; update the benchmark export override before launching the run."
+            f"HELM tokenizer alias missing for {tokenizer_name!r}; register it in the "
+            "vendored HELM or ship a tokenizer_configs.yaml sidecar (preset "
+            "tokenizer_configs_fpath) before launching the run."
         )
 
 
@@ -322,6 +350,8 @@ def _manifest_doc(
     model_deployment: str | None = None,
     run_spec_sources: list[dict[str, Any]] | None = None,
     era: str | None = None,
+    model_metadata_fpath: str | None = None,
+    tokenizer_configs_fpath: str | None = None,
 ) -> dict[str, Any]:
     # From-spec replay: the generated manifest must carry from_run_spec: true and a
     # precomputed_root (the recipe SOURCE the bridge requires). Because this builder
@@ -352,6 +382,12 @@ def _manifest_doc(
         "enable_huggingface_models": [],
         "enable_local_huggingface_models": [],
     }
+    # HELM registry sidecars (net-new model/tokenizer ids): only emitted when the
+    # preset declares them, so existing manifests stay byte-compatible.
+    if model_metadata_fpath is not None:
+        doc["model_metadata_fpath"] = model_metadata_fpath
+    if tokenizer_configs_fpath is not None:
+        doc["tokenizer_configs_fpath"] = tokenizer_configs_fpath
     if from_run_spec:
         doc["from_run_spec"] = True
         # Deployment-rewrite target: the LOCAL deployment name the replay records
@@ -444,6 +480,12 @@ def materialize_benchmark_bundle(
     # in this function.
     resolved_era = era or preset_cfg.get("era")
     era_mode = resolved_era is not None
+    # HELM registry sidecars (net-new model/tokenizer ids): preset-level,
+    # repo-relative paths. They widen the alias-assert universe below and are
+    # forwarded into both generated manifests (the bridge resolves + mounts them
+    # and the materializer copies them into prod_env at run time).
+    sidecar_model_metadata_fpath = preset_cfg.get("model_metadata_fpath")
+    sidecar_tokenizer_configs_fpath = preset_cfg.get("tokenizer_configs_fpath")
     model_entries = []
     selected_accesses = []
     for fact, spec in zip(facts, specs, strict=True):
@@ -517,7 +559,12 @@ def materialize_benchmark_bundle(
                     api_key_value=api_key_value,
                 )
             )
-            _assert_helm_aliases_exist(model_entries[-1]["model_name"], model_entries[-1]["tokenizer_name"])
+            _assert_helm_aliases_exist(
+                model_entries[-1]["model_name"],
+                model_entries[-1]["tokenizer_name"],
+                model_metadata_fpath=sidecar_model_metadata_fpath,
+                tokenizer_configs_fpath=sidecar_tokenizer_configs_fpath,
+            )
         # The old contract carried a rich access dict; under default-B the only
         # facts worth recording are the resolved transport (for bundle.yaml
         # traceability — nothing downstream parses it).
@@ -662,6 +709,8 @@ def materialize_benchmark_bundle(
         model_deployment=rewrite_deployment,
         run_spec_sources=smoke_sources,
         era=resolved_era,
+        model_metadata_fpath=sidecar_model_metadata_fpath,
+        tokenizer_configs_fpath=sidecar_tokenizer_configs_fpath,
     )
     benchmark_full_manifest = _manifest_doc(
         spec=full_spec,
@@ -672,6 +721,8 @@ def materialize_benchmark_bundle(
         model_deployment=rewrite_deployment,
         run_spec_sources=full_sources,
         era=resolved_era,
+        model_metadata_fpath=sidecar_model_metadata_fpath,
+        tokenizer_configs_fpath=sidecar_tokenizer_configs_fpath,
     )
     benchmark_smoke_path = output_dir / "benchmark_smoke_manifest.yaml"
     benchmark_full_path = output_dir / "benchmark_full_manifest.yaml"

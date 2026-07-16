@@ -365,3 +365,63 @@ def test_machine_local_bundle_uses_absolute_model_deployments_path(tmp_path: Pat
     assert fname.startswith("model_deployments.") and fname.endswith(".yaml")
     assert Path(fpath).parent == bundle_root.resolve()
     assert Path(fpath).is_file()
+
+
+def test_materialize_forwards_registry_sidecars_and_widens_alias_assert(tmp_path: Path) -> None:
+    # Registry sidecars (net-new model ids): qwen/qwen3.5-9b-base exists in NO
+    # HELM registry — only in the preset-declared sidecar yamls. The exporter
+    # must (a) accept the alias via the widened assert (builtin ∪ sidecars) and
+    # (b) forward both fpaths into the generated manifests so the bridge mounts
+    # them and the materializer copies them into prod_env.
+    facts = [
+        ServingFacts(
+            endpoint="qwen3-5-9b-base-single",
+            served_model_name="qwen3-5-9b-base-single",
+            hf_model_id="Qwen/Qwen3.5-9B-Base",
+            max_model_len=4096,
+        )
+    ]
+    result = materialize_benchmark_bundle(
+        facts=facts,
+        output_dir=tmp_path / "bundle",
+        preset="qwen35_9b_base_vllm",
+        base_url="http://localhost:14042/v1",
+        api_key_value="test-key",
+    )
+    for manifest_key in ("benchmark_smoke_manifest_path", "benchmark_full_manifest_path"):
+        doc = yaml.safe_load(Path(result[manifest_key]).read_text())
+        assert doc["model_metadata_fpath"] == (
+            "configs/local_models/qwen35_9b_vllm/model_metadata.yaml"
+        )
+        assert doc["tokenizer_configs_fpath"] == (
+            "configs/local_models/qwen35_9b_vllm/tokenizer_configs.yaml"
+        )
+        # Compute preset: no from-spec artifacts, precomputed_root stays null.
+        assert doc["precomputed_root"] is None
+        assert "from_run_spec" not in doc
+
+
+def test_alias_assert_still_rejects_unregistered_ids(tmp_path: Path) -> None:
+    # The sidecar widening must not blanket-disable the assert: an id in
+    # neither the builtin registry nor any sidecar still fails at export time.
+    facts = [
+        ServingFacts(
+            endpoint="ep", served_model_name="ep", hf_model_id="x", max_model_len=2048
+        )
+    ]
+    with pytest.raises(ValueError, match="HELM model alias missing"):
+        materialize_benchmark_bundle(
+            facts=facts,
+            output_dir=tmp_path / "bundle",
+            profile_specs=[
+                {
+                    "profile": "ep",
+                    "protocol_mode": "completions",
+                    "model_deployment_name": "vllm/nonexistent-local",
+                    "helm_model_name": "nonexistent/never-registered",
+                    "helm_tokenizer_name": "nonexistent/never-registered",
+                }
+            ],
+            base_url="http://localhost:14042/v1",
+            api_key_value="test-key",
+        )

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
 
 if [[ $# -ne 1 ]]; then
@@ -8,4 +8,4 @@ if [[ $# -ne 1 ]]; then
   exit 2
 fi
 
-python configs/local_models/qwen35_9b_vllm/verify_run_artifacts.py "$1"
+"$PYTHON_BIN" configs/local_models/qwen35_9b_vllm/verify_run_artifacts.py "$1"

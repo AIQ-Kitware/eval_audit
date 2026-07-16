@@ -1,0 +1,43 @@
+# infer-stack serving catalog for the Qwen3.5-9B-Base extension runbook.
+#
+# One model, one endpoint. `infer-stack acquire qwen3-5-9b-base-single` leases a
+# GPU + brings it up; the runbook drives it through `eval-audit-run --lease`, so
+# serving lifecycle is owned by per-run leasing (reclaim: stop frees the GPU on
+# last release), exactly like reproduce/qwen_models_combined/.
+#
+# The endpoint name doubles as the preset's `profile`
+# (PRESET_CONFIGS['qwen35_9b_base_vllm']) and the LiteLLM model_name HELM
+# requests. HELM-domain aliases (qwen/qwen3.5-9b-base) live in the preset +
+# registry sidecars, never here — the catalog owns transport only.
+#
+# ⚠️ protocol: completions is load-bearing twice over: (1) the preset's
+# protocol_mode is completions (base model, no chat template — serving it chat
+# would template every prompt into garbage); (2) infer-stack's readiness probe
+# defaults to /chat/completions, which a completions-only serve never answers,
+# blocking `acquire` until the TTL.
+#
+# ⚠️ dtype: float16 is pinned for pre-Ampere GPUs (Quadro RTX 8000 is Turing
+# sm_75 — no native bf16; vLLM refuses the checkpoint's bf16 there). On Ampere+
+# hosts you may drop the pin to serve the native bf16 — but then RECORD that:
+# the served dtype is exactly the kind of unrecorded substrate fact this project
+# exists to surface. Qwen3.5 is a Gated-DeltaNet + sparse-MoE hybrid — a NEW
+# architecture; if vLLM fails at load with an unrecognized-architecture error,
+# upgrade vLLM in the serving container before debugging anything else.
+
+models:
+  qwen3-5-9b-base:
+    source: hf://Qwen/Qwen3.5-9B-Base    # base (pre-trained); Qwen/Qwen3.5-9B is the post-trained variant
+
+endpoints:
+  qwen3-5-9b-base-single:
+    engine: vllm
+    reclaim: stop                # free the GPU on last release (per-run leasing owns lifecycle)
+    model: qwen3-5-9b-base
+    protocol: completions        # base model -> probe /completions (see header)
+    runtime:
+      dtype: float16             # Turing (sm_75) has no bf16; explicit > vLLM deciding silently
+      max_model_len: 4096        # preset reserves 4064 (helm_max_sequence_and_generated_tokens_length)
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+      enable_prefix_caching: true
