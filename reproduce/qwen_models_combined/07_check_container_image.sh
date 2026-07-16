@@ -22,7 +22,7 @@ if docker image inspect "$QWEN_CONTAINER_IMAGE" >/dev/null 2>&1; then
   echo "OK: container image present: $QWEN_CONTAINER_IMAGE"
 else
   echo "FAIL: container image not found: $QWEN_CONTAINER_IMAGE" >&2
-  echo "  Build it first:  ./docker/build.sh" >&2
+  echo "  Build it first:  $ROOT/docker/build.sh" >&2
   echo "  (or push it and reference a digest via 'eval-audit-run --container-image'," >&2
   echo "   and set QWEN_CONTAINER_IMAGE to match; see docs/container-execution.md)" >&2
   exit 1
@@ -72,7 +72,7 @@ print(f"OK: container python env — langdetect ok; huggingface_hub {huggingface
 PY
 then
   echo "FAIL: container image is present but its python env is stale/incorrect." >&2
-  echo "  Rebuild the runner image:  ./docker/build.sh" >&2
+  echo "  Rebuild the runner image:  $ROOT/docker/build.sh" >&2
   echo "  then re-pin QWEN_CONTAINER_IMAGE to the new build (docs/container-execution.md)." >&2
   exit 1
 fi

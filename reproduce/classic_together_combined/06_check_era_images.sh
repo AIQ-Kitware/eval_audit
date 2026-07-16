@@ -22,7 +22,7 @@ while read -r key; do
 
   if ! docker image inspect "$image" >/dev/null 2>&1; then
     echo "FAIL: era image not found: $image" >&2
-    echo "  Build it first:  ERA=${key} ./docker/build.sh" >&2
+    echo "  Build it first:  ERA=${key} $ROOT/docker/build.sh" >&2
     echo "  (or push it and set ERA_IMAGE_${key//[.-]/_}=<repo@sha256:...> for a" >&2
     echo "   digest-pinned cross-machine run)." >&2
     exit 1
