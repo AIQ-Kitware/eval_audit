@@ -15,5 +15,24 @@ local_path: prod_env
 precomputed_root: null
 require_per_instance_stats: true
 model_deployments_fpath: configs/local_models/qwen35_9b_vllm/model_deployments.yaml
+# Registry sidecars: register the net-new qwen/qwen3.5-9b-base model +
+# tokenizer ids via prod_env, so neither the venv helm nor the baked
+# in-container helm needs a source edit.
+model_metadata_fpath: configs/local_models/qwen35_9b_vllm/model_metadata.yaml
+tokenizer_configs_fpath: configs/local_models/qwen35_9b_vllm/tokenizer_configs.yaml
 enable_huggingface_models: []
 enable_local_huggingface_models: []
+
+# --- Containerized execution (required on this branch) -----------------------
+# Build the image first with ./docker/build.sh (tags eval-audit-helm-runner:dev).
+container_image: eval-audit-helm-runner:dev
+container_runtime: docker
+# Dedicated audit HF cache (NOT your personal ~/.cache/huggingface): the
+# container runs as root; a dedicated dir keeps downloaded files consistently owned.
+hf_cache_dir: ~/.cache/eval-audit-hf
+# vLLM serves on the HOST's localhost:8000 — the in-container HELM client needs
+# the host network namespace to reach it.
+container_network: host
+# The HELM client only makes HTTP calls + tokenizes; the GPU belongs to the
+# host-side vLLM server, so the run container gets none.
+container_gpus: none

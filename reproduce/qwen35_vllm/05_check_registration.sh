@@ -3,38 +3,57 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-# CPU-only preflight: the qwen/qwen3.5-9b-base registration lives in the
-# VENDORED helm (submodules/helm). This asserts the helm the current venv
-# imports actually sees it — a pip-installed crfm-helm would not, and the run
-# would fail late at tokenizer resolution instead of here.
+# CPU-only preflight: the qwen/qwen3.5-9b-base registration ships as prod_env
+# SIDECARS (model_metadata.yaml + tokenizer_configs.yaml next to the
+# deployment yaml), copied in at run time via the manifest's
+# model_metadata_fpath / tokenizer_configs_fpath. No helm install needs the
+# ids baked in — this validates the sidecars are well-formed and consistent
+# with the deployment + manifest before any GPU work.
 python - <<'EOF'
 import sys
+import yaml
 
-import helm
-print(f"helm from: {helm.__file__}")
+CONFIG_DIR = "configs/local_models/qwen35_9b_vllm"
+MODEL_ID = "qwen/qwen3.5-9b-base"
 
-from helm.benchmark.config_registry import register_builtin_configs_from_helm_package
-from helm.benchmark.model_metadata_registry import get_model_metadata
-from helm.benchmark.tokenizer_config_registry import get_tokenizer_config
+metadata = yaml.safe_load(open(f"{CONFIG_DIR}/model_metadata.yaml"))
+tokenizers = yaml.safe_load(open(f"{CONFIG_DIR}/tokenizer_configs.yaml"))
+deployments = yaml.safe_load(open(f"{CONFIG_DIR}/model_deployments.yaml"))
+manifest = yaml.safe_load(open("configs/qwen35_vllm_smoke_manifest.yaml"))
 
-register_builtin_configs_from_helm_package()
+problems = []
 
-name = "qwen/qwen3.5-9b-base"
-try:
-    metadata = get_model_metadata(name)
-except ValueError:
-    print(
-        f"FAIL: {name} not registered in this helm install.\n"
-        "Install helm from submodules/helm (pip install -e submodules/helm) "
-        "so the -base registration is visible.",
-        file=sys.stderr,
-    )
+model_names = {m["name"] for m in metadata.get("models", [])}
+if MODEL_ID not in model_names:
+    problems.append(f"model_metadata.yaml missing {MODEL_ID}")
+
+tokenizer_names = {t["name"] for t in tokenizers.get("tokenizer_configs", [])}
+deployment = deployments["model_deployments"][0]
+if deployment["model_name"] != MODEL_ID:
+    problems.append(f"deployment model_name={deployment['model_name']!r} != {MODEL_ID!r}")
+if deployment["tokenizer_name"] not in tokenizer_names:
+    problems.append(f"deployment tokenizer {deployment['tokenizer_name']!r} not in tokenizer_configs.yaml")
+
+for key in ("model_deployments_fpath", "model_metadata_fpath", "tokenizer_configs_fpath"):
+    fpath = manifest.get(key)
+    if not fpath:
+        problems.append(f"manifest missing {key}")
+    else:
+        try:
+            yaml.safe_load(open(fpath))
+        except OSError as ex:
+            problems.append(f"manifest {key}={fpath!r} unreadable: {ex}")
+
+for entry in manifest["run_entries"]:
+    if f"model={MODEL_ID}" not in entry:
+        problems.append(f"run_entry not targeting {MODEL_ID}: {entry}")
+
+if problems:
+    print("FAIL:", file=sys.stderr)
+    for problem in problems:
+        print(f"  - {problem}", file=sys.stderr)
     raise SystemExit(1)
 
-tokenizer_config = get_tokenizer_config(name)
-if tokenizer_config is None:
-    print(f"FAIL: tokenizer config for {name} not registered.", file=sys.stderr)
-    raise SystemExit(1)
-
-print(f"OK: {name} metadata (tags={metadata.tags}) + tokenizer registered.")
+print(f"OK: {MODEL_ID} sidecar registration consistent "
+      f"(deployment={deployment['name']}, {len(manifest['run_entries'])} run_entries).")
 EOF

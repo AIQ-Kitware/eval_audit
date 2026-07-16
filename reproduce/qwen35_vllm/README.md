@@ -23,12 +23,26 @@ the clean apples-to-apples comparison. (`Qwen/Qwen3.5-9B` without `-Base` is the
 post-trained variant; comparing that against the Qwen2.5 instruct-turbo pair is
 a separate, chat-protocol exercise.)
 
+## How the new model id is registered (no HELM edit)
+
+`qwen/qwen3.5-9b-base` is unknown to upstream HELM. Its registration ships as
+**prod_env sidecars** — `model_metadata.yaml` + `tokenizer_configs.yaml` next
+to the deployment yaml in
+[`configs/local_models/qwen35_9b_vllm/`](../../configs/local_models/qwen35_9b_vllm/) —
+forwarded by the manifest's `model_metadata_fpath` / `tokenizer_configs_fpath`
+and merged at run time by HELM's own `register_configs_from_directory`. Neither
+your venv's helm nor the container's baked helm needs the ids; no HELM-source
+edit, no image rebuild per new model. (`05` validates the sidecars are
+consistent.)
+
 ## Prerequisites (on the GPU host)
 
-- A venv with `eval_audit` (`pip install -e .`), **helm installed from the
-  vendored submodule** (`pip install -e submodules/helm`) — the
-  `qwen/qwen3.5-9b-base` registration lives there, a pip `crfm-helm` will not
-  have it (`05` checks exactly this) — and a **recent vLLM**.
+- A venv with `eval_audit` (`pip install -e .`) and a **recent vLLM**.
+- **The runner container image**: execution is containerized on this branch
+  (the bare host-venv pipeline was removed) — build
+  `eval-audit-helm-runner:dev` once with `./docker/build.sh` from the repo
+  root. The container only makes HTTP calls to your host vLLM (it gets no
+  GPU; `container_network: host` reaches `localhost:8000`).
 - **vLLM architecture support is the #1 risk.** Qwen3.5 uses a hybrid
   Gated-DeltaNet + sparse-MoE architecture (with a vision encoder in the
   packaging); older vLLM cannot load it. If `10_start_vllm.sh` fails at model
@@ -45,8 +59,9 @@ a separate, chat-protocol exercise.)
 ## Steps
 
 ```bash
+../../docker/build.sh      # once: build eval-audit-helm-runner:dev
 ./00_check_env.sh          # eval-audit-check-env
-./05_check_registration.sh # CPU-only: venv helm resolves qwen/qwen3.5-9b-base (+tokenizer)
+./05_check_registration.sh # CPU-only: sidecar registration consistent (yaml-level)
 ./10_start_vllm.sh         # terminal 1: vLLM serves Qwen/Qwen3.5-9B-Base on :8000 (GPU 0)
 ./15_validate_vllm.sh      # terminal 2: one completions-API request returns text
 ./20_preview.sh            # dry-run the smoke manifest (prints the helm-run plan)
@@ -60,7 +75,7 @@ against the live server. Find `<run-dir>` for `40` under the experiment output
 
 ## Success criteria
 
-1. `05` prints the vendored-helm path and `OK`.
+1. `05` prints `OK` (sidecar registration consistent).
 2. `15` prints a non-empty completion (settles the vLLM-arch-support risk).
 3. `30` lands both runs with `stats.json` + `per_instance_stats.json`.
 4. `40` confirms `adapter_spec.model=qwen/qwen3.5-9b-base` and

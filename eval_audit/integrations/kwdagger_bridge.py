@@ -305,6 +305,12 @@ def build_schedule_params(
     model_deployments_fpath = manifest.get("model_deployments_fpath", None)
     if model_deployments_fpath is not None:
         matrix["helm.model_deployments_fpath"] = [model_deployments_fpath]
+    model_metadata_fpath = manifest.get("model_metadata_fpath", None)
+    if model_metadata_fpath is not None:
+        matrix["helm.model_metadata_fpath"] = [model_metadata_fpath]
+    tokenizer_configs_fpath = manifest.get("tokenizer_configs_fpath", None)
+    if tokenizer_configs_fpath is not None:
+        matrix["helm.tokenizer_configs_fpath"] = [tokenizer_configs_fpath]
     enable_hf = manifest.get("enable_huggingface_models", [])
     if enable_hf:
         matrix["helm.enable_huggingface_models"] = [json.dumps(enable_hf)]
@@ -437,6 +443,12 @@ def prepare_schedule_request(
     manifest = dict(manifest)
     manifest["model_deployments_fpath"] = _resolve_manifest_override_path(
         manifest.get("model_deployments_fpath", None)
+    )
+    manifest["model_metadata_fpath"] = _resolve_manifest_override_path(
+        manifest.get("model_metadata_fpath", None)
+    )
+    manifest["tokenizer_configs_fpath"] = _resolve_manifest_override_path(
+        manifest.get("tokenizer_configs_fpath", None)
     )
     experiment_name = str(manifest["experiment_name"])
     runtime_queue_name = (queue_name or f"audit-{experiment_name}").translate(

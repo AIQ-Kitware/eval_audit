@@ -173,19 +173,29 @@ def test_kwdagger_manifest_propagates_model_override(tmp_path: Path):
 
 
 def test_qwen35_vllm_manifest_propagates_local_override_and_local_path():
-    # This config lives in a frozen/archival runbook (reproduce/qwen35_vllm) that
-    # bakes no container_image; supply one here since containerization is now
-    # mandatory. The test is about override + local_path propagation, not the
-    # (removed) bare path.
+    # The qwen3.5-9b-base extension manifest. The CLI image override still wins
+    # over the manifest's container_image; pin it here so the test doesn't
+    # depend on a locally built eval-audit-helm-runner:dev.
     manifest_fpath = repo_root() / "configs/qwen35_vllm_smoke_manifest.yaml"
     request = prepare_schedule_request(
         manifest_fpath, run=False, container_image=_PINNED_IMAGE
     )
     params_text = request.params_text
-    assert "qwen/qwen3.5-9b" in params_text
+    assert "qwen/qwen3.5-9b-base" in params_text
     assert "helm.local_path" in params_text
     assert "prod_env" in params_text
     assert "helm.model_deployments_fpath" in params_text
     assert str(
         (repo_root() / "configs/local_models/qwen35_9b_vllm/model_deployments.yaml").resolve()
+    ) in params_text
+    # Registry sidecars (net-new model id): both fpaths must reach the node
+    # params resolved to absolute host paths, exactly like the deployments
+    # override, so the in-container magnet CLI can copy them into prod_env.
+    assert "helm.model_metadata_fpath" in params_text
+    assert str(
+        (repo_root() / "configs/local_models/qwen35_9b_vllm/model_metadata.yaml").resolve()
+    ) in params_text
+    assert "helm.tokenizer_configs_fpath" in params_text
+    assert str(
+        (repo_root() / "configs/local_models/qwen35_9b_vllm/tokenizer_configs.yaml").resolve()
     ) in params_text

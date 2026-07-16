@@ -1,0 +1,14 @@
+# HELM registry sidecar: shipped into prod_env via the manifest's
+# model_metadata_fpath so qwen/qwen3.5-9b-base needs no edit to HELM itself
+# (HELM merges this with its builtin registry via
+# register_configs_from_directory).
+models:
+  - name: qwen/qwen3.5-9b-base
+    display_name: Qwen3.5 9B Base
+    description: Qwen3.5 9B Base is the pre-trained (base, not post-trained) 9B model of the Qwen3.5 family, using a hybrid architecture that fuses linear attention (via Gated Delta Networks) with a sparse mixture-of-experts. ([HF](https://huggingface.co/Qwen/Qwen3.5-9B-Base))
+    creator_organization_name: Qwen
+    access: open
+    num_parameters: 10000000000
+    release_date: 2026-03-02  # Source: https://github.com/QwenLM/Qwen3.5 README
+    # Base-model tag convention mirrors qwen/qwen1.5-7b (no INSTRUCTION_FOLLOWING).
+    tags: [TEXT_MODEL_TAG, LIMITED_FUNCTIONALITY_TEXT_MODEL_TAG]

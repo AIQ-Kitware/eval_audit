@@ -232,6 +232,14 @@ class MaterializeHelmRunDockerNode(LeaseBracketMixin, MaterializeHelmRunNode):
         if model_deployments_fpath:
             m = q(str(model_deployments_fpath))
             lines.append(f"-v {m}:{m}:ro")
+        # HELM registry sidecars (net-new model/tokenizer ids): mounted :ro at
+        # their host paths so the in-container magnet CLI can copy them into
+        # prod_env exactly like the deployments override above.
+        for sidecar_key in ("model_metadata_fpath", "tokenizer_configs_fpath"):
+            sidecar_fpath = cfg.get(sidecar_key)
+            if sidecar_fpath:
+                m = q(str(sidecar_fpath))
+                lines.append(f"-v {m}:{m}:ro")
         for local_model in _coerce_list(cfg.get("enable_local_huggingface_models")):
             d = q(str(local_model))
             lines.append(f"-v {d}:{d}:ro")

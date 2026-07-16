@@ -2116,3 +2116,54 @@ yardrat — this VM has no GPU/vllm/helm.
   `model_metadata.yaml`/`tokenizer_configs.yaml` if not already resolvable;
   V1/V3 CPU gates here, then V4–V6 on the GPU box.
 - Nothing was executed on GPUs this session; no runs launched.
+
+**Addendum (same session, ~18:20): vendored-HELM registration replaced by
+prod_env registry sidecars.** Jon pushed back on editing HELM: "Can we avoid
+changes to HELM via registering custom deployments / custom models? Doesn't
+HELM let you do that?" Investigation: (a) HELM natively reads
+model_metadata.yaml + tokenizer_configs.yaml + model_deployments.yaml from
+--local-path (config_registry.register_configs_from_directory) — the sidecar
+mechanism Jon remembered; (b) BUT no support existed in our stack: magnet's
+prepare_local_helm_config shipped ONLY model_deployments.yaml (its docstring
+said so), and no magnet branch has the passthrough (grepped every remote tip);
+(c) what Jon half-remembered as "we did this before" is bundle_export's
+_assert_helm_aliases_exist — which is the OPPOSITE (it requires registration
+in the VENDORED helm yamls; the qwen36 plan §4 blessed that pattern). All
+prior local models were upstream-registered, so only deployments plumbing was
+ever needed; qwen3.5-9b-base is the first net-new id.
+
+Built the sidecar passthrough end-to-end:
+- **magnet @ 312c894** (branch `jons/prod-env-sidecar-configs`, based on the
+  pinned 50489f0 — NOTE magnet main and Edward's pin have DIVERGED; do not
+  base on main): prepare_local_helm_config copies optional
+  model_metadata.yaml / tokenizer_configs.yaml under canonical names; both
+  materialize CLIs expose + manifest-record the fpaths; both are
+  identity-bearing algo_params on MaterializeHelmRunNode. Unit tests added.
+- **eval_audit**: ManifestSpec fields, kwdagger_bridge matrix keys
+  (helm.model_metadata_fpath / helm.tokenizer_configs_fpath) +
+  _resolve_manifest_override_path, docker pipeline mounts both :ro (docker
+  nodes inherit the algo_params via spread — one magnet edit propagates).
+- **configs**: model_metadata.yaml + tokenizer_configs.yaml sidecars next to
+  the qwen35 deployment yaml; smoke manifest wires all three fpaths AND the
+  now-required container knobs (container_image eval-audit-helm-runner:dev,
+  network host for host-side vLLM, container_gpus none — the bare host-venv
+  pipeline was REMOVED on this branch, the old runbook predated that).
+- **05_check_registration.sh** rewritten: pure-yaml consistency check of
+  sidecars vs deployment vs manifest (no helm import needed — with sidecars,
+  neither the venv helm nor the baked container helm needs the ids).
+- **Reverted the vendored-helm registration**: submodule main reset to
+  origin/main e9bd720d; b583244f abandoned deliberately (recoverable via
+  reflog; content preserved as the sidecar yamls).
+
+Validation: magnet sidecar tests 3/3; eval_audit schedule group
+(test_run_surface + from_spec_materialized_schedule + lease_bracket +
+container_execution) 52/52 incl. the qwen35 test extended to assert both new
+matrix keys resolve to absolute paths. Ran in a throwaway uv env in the
+scratchpad (this VM has no pytest/kwdagger; Jon's real env is on yardrat —
+per his preference, install into HIS top-level venv, never make a repo
+.venv).
+
+Also noted: the magnet submodule working tree had drifted to magnet main
+(47614e7) — not the pin; restored before branching. Push order when
+publishing: magnet branch first, then the superproject (helm needs no push —
+its gitlink is back at upstream e9bd720d).
