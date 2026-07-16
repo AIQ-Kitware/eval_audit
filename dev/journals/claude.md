@@ -2212,3 +2212,38 @@ extension mechanism the LoRA arc (fable-coder-35B-A3B) will ride.
 
 Next on yardrat: 00→05→06→07→10. First real gates: vLLM loading the
 Gated-DeltaNet hybrid arch; the LiteLLM data_dir being docker-mountable.
+
+**Addendum 3 (same session, ~20:00): TUI startup forensics + async-startup
+rule enforced in infer_stack.** Jon reported `infer-stack tui` taking >7s
+to first frame. Forensics: wrote
+`dev/oneoff/profile_infer_stack_tui_startup.py` (phase-bisects the exact
+TuiCLI.main pre-frame sequence). On yardrat it measured 0.666s total — so
+the 7s was NOT steady-state code cost. Explanation: cold start (first run
+after run_developer_setup byte-compiles the whole import chain incl.
+textual through a cold page cache) — and the profiler run itself warmed
+exactly that chain, which is why "slow before, fast after". History
+confirms Jon's compose hypothesis was right for OLD versions: the async
+first-paint fix ("kick the docker observe to the worker") landed
+2026-06-30 (infer_stack 680926e "TUI improvements"), absent from the
+v0.6.0-5 tree this repo pinned at session start, present on
+infer-stack-cli-api-migration (which Jon switched the submodule onto; tip
+== Edward's pin 22d9431, origin/main is BEHIND it).
+
+Jon then set the design rule: subprocess waits must never gate startup,
+and the dependent component must SAY it's loading. Tiering agreed:
+subprocess (docker/nvidia-smi) = async + loading note; bounded local-file
+reads (catalog yaml ~27ms, settings) = OK sync. Implemented in
+**infer_stack @ 0e04b01** (branch `jons/tui-async-startup` off 22d9431):
+- ComposeBackend.inventory → lazy property; _make_backend passes None
+  (the one remaining pre-frame subprocess — nvidia-smi — now deferred to
+  first placement, worker-side under the TUI).
+- hardware._run: 20s timeout (wedged driver used to hang forever).
+- TUI: '(loading…)' placeholder rows in #ps/#gpus until their first poll
+  lands (deterministic via diff-cache sentinel); docker/deployments
+  titles say 'observing…' pre-first-observe instead of lying '0 running'.
+- 4 new tests; full infer_stack suite 381 passed / 2 skipped.
+
+Gitlink NOT yet bumped in the superproject — the submodule branch should
+be pushed + ideally PR'd upstream (this is generic infer-stack
+improvement, not eval_audit-specific). Flag to Jon/Edward before folding
+into the superproject pin.
