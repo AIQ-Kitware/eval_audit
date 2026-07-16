@@ -76,8 +76,38 @@ def _complete(key: str, prompt: str, *, max_tokens: int, stop=None) -> dict:
         return json.loads(resp.read())
 
 
+def _wait_ready(key: str, budget_s: float) -> None:
+    """Poll a 1-token completion until the model actually answers.
+
+    With ``acquire --no-wait`` the lease is held while the model loads, but the
+    gateway 500s until the route attaches — readiness on this card can exceed
+    30 min (Turing + Qwen3.5 hybrid kernels), so the probe waits instead of
+    racing the load."""
+    import time
+
+    t0 = time.monotonic()
+    attempt = 0
+    while True:
+        try:
+            _complete(key, "Hello", max_tokens=1)
+            print(f"[probe] endpoint ready after {time.monotonic() - t0:.0f}s")
+            return
+        except Exception as ex:  # noqa: BLE001 - any failure means "not yet"
+            elapsed = time.monotonic() - t0
+            if elapsed > budget_s:
+                raise SystemExit(
+                    f"endpoint not ready within {budget_s:.0f}s (last: {ex}); "
+                    "check `docker logs infer-stack-vllm-qwen3-5-9b-base-single-1`"
+                )
+            attempt += 1
+            if attempt % 8 == 1:
+                print(f"[probe] waiting for readiness ({elapsed:.0f}s): {ex}")
+            time.sleep(15)
+
+
 def main() -> int:
     key = _master_key()
+    _wait_ready(key, float(os.environ.get("PROBE_READY_BUDGET_S", "5400")))
     verdicts = []
     for name, prompt, expected in CASES:
         # A: HELM's canonical recipe (stop='\n', 5 tokens) — reproduces the smoke.
