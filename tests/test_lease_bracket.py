@@ -367,3 +367,52 @@ def test_prepare_request_lease_defaults_client_to_no_gpu(tmp_path: Path) -> None
     assert matrix["helm.lease_ttl"] == ["2h"]
     # Design rule #1: the client requests no GPU (infer-stack owns them).
     assert matrix["helm.container_gpus"] == ["none"]
+
+
+def test_bracket_pins_the_infer_stack_world_on_acquire_release_and_snapshot() -> None:
+    """Regression for the two-worlds master-key mismatch (2026-07-16): a
+    cmd_queue tmux job is a fresh login shell, so without explicit world pins
+    its acquire resolved a DIFFERENT infer-stack config/data dir than the
+    export-time bootstrap, converged the shared gateway with a different
+    managed master key, and every HELM request got LiteLLM 400
+    'No connected db.'. The bracket must render --config-dir/--data-dir on
+    acquire, release, AND the leases snapshot (the ledger lives in data dir)."""
+    cfg = {
+        "out_dpath": "/o",
+        "lease_endpoint": "ep",
+        "lease_catalog": "/cfg/catalog.yaml",
+        "lease_config_dir": "/cfg",
+        "lease_data_dir": "/data/infer-stack",
+    }
+    setup = render_lease_setup(cfg)
+    acquire_part, snapshot_part = setup.split("{", 1)
+    assert "--config-dir /cfg" in acquire_part
+    assert "--data-dir /data/infer-stack" in acquire_part
+    assert "--config-dir /cfg" in snapshot_part
+    assert "--data-dir /data/infer-stack" in snapshot_part
+    teardown = render_lease_teardown(cfg)
+    assert "--config-dir /cfg" in teardown
+    assert "--data-dir /data/infer-stack" in teardown
+
+
+def test_bracket_world_pins_absent_when_manifest_has_none() -> None:
+    # Pre-worlds manifests keep byte-identical brackets.
+    cfg = {"out_dpath": "/o", "lease_endpoint": "ep"}
+    assert "--config-dir" not in render_lease_setup(cfg)
+    assert "--config-dir" not in render_lease_teardown(cfg)
+
+
+def test_bridge_broadcasts_world_dirs(tmp_path) -> None:
+    from eval_audit.integrations.kwdagger_bridge import build_broadcast_lease_knobs
+
+    config_dir = tmp_path / "cfg"
+    data_dir = tmp_path / "data"
+    config_dir.mkdir(); data_dir.mkdir()
+    manifest = {
+        "lease_endpoint": "ep",
+        "lease_config_dir": str(config_dir),
+        "lease_data_dir": str(data_dir),
+    }
+    entries = build_broadcast_lease_knobs(manifest)
+    assert entries["helm.lease_config_dir"] == [str(config_dir.resolve())]
+    assert entries["helm.lease_data_dir"] == [str(data_dir.resolve())]

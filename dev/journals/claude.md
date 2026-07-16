@@ -2247,3 +2247,55 @@ Gitlink NOT yet bumped in the superproject — the submodule branch should
 be pushed + ideally PR'd upstream (this is generic infer-stack
 improvement, not eval_audit-specific). Flag to Jon/Edward before folding
 into the superproject pin.
+
+**Addendum 4 (same session, ~21:00): first live smoke failed on a
+two-worlds master-key mismatch — fixed by pinning the infer-stack world
+through the lease bracket.** Jon attached the cmd_queue cache to the VM.
+The failed job log showed the FULL pipeline working (lease acquired, vLLM
+v0.19.1 served Qwen3.5-9B-Base, containerized HELM sent real mmlu
+prompts) until every request got LiteLLM **400 "No connected db."** —
+LiteLLM's response when the presented key isn't its master key (it then
+attempts a virtual-key DB lookup with no DB attached).
+
+Root cause: TWO infer-stack worlds on yardrat. The runbook shell (with
+_lib.sh's INFER_STACK_CONFIG_DIR/DATA_DIR exports) resolved
+/data/service/infer-stack; the scheduled cmd_queue tmux job — a FRESH
+LOGIN SHELL that inherits none of those exports — resolved Jon's
+pre-existing global world /data/service/docker/infer-stack (evidence: the
+job's acquire logged "seeded 22 vLLM route(s)" = his global gateway
+config, and compose rendered under /data/service/docker/...). Both worlds
+converge the SAME docker compose project (same container names, port
+14042), so the job-side converge re-created the gateway with world-B's
+managed master key while the bundle carried world-A's → every request
+401-shaped into "No connected db." infer_stack's data_root() resolution
+(env > settings.yaml-in-config_root > XDG) makes this environment-
+dependent by design; the bracket already threaded --catalog explicitly
+for exactly this class of reason, but not the world dirs.
+
+Fix (superproject): thread the WORLD like the catalog —
+- serving_facts: `_infer_stack_data_root()` helper (resolves the
+  export-time process's view).
+- bundle_export: `_lease_facts` emits `lease_config_dir` +
+  `lease_data_dir` (resolved at export time next to lease_catalog);
+  flows into both generated manifests via the existing lease_facts
+  doc.update.
+- kwdagger_bridge.build_broadcast_lease_knobs: forwards both as
+  helm.lease_* matrix keys.
+- lease_bracket: LEASE_KEYS += both; acquire, release, AND the
+  leases-snapshot (ledger lives in data dir) render
+  --config-dir/--data-dir (verified all three verbs inherit
+  _PathOverridesMixin and _open_controller applies the overrides).
+  Manifests without the keys render byte-identical brackets.
+
+Tests: bracket world-pin rendering (acquire/release/snapshot + absent
+case), bridge broadcast, export bakes the world into manifests.
+Group: 98 passed, 1 skipped.
+
+Note for Jon on next run: the whole flow now coheres to the RUNBOOK
+world (/data/service/infer-stack per the shipped settings.yaml). The
+converge will re-render the shared gateway containers from that world —
+his global 22-route gateway config gets replaced while the run holds it
+(same containers). If he prefers the runs to ride his existing world
+instead, `export INFER_STACK_DATA_DIR=/data/service/docker/infer-stack`
+before 10 — _lib.sh's env-wins resolution + the export-time capture then
+pin THAT world everywhere, coherently.

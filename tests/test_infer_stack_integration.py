@@ -492,3 +492,24 @@ def test_bundle_records_serving_provenance(tmp_path: Path) -> None:
     assert serving["dtype"] == "float16"
     assert serving["revision"] is None
     assert serving["max_model_len"] == 4096
+
+
+def test_export_bakes_the_infer_stack_world_into_manifests(tmp_path: Path, monkeypatch) -> None:
+    # The generated manifests must carry lease_config_dir/lease_data_dir — the
+    # world the exporter resolved — so scheduled jobs lease in the same world
+    # that minted the gateway master key (the 'No connected db.' regression).
+    config_dir = _make_config_dir(tmp_path)
+    data_dir = tmp_path / "world-data"
+    data_dir.mkdir()
+    monkeypatch.setenv("INFER_STACK_DATA_DIR", str(data_dir))
+    bundle_root = tmp_path / "bundle"
+    result = export_benchmark_bundle(
+        "",
+        preset="e2e-phi_2-vllm-philosophy",
+        bundle_root=bundle_root,
+        config_dir=config_dir,
+        api_key_value="explicit-test-key",
+    )
+    smoke = yaml.safe_load(result["benchmark_smoke_manifest_path"].read_text())
+    assert smoke["lease_config_dir"] == str(config_dir.resolve())
+    assert smoke["lease_data_dir"] == str(data_dir.resolve())

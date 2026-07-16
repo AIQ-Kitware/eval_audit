@@ -25,6 +25,7 @@ from eval_audit.integrations.infer_stack.serving_facts import (
     _default_deployment_name,
     _default_gateway_base_url,
     _infer_stack_config_root,
+    _infer_stack_data_root,
     _resolve_api_key,
 )
 from eval_audit.integrations.infer_stack.freeze import _freeze_run_spec_sources
@@ -301,6 +302,8 @@ def _lease_facts(
     *,
     preset_cfg: dict[str, Any],
     lease_catalog: Path | str | None,
+    lease_config_dir: Path | str | None = None,
+    lease_data_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Build the per-run GPU-lease facts baked into the generated manifest.
 
@@ -337,6 +340,10 @@ def _lease_facts(
     out["lease_ttl"] = str(preset_cfg.get("lease_ttl") or DEFAULT_LEASE_TTL)
     if lease_catalog is not None:
         out["lease_catalog"] = str(Path(lease_catalog).resolve())
+    if lease_config_dir is not None:
+        out["lease_config_dir"] = str(Path(lease_config_dir).resolve())
+    if lease_data_dir is not None:
+        out["lease_data_dir"] = str(Path(lease_data_dir).resolve())
     return out
 
 
@@ -460,6 +467,8 @@ def materialize_benchmark_bundle(
     base_url: str | None = None,
     api_key_value: str | None = None,
     lease_catalog: Path | str | None = None,
+    lease_config_dir: Path | str | None = None,
+    lease_data_dir: Path | str | None = None,
     from_run_spec: bool = False,
     precomputed_root: str | None = None,
     freeze_rel_paths: bool = False,
@@ -654,6 +663,8 @@ def materialize_benchmark_bundle(
         model_entries,
         preset_cfg=preset_cfg,
         lease_catalog=lease_catalog,
+        lease_config_dir=lease_config_dir,
+        lease_data_dir=lease_data_dir,
     )
     # From-spec replay records the LOCAL deployment so the audit reports
     # same_deployment=no. The rewrite target is the bundle's own deployment name —
@@ -817,7 +828,17 @@ def export_benchmark_bundle(
     # The catalog the lease facts point at — the same one the facts resolved
     # against. Baked into the manifest as an absolute path so `infer-stack
     # acquire --catalog` works from any kwdagger job cwd.
-    lease_catalog = _infer_stack_config_root(resolved_config_dir) / "catalog.yaml"
+    lease_config_dir = _infer_stack_config_root(resolved_config_dir)
+    lease_catalog = lease_config_dir / "catalog.yaml"
+    # The infer-stack WORLD (config dir + data dir) as resolved at export time.
+    # Baked into the manifest so the scheduled jobs' acquire/release run
+    # against the SAME world (ledger, compose state, managed LiteLLM master
+    # key) that minted the api key baked into model_deployments.yaml. A
+    # cmd_queue tmux job is a fresh login shell — without these pins it
+    # resolves its own world from its own env/settings, and a divergent world
+    # converges the shared gateway with a DIFFERENT master key (observed as
+    # LiteLLM 400 "No connected db." on every HELM request).
+    lease_data_dir = _infer_stack_data_root()
     if bundle_root is None:
         # Allow presets to override the target bundle root path. If the
         # preset sets `bundle_root`, interpret absolute paths directly
@@ -842,6 +863,8 @@ def export_benchmark_bundle(
         base_url=base_url,
         api_key_value=api_key_value,
         lease_catalog=lease_catalog,
+        lease_config_dir=lease_config_dir,
+        lease_data_dir=lease_data_dir,
         from_run_spec=from_run_spec,
         precomputed_root=precomputed_root,
         freeze_rel_paths=freeze_rel_paths,

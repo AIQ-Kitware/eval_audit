@@ -47,6 +47,14 @@ LEASE_KEYS = frozenset(
         "lease_ttl",
         "lease_timeout",
         "lease_catalog",
+        # The infer-stack WORLD (config dir + data dir) the bundle was exported
+        # against, rendered as --config-dir/--data-dir on acquire AND release. A
+        # cmd_queue tmux job is a fresh login shell: without these, it resolves
+        # its own world from its own env/settings, and a divergent world
+        # converges the shared gateway with a different managed master key than
+        # the one baked into the bundle (LiteLLM 400 "No connected db.").
+        "lease_config_dir",
+        "lease_data_dir",
         "lease_queue",
         "lease_snapshot",
         # Reserve-only lease: hold N GPUs without serving (the in-process
@@ -219,6 +227,14 @@ def render_lease_setup(cfg: dict[str, Any]) -> str | None:
         # compose project, so it must render the gateway from the SAME catalog as
         # concurrent served runs or it recreates their gateway container mid-flight.
         acquire += ["--catalog", q(str(catalog))]
+    # World pins (see LEASE_KEYS): keep the job in the export-time infer-stack
+    # world so the gateway's managed master key matches the bundle's baked key.
+    config_dir = cfg.get("lease_config_dir")
+    if config_dir:
+        acquire += ["--config-dir", q(str(config_dir))]
+    data_dir = cfg.get("lease_data_dir")
+    if data_dir:
+        acquire += ["--data-dir", q(str(data_dir))]
 
     # Ensure the node dir exists before acquire writes lease.env into it (the
     # inner materialize CLI creates out_dpath, but it has not run yet at setup
@@ -234,8 +250,16 @@ def render_lease_setup(cfg: dict[str, Any]) -> str | None:
         # snapshot's status — the preceding ``&& acquire`` still gates, so a
         # failed acquire keeps the whole chain false (PREAMBLE_OK=0) and the
         # HELM command is correctly skipped. Records co-held demand at run start
-        # for the agreement-vs-concurrency analysis (design §7).
-        parts.append(f"{{ infer-stack leases --json > {snap_path} 2>/dev/null || true ; }}")
+        # for the agreement-vs-concurrency analysis (design §7). World pins
+        # apply here too — the ledger being snapshotted lives in the data dir.
+        leases_cmd = ["infer-stack", "leases", "--json"]
+        if config_dir:
+            leases_cmd += ["--config-dir", q(str(config_dir))]
+        if data_dir:
+            leases_cmd += ["--data-dir", q(str(data_dir))]
+        parts.append(
+            f"{{ {' '.join(leases_cmd)} > {snap_path} 2>/dev/null || true ; }}"
+        )
     return " && ".join(parts)
 
 
@@ -266,6 +290,15 @@ def render_lease_teardown(cfg: dict[str, Any]) -> str | None:
     catalog = cfg.get("lease_catalog")
     if catalog:
         release += ["--catalog", shlex.quote(str(catalog))]
+    # Mirror acquire's world pins: release converges too, and a release in the
+    # wrong world would both strand the real lease and re-render the gateway
+    # from the wrong state dir.
+    config_dir = cfg.get("lease_config_dir")
+    if config_dir:
+        release += ["--config-dir", shlex.quote(str(config_dir))]
+    data_dir = cfg.get("lease_data_dir")
+    if data_dir:
+        release += ["--data-dir", shlex.quote(str(data_dir))]
     return " ".join(release)
 
 

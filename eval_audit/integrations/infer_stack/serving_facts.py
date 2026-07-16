@@ -64,6 +64,22 @@ def _infer_stack_config_root(config_dir: Path | None = None) -> Path:
     return paths.config_root()
 
 
+def _infer_stack_data_root() -> Path:
+    """Resolve the infer-stack data dir (leasing ledger, compose state, managed
+    LiteLLM master key) AS THE CURRENT PROCESS SEES IT — env >
+    settings.yaml-in-config_root > XDG default.
+
+    Export-time capture of this is what pins the scheduled jobs to the SAME
+    infer-stack world the exporter/bootstrap ran in: a cmd_queue tmux job is a
+    fresh login shell whose environment resolves its own (possibly different)
+    world, and two worlds converging the shared compose project means the
+    gateway's managed master key silently diverges from the key baked into the
+    bundle (observed as LiteLLM 400 "No connected db.")."""
+    _ensure_importable_infer_stack()
+    paths = importlib.import_module("infer_stack.paths")
+    return paths.data_root()
+
+
 @dataclass(frozen=True)
 class ServingFacts:
     """The transport facts the serving catalog uniquely supplies for one endpoint.

@@ -247,6 +247,16 @@ def build_broadcast_lease_knobs(
     catalog = catalog_override or manifest.get("lease_catalog")
     if catalog:
         entries["helm.lease_catalog"] = [str(Path(catalog).expanduser().resolve())]
+    # The infer-stack world (config dir + data dir) the bundle was exported
+    # against. Broadcast so every job's acquire/release runs in that SAME world
+    # — a tmux job's fresh login shell must not resolve its own (see
+    # lease_bracket: rendered as --config-dir/--data-dir).
+    for world_key in ("lease_config_dir", "lease_data_dir"):
+        world_dir = manifest.get(world_key)
+        if world_dir:
+            entries[f"helm.{world_key}"] = [
+                str(Path(world_dir).expanduser().resolve())
+            ]
     # Reserve-only lease (in-process HuggingFace): broadcast the GPU count to
     # every run so its bracket renders `acquire --reserve-gpus N` and the docker
     # node pins the container to the reserved card (see helm_docker_pipeline).
