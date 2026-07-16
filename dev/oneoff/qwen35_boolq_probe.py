@@ -18,7 +18,10 @@ Run ON YARDRAT while the endpoint is leased (the runbook world):
     cd ~/code/eval_audit/reproduce/qwen35_vllm
     export INFER_STACK_CONFIG_DIR=$PWD/config/infer_stack
     infer-stack acquire qwen3-5-9b-base-single --ttl 30m --yes --queue \
-        --env-file /tmp/probe-lease.env
+        --timeout 1800 --env-file /tmp/probe-lease.env
+    # --timeout is LOAD-BEARING: infer-stack's default readiness budget is
+    # 600s and a cold vLLM start (compile pass) can exceed it — the lease
+    # then self-releases mid-load and the env file is never written.
     python ../../dev/oneoff/qwen35_boolq_probe.py
     infer-stack release --yes --env-file /tmp/probe-lease.env
 
