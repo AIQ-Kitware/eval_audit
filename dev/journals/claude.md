@@ -1980,3 +1980,139 @@ test_from_spec_materialized_schedule + test_lease_bracket + test_container_execu
 should now clear. Watch that kwdagger actually loads the spilled params file (a stale
 same-named file in an earlier root would be overwritten — each experiment has its own
 root_dpath, so no cross-run collision expected).
+
+## 2026-07-15 17:40:00 -0400
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code.
+
+**User intent:** Jon is stepping in to help Edward. Session goal was
+*orientation* plus "sync our branches to Edward's and branch off him."
+The substantive work Jon wants to drive: benchmark **base Qwen 3.5**
+models (an *extension*, not a reproduction — Qwen 3.5 has no public HELM
+run) on the **same scenario roster** Edward uses for the Qwen 2.x/2.5
+reproductions, so Qwen 3.5-vs-2.5 becomes a fair comparison under the
+corrected local recipe. Later: LoRAs fine-tuned on Fable outputs
+(e.g. `Achilles1089/fable-coder-35B-A3B`). Framing = "eval_audit as a
+reproducibility-fixing extension of HELM; new-model results are the
+value-add on top of the reproducibility study."
+
+**Orientation findings.**
+- **Branch topology.** Local `main` (55fb5ec) is **380 commits behind**
+  Edward's live branch `origin/impl/run-from-run-spec` (156ffa0). All of
+  his current work (from-spec replay, qwen-combined fan-out, era shims,
+  TMLR plan) lives there, not on main. Created working branch
+  `jons/qwen35-extension` off his tip; ran `git submodule update
+  --init --recursive` to align the 4 drifted submodules (aiq-magnet,
+  cmd_queue, infer_stack@v0.6.0-167 route-registry, kwdagger). Tree clean.
+- **Environment.** This VM (`aivm-2404-yardrat`) is the **analysis host**:
+  no `nvidia-smi`, no `/data`, no `helm`/`vllm` installed; only
+  `eval_audit` importable. GPU runs execute on the **parent GPU box**
+  (2 cards: Quadro RTX 8000 48GB + RTX 5000 16GB) via the containerized
+  runner (`docker/build.sh` → `eval-audit-helm-runner:dev`). CPU-only
+  gates (V1/V3, `08_check_discovery`, preset-load) run here; serving +
+  runs (V4–V6) run there.
+- **The roadmap already exists.** `docs/planning/qwen36-core-new-results-plan.md`
+  (proposed 2026-07-11, **not started**) is precisely this extension:
+  the `qwen-combined` fan-out shape with **one axis flipped — compute
+  instead of reproduce** (no `--from-spec`, no freeze, `precomputed_root:
+  null`, no `official_public_index` pairing → standalone local-only
+  report). Two serving modes (thinking / non-thinking) as two
+  deployments, leased fan-out (`--lease --tmux-workers 2`). Comparability
+  is guaranteed by **authoring the same 9-group classic/Lite core
+  scenarios** (mmlu 57-subj, commonsense, gsm, math, legalbench, med_qa,
+  narrative_qa, natural_qa, wmt_14; ~85 run_entries/mode) with the model
+  token swapped. Scaffolding stubs already on disk:
+  `configs/local_models/qwen35_9b_vllm/` + `configs/qwen35_vllm_smoke_manifest.yaml`
+  (mmlu:anatomy + boolq, max_eval_instances=5, `VLLMChatClient` →
+  `Qwen/Qwen3.5-9B`) + `reproduce/qwen35_vllm/` (00–40 scripts).
+- **Comparison target roster (Edward's reproduction side).**
+  `qwen-models-combined` = 8 public Qwen text models (Qwen1.5
+  7b/14b/32b/72b/110b-chat, Qwen2-72B-Instruct, Qwen2.5 7B/72B
+  instruct-turbo), 775 run_entries, from-spec replay vs public HELM.
+  README explicitly lists `qwen/qwen3.5-9b` as **out of scope (no public
+  run to replay)** — i.e. reserved for exactly our extension.
+
+**Open decisions before any GPU work (surfaced to Jon, not yet answered).**
+1. **T1 — model identity.** Confirm the real HF repo(s)/id(s)/size(s) for
+   "Qwen 3.5". `Qwen/Qwen3.5-9B` is a *placeholder* in the stub config and
+   unverified on the Hub. Pick the size roster (9B fits the RTX 8000 at
+   bf16; 35B-A3B MoE ~70GB bf16 does **not** fit 48GB → needs FP8/quant or
+   offload, a later concern for the Fable-LoRA arc).
+2. **Benchmark scope** — adopt the plan's 9-group core verbatim (max
+   comparability with the Qwen reproduction heatmap) vs a smaller first cut.
+3. **Thinking vs non-thinking** — run both modes (the plan's headline axis)
+   or non-thinking only to start.
+4. **Where reproduction pairing is impossible** — Qwen 3.5 has no official
+   side, so the report is local-only; the scientific comparison is
+   Qwen 3.5 placed beside Edward's *reproduced* Qwen 2.5 numbers in the
+   same recipe frame (not HELM-pairing).
+
+**Decisions + T1 resolution (same session).** Jon chose: single ~9B
+**base** model first, smoke scope first. Web-verified: Qwen3.5 is real
+(Small 0.8/2/4/9B released 2026-03-02); the base repo is
+**`Qwen/Qwen3.5-9B-Base`** (`Qwen/Qwen3.5-9B` is the post-trained
+variant — the old stub pointed at the wrong one). HF card: hybrid
+Gated-DeltaNet + sparse-MoE (+ vision encoder), bf16 ~10B params, 262k
+ctx, no thinking mode on base. Consequences: (1) **vLLM arch support is
+the #1 execution risk** — verify at serve time before any wider grid;
+(2) **base ⇒ completions protocol** (`VLLMClient`), matching how base
+Qwen1.5 officials were served → base-3.5 vs base-1.5 is the clean
+comparison (the "3.5 vs 2.5" group-chat framing is base-vs-instruct,
+flag when reporting); (3) the plan's thinking/non-thinking axis
+collapses to one deployment for base.
+
+**Implemented (this session).** Jon clarified the repo is mirrored to
+yardrat via virtiofs — deliverable = turn-key scripts he runs there.
+Retargeted the whole `qwen35_vllm` smoke path to the base model:
+- **Vendored HELM** (`submodules/helm` @ b583244f on its local `main`,
+  AIQ-Kitware fork): registered `qwen/qwen3.5-9b-base` in
+  `model_metadata.yaml` (base tags mirror qwen1.5-7b: no
+  INSTRUCTION_FOLLOWING) + `tokenizer_configs.yaml` (explicit
+  `pretrained_model_name_or_path=Qwen/Qwen3.5-9B-Base`,
+  EOT `<|endoftext|>`). **Intentional submodule change** per the
+  qwen36-plan §4 pattern; gitlink staged deliberately. NOTE: the
+  submodule commit is local-only — **push the submodule before pushing
+  the superproject branch** or the pin dangles for others.
+- `configs/local_models/qwen35_9b_vllm/`: deployment renamed
+  `vllm/qwen3.5-9b-base-local`, `VLLMClient` (completions, not chat);
+  `start_vllm.sh` defaults `Qwen/Qwen3.5-9B-Base`, pins
+  `--dtype float16` (RTX 8000 is Turing sm_75, no native bf16 — the
+  downcast must be an explicit recorded choice, not vLLM's silent one)
+  and `CUDA_VISIBLE_DEVICES=0` (the 48GB card); `validate_vllm.py` now
+  exercises the completions API (chat would hit a nonexistent template);
+  `verify_run_artifacts.py` expects the base ids.
+- `configs/qwen35_vllm_smoke_manifest.yaml`: run_entries →
+  `model=qwen/qwen3.5-9b-base`, experiment
+  `audit-qwen35-9b-base-vllm-smoke`.
+- `reproduce/qwen35_vllm/05_check_registration.sh` (NEW): CPU preflight
+  asserting the venv's helm resolves the -base metadata + tokenizer —
+  catches a pip-crfm-helm venv early instead of failing late at
+  tokenizer resolution.
+- `reproduce/qwen35_vllm/README.md` (NEW): yardrat step-by-step,
+  success criteria, the vLLM-arch and Turing-fp16 caveats, and the
+  bridge to the full core grid (qwen36 plan, single non-thinking mode).
+
+Validation: `bash -n` all scripts, `py_compile` both .py, yaml loads +
+targeted assertions on the new registrations. GPU-side validation
+(V4/V5 analogues: serve, one completion, smoke run) is Jon's on
+yardrat — this VM has no GPU/vllm/helm.
+
+**Next steps.**
+- Jon runs `reproduce/qwen35_vllm/{00,05,10,15,20,30,40}` on yardrat.
+  First real gate: does yardrat's vLLM load the Qwen3.5 architecture?
+  Second: does the venv helm see the -base registration (05)?
+- If smoke passes: author the ~85-entry classic/Lite core compute grid
+  per `docs/planning/qwen36-core-new-results-plan.md` (single
+  non-thinking member since base), local-only virtual experiment,
+  report beside the reproduced Qwen1.5/2/2.5 numbers.
+- Later arcs: post-trained Qwen3.5-9B (chat), fable-coder-35B-A3B LoRA
+  (needs quantization for 48GB).
+- Then execute the plan's checklist (§14): add `precomputed_root` +
+  `max_eval_instances` params to `_build_combined_preset`; author the
+  compute member presets + core run_entries (model-swapped from any
+  `qwen/*` row in `official_public_index.csv`); infer-stack catalog with
+  the 2 endpoints; port `reproduce/qwen3_5_core/`; add the local-only
+  virtual-experiment yaml; register the new ids in the vendored HELM
+  `model_metadata.yaml`/`tokenizer_configs.yaml` if not already resolvable;
+  V1/V3 CPU gates here, then V4–V6 on the GPU box.
+- Nothing was executed on GPUs this session; no runs launched.

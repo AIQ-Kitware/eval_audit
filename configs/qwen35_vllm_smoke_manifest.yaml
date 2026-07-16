@@ -1,9 +1,9 @@
 schema_version: 1
-experiment_name: audit-qwen35-9b-vllm-smoke
-description: Smoke-test HELM batch for qwen/qwen3.5-9b through a local vLLM server.
+experiment_name: audit-qwen35-9b-base-vllm-smoke
+description: Smoke-test HELM batch for qwen/qwen3.5-9b-base through a local vLLM server.
 run_entries:
-  - mmlu:subject=anatomy,method=multiple_choice_joint,model=qwen/qwen3.5-9b
-  - boolq:model=qwen/qwen3.5-9b,data_augmentation=canonical
+  - mmlu:subject=anatomy,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base
+  - boolq:model=qwen/qwen3.5-9b-base,data_augmentation=canonical
 max_eval_instances: 5
 suite: audit-qwen35-vllm-smoke
 mode: compute_if_missing
