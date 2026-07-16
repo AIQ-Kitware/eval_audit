@@ -2327,3 +2327,35 @@ on 2 unambiguous cases and prints an H1/H2 verdict.
 This is a textbook instance of the project's central taxonomy operating
 on a NET-NEW model: a 0.0 cell that is not model weakness but recipe/
 substrate interaction, caught by instance-level forensics.
+
+**Addendum 6 (same session, ~23:30): probe VERDICT = H1 (style), plus the
+cold-start economics fully measured.** The discriminating probe ran against
+the live endpoint: content is CORRECT behind the leading "\n\n" on all
+cases — fp16-on-Turing numerics exonerated; Qwen3.5-9B-Base simply answers
+paragraph-style ("Answer:\n\nYes") even with 5 inline few-shot examples,
+and HELM's canonical stop=['\n'] truncates every completion to '' → the
+0/5 boolq cell is a RECIPE-FORMAT ARTIFACT, not model failure. (In the
+paper's grade vocabulary: deployment-boundary/recipe artifact.)
+
+Cold-start accounting (2026-07-16, RTX 8000, vllm v0.25.1, fp16):
+- total cold start 22:52:41 → 23:26:49 ready ≈ 34 min
+- init engine 1937s, of which: VL encoder-cache profiling ~26 min (the
+  dominant tax — max-size VIDEO forward on TORCH_SDPA, sm_75 has no FA),
+  torch.compile 87s, warmup run 289s, cudagraph capture 4s, mm warmup 31s
+- cache mounts verified working: vllm-cache 268M (AOT-compiled model
+  saved), triton-cache 380K; torch-cache ~empty (inductor artifacts live
+  under vllm's torch_compile_cache)
+- mitigations landed for next start: --limit-mm-per-prompt
+  '{"image":0,"video":0}' (kills the 26-min profiling outright) + compile
+  cache reuse (kills the 87s) → expected <5 min, TO BE VERIFIED on the
+  next acquire.
+
+OPEN DECISION (for Jon): how to score generation tasks for
+paragraph-style models. boolq isn't in the planned ~85-entry core, but
+narrative_qa / natural_qa (short-answer generation with '\n' stops) carry
+the same hazard. Options sketched: (1) run canonical + newline-tolerant
+variants and report the delta as quantified format-sensitivity (keeps
+canonical comparability, most on-thesis); (2) canonical only, document
+zeros; (3) tolerant only (breaks strict comparability). Tolerant variant
+mechanically = a client-shim that strips leading newlines before applying
+stops (the NullSafe-client pattern), declared via deployment name.
