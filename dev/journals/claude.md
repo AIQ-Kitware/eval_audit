@@ -2299,3 +2299,31 @@ his global 22-route gateway config gets replaced while the run holds it
 instead, `export INFER_STACK_DATA_DIR=/data/service/docker/infer-stack`
 before 10 — _lib.sh's env-wins resolution + the export-time capture then
 pin THAT world everywhere, coherently.
+
+**Addendum 5 (same session, ~22:00): SMOKE PASSED — first HELM-shaped
+Qwen3.5-9B-Base numbers — plus a real finding on boolq.** After the
+v0.25.1 tag fix + stale-group evict, 10_run_smoke.sh landed both runs.
+Verified from the VM (results attached at /data/crfm-helm-audit): both
+run_specs record model=qwen/qwen3.5-9b-base +
+model_deployment=vllm/qwen3.5-9b-base-local; all three registry sidecars
+present in prod_env (the sidecar mechanism worked end-to-end in
+production); world pins held (everything under /data/service/infer-stack).
+
+Results: mmlu:anatomy exact_match=1.0 (4/4). boolq exact_match=0.0 (0/5)
+— but forensics show the model returned EMPTY strings: raw vLLM cache
+(prod_env/cache/vllm.sqlite) shows first generated token = "\n\n"
+(logprob -0.28, ~75%), stop='\n' matches inside it, completion truncates
+to ''. Prompt is well-formed (5 inline "Answer: Yes/No" shots).
+Tokenizer exonerated (HF probe: add_special_tokens adds nothing; no
+BOS; eos=<|endoftext|>). Two hypotheses: H1 the model style-prefers
+"Answer:\n\nYes" (content fine; HELM's canonical stop zeroes it — a
+deployment-boundary artifact in the paper's grade vocabulary); H2
+fp16-on-Turing numerics distort the GDN state kernels (fp32 ablation
+fits the 48GB card: 9B*4B=36GB). Wrote
+dev/oneoff/qwen35_boolq_probe.py — acquires nothing itself; Jon leases
+the endpoint, it replays the canonical recipe AND an unstopped variant
+on 2 unambiguous cases and prints an H1/H2 verdict.
+
+This is a textbook instance of the project's central taxonomy operating
+on a NET-NEW model: a 0.0 cell that is not model weakness but recipe/
+substrate interaction, caught by instance-level forensics.
