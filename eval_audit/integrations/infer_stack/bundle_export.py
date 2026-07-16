@@ -567,12 +567,21 @@ def materialize_benchmark_bundle(
             )
         # The old contract carried a rich access dict; under default-B the only
         # facts worth recording are the resolved transport (for bundle.yaml
-        # traceability — nothing downstream parses it).
+        # traceability — nothing downstream parses it) plus the serving
+        # substrate provenance: engine image, dtype, and revision are exactly
+        # the "unrecorded execution substrate" parameters the reproducibility
+        # work pins down, so every bundle self-describes what served it.
         selected_accesses.append(
             {
                 "kind": selected_kind,
                 "base_url": model_entries[-1]["client_spec"]["args"]["base_url"],
                 "request_model_name": fact.served_model_name,
+                "serving": {
+                    "engine_image": fact.serving_image,
+                    "dtype": fact.dtype,
+                    "revision": fact.revision,
+                    "max_model_len": fact.max_model_len,
+                },
             }
         )
     output_dir.mkdir(parents=True, exist_ok=True)

@@ -425,3 +425,70 @@ def test_alias_assert_still_rejects_unregistered_ids(tmp_path: Path) -> None:
             base_url="http://localhost:14042/v1",
             api_key_value="test-key",
         )
+
+
+def test_serving_facts_record_substrate_provenance(tmp_path: Path) -> None:
+    # The serving-engine image, dtype, and revision are exactly the "unrecorded
+    # execution substrate" parameters the reproducibility work pins down —
+    # resolve_serving_facts must surface them (explicit pins verbatim; the
+    # engine image falling back to infer-stack's PINNED default when the
+    # endpoint declares no override, recording the actual value not "default").
+    catalog = {
+        "models": {
+            "q35": {
+                "source": "hf://Qwen/Qwen3.5-9B-Base",
+                "dtype": "float16",
+                "revision": "abc123",
+            },
+        },
+        "endpoints": {
+            "q35-pinned": {
+                "engine": "vllm",
+                "model": "q35",
+                "runtime": {"max_model_len": 4096, "image": "vllm/vllm-openai:v0.25.10"},
+            },
+            "q35-default-image": {
+                "engine": "vllm",
+                "model": "q35",
+                "runtime": {"max_model_len": 4096},
+            },
+        },
+    }
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
+    (config_dir / "catalog.yaml").write_text(yaml.safe_dump(catalog), encoding="utf-8")
+
+    pinned = resolve_serving_facts("q35-pinned", config_dir=config_dir)
+    assert pinned.serving_image == "vllm/vllm-openai:v0.25.10"
+    assert pinned.dtype == "float16"
+    assert pinned.revision == "abc123"
+
+    defaulted = resolve_serving_facts("q35-default-image", config_dir=config_dir)
+    from infer_stack.config import PINNED_IMAGES
+
+    assert defaulted.serving_image == PINNED_IMAGES["vllm"]
+
+
+def test_bundle_records_serving_provenance(tmp_path: Path) -> None:
+    # bundle.yaml must self-describe the serving substrate per profile.
+    facts = [
+        ServingFacts(
+            endpoint="q35-ep", served_model_name="q35-ep",
+            hf_model_id="Qwen/Qwen3.5-9B-Base", max_model_len=4096,
+            serving_image="vllm/vllm-openai:v0.25.10",
+            dtype="float16", revision=None,
+        )
+    ]
+    result = materialize_benchmark_bundle(
+        facts=facts,
+        output_dir=tmp_path / "bundle",
+        preset="qwen35_9b_base_vllm",
+        base_url="http://localhost:14042/v1",
+        api_key_value="test-key",
+    )
+    bundle = yaml.safe_load(Path(result["bundle_path"]).read_text())
+    serving = bundle["selected_access"]["serving"]
+    assert serving["engine_image"] == "vllm/vllm-openai:v0.25.10"
+    assert serving["dtype"] == "float16"
+    assert serving["revision"] is None
+    assert serving["max_model_len"] == 4096

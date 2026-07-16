@@ -27,6 +27,12 @@
 models:
   qwen3-5-9b-base:
     source: hf://Qwen/Qwen3.5-9B-Base    # base (pre-trained); Qwen/Qwen3.5-9B is the post-trained variant
+    # dtype is a MODEL-level knob in infer-stack (part of the deployment compat
+    # key; see catalog._resolve_vllm) — an endpoint runtime.dtype is silently
+    # ignored. Pin fp16 here so the serve args carry --dtype=float16 explicitly
+    # instead of relying on vLLM's sm_75 bf16->fp16 fallback (observed working,
+    # but the precision must be a recorded fact, not a driver-dependent accident).
+    dtype: float16
 
 endpoints:
   qwen3-5-9b-base-single:
@@ -35,7 +41,14 @@ endpoints:
     model: qwen3-5-9b-base
     protocol: completions        # base model -> probe /completions (see header)
     runtime:
-      dtype: float16             # Turing (sm_75) has no bf16; explicit > vLLM deciding silently
+      # Serving-engine pin, SCOPED to this extension endpoint (infer-stack's
+      # global PINNED_IMAGES stays v0.19.1 so the reproduction runbooks keep
+      # their validated substrate). v0.19.1 was observed to load Qwen3.5
+      # (arch Qwen3_5ForConditionalGeneration) on 2026-07-16; bumped to the
+      # current release for the newer hybrid-GDN kernels. The effective image
+      # is RECORDED in the exported bundle.yaml (serving provenance) — the
+      # engine version is an unrecorded-substrate parameter otherwise.
+      image: vllm/vllm-openai:v0.25.10
       max_model_len: 4096        # preset reserves 4064 (helm_max_sequence_and_generated_tokens_length)
       gpu_memory_utilization: 0.85
       max_num_batched_tokens: 4096

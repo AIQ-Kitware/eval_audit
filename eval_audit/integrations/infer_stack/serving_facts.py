@@ -70,14 +70,25 @@ class ServingFacts:
 
     Everything HELM-domain (model/tokenizer alias, protocol mode) comes from the
     eval_audit preset; everything transport (base_url, api key, access kind) is
-    caller-supplied. The catalog only authoritatively knows the served name, the
-    backing HF model id, and the served context window — so those are the only
-    fields this carries (see the §3 strategic decision in the migration plan)."""
+    caller-supplied. The catalog authoritatively knows the served name, the
+    backing HF model id, and the served context window (see the §3 strategic
+    decision in the migration plan) — plus the serving-substrate provenance
+    fields below, which exist purely to be RECORDED in the exported bundle
+    (the engine image/dtype/revision are exactly the "unrecorded execution
+    substrate" parameters the reproducibility work exists to pin down)."""
 
     endpoint: str
     served_model_name: str
     hf_model_id: str
     max_model_len: int | None = None
+    # Serving-substrate provenance (record-only; never used for routing).
+    # serving_image: the effective vLLM container image — the endpoint's
+    # runtime.image override when set, else infer-stack's PINNED default.
+    # dtype / revision: the catalog's model-level pins (None = engine default,
+    # i.e. deliberately unpinned — record that fact too).
+    serving_image: str | None = None
+    dtype: str | None = None
+    revision: str | None = None
 
 
 def resolve_serving_facts(
@@ -103,11 +114,25 @@ def resolve_serving_facts(
             "benchmark export only supports vLLM endpoints."
         )
     served = request.served
+    spec = getattr(request, "spec", None) or {}
+    runtime = spec.get("runtime") or {}
+    serving_image = runtime.get("image")
+    if not serving_image:
+        # No per-endpoint override -> the effective image is infer-stack's
+        # pinned default. Record the actual value, not "default".
+        try:
+            config_mod = importlib.import_module("infer_stack.config")
+            serving_image = config_mod.PINNED_IMAGES.get("vllm")
+        except Exception:
+            serving_image = None
     return ServingFacts(
         endpoint=endpoint,
         served_model_name=served["served_model_name"],
         hf_model_id=served["hf_model_id"],
         max_model_len=request.capacity.get("max_model_len"),
+        serving_image=serving_image,
+        dtype=spec.get("dtype"),
+        revision=spec.get("revision"),
     )
 
 
