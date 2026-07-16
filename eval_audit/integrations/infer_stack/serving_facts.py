@@ -152,23 +152,33 @@ def resolve_serving_facts(
     )
 
 
-def _benchmark_client_class(protocol_mode: str, access_kind: str) -> str:
+def _benchmark_client_class(
+    protocol_mode: str, access_kind: str, *, newline_tolerant: bool = False
+) -> str:
     # Chat protocol -> eval_audit's null-safe subclasses (helm_clients.py): reasoning
     # models can return message.content=null on a successful chat response, which HELM
     # would crash on downstream (`NoneType.strip()`). The subclass normalizes null->""
     # via HELM's own client_spec.class_name seam, matching what the official
     # together/gpt-oss-20b run already emitted. Completions protocol returns text
-    # directly and never hits this, so it keeps the stock HELM client.
+    # directly and never hits this, so it keeps the stock HELM client — unless the
+    # preset opts into ``newline_tolerant`` (paragraph-style base models whose
+    # answers a server-side "\n" stop would truncate to ""; the tolerant subclass
+    # relaxes the stop and restores it client-side after stripping leading
+    # newlines — a DECLARED substitution, reflected in the deployment name).
     if access_kind == "vllm-direct":
+        if protocol_mode != "completions":
+            return "eval_audit.integrations.helm_clients.NullSafeVLLMChatClient"
         return (
-            "helm.clients.vllm_client.VLLMClient"
-            if protocol_mode == "completions"
-            else "eval_audit.integrations.helm_clients.NullSafeVLLMChatClient"
+            "eval_audit.integrations.helm_clients.NewlineTolerantVLLMClient"
+            if newline_tolerant
+            else "helm.clients.vllm_client.VLLMClient"
         )
+    if protocol_mode != "completions":
+        return "eval_audit.integrations.helm_clients.NullSafeOpenAIChatClient"
     return (
-        "helm.clients.openai_client.OpenAILegacyCompletionsClient"
-        if protocol_mode == "completions"
-        else "eval_audit.integrations.helm_clients.NullSafeOpenAIChatClient"
+        "eval_audit.integrations.helm_clients.NewlineTolerantOpenAICompletionsClient"
+        if newline_tolerant
+        else "helm.clients.openai_client.OpenAILegacyCompletionsClient"
     )
 
 

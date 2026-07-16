@@ -2359,3 +2359,31 @@ canonical comparability, most on-thesis); (2) canonical only, document
 zeros; (3) tolerant only (breaks strict comparability). Tolerant variant
 mechanically = a client-shim that strips leading newlines before applying
 stops (the NullSafe-client pattern), declared via deployment name.
+
+**Addendum 7 (same session, ~00:15): Option A implemented — the
+newline-tolerant completions client (declared substitution).** Jon chose
+the client-shim mechanism. Landed:
+- `helm_clients.py`: `_NewlineTolerantCompletionsMixin` +
+  `NewlineTolerantOpenAICompletionsClient` (gateway transport) +
+  `NewlineTolerantVLLMClient` (vllm-direct). Fires ONLY when the request
+  carries a "\n" stop (MC max_tokens=1 shapes pass through
+  byte-identically); relaxes the stop server-side (+4-token budget),
+  then client-side lstrips newlines, re-applies the ORIGINAL stops, and
+  truncates tokens/logprob consistently (straddling tokens kept whole —
+  metrics score text; tokens are supplementary).
+- Wiring: preset/profile knob `newline_tolerant: true` →
+  `_benchmark_client_class(..., newline_tolerant=)` selects the shim;
+  `_model_deployment_entry` REFUSES the knob unless the deployment name
+  carries an 'nlstrip' marker (the run_spec's model_deployment is where
+  the substitution must be visible) and rejects chat protocol
+  (completions-only hazard).
+- Tests: 8 shim-semantics units (boolq-shape recovery, request
+  relaxation, inline no-op, pass-through, multi-stop earliest-wins,
+  straddling token) + export wiring (client class, marked-name
+  enforcement, chat rejection). 32+75 green.
+
+NOT yet enabled anywhere: the qwen35 preset stays canonical. Enabling =
+add `newline_tolerant: true` + rename model_deployment_name to
+'vllm/qwen3.5-9b-base-nlstrip-local' in the preset (+ docker/build.sh
+rebuild so the container's baked eval_audit has the new class). Decision
+on WHICH tasks get it awaits the narrative_qa/natural_qa probes.

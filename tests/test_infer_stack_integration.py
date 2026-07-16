@@ -513,3 +513,49 @@ def test_export_bakes_the_infer_stack_world_into_manifests(tmp_path: Path, monke
     smoke = yaml.safe_load(result["benchmark_smoke_manifest_path"].read_text())
     assert smoke["lease_config_dir"] == str(config_dir.resolve())
     assert smoke["lease_data_dir"] == str(data_dir.resolve())
+
+
+def test_newline_tolerant_selects_shim_and_requires_marked_name(tmp_path: Path) -> None:
+    # The declared-substitution knob: newline_tolerant picks the tolerant
+    # completions client AND refuses a deployment name without the 'nlstrip'
+    # marker (the produced run_spec's model_deployment is where the
+    # substitution must be visible).
+    facts = [
+        ServingFacts(
+            endpoint="q35-ep", served_model_name="q35-ep",
+            hf_model_id="Qwen/Qwen3.5-9B-Base", max_model_len=4096,
+        )
+    ]
+    spec = {
+        "profile": "q35-ep",
+        "protocol_mode": "completions",
+        "model_deployment_name": "vllm/qwen3.5-9b-base-nlstrip-local",
+        "helm_model_name": "qwen/qwen1.5-7b",       # any registered alias
+        "helm_tokenizer_name": "qwen/qwen1.5-7b",
+        "newline_tolerant": True,
+    }
+    result = materialize_benchmark_bundle(
+        facts=facts, output_dir=tmp_path / "ok", profile_specs=[spec],
+        base_url="http://localhost:14042/v1", api_key_value="k",
+    )
+    entry = yaml.safe_load(Path(result["model_deployments_path"]).read_text())[
+        "model_deployments"
+    ][0]
+    assert entry["client_spec"]["class_name"] == (
+        "eval_audit.integrations.helm_clients.NewlineTolerantOpenAICompletionsClient"
+    )
+    assert entry["name"] == "vllm/qwen3.5-9b-base-nlstrip-local"
+
+    unmarked = dict(spec, model_deployment_name="vllm/qwen3.5-9b-base-local")
+    with pytest.raises(ValueError, match="nlstrip"):
+        materialize_benchmark_bundle(
+            facts=facts, output_dir=tmp_path / "bad", profile_specs=[unmarked],
+            base_url="http://localhost:14042/v1", api_key_value="k",
+        )
+
+    chat = dict(spec, protocol_mode="chat")
+    with pytest.raises(ValueError, match="completions-only"):
+        materialize_benchmark_bundle(
+            facts=facts, output_dir=tmp_path / "chat", profile_specs=[chat],
+            base_url="http://localhost:14042/v1", api_key_value="k",
+        )

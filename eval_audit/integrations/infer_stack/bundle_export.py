@@ -42,6 +42,7 @@ def _model_deployment_entry(
     model_deployment_name: str | None = None,
     base_url: str | None = None,
     api_key_value: str | None = None,
+    newline_tolerant: bool = False,
 ) -> dict[str, Any]:
     # default-B: the front door is the LiteLLM gateway (openai-compatible) for
     # every preset; vllm-direct is a fallback-only marker (migration plan §5.G3).
@@ -54,7 +55,27 @@ def _model_deployment_entry(
             "size the prompt+generation budget."
         )
     max_model_len = int(facts.max_model_len)
-    client_class = _benchmark_client_class(protocol_mode, kind)
+    if newline_tolerant and protocol_mode != "completions":
+        raise ValueError(
+            f"newline_tolerant is a completions-only knob (profile "
+            f"{facts.endpoint!r} declares protocol_mode={protocol_mode!r}): chat "
+            "transports have no server-side '\\n' stop hazard to relax."
+        )
+    client_class = _benchmark_client_class(
+        protocol_mode, kind, newline_tolerant=newline_tolerant
+    )
+    resolved_name = model_deployment_name or _default_deployment_name(served_name, kind)
+    if newline_tolerant and "nlstrip" not in resolved_name:
+        # Declared substitution: a non-canonical client produced these runs, and
+        # the produced run_spec's model_deployment is where that fact must live.
+        # Force the preset author to name it rather than silently branding runs
+        # with a canonical-looking deployment.
+        raise ValueError(
+            f"newline_tolerant preset must carry an 'nlstrip' marker in its "
+            f"model_deployment_name (got {resolved_name!r}) so the produced runs "
+            "declare the non-canonical completions client — e.g. "
+            f"{resolved_name + '-nlstrip'!r}."
+        )
     if kind == "vllm-direct":
         # vllm-direct talks to the vLLM server directly and sends api_key="EMPTY";
         # it MUST NOT fall back to the auth-protected LiteLLM gateway base_url
@@ -71,7 +92,7 @@ def _model_deployment_entry(
     else:
         resolved_base_url = base_url or _default_gateway_base_url()
     entry = {
-        "name": model_deployment_name or _default_deployment_name(served_name, kind),
+        "name": resolved_name,
         # HELM-domain aliases are preset-authoritative; the catalog hf_model_id is
         # only a last-resort fallback (and _assert_helm_aliases_exist fails loudly
         # if it isn't a registered HELM alias — no silent wrong alias).
@@ -270,6 +291,10 @@ def _profile_specs(profile: str, preset_cfg: dict[str, Any]) -> list[dict[str, A
         "helm_max_sequence_and_generated_tokens_length": preset_cfg.get(
             "helm_max_sequence_and_generated_tokens_length"
         ),
+        # Declared substitution (paragraph-style base models): selects the
+        # newline-tolerant completions client; requires an 'nlstrip'-marked
+        # deployment name (enforced in _model_deployment_entry).
+        "newline_tolerant": preset_cfg.get("newline_tolerant"),
     }]
 
 
@@ -566,6 +591,10 @@ def materialize_benchmark_bundle(
                     model_deployment_name=deployment_name,
                     base_url=base_url,
                     api_key_value=api_key_value,
+                    newline_tolerant=bool(
+                        spec.get("newline_tolerant")
+                        or preset_cfg.get("newline_tolerant")
+                    ),
                 )
             )
             _assert_helm_aliases_exist(
