@@ -2173,12 +2173,19 @@
   'bundle_name': 'qwen35_9b_base_vllm'
   'backend': 'compose'
   'access_kind': 'openai-compatible'
-  'model_deployment_name': 'vllm/qwen3.5-9b-base-local'
+  # 'nlstrip' marker: the newline-tolerant completions client produced these
+  # runs (declared substitution; enforced by _model_deployment_entry). The
+  # shim self-scopes per-request — it only alters requests carrying a "\n"
+  # stop (boolq-shaped short generation, where this model's paragraph-style
+  # "Answer:\n\nYes" would otherwise be server-truncated to ""); MC shapes
+  # pass through byte-identically and greedy inline answers are unchanged.
+  'model_deployment_name': 'vllm/qwen3.5-9b-base-nlstrip-local'
   'helm_model_name': 'qwen/qwen3.5-9b-base'
   'helm_tokenizer_name': 'qwen/qwen3.5-9b-base'
   # Base (pre-trained) model -> completions. Chat would wrap prompts in a
   # nonexistent chat template (the OLMo-7B "The" failure mode).
   'protocol_mode': 'completions'
+  'newline_tolerant': true
   # Serve 4096 (catalog max_model_len); reserve headroom below it (OLMo pattern).
   'helm_max_sequence_and_generated_tokens_length': 4064
   'model_metadata_fpath': 'configs/local_models/qwen35_9b_vllm/model_metadata.yaml'

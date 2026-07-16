@@ -18,7 +18,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("run_dir")
     parser.add_argument("--expect-model", default="qwen/qwen3.5-9b-base")
-    parser.add_argument("--expect-deployment", default="vllm/qwen3.5-9b-base-local")
+    # nlstrip = the newline-tolerant completions client (declared substitution).
+    parser.add_argument("--expect-deployment", default="vllm/qwen3.5-9b-base-nlstrip-local")
     args = parser.parse_args(argv)
 
     run_dir = Path(args.run_dir).expanduser().resolve()
