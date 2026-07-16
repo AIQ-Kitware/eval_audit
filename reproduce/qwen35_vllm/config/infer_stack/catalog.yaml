@@ -51,8 +51,17 @@ endpoints:
       # Tag verified against the Docker Hub API 2026-07-16 (v0.25.1 is the
       # latest stable; a prior unverified v0.25.10 pin was 'manifest unknown').
       image: vllm/vllm-openai:v0.25.1
-      max_model_len: 4096        # preset reserves 4064 (helm_max_sequence_and_generated_tokens_length)
+      max_model_len: 4096        # preserves 4064 preset reserve (helm_max_sequence_and_generated_tokens_length)
       gpu_memory_utilization: 0.85
       max_num_batched_tokens: 4096
       max_num_seqs: 16
       enable_prefix_caching: true
+      extra_args:
+        # Text-only benchmark serve of a VL-packaged model: disable the vision
+        # modalities so vLLM skips the encoder-cache profiling pass (observed
+        # >25 min on this Turing card: a max-size VIDEO forward through the
+        # encoder on the TORCH_SDPA fallback) and frees its cache budget.
+        # If a future vLLM rejects 0-limits here, drop these two args and
+        # re-pay the profiling tax.
+        - '--limit-mm-per-prompt'
+        - '{"image": 0, "video": 0}'
