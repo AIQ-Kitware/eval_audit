@@ -48,7 +48,9 @@ endpoints:
       # current release for the newer hybrid-GDN kernels. The effective image
       # is RECORDED in the exported bundle.yaml (serving provenance) — the
       # engine version is an unrecorded-substrate parameter otherwise.
-      image: vllm/vllm-openai:v0.25.10
+      # Tag verified against the Docker Hub API 2026-07-16 (v0.25.1 is the
+      # latest stable; a prior unverified v0.25.10 pin was 'manifest unknown').
+      image: vllm/vllm-openai:v0.25.1
       max_model_len: 4096        # preset reserves 4064 (helm_max_sequence_and_generated_tokens_length)
       gpu_memory_utilization: 0.85
       max_num_batched_tokens: 4096

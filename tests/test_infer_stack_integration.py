@@ -445,7 +445,7 @@ def test_serving_facts_record_substrate_provenance(tmp_path: Path) -> None:
             "q35-pinned": {
                 "engine": "vllm",
                 "model": "q35",
-                "runtime": {"max_model_len": 4096, "image": "vllm/vllm-openai:v0.25.10"},
+                "runtime": {"max_model_len": 4096, "image": "vllm/vllm-openai:v0.25.1"},
             },
             "q35-default-image": {
                 "engine": "vllm",
@@ -459,7 +459,7 @@ def test_serving_facts_record_substrate_provenance(tmp_path: Path) -> None:
     (config_dir / "catalog.yaml").write_text(yaml.safe_dump(catalog), encoding="utf-8")
 
     pinned = resolve_serving_facts("q35-pinned", config_dir=config_dir)
-    assert pinned.serving_image == "vllm/vllm-openai:v0.25.10"
+    assert pinned.serving_image == "vllm/vllm-openai:v0.25.1"
     assert pinned.dtype == "float16"
     assert pinned.revision == "abc123"
 
@@ -475,7 +475,7 @@ def test_bundle_records_serving_provenance(tmp_path: Path) -> None:
         ServingFacts(
             endpoint="q35-ep", served_model_name="q35-ep",
             hf_model_id="Qwen/Qwen3.5-9B-Base", max_model_len=4096,
-            serving_image="vllm/vllm-openai:v0.25.10",
+            serving_image="vllm/vllm-openai:v0.25.1",
             dtype="float16", revision=None,
         )
     ]
@@ -488,7 +488,7 @@ def test_bundle_records_serving_provenance(tmp_path: Path) -> None:
     )
     bundle = yaml.safe_load(Path(result["bundle_path"]).read_text())
     serving = bundle["selected_access"]["serving"]
-    assert serving["engine_image"] == "vllm/vllm-openai:v0.25.10"
+    assert serving["engine_image"] == "vllm/vllm-openai:v0.25.1"
     assert serving["dtype"] == "float16"
     assert serving["revision"] is None
     assert serving["max_model_len"] == 4096
