@@ -6,8 +6,11 @@
 **Initial candidate source:** published or locally retained HELM outputs for
 `openai/gpt-oss-20b`, beginning with XSTest and WildBench.  
 **Initial judges:** Qwen3.5-27B and Qwen3.6-35B-A3B, served through infer-stack
-and LiteLLM.  
-**Last updated:** 2026-07-17.
+and LiteLLM. (Both verified present on HF 2026-07-17: `Qwen/Qwen3.5-27B`,
+`Qwen/Qwen3.6-35B-A3B`; FP8 variants exist for both but quantization changes
+judge behavior — full precision for v1, quantized arms only as explicitly
+declared `JudgeSpec.quantization` variants.)  
+**Last updated:** 2026-07-17 (revised — see "Review record" at the end).
 
 This document is the implementation plan for turning the existing
 `judge_substitution_planned` analysis seam into an executable, auditable
@@ -263,16 +266,42 @@ The evaluation container installs `eval_audit`, so dotted classes under
 `eval_audit.*` are available to HELM. The first implementation should use this
 plugin seam instead of patching the vendored HELM submodule.
 
-### 2.8 The built-in Qwen3.6 profile does not itself provide one balanced name
+### 2.8 The built-in Qwen3.6 profile is an interactive profile, not a judge profile
 
-The existing Qwen3.6 serving recipe exposes two TP2 replicas under different
-served model names. A single public alias backed by several replicas is only
-available when infer-stack uses opt-in dynamic routing with Postgres-backed
-LiteLLM route registration.
+The existing recipe (`submodules/infer_stack/recipies/
+compose_qwen36_35b_a3b_4x96GB.md`, built-in profile
+`qwen3.6-35b-a3b-dual-tp2-4x96` — verified 2026-07-17) exposes **two TP2
+replicas under different served model names** with a native **262k** context
+and the Qwen reasoning parser. None of that is judge-shaped: a single public
+alias backed by several replicas requires opt-in dynamic routing
+(Postgres-backed LiteLLM route registration), and 262k context wastes VRAM a
+judge prompt never uses.
 
-Dynamic routing is therefore an experiment requirement, not an incidental
-serving preference. Acquisition, release, reconciliation, and garbage
-collection must all agree on the dynamic-routing setting.
+**Revision (2026-07-17): multi-replica serving is NOT a v1 requirement.**
+The experiment's correctness never depends on replicas — only wall-clock
+does, and the workload (a few thousand judge prompts per arm) fits a single
+replica overnight. v1 uses **one endpoint per judge arm, one replica, static
+routing** — the battle-tested path every existing runbook uses. Dynamic
+routing + `--replicas` (original Phase 9 §14.4) is demoted to a deferred
+scale-out phase, applied only if the Milestone-D pilot measures a real
+throughput shortfall. This removes the least-proven infrastructure
+(dynamic routing) from the critical path of a correctness-sensitive
+experiment.
+
+### 2.9 VRAM-aware placement is now available and is house style
+
+infer-stack gained eligibility-constrained placement on 2026-07-17
+(`submodules/infer_stack/docs/planning/vram-aware-placement.md`, Phases 0–3
+implemented): catalog endpoints declare `placement: {min_vram_gib: N}`, the
+planner places leases only on eligible GPUs, a too-low declaration fails
+with a guided error naming `infer-stack measure <endpoint> --record`, and
+the weight-bytes floor clamps unsound guesses. The judge catalogs written in
+Phase 9 must declare `min_vram_gib` (best guess; `measure` refines) — on
+aiq-gpu's homogeneous 4×96 GiB pool eligibility is trivially satisfied, but
+the declaration is the contract that makes the same catalog correct on any
+future host. Also declare a generous `lease_ttl` (the soft TTL must outlive
+a full judging batch, not just model load — same lesson as the Qwen3.5
+runbooks).
 
 ---
 
@@ -389,16 +418,15 @@ The source archive alone is not an installed environment. Missing imports such
 as `ubelt` or `every_eval_ever` during collection are environment failures, not
 code-test failures.
 
-On the development machine:
+On the development machine (NOTE: this repo is `eval_audit`, and the house
+convention is one top-level venv — do **not** create a per-project `.venv`):
 
 ```bash
-cd ~/code/helm_audit
+cd ~/code/eval_audit
 
 git submodule update --init --recursive
 
-uv venv --python 3.13 .venv
-source .venv/bin/activate
-
+# activate the existing top-level env (e.g. uvpy3.13.x), then:
 uv pip install -e .
 uv pip install -e submodules/aiq-magnet
 uv pip install -e submodules/infer_stack
@@ -1295,37 +1323,44 @@ qwen3.5-27b-judge
 qwen3.6-35b-a3b-judge
 ```
 
-### 14.1 Qwen3.5-27B topology
+**v1 topology (revised): one replica per judge arm, static routing.**
+Correctness never needs replicas; only wall-clock does, and the pilot
+(Milestone D) measures whether it matters. Every endpoint declares its VRAM
+requirement (§2.9):
 
-The repository's model suggestions treat this as a one-GPU model on the 96 GiB
-GPUs. Request four dedicated replicas:
+### 14.1 Qwen3.5-27B topology (v1)
 
-```text
-GPU 0 -> replica 0
-GPU 1 -> replica 1
-GPU 2 -> replica 2
-GPU 3 -> replica 3
+Dense ~27B, fp16 ≈ 54 GiB weights — a one-GPU model on the 96 GiB cards.
+One replica:
+
+```yaml
+qwen3.5-27b-judge:
+  engine: vllm
+  reclaim: stop
+  protocol: chat
+  placement:
+    min_vram_gib: 60          # best guess; refine with `infer-stack measure`
+  runtime:
+    tensor_parallel_size: 1
+    max_model_len: <from the §14.3 preflight>
 ```
 
-All replicas register the same public LiteLLM model alias:
+### 14.2 Qwen3.6-35B-A3B topology (v1)
 
-```text
-qwen3.5-27b-judge
-```
+MoE ~35B total (A3B active), fp16 ≈ 70 GiB weights. One TP2 replica
+(matching the built-in recipe's per-instance shape, minus the second
+instance and the 262k context):
 
-### 14.2 Qwen3.6-35B-A3B topology
-
-Use two tensor-parallel replicas:
-
-```text
-GPUs 0,1 -> replica 0
-GPUs 2,3 -> replica 1
-```
-
-Both register:
-
-```text
-qwen3.6-35b-a3b-judge
+```yaml
+qwen3.6-35b-a3b-judge:
+  engine: vllm
+  reclaim: stop
+  protocol: chat
+  placement:
+    min_vram_gib: 40          # per TP shard; refine with `infer-stack measure`
+  runtime:
+    tensor_parallel_size: 2
+    max_model_len: <from the §14.3 preflight>
 ```
 
 ### 14.3 Choose judge-sized context windows
@@ -1348,7 +1383,12 @@ A 32k context may be sufficient for WildBench and safety tasks, but the
 preflight must establish that from actual source responses. Do not retain a
 262k context merely because an interactive profile uses it.
 
-### 14.4 Add replica-count acquisition
+### 14.4 Add replica-count acquisition — DEFERRED (scale-out, post-pilot)
+
+**Everything in §14.4 and §14.5 is out of v1** (see §2.8 revision). Apply it
+only if the Milestone-D pilot shows single-replica throughput actually
+limits the experiment; until then, dynamic routing stays out of the critical
+path. Preserved below as the design for that eventuality.
 
 Add an infer-stack command shape such as:
 
@@ -1407,7 +1447,7 @@ infer-stack config set dynamic_routing true
 Do not depend on a one-off flag used only by acquisition. Apply, release, GC,
 and reconciliation must resolve the same setting.
 
-### 14.5 Live route acceptance test
+### 14.5 Live route acceptance test — DEFERRED (with §14.4)
 
 After acquisition:
 
@@ -1745,7 +1785,7 @@ judge_arms:
     model: qwen/qwen3.5-27b
     model_deployment: litellm/qwen3.5-27b-judge
     lease_endpoint: qwen3.5-27b-judge
-    replicas: 4
+    replicas: 1                    # v1: single replica, static routing (§2.8)
     tensor_parallel_size: 1
     temperature: 0.0
     thinking_mode: disabled
@@ -1755,7 +1795,7 @@ judge_arms:
     model: qwen/qwen3.6-35b-a3b
     model_deployment: litellm/qwen3.6-35b-a3b-judge
     lease_endpoint: qwen3.6-35b-a3b-judge
-    replicas: 2
+    replicas: 1                    # v1: one TP2 instance
     tensor_parallel_size: 2
     temperature: 0.0
     thinking_mode: disabled
@@ -1766,12 +1806,26 @@ execution:
   network: host
   annotation_parallelism: 16
   sqlite_cache: true
-  dynamic_routing: true
+  dynamic_routing: false           # v1 (see §2.8); flips only with §14.4
 ```
 
 `thinking_mode: disabled` remains valid only after a live client smoke confirms
 that the deployed server honors that request. Otherwise record
 `server_default`; never silently fall back.
+
+### 19.1 What replicates measure at temperature 0 (be explicit)
+
+At `temperature: 0.0` with greedy decoding, replicate variation does **not**
+measure sampling variance — it measures **serving nondeterminism** (vLLM
+batching order, kernel scheduling, MoE routing ties). That is squarely
+in-scope for this project's reproducibility theme, so replicates are kept —
+but their purpose must be stated as such in the report. Decision point at
+Milestone D: if replicate variance is ≈ 0, drop to one replicate for the
+remaining arms and bank the compute; if it is measurable, that is itself a
+reportable finding (T=0 judge instability) and three replicates stay.
+The official annotators' own temperature settings are asserted per-benchmark
+by the §10.6 prompt-parity tests — judge arms must match the official
+temperature, not assume 0.0.
 
 ---
 
@@ -1843,6 +1897,11 @@ Do not proceed automatically when:
 
 These are investigation triggers, not observations to silently filter out.
 
+Milestone D also resolves two deferred decisions: the replicate count for
+the full runs (§19.1 — keep 3 only if T=0 replicate variance is measurable)
+and whether single-replica throughput justifies the §14.4 scale-out work
+(measured, not assumed).
+
 ### Milestone E — full WildBench source run
 
 Run all selected responses with:
@@ -1879,7 +1938,9 @@ reproduce/open_judge_gpt_oss/
     experiment.yaml
 
     00_check_env.sh
-    03_check_dynamic_routing.sh
+    03_check_judge_serving.sh      # endpoints + min_vram_gib declared (§2.9);
+                                   # becomes a dynamic-routing check only if
+                                   # §14.4 scale-out lands
     05_audit_source_artifacts.sh
     06_check_hf_auth.sh
     07_check_container_image.sh
@@ -1979,7 +2040,10 @@ state where an apparently supported path is silently incorrect.
 - Add optional explicit thinking-mode client support.
 - Add structured-output smoke command.
 
-### Commit 10 — infer-stack multi-replica leasing
+### Commit 10 — infer-stack multi-replica leasing — DEFERRED (post-pilot)
+
+Out of the v1 sequence (§2.8 revision; single replica + static routing).
+Implement only if Milestone D measures a throughput shortfall:
 
 - Add `--replicas` for dedicated dynamic-routing leases.
 - Add static-mode rejection.
@@ -2067,3 +2131,64 @@ The infrastructure is complete when all of the following are demonstrated:
 The central new abstraction is therefore not "a HELM run with a rewritten
 judge deployment." It is an immutable **response snapshot** followed by one or
 more independently attributable **judgment attempts**.
+
+---
+
+## 25. Review record (2026-07-17, Fable)
+
+The plan above was drafted by GPT 5.6 and reviewed/revised same-day. Every
+load-bearing repository claim was **verified against the tree** before
+revision, and all of them held:
+
+- plugin seams exist (`eval_audit/integrations/helm_plugins.py`,
+  `helm_clients.py` with `NullSafeOpenAIChatClient` at line 57);
+- all five Phase-0 test files exist;
+- `eval_audit/manifests/run_spec_materializer.py` exists with the narrow
+  invariant described;
+- `helm.common.codec.from_json` exists (codec.py:142);
+- the annotator hard-coding claim is accurate — WildBench/Omni-MATH inline,
+  the four safety annotators via `model_as_judge.py`, which carries the
+  literal `# TODO: Make this configurable` (line 33);
+- `extract_judge_models()` is at `eval_audit/indexing/schema.py:176`;
+- the Qwen3.6 recipe exists exactly as described
+  (`infer_stack/recipies/compose_qwen36_35b_a3b_4x96GB.md`, built-in profile
+  `qwen3.6-35b-a3b-dual-tp2-4x96`, two TP2 instances, 262k context);
+- both judges exist on HF (`Qwen/Qwen3.5-27B`, `Qwen/Qwen3.6-35B-A3B`,
+  plus FP8 variants).
+
+The central abstraction (immutable response snapshot → independently
+attributable judgment attempts), the identity-replay stop gate (Phase 3),
+prompt-parity testing (§10.6), judge-attributed metric names (Phase 6), and
+the anti-goals list are all endorsed unchanged.
+
+**Revisions made:**
+
+1. **Multi-replica + dynamic routing demoted from v1 requirement to
+   post-pilot scale-out** (§2.8, §14, §19, Commit 10, Milestone D). The
+   original plan made Postgres-backed dynamic routing "an experiment
+   requirement"; it is a throughput optimization, and the workload fits a
+   single replica per judge overnight. v1 = one endpoint per arm, static
+   routing — the path every existing runbook exercises. The least-proven
+   infrastructure is now off the critical path of a correctness-sensitive
+   experiment, and the pilot *measures* whether it is ever needed.
+2. **Stitched in the VRAM-aware placement work** that landed the same day
+   (new §2.9): judge endpoints declare `placement.min_vram_gib` (house
+   style; `infer-stack measure --record` refines), generous `lease_ttl`,
+   and the runbook's `03` preflight checks declarations instead of dynamic
+   routing.
+3. **Fixed Phase 0 environment instructions** — wrong repo path
+   (`helm_audit` → `eval_audit`) and a per-project `.venv` that violates
+   the maintainer's one-top-level-venv convention.
+4. **Made the T=0 replicate semantics explicit** (new §19.1): at
+   temperature 0, replicates measure *serving nondeterminism*, not sampling
+   variance — in-scope for this project's reproducibility theme, but it
+   must be reported as such, with a Milestone-D decision point to drop to
+   one replicate if variance is ≈ 0. Prompt-parity tests assert the
+   official per-benchmark temperatures rather than assuming 0.0.
+5. **Concretized v1 judge topologies** (§14.1–14.2) with declared
+   placements and TP shapes (27B dense: TP1/~60 GiB guess; 35B-A3B: one
+   TP2 instance/~40 GiB per shard guess), context length still owed to the
+   §14.3 prompt-length preflight.
+6. Recorded judge-model existence and the FP8-variant caveat in the header
+   (quantized judges only as explicitly declared spec variants, never a
+   silent substitution).

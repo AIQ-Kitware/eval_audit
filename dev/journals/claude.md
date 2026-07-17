@@ -2661,3 +2661,35 @@ best guess (13 GiB — the tightest fit; the guided error is the designed
 recovery if it's wrong). First real run: ./10_run_smoke.sh in the new
 runbook, ideally with the 9B re-run going concurrently to watch eligibility
 keep them apart.
+
+### Addendum 3 (same day, 15:30) — open-judge plan review (Fable)
+
+Jon had GPT 5.6 draft docs/planning/open-judge-plan.md (rejudge frozen
+official candidate responses with open-weight judges — Qwen3.5-27B /
+Qwen3.6-35B-A3B on aiq-gpu; measure judge-substitution effect). Reviewed and
+revised. Verification-first: every load-bearing repo claim in the draft
+CHECKED OUT against the tree (plugin seams, Phase-0 tests, codec, the six
+hard-coded annotators + model_as_judge TODO, extract_judge_models, the
+qwen3.6-35b-a3b-dual-tp2-4x96 recipe, both judges on HF). The core design —
+immutable response snapshot → attributable judgment attempts, identity-replay
+stop gate, prompt-parity tests, judge-attributed metric names — endorsed
+unchanged.
+
+Revisions: (1) multi-replica + dynamic routing DEMOTED from v1 requirement
+to post-pilot scale-out — it's a throughput optimization presented as a
+correctness requirement, and it put the least-proven infra (Postgres LiteLLM
+dynamic routing) on the critical path; v1 = one replica per judge arm,
+static routing, and Milestone D *measures* whether scale-out is ever needed.
+(2) Stitched in same-day VRAM-aware placement (§2.9: judge endpoints declare
+min_vram_gib, measure --record refines, lease_ttl lesson). (3) Fixed Phase-0
+env instructions (wrong repo name, per-project .venv vs Jon's top-level-venv
+convention). (4) New §19.1: at T=0, replicates measure SERVING
+nondeterminism, not sampling variance — reportable as such, with a
+Milestone-D drop-to-1 decision point; prompt-parity must assert official
+temperatures rather than assuming 0.0. (5) Concrete v1 topologies with
+declared placements. Review record appended to the doc itself (§25).
+
+Design takeaway: when reviewing a generated plan, the highest-value pass is
+fact-verification against the tree (all held here — rare) and then
+*risk-ordering*: a plan can be entirely correct and still wrong about what
+belongs on the critical path.
