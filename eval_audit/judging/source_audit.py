@@ -338,7 +338,11 @@ def audit_run(run_path: str | Path) -> SourceAuditRecord:
             continue
         inner_keys.update(benchmark_annotations.keys())
         record.num_original_annotations += 1
-        has_judge_fields = all(
+        # ANY official judge field suffices: the official ensemble's
+        # membership varies by HELM version (newer releases dropped the
+        # deprecated Llama judge), and replay compares whatever judge
+        # metrics the source actually published.
+        has_judge_fields = any(
             f in benchmark_annotations for f in profile.official_judge_fields
         )
         is_empty_output = any(f in benchmark_annotations for f in profile.empty_output_fields)
