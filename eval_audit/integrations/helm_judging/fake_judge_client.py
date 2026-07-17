@@ -46,8 +46,20 @@ def deterministic_score(prompt: str, random: str | None) -> float:
     return (digest[0] % 3) / 2.0  # 0.0, 0.5, or 1.0
 
 
+def deterministic_wildbench_score(prompt: str, random: str | None) -> int:
+    digest = hashlib.sha256(f"{prompt}\x00{random or ''}".encode("utf-8")).digest()
+    return 1 + digest[1] % 10  # 1..10
+
+
+#: The official WildBench template opens with this header; the fake
+#: judge uses it to answer in the format the benchmark parser expects.
+_WILDBENCH_PROMPT_MARKER = "# Instruction"
+
+
 class FakeSafetyJudgeClient(Client):
-    """Answers with official-format ``<reasoning>/<score>`` markup."""
+    """Answers in the official format the prompt calls for: safety
+    ``<reasoning>/<score>`` markup, or WildBench strengths/weaknesses/
+    score JSON when the prompt is the WildBench template."""
 
     def __init__(self, cache_config: CacheConfig):
         self._cache = Cache(cache_config)
@@ -68,6 +80,13 @@ class FakeSafetyJudgeClient(Client):
             marker = MALFORMED_PROMPT_SUBSTRING[0]
             if marker is not None and marker in request.prompt:
                 text = "The fake judge declines to emit parseable markup."
+            elif request.prompt.startswith(_WILDBENCH_PROMPT_MARKER):
+                wb_score = deterministic_wildbench_score(request.prompt, request.random)
+                text = (
+                    '{"strengths": "deterministic fake strengths", '
+                    '"weaknesses": "deterministic fake weaknesses", '
+                    f'"score": "{wb_score}"}}'
+                )
             else:
                 score = deterministic_score(request.prompt, request.random)
                 text = (

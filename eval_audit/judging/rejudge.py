@@ -69,6 +69,9 @@ DONE_FNAME = "DONE"
 #: benchmark -> configurable single-judge annotator (plan Phase 5).
 CONFIGURABLE_ANNOTATOR_CLASSES: dict[str, str] = {
     "xstest": "eval_audit.integrations.helm_judging.safety.ConfigurableXSTestAnnotator",
+    "wildbench": (
+        "eval_audit.integrations.helm_judging.wildbench.ConfigurableWildBenchAnnotator"
+    ),
 }
 
 

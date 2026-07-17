@@ -67,20 +67,77 @@ class SingleJudgeSafetyMetric(Metric):
         return stats
 
 
+class SingleJudgeWildBenchMetric(Metric):
+    """WildBench score from exactly one declared judge.
+
+    Reads two explicit fields — ``<judge_id>_score`` and the official
+    ``empty_output_score`` shortcut (an empty candidate scores 1.0 with
+    no judge involved, matching official semantics) — never a key scan.
+    A failed/unparseable judgment yields annotator_success 0 and no
+    score stat.
+    """
+
+    def __init__(self, judge_id: str, annotator_name: str = "wildbench"):
+        super().__init__()
+        self._judge_id = judge_id
+        self._annotator_name = annotator_name
+        self._score_field = f"{judge_id}_score"
+
+    def evaluate_generation(
+        self,
+        adapter_spec: AdapterSpec,
+        request_state: RequestState,
+        metric_service: MetricService,
+        eval_cache_path: str,
+    ) -> List[Stat]:
+        if not request_state.annotations or self._annotator_name not in request_state.annotations:
+            raise ValueError(
+                f"request state has no {self._annotator_name!r} annotations; "
+                f"SingleJudgeWildBenchMetric must run on rejudged states"
+            )
+        annotation = request_state.annotations[self._annotator_name]
+        score = annotation.get(self._score_field)
+        if score is None and "empty_output_score" in annotation:
+            score = annotation["empty_output_score"]
+            success = 1  # official semantics: not a judge failure
+        else:
+            success = 1 if score is not None else 0
+        stats = [
+            Stat(MetricName(f"wildbench_annotator_success:judge={self._judge_id}")).add(
+                success
+            )
+        ]
+        if score is not None:
+            stats.append(
+                Stat(MetricName(f"wildbench_score:judge={self._judge_id}")).add(score)
+            )
+            stats.append(
+                Stat(
+                    MetricName(f"wildbench_score_rescaled:judge={self._judge_id}")
+                ).add((score - 1) / 9)
+            )
+        return stats
+
+
 #: benchmark -> judge-attributed metric class for rejudge artifacts.
-#: (WildBench and Omni-MATH land with their annotators.)
+#: (Omni-MATH lands with its annotator.)
 _SAFETY_METRIC_CLASS = (
     "eval_audit.integrations.helm_judging.metrics.SingleJudgeSafetyMetric"
+)
+_WILDBENCH_METRIC_CLASS = (
+    "eval_audit.integrations.helm_judging.metrics.SingleJudgeWildBenchMetric"
 )
 JUDGE_METRIC_CLASSES: dict[str, str] = {
     "xstest": _SAFETY_METRIC_CLASS,
     "simple_safety_tests": _SAFETY_METRIC_CLASS,
     "harm_bench": _SAFETY_METRIC_CLASS,
     "anthropic_red_team": _SAFETY_METRIC_CLASS,
+    "wildbench": _WILDBENCH_METRIC_CLASS,
 }
 
 _METRIC_CLASS_REGISTRY = {
     _SAFETY_METRIC_CLASS: SingleJudgeSafetyMetric,
+    _WILDBENCH_METRIC_CLASS: SingleJudgeWildBenchMetric,
 }
 
 
@@ -107,6 +164,7 @@ def build_judge_metric(benchmark: str, judge_id: str, annotator_name: str) -> Me
 __all__ = [
     "JUDGE_METRIC_CLASSES",
     "SingleJudgeSafetyMetric",
+    "SingleJudgeWildBenchMetric",
     "build_judge_metric",
     "judge_metric_spec_dict",
 ]

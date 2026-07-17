@@ -78,6 +78,7 @@ class METRIC_PREFIXES:
         'safety_gpt_annotator_success',
         'safety_llama_annotator_success',
         'safety_annotator_success',
+        'wildbench_annotator_success',
         # meta / dataset sizing
         'num_instances',
         'num_train_',
