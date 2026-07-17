@@ -2426,3 +2426,28 @@ Full suite 384 passed / 2 skipped. Superproject gitlink bump to follow
 with the smoke-validation commit. Jon's next action: infer-stack gc,
 re-run 10_run_smoke.sh — the keyed mount gives the mm-limited config a
 fresh cache automatically (no manual sudo rm of root-owned cache files).
+
+**Addendum 9 (2026-07-17, ~01:15): Option A PRODUCTION-VALIDATED.** The
+re-run smoke (fresh keyed compile cache, mm-limits active, shim baked in
+the runner image) landed clean:
+- boolq exact_match 0.0 -> **0.8 (4/5)** under the newline-tolerant
+  client; raw completions are clean 'Yes' strings (strip+re-stop worked
+  exactly as designed).
+- mmlu:anatomy stays 1.0 — the MC shape passed through the shim
+  untouched, as designed (per-request self-scoping confirmed in prod).
+- Both run_specs record model_deployment=
+  vllm/qwen3.5-9b-base-nlstrip-local — the substitution is DECLARED in
+  the artifact of record.
+- The single boolq miss is a REAL model behavior: the base model emitted
+  '<think>' on one instance — Qwen3.5 pretraining contamination with
+  reasoning-format data surfacing on a plain completions prompt. With
+  the recipe artifact removed, the residual failure is honest signal;
+  this belongs in the extension study's findings (base-model
+  thinking-tag leakage rate is measurable per task).
+
+The full mechanism stack is now proven end-to-end on GPUs: registry
+sidecars -> world-pinned leasing -> keyed compile caches -> mm-limited
+serving -> newline-tolerant declared-substitution client -> verified
+artifacts. Next unit of work: author the ~85-entry classic/Lite core
+grid (qwen36 plan §6.1) in the preset's full_manifest and run the first
+real breadth batch.
