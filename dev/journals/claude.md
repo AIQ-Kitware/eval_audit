@@ -2039,3 +2039,531 @@ untracked, matching prior rounds.
 preserve+hash; copy+hash RedPajama and the deployment-match sweeps; complete or document
 the ordinary-path OLMo confirmation on held-out instances; regenerate the corpus-wide
 denominator from a checked-in manifest.
+
+## 2026-07-15 17:40:00 -0400
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context), Claude Code.
+
+**User intent:** Jon is stepping in to help Edward. Session goal was
+*orientation* plus "sync our branches to Edward's and branch off him."
+The substantive work Jon wants to drive: benchmark **base Qwen 3.5**
+models (an *extension*, not a reproduction — Qwen 3.5 has no public HELM
+run) on the **same scenario roster** Edward uses for the Qwen 2.x/2.5
+reproductions, so Qwen 3.5-vs-2.5 becomes a fair comparison under the
+corrected local recipe. Later: LoRAs fine-tuned on Fable outputs
+(e.g. `Achilles1089/fable-coder-35B-A3B`). Framing = "eval_audit as a
+reproducibility-fixing extension of HELM; new-model results are the
+value-add on top of the reproducibility study."
+
+**Orientation findings.**
+- **Branch topology.** Local `main` (55fb5ec) is **380 commits behind**
+  Edward's live branch `origin/impl/run-from-run-spec` (156ffa0). All of
+  his current work (from-spec replay, qwen-combined fan-out, era shims,
+  TMLR plan) lives there, not on main. Created working branch
+  `jons/qwen35-extension` off his tip; ran `git submodule update
+  --init --recursive` to align the 4 drifted submodules (aiq-magnet,
+  cmd_queue, infer_stack@v0.6.0-167 route-registry, kwdagger). Tree clean.
+- **Environment.** This VM (`aivm-2404-yardrat`) is the **analysis host**:
+  no `nvidia-smi`, no `/data`, no `helm`/`vllm` installed; only
+  `eval_audit` importable. GPU runs execute on the **parent GPU box**
+  (2 cards: Quadro RTX 8000 48GB + RTX 5000 16GB) via the containerized
+  runner (`docker/build.sh` → `eval-audit-helm-runner:dev`). CPU-only
+  gates (V1/V3, `08_check_discovery`, preset-load) run here; serving +
+  runs (V4–V6) run there.
+- **The roadmap already exists.** `docs/planning/qwen36-core-new-results-plan.md`
+  (proposed 2026-07-11, **not started**) is precisely this extension:
+  the `qwen-combined` fan-out shape with **one axis flipped — compute
+  instead of reproduce** (no `--from-spec`, no freeze, `precomputed_root:
+  null`, no `official_public_index` pairing → standalone local-only
+  report). Two serving modes (thinking / non-thinking) as two
+  deployments, leased fan-out (`--lease --tmux-workers 2`). Comparability
+  is guaranteed by **authoring the same 9-group classic/Lite core
+  scenarios** (mmlu 57-subj, commonsense, gsm, math, legalbench, med_qa,
+  narrative_qa, natural_qa, wmt_14; ~85 run_entries/mode) with the model
+  token swapped. Scaffolding stubs already on disk:
+  `configs/local_models/qwen35_9b_vllm/` + `configs/qwen35_vllm_smoke_manifest.yaml`
+  (mmlu:anatomy + boolq, max_eval_instances=5, `VLLMChatClient` →
+  `Qwen/Qwen3.5-9B`) + `reproduce/qwen35_vllm/` (00–40 scripts).
+- **Comparison target roster (Edward's reproduction side).**
+  `qwen-models-combined` = 8 public Qwen text models (Qwen1.5
+  7b/14b/32b/72b/110b-chat, Qwen2-72B-Instruct, Qwen2.5 7B/72B
+  instruct-turbo), 775 run_entries, from-spec replay vs public HELM.
+  README explicitly lists `qwen/qwen3.5-9b` as **out of scope (no public
+  run to replay)** — i.e. reserved for exactly our extension.
+
+**Open decisions before any GPU work (surfaced to Jon, not yet answered).**
+1. **T1 — model identity.** Confirm the real HF repo(s)/id(s)/size(s) for
+   "Qwen 3.5". `Qwen/Qwen3.5-9B` is a *placeholder* in the stub config and
+   unverified on the Hub. Pick the size roster (9B fits the RTX 8000 at
+   bf16; 35B-A3B MoE ~70GB bf16 does **not** fit 48GB → needs FP8/quant or
+   offload, a later concern for the Fable-LoRA arc).
+2. **Benchmark scope** — adopt the plan's 9-group core verbatim (max
+   comparability with the Qwen reproduction heatmap) vs a smaller first cut.
+3. **Thinking vs non-thinking** — run both modes (the plan's headline axis)
+   or non-thinking only to start.
+4. **Where reproduction pairing is impossible** — Qwen 3.5 has no official
+   side, so the report is local-only; the scientific comparison is
+   Qwen 3.5 placed beside Edward's *reproduced* Qwen 2.5 numbers in the
+   same recipe frame (not HELM-pairing).
+
+**Decisions + T1 resolution (same session).** Jon chose: single ~9B
+**base** model first, smoke scope first. Web-verified: Qwen3.5 is real
+(Small 0.8/2/4/9B released 2026-03-02); the base repo is
+**`Qwen/Qwen3.5-9B-Base`** (`Qwen/Qwen3.5-9B` is the post-trained
+variant — the old stub pointed at the wrong one). HF card: hybrid
+Gated-DeltaNet + sparse-MoE (+ vision encoder), bf16 ~10B params, 262k
+ctx, no thinking mode on base. Consequences: (1) **vLLM arch support is
+the #1 execution risk** — verify at serve time before any wider grid;
+(2) **base ⇒ completions protocol** (`VLLMClient`), matching how base
+Qwen1.5 officials were served → base-3.5 vs base-1.5 is the clean
+comparison (the "3.5 vs 2.5" group-chat framing is base-vs-instruct,
+flag when reporting); (3) the plan's thinking/non-thinking axis
+collapses to one deployment for base.
+
+**Implemented (this session).** Jon clarified the repo is mirrored to
+yardrat via virtiofs — deliverable = turn-key scripts he runs there.
+Retargeted the whole `qwen35_vllm` smoke path to the base model:
+- **Vendored HELM** (`submodules/helm` @ b583244f on its local `main`,
+  AIQ-Kitware fork): registered `qwen/qwen3.5-9b-base` in
+  `model_metadata.yaml` (base tags mirror qwen1.5-7b: no
+  INSTRUCTION_FOLLOWING) + `tokenizer_configs.yaml` (explicit
+  `pretrained_model_name_or_path=Qwen/Qwen3.5-9B-Base`,
+  EOT `<|endoftext|>`). **Intentional submodule change** per the
+  qwen36-plan §4 pattern; gitlink staged deliberately. NOTE: the
+  submodule commit is local-only — **push the submodule before pushing
+  the superproject branch** or the pin dangles for others.
+- `configs/local_models/qwen35_9b_vllm/`: deployment renamed
+  `vllm/qwen3.5-9b-base-local`, `VLLMClient` (completions, not chat);
+  `start_vllm.sh` defaults `Qwen/Qwen3.5-9B-Base`, pins
+  `--dtype float16` (RTX 8000 is Turing sm_75, no native bf16 — the
+  downcast must be an explicit recorded choice, not vLLM's silent one)
+  and `CUDA_VISIBLE_DEVICES=0` (the 48GB card); `validate_vllm.py` now
+  exercises the completions API (chat would hit a nonexistent template);
+  `verify_run_artifacts.py` expects the base ids.
+- `configs/qwen35_vllm_smoke_manifest.yaml`: run_entries →
+  `model=qwen/qwen3.5-9b-base`, experiment
+  `audit-qwen35-9b-base-vllm-smoke`.
+- `reproduce/qwen35_vllm/05_check_registration.sh` (NEW): CPU preflight
+  asserting the venv's helm resolves the -base metadata + tokenizer —
+  catches a pip-crfm-helm venv early instead of failing late at
+  tokenizer resolution.
+- `reproduce/qwen35_vllm/README.md` (NEW): yardrat step-by-step,
+  success criteria, the vLLM-arch and Turing-fp16 caveats, and the
+  bridge to the full core grid (qwen36 plan, single non-thinking mode).
+
+Validation: `bash -n` all scripts, `py_compile` both .py, yaml loads +
+targeted assertions on the new registrations. GPU-side validation
+(V4/V5 analogues: serve, one completion, smoke run) is Jon's on
+yardrat — this VM has no GPU/vllm/helm.
+
+**Next steps.**
+- Jon runs `reproduce/qwen35_vllm/{00,05,10,15,20,30,40}` on yardrat.
+  First real gate: does yardrat's vLLM load the Qwen3.5 architecture?
+  Second: does the venv helm see the -base registration (05)?
+- If smoke passes: author the ~85-entry classic/Lite core compute grid
+  per `docs/planning/qwen36-core-new-results-plan.md` (single
+  non-thinking member since base), local-only virtual experiment,
+  report beside the reproduced Qwen1.5/2/2.5 numbers.
+- Later arcs: post-trained Qwen3.5-9B (chat), fable-coder-35B-A3B LoRA
+  (needs quantization for 48GB).
+- Then execute the plan's checklist (§14): add `precomputed_root` +
+  `max_eval_instances` params to `_build_combined_preset`; author the
+  compute member presets + core run_entries (model-swapped from any
+  `qwen/*` row in `official_public_index.csv`); infer-stack catalog with
+  the 2 endpoints; port `reproduce/qwen3_5_core/`; add the local-only
+  virtual-experiment yaml; register the new ids in the vendored HELM
+  `model_metadata.yaml`/`tokenizer_configs.yaml` if not already resolvable;
+  V1/V3 CPU gates here, then V4–V6 on the GPU box.
+- Nothing was executed on GPUs this session; no runs launched.
+
+**Addendum (same session, ~18:20): vendored-HELM registration replaced by
+prod_env registry sidecars.** Jon pushed back on editing HELM: "Can we avoid
+changes to HELM via registering custom deployments / custom models? Doesn't
+HELM let you do that?" Investigation: (a) HELM natively reads
+model_metadata.yaml + tokenizer_configs.yaml + model_deployments.yaml from
+--local-path (config_registry.register_configs_from_directory) — the sidecar
+mechanism Jon remembered; (b) BUT no support existed in our stack: magnet's
+prepare_local_helm_config shipped ONLY model_deployments.yaml (its docstring
+said so), and no magnet branch has the passthrough (grepped every remote tip);
+(c) what Jon half-remembered as "we did this before" is bundle_export's
+_assert_helm_aliases_exist — which is the OPPOSITE (it requires registration
+in the VENDORED helm yamls; the qwen36 plan §4 blessed that pattern). All
+prior local models were upstream-registered, so only deployments plumbing was
+ever needed; qwen3.5-9b-base is the first net-new id.
+
+Built the sidecar passthrough end-to-end:
+- **magnet @ 312c894** (branch `jons/prod-env-sidecar-configs`, based on the
+  pinned 50489f0 — NOTE magnet main and Edward's pin have DIVERGED; do not
+  base on main): prepare_local_helm_config copies optional
+  model_metadata.yaml / tokenizer_configs.yaml under canonical names; both
+  materialize CLIs expose + manifest-record the fpaths; both are
+  identity-bearing algo_params on MaterializeHelmRunNode. Unit tests added.
+- **eval_audit**: ManifestSpec fields, kwdagger_bridge matrix keys
+  (helm.model_metadata_fpath / helm.tokenizer_configs_fpath) +
+  _resolve_manifest_override_path, docker pipeline mounts both :ro (docker
+  nodes inherit the algo_params via spread — one magnet edit propagates).
+- **configs**: model_metadata.yaml + tokenizer_configs.yaml sidecars next to
+  the qwen35 deployment yaml; smoke manifest wires all three fpaths AND the
+  now-required container knobs (container_image eval-audit-helm-runner:dev,
+  network host for host-side vLLM, container_gpus none — the bare host-venv
+  pipeline was REMOVED on this branch, the old runbook predated that).
+- **05_check_registration.sh** rewritten: pure-yaml consistency check of
+  sidecars vs deployment vs manifest (no helm import needed — with sidecars,
+  neither the venv helm nor the baked container helm needs the ids).
+- **Reverted the vendored-helm registration**: submodule main reset to
+  origin/main e9bd720d; b583244f abandoned deliberately (recoverable via
+  reflog; content preserved as the sidecar yamls).
+
+Validation: magnet sidecar tests 3/3; eval_audit schedule group
+(test_run_surface + from_spec_materialized_schedule + lease_bracket +
+container_execution) 52/52 incl. the qwen35 test extended to assert both new
+matrix keys resolve to absolute paths. Ran in a throwaway uv env in the
+scratchpad (this VM has no pytest/kwdagger; Jon's real env is on yardrat —
+per his preference, install into HIS top-level venv, never make a repo
+.venv).
+
+Also noted: the magnet submodule working tree had drifted to magnet main
+(47614e7) — not the pin; restored before branching. Push order when
+publishing: magnet branch first, then the superproject (helm needs no push —
+its gitlink is back at upstream e9bd720d).
+
+**Addendum 2 (same session, ~19:00): qwen35 runbook ported to the
+infer-stack lease shape.** Jon ran the runbook on yardrat and hit
+`vllm: not found` from the hand-rolled `start_vllm.sh`, then correctly
+called out: "we should be using infer stack, not our own hosted vllm."
+The old reproduce/qwen35_vllm was a pre-fan-out stub. Rebuilt it as a
+single-model port of reproduce/qwen_models_combined with ONE axis
+flipped — compute instead of reproduce (the qwen36-plan shape):
+
+- **Preset** `qwen35_9b_base_vllm` (preset_configs.yaml): profile
+  `qwen3-5-9b-base-single`, deployment `vllm/qwen3.5-9b-base-local`,
+  protocol_mode completions, reserve 4064, COMPUTE manifests
+  (precomputed_root null, authored run_entries, no from-spec), container
+  keys (network host / hf_cache / gpus none). Full grid = PLACEHOLDER
+  (smoke pair @1000) until the ~85-entry core list lands.
+- **Sidecar support in bundle_export.py**: preset-level
+  `model_metadata_fpath`/`tokenizer_configs_fpath` (a) widen
+  `_assert_helm_aliases_exist` (builtin ∪ sidecars — the same union
+  helm-run sees after prod_env copy; without this the export would fail
+  since we reverted the vendored registration), (b) flow through
+  `_manifest_doc` into both generated manifests (emitted only when set —
+  existing manifests stay byte-identical).
+- **Runbook**: runbook-local config/infer_stack/{catalog,settings}.yaml
+  (dtype float16 pinned — Turing sm_75 has no bf16; protocol completions
+  or the readiness probe polls /chat/completions forever), _lib.sh
+  (QWEN35_*, PYTHON_BIN falls back python→python3), preflights 00/05
+  (preset↔sidecar consistency)/06 (endpoint in catalog)/07 (image +
+  stale-digest probe), 10_run_smoke.sh + 15_run_full.sh (gc → bootstrap
+  gateway for the master key → export compute → eval-audit-run --lease),
+  40 via $PYTHON_BIN. Deleted 10_start_vllm/15_validate/20_preview/
+  30_run + configs/qwen35_vllm_smoke_manifest.yaml + the hand-written
+  model_deployments.yaml/start_vllm.sh/validate_vllm.py (deployments are
+  GENERATED by the exporter now; registry sidecars stay).
+- **Tests**: test_run_surface qwen35 test → tmp-manifest sidecar
+  propagation test (old fixture file deleted); 2 new bundle-export tests
+  (sidecars forwarded + compute shape; widened assert still rejects
+  unregistered ids). 72 passed + 20 infer-stack integration passed.
+
+Key insight for the paper/tooling story: with sidecar support in the
+exporter, "add a net-new model" = one preset block + 2 sidecar yamls +
+1 catalog endpoint — no HELM edit, no image rebuild. That is the
+extension mechanism the LoRA arc (fable-coder-35B-A3B) will ride.
+
+Next on yardrat: 00→05→06→07→10. First real gates: vLLM loading the
+Gated-DeltaNet hybrid arch; the LiteLLM data_dir being docker-mountable.
+
+**Addendum 3 (same session, ~20:00): TUI startup forensics + async-startup
+rule enforced in infer_stack.** Jon reported `infer-stack tui` taking >7s
+to first frame. Forensics: wrote
+`dev/oneoff/profile_infer_stack_tui_startup.py` (phase-bisects the exact
+TuiCLI.main pre-frame sequence). On yardrat it measured 0.666s total — so
+the 7s was NOT steady-state code cost. Explanation: cold start (first run
+after run_developer_setup byte-compiles the whole import chain incl.
+textual through a cold page cache) — and the profiler run itself warmed
+exactly that chain, which is why "slow before, fast after". History
+confirms Jon's compose hypothesis was right for OLD versions: the async
+first-paint fix ("kick the docker observe to the worker") landed
+2026-06-30 (infer_stack 680926e "TUI improvements"), absent from the
+v0.6.0-5 tree this repo pinned at session start, present on
+infer-stack-cli-api-migration (which Jon switched the submodule onto; tip
+== Edward's pin 22d9431, origin/main is BEHIND it).
+
+Jon then set the design rule: subprocess waits must never gate startup,
+and the dependent component must SAY it's loading. Tiering agreed:
+subprocess (docker/nvidia-smi) = async + loading note; bounded local-file
+reads (catalog yaml ~27ms, settings) = OK sync. Implemented in
+**infer_stack @ 0e04b01** (branch `jons/tui-async-startup` off 22d9431):
+- ComposeBackend.inventory → lazy property; _make_backend passes None
+  (the one remaining pre-frame subprocess — nvidia-smi — now deferred to
+  first placement, worker-side under the TUI).
+- hardware._run: 20s timeout (wedged driver used to hang forever).
+- TUI: '(loading…)' placeholder rows in #ps/#gpus until their first poll
+  lands (deterministic via diff-cache sentinel); docker/deployments
+  titles say 'observing…' pre-first-observe instead of lying '0 running'.
+- 4 new tests; full infer_stack suite 381 passed / 2 skipped.
+
+Gitlink NOT yet bumped in the superproject — the submodule branch should
+be pushed + ideally PR'd upstream (this is generic infer-stack
+improvement, not eval_audit-specific). Flag to Jon/Edward before folding
+into the superproject pin.
+
+**Addendum 4 (same session, ~21:00): first live smoke failed on a
+two-worlds master-key mismatch — fixed by pinning the infer-stack world
+through the lease bracket.** Jon attached the cmd_queue cache to the VM.
+The failed job log showed the FULL pipeline working (lease acquired, vLLM
+v0.19.1 served Qwen3.5-9B-Base, containerized HELM sent real mmlu
+prompts) until every request got LiteLLM **400 "No connected db."** —
+LiteLLM's response when the presented key isn't its master key (it then
+attempts a virtual-key DB lookup with no DB attached).
+
+Root cause: TWO infer-stack worlds on yardrat. The runbook shell (with
+_lib.sh's INFER_STACK_CONFIG_DIR/DATA_DIR exports) resolved
+/data/service/infer-stack; the scheduled cmd_queue tmux job — a FRESH
+LOGIN SHELL that inherits none of those exports — resolved Jon's
+pre-existing global world /data/service/docker/infer-stack (evidence: the
+job's acquire logged "seeded 22 vLLM route(s)" = his global gateway
+config, and compose rendered under /data/service/docker/...). Both worlds
+converge the SAME docker compose project (same container names, port
+14042), so the job-side converge re-created the gateway with world-B's
+managed master key while the bundle carried world-A's → every request
+401-shaped into "No connected db." infer_stack's data_root() resolution
+(env > settings.yaml-in-config_root > XDG) makes this environment-
+dependent by design; the bracket already threaded --catalog explicitly
+for exactly this class of reason, but not the world dirs.
+
+Fix (superproject): thread the WORLD like the catalog —
+- serving_facts: `_infer_stack_data_root()` helper (resolves the
+  export-time process's view).
+- bundle_export: `_lease_facts` emits `lease_config_dir` +
+  `lease_data_dir` (resolved at export time next to lease_catalog);
+  flows into both generated manifests via the existing lease_facts
+  doc.update.
+- kwdagger_bridge.build_broadcast_lease_knobs: forwards both as
+  helm.lease_* matrix keys.
+- lease_bracket: LEASE_KEYS += both; acquire, release, AND the
+  leases-snapshot (ledger lives in data dir) render
+  --config-dir/--data-dir (verified all three verbs inherit
+  _PathOverridesMixin and _open_controller applies the overrides).
+  Manifests without the keys render byte-identical brackets.
+
+Tests: bracket world-pin rendering (acquire/release/snapshot + absent
+case), bridge broadcast, export bakes the world into manifests.
+Group: 98 passed, 1 skipped.
+
+Note for Jon on next run: the whole flow now coheres to the RUNBOOK
+world (/data/service/infer-stack per the shipped settings.yaml). The
+converge will re-render the shared gateway containers from that world —
+his global 22-route gateway config gets replaced while the run holds it
+(same containers). If he prefers the runs to ride his existing world
+instead, `export INFER_STACK_DATA_DIR=/data/service/docker/infer-stack`
+before 10 — _lib.sh's env-wins resolution + the export-time capture then
+pin THAT world everywhere, coherently.
+
+**Addendum 5 (same session, ~22:00): SMOKE PASSED — first HELM-shaped
+Qwen3.5-9B-Base numbers — plus a real finding on boolq.** After the
+v0.25.1 tag fix + stale-group evict, 10_run_smoke.sh landed both runs.
+Verified from the VM (results attached at /data/crfm-helm-audit): both
+run_specs record model=qwen/qwen3.5-9b-base +
+model_deployment=vllm/qwen3.5-9b-base-local; all three registry sidecars
+present in prod_env (the sidecar mechanism worked end-to-end in
+production); world pins held (everything under /data/service/infer-stack).
+
+Results: mmlu:anatomy exact_match=1.0 (4/4). boolq exact_match=0.0 (0/5)
+— but forensics show the model returned EMPTY strings: raw vLLM cache
+(prod_env/cache/vllm.sqlite) shows first generated token = "\n\n"
+(logprob -0.28, ~75%), stop='\n' matches inside it, completion truncates
+to ''. Prompt is well-formed (5 inline "Answer: Yes/No" shots).
+Tokenizer exonerated (HF probe: add_special_tokens adds nothing; no
+BOS; eos=<|endoftext|>). Two hypotheses: H1 the model style-prefers
+"Answer:\n\nYes" (content fine; HELM's canonical stop zeroes it — a
+deployment-boundary artifact in the paper's grade vocabulary); H2
+fp16-on-Turing numerics distort the GDN state kernels (fp32 ablation
+fits the 48GB card: 9B*4B=36GB). Wrote
+dev/oneoff/qwen35_boolq_probe.py — acquires nothing itself; Jon leases
+the endpoint, it replays the canonical recipe AND an unstopped variant
+on 2 unambiguous cases and prints an H1/H2 verdict.
+
+This is a textbook instance of the project's central taxonomy operating
+on a NET-NEW model: a 0.0 cell that is not model weakness but recipe/
+substrate interaction, caught by instance-level forensics.
+
+**Addendum 6 (same session, ~23:30): probe VERDICT = H1 (style), plus the
+cold-start economics fully measured.** The discriminating probe ran against
+the live endpoint: content is CORRECT behind the leading "\n\n" on all
+cases — fp16-on-Turing numerics exonerated; Qwen3.5-9B-Base simply answers
+paragraph-style ("Answer:\n\nYes") even with 5 inline few-shot examples,
+and HELM's canonical stop=['\n'] truncates every completion to '' → the
+0/5 boolq cell is a RECIPE-FORMAT ARTIFACT, not model failure. (In the
+paper's grade vocabulary: deployment-boundary/recipe artifact.)
+
+Cold-start accounting (2026-07-16, RTX 8000, vllm v0.25.1, fp16):
+- total cold start 22:52:41 → 23:26:49 ready ≈ 34 min
+- init engine 1937s, of which: VL encoder-cache profiling ~26 min (the
+  dominant tax — max-size VIDEO forward on TORCH_SDPA, sm_75 has no FA),
+  torch.compile 87s, warmup run 289s, cudagraph capture 4s, mm warmup 31s
+- cache mounts verified working: vllm-cache 268M (AOT-compiled model
+  saved), triton-cache 380K; torch-cache ~empty (inductor artifacts live
+  under vllm's torch_compile_cache)
+- mitigations landed for next start: --limit-mm-per-prompt
+  '{"image":0,"video":0}' (kills the 26-min profiling outright) + compile
+  cache reuse (kills the 87s) → expected <5 min, TO BE VERIFIED on the
+  next acquire.
+
+OPEN DECISION (for Jon): how to score generation tasks for
+paragraph-style models. boolq isn't in the planned ~85-entry core, but
+narrative_qa / natural_qa (short-answer generation with '\n' stops) carry
+the same hazard. Options sketched: (1) run canonical + newline-tolerant
+variants and report the delta as quantified format-sensitivity (keeps
+canonical comparability, most on-thesis); (2) canonical only, document
+zeros; (3) tolerant only (breaks strict comparability). Tolerant variant
+mechanically = a client-shim that strips leading newlines before applying
+stops (the NullSafe-client pattern), declared via deployment name.
+
+**Addendum 7 (same session, ~00:15): Option A implemented — the
+newline-tolerant completions client (declared substitution).** Jon chose
+the client-shim mechanism. Landed:
+- `helm_clients.py`: `_NewlineTolerantCompletionsMixin` +
+  `NewlineTolerantOpenAICompletionsClient` (gateway transport) +
+  `NewlineTolerantVLLMClient` (vllm-direct). Fires ONLY when the request
+  carries a "\n" stop (MC max_tokens=1 shapes pass through
+  byte-identically); relaxes the stop server-side (+4-token budget),
+  then client-side lstrips newlines, re-applies the ORIGINAL stops, and
+  truncates tokens/logprob consistently (straddling tokens kept whole —
+  metrics score text; tokens are supplementary).
+- Wiring: preset/profile knob `newline_tolerant: true` →
+  `_benchmark_client_class(..., newline_tolerant=)` selects the shim;
+  `_model_deployment_entry` REFUSES the knob unless the deployment name
+  carries an 'nlstrip' marker (the run_spec's model_deployment is where
+  the substitution must be visible) and rejects chat protocol
+  (completions-only hazard).
+- Tests: 8 shim-semantics units (boolq-shape recovery, request
+  relaxation, inline no-op, pass-through, multi-stop earliest-wins,
+  straddling token) + export wiring (client class, marked-name
+  enforcement, chat rejection). 32+75 green.
+
+NOT yet enabled anywhere: the qwen35 preset stays canonical. Enabling =
+add `newline_tolerant: true` + rename model_deployment_name to
+'vllm/qwen3.5-9b-base-nlstrip-local' in the preset (+ docker/build.sh
+rebuild so the container's baked eval_audit has the new class). Decision
+on WHICH tasks get it awaits the narrative_qa/natural_qa probes.
+
+**Addendum 8 (2026-07-17, ~00:45): vLLM compile-cache poisoning — a
+first-class unrecorded-substrate wart, now fixed structurally.** The
+Option-A validation smoke crashed at engine init: AttributeError
+"'NoneType' object has no attribute 'size'" INSIDE the AOT-compiled
+graph loaded from cache. Root cause: **vLLM's compile-cache key omits at
+least `limit_mm_per_prompt`** — the cache hash (71a3a486…) was IDENTICAL
+before and after we disabled the vision modalities, so the engine
+reloaded a graph traced under multimodal-enabled inputs and fed it None
+where a tensor was baked in. We got the LOUD failure mode; the quiet one
+is the scary one: **a serving-config change silently reusing compiled
+artifacts from a different config could produce wrong numerics with no
+error at all.** For a reproducibility project this is a textbook
+substrate wart — the compiled-graph provenance is invisible to the
+run_spec, invisible to vLLM's own cache key, and (before today)
+invisible to our serving records.
+
+Wart taxonomy entry: "compiled-artifact cache keyed narrower than the
+config space that shapes the artifacts." Mitigation landed in
+infer_stack @ 6616c51 (branch jons/tui-async-startup): the vLLM
+compile-cache mount is now keyed
+`<vllm_cache>/cfg-<sha256(image+command+generation-env)[:12]>` — any
+serve-arg change (including deliberately non-structural extra_args like
+--limit-mm-per-prompt) starts a fresh cache dir; identical configs keep
+full reuse. Cache-hit economics measured in the same log: graph load
+2.5s + torch.compile 11.6s total (vs 87s cold) — the mount works.
+Disk cost: one ~270MB subdir per distinct serve config; no GC yet
+(acceptable; note if it grows). Upstream-worthy: vLLM should widen its
+cache key; our per-config mount is defense-in-depth we keep regardless.
+
+Also worth recording the epistemics: this was caught ONLY because the
+config change happened between two runs sharing a cache — a fresh
+machine would never see it, and a long-running grid would. Cross-machine
+reproduction runs are implicitly also cache-freshness controls.
+
+Full suite 384 passed / 2 skipped. Superproject gitlink bump to follow
+with the smoke-validation commit. Jon's next action: infer-stack gc,
+re-run 10_run_smoke.sh — the keyed mount gives the mm-limited config a
+fresh cache automatically (no manual sudo rm of root-owned cache files).
+
+**Addendum 9 (2026-07-17, ~01:15): Option A PRODUCTION-VALIDATED.** The
+re-run smoke (fresh keyed compile cache, mm-limits active, shim baked in
+the runner image) landed clean:
+- boolq exact_match 0.0 -> **0.8 (4/5)** under the newline-tolerant
+  client; raw completions are clean 'Yes' strings (strip+re-stop worked
+  exactly as designed).
+- mmlu:anatomy stays 1.0 — the MC shape passed through the shim
+  untouched, as designed (per-request self-scoping confirmed in prod).
+- Both run_specs record model_deployment=
+  vllm/qwen3.5-9b-base-nlstrip-local — the substitution is DECLARED in
+  the artifact of record.
+- The single boolq miss is a REAL model behavior: the base model emitted
+  '<think>' on one instance — Qwen3.5 pretraining contamination with
+  reasoning-format data surfacing on a plain completions prompt. With
+  the recipe artifact removed, the residual failure is honest signal;
+  this belongs in the extension study's findings (base-model
+  thinking-tag leakage rate is measurable per task).
+
+The full mechanism stack is now proven end-to-end on GPUs: registry
+sidecars -> world-pinned leasing -> keyed compile caches -> mm-limited
+serving -> newline-tolerant declared-substitution client -> verified
+artifacts. Next unit of work: author the ~85-entry classic/Lite core
+grid (qwen36 plan §6.1) in the preset's full_manifest and run the first
+real breadth batch.
+
+**Addendum 10 (2026-07-16, overnight prep): 86-entry full grid authored
++ batch hardening (commit e78676d).** Jon asked to prepare the full run
+for overnight. Model: claude-opus-4-8[1m] (Claude Code). Three design
+decisions worth recording:
+
+1. **The grid is lifted, not authored fresh.** The 85 core run_entries
+   are copied verbatim from the qwen-1-5-7b preset's full grid (sed on
+   the model token only). Rationale: the qwen36 plan §6.1 observed the
+   core specs are identical across every reproduced Qwen grid — that
+   identity IS the comparability claim. Any hand-authoring risk
+   (different mmlu variants, dropped eval_split/groups suffixes) would
+   silently break run-key pairing with Edward's grids. The 5 "duplicate"
+   mmlu subjects (plain + eval_split=test,groups=… variants) are kept
+   deliberately: they mirror the classic-vs-Lite duality in the official
+   corpus and cost pennies. boolq rides along at n=1000 as the
+   '<think>'-leakage probe (1/5 in the smoke; n=1000 makes it a rate).
+
+2. **workers=2 is a leasing-correctness knob, not a throughput knob.**
+   Reading controller.desired_deployments() showed `reclaim: stop` +
+   refcount 0 => the converge stops vLLM. With 1 worker, EVERY gap
+   between consecutive runs bounces the server: ~86 cold cycles, hours
+   of churn. Two workers' overlapping acquire/release brackets keep
+   refcount >= 1 across the whole batch (design §4 coalescing) — the
+   deployment stays up end to end without touching the reclaim policy,
+   so a crashed batch still frees the GPU via gc/TTL. Alternative
+   considered and rejected: keep-warm in the catalog (leaves the GPU
+   held after a crash, needs an explicit evict step).
+
+3. **lease_ttl 8h: the TTL must exceed the RUN, not the cold-load.**
+   The soft TTL is a crash backstop, but a healthy run that outlives it
+   gets reclaimed mid-run. 4h is probably fine for every entry; 8h is
+   free insurance on a single-model overnight batch (a leaked lease
+   blocks nothing — same-endpoint acquires just ref-count on top).
+
+Also: 40_verify_artifacts.sh now sweeps an experiment root with a
+pass/fail tally (validated 2/2 against the real smoke artifacts from
+this VM — verify_run_artifacts.py is stdlib-only, so it runs even where
+the venv is absent); local-only virtual experiment yaml
+(qwen35-9b-base-core.yaml, no official_public_index source, per plan
+§9). NOTE this analysis VM currently has NO python env with eval_audit
+installed (recycled) — YAML/structural validation done here; the
+import-level preflights (05/06) re-run on yardrat as part of the
+runbook anyway. Uncertainty worth watching on the first overnight: (a)
+whether any single run approaches the TTL (narrative_qa n=1000 is the
+candidate), (b) whether two concurrent HELM containers contend on the
+shared hf_cache dir during first-time dataset downloads (the combined
+runbook ran this shape without issue), (c) legalbench/med_qa/wmt_14
+first-run dataset downloads need network from the container
+(--network host, same as smoke). Resume semantics: force-rerun is OFF
+for full — re-running 15_run_full.sh after any interruption skips
+completed runs.
+
+Next: Jon runs reproduce/qwen35_vllm/15_run_full.sh on yardrat
+overnight; morning-after checklist = 40_verify_artifacts.sh (no arg =
+full-suite sweep), then the qwen35-9b-base-core virtual experiment for
+the report beside the reproduced Qwen 1.5/2/2.5 numbers.

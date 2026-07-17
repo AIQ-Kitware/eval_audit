@@ -22,6 +22,12 @@ class ManifestSpec:
     precomputed_root: str | None = None
     require_per_instance_stats: bool = True
     model_deployments_fpath: str | None = None
+    # Optional HELM registry sidecars, copied into <local_path>/ alongside
+    # model_deployments.yaml. They register net-new model/tokenizer ids via
+    # HELM's own register_configs_from_directory, so a model unknown to the
+    # (venv or baked-in-container) HELM needs no HELM-source edit.
+    model_metadata_fpath: str | None = None
+    tokenizer_configs_fpath: str | None = None
     enable_huggingface_models: list[str] = field(default_factory=list)
     enable_local_huggingface_models: list[str] = field(default_factory=list)
     # Containerized execution (opt-in). When ``container_image`` is set, Stage 3

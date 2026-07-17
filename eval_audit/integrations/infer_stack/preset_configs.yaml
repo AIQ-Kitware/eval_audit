@@ -2153,3 +2153,157 @@
     'container_network': 'host'
     'hf_cache_dir': '~/.cache/eval-audit-hf'
     'container_gpus': 'none'
+
+# --- Qwen3.5-9B-Base extension (COMPUTE, not reproduction) -----------------------
+# First net-new benchmark target: qwen/qwen3.5-9b-base has NO public HELM run to
+# replay, so this preset is plain compute (no from-spec / freeze; precomputed_root
+# stays null) — the qwen36-core-new-results-plan.md shape, single non-thinking
+# member (a base model has no thinking toggle). Serving rides the runbook-local
+# infer-stack catalog (reproduce/qwen35_vllm/config/infer_stack/): endpoint
+# qwen3-5-9b-base-single, protocol completions, dtype float16 pinned for
+# pre-Ampere cards.
+#
+# The model id is registered via REGISTRY SIDECARS (model_metadata_fpath /
+# tokenizer_configs_fpath below): the exporter widens its alias assert with them
+# and forwards both paths into the generated manifests; the materializer copies
+# them into prod_env, where HELM's register_configs_from_directory merges them —
+# no HELM-source edit, no runner-image rebuild.
+'qwen35_9b_base_vllm':
+  'profile': 'qwen3-5-9b-base-single'
+  'bundle_name': 'qwen35_9b_base_vllm'
+  'backend': 'compose'
+  'access_kind': 'openai-compatible'
+  # 'nlstrip' marker: the newline-tolerant completions client produced these
+  # runs (declared substitution; enforced by _model_deployment_entry). The
+  # shim self-scopes per-request — it only alters requests carrying a "\n"
+  # stop (boolq-shaped short generation, where this model's paragraph-style
+  # "Answer:\n\nYes" would otherwise be server-truncated to ""); MC shapes
+  # pass through byte-identically and greedy inline answers are unchanged.
+  'model_deployment_name': 'vllm/qwen3.5-9b-base-nlstrip-local'
+  'helm_model_name': 'qwen/qwen3.5-9b-base'
+  'helm_tokenizer_name': 'qwen/qwen3.5-9b-base'
+  # Base (pre-trained) model -> completions. Chat would wrap prompts in a
+  # nonexistent chat template (the OLMo-7B "The" failure mode).
+  'protocol_mode': 'completions'
+  'newline_tolerant': true
+  # Serve 4096 (catalog max_model_len); reserve headroom below it (OLMo pattern).
+  'helm_max_sequence_and_generated_tokens_length': 4064
+  'model_metadata_fpath': 'configs/local_models/qwen35_9b_vllm/model_metadata.yaml'
+  'tokenizer_configs_fpath': 'configs/local_models/qwen35_9b_vllm/tokenizer_configs.yaml'
+  # Overnight-batch insurance: the soft TTL is a crash-recovery backstop, but a
+  # healthy run that OUTLIVES it gets reclaimed mid-run (vLLM stopped under it).
+  # 8h > any plausible single run (narrative_qa/wmt_14 at n=1000 are the slow
+  # ones); a leaked lease on this single-model batch blocks nothing meanwhile.
+  'lease_ttl': '8h'
+  'smoke_manifest':
+    'experiment_name': 'audit-qwen35-9b-base-vllm-smoke'
+    'description': 'Smoke-test HELM batch for qwen/qwen3.5-9b-base through the leased local vLLM service.'
+    'run_entries':
+    - 'mmlu:subject=anatomy,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base'
+    - 'boolq:model=qwen/qwen3.5-9b-base,data_augmentation=canonical'
+    'suite': 'audit-qwen35-vllm-smoke'
+    'max_eval_instances': 5
+    'container_network': 'host'
+    'hf_cache_dir': '~/.cache/eval-audit-hf'
+    'container_gpus': 'none'
+  # Full grid: the authored 85-entry classic/Lite core (qwen36 plan §6.1),
+  # lifted verbatim from the 'qwen-1-5-7b' full grid above (the core specs are
+  # identical across the reproduced Qwen 1.5/2/2.5 grids — that is what makes
+  # the extension comparable) with the model token swapped, PLUS boolq at full
+  # instance count to measure the '<think>'-leakage rate found in the smoke
+  # (base-model pretraining contamination; 1/5 instances at n=5).
+  'full_manifest':
+    'experiment_name': 'audit-qwen35-9b-base-vllm-full'
+    'description': 'Full HELM batch for qwen/qwen3.5-9b-base: 85-entry classic/Lite core (new results, no official counterpart) + boolq think-leakage probe.'
+    'run_entries':
+    - 'boolq:model=qwen/qwen3.5-9b-base,data_augmentation=canonical'
+    - 'commonsense:dataset=openbookqa,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base'
+    - 'gsm:model=qwen/qwen3.5-9b-base'
+    - 'legalbench:subset=abercrombie,model=qwen/qwen3.5-9b-base'
+    - 'legalbench:subset=corporate_lobbying,model=qwen/qwen3.5-9b-base'
+    - 'legalbench:subset=function_of_decision_section,model=qwen/qwen3.5-9b-base'
+    - 'legalbench:subset=international_citizenship_questions,model=qwen/qwen3.5-9b-base'
+    - 'legalbench:subset=proa,model=qwen/qwen3.5-9b-base'
+    - 'math:subject=algebra,level=1,use_official_examples=False,use_chain_of_thought=True,model=qwen/qwen3.5-9b-base'
+    - 'math:subject=counting_and_probability,level=1,use_official_examples=False,use_chain_of_thought=True,model=qwen/qwen3.5-9b-base'
+    - 'math:subject=geometry,level=1,use_official_examples=False,use_chain_of_thought=True,model=qwen/qwen3.5-9b-base'
+    - 'math:subject=intermediate_algebra,level=1,use_official_examples=False,use_chain_of_thought=True,model=qwen/qwen3.5-9b-base'
+    - 'math:subject=number_theory,level=1,use_official_examples=False,use_chain_of_thought=True,model=qwen/qwen3.5-9b-base'
+    - 'math:subject=prealgebra,level=1,use_official_examples=False,use_chain_of_thought=True,model=qwen/qwen3.5-9b-base'
+    - 'math:subject=precalculus,level=1,use_official_examples=False,use_chain_of_thought=True,model=qwen/qwen3.5-9b-base'
+    - 'med_qa:model=qwen/qwen3.5-9b-base'
+    - 'mmlu:subject=abstract_algebra,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base'
+    - 'mmlu:subject=abstract_algebra,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_abstract_algebra'
+    - 'mmlu:subject=anatomy,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_anatomy'
+    - 'mmlu:subject=astronomy,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_astronomy'
+    - 'mmlu:subject=business_ethics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_business_ethics'
+    - 'mmlu:subject=clinical_knowledge,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_clinical_knowledge'
+    - 'mmlu:subject=college_biology,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_college_biology'
+    - 'mmlu:subject=college_chemistry,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base'
+    - 'mmlu:subject=college_chemistry,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_college_chemistry'
+    - 'mmlu:subject=college_computer_science,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_college_computer_science'
+    - 'mmlu:subject=college_mathematics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_college_mathematics'
+    - 'mmlu:subject=college_medicine,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_college_medicine'
+    - 'mmlu:subject=college_physics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_college_physics'
+    - 'mmlu:subject=computer_security,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base'
+    - 'mmlu:subject=computer_security,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_computer_security'
+    - 'mmlu:subject=conceptual_physics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_conceptual_physics'
+    - 'mmlu:subject=econometrics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base'
+    - 'mmlu:subject=econometrics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_econometrics'
+    - 'mmlu:subject=electrical_engineering,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_electrical_engineering'
+    - 'mmlu:subject=elementary_mathematics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_elementary_mathematics'
+    - 'mmlu:subject=formal_logic,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_formal_logic'
+    - 'mmlu:subject=global_facts,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_global_facts'
+    - 'mmlu:subject=high_school_biology,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_biology'
+    - 'mmlu:subject=high_school_chemistry,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_chemistry'
+    - 'mmlu:subject=high_school_computer_science,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_computer_science'
+    - 'mmlu:subject=high_school_european_history,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_european_history'
+    - 'mmlu:subject=high_school_geography,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_geography'
+    - 'mmlu:subject=high_school_government_and_politics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_government_and_politics'
+    - 'mmlu:subject=high_school_macroeconomics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_macroeconomics'
+    - 'mmlu:subject=high_school_mathematics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_mathematics'
+    - 'mmlu:subject=high_school_microeconomics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_microeconomics'
+    - 'mmlu:subject=high_school_physics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_physics'
+    - 'mmlu:subject=high_school_psychology,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_psychology'
+    - 'mmlu:subject=high_school_statistics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_statistics'
+    - 'mmlu:subject=high_school_us_history,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_us_history'
+    - 'mmlu:subject=high_school_world_history,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_high_school_world_history'
+    - 'mmlu:subject=human_aging,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_human_aging'
+    - 'mmlu:subject=human_sexuality,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_human_sexuality'
+    - 'mmlu:subject=international_law,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_international_law'
+    - 'mmlu:subject=jurisprudence,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_jurisprudence'
+    - 'mmlu:subject=logical_fallacies,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_logical_fallacies'
+    - 'mmlu:subject=machine_learning,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_machine_learning'
+    - 'mmlu:subject=management,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_management'
+    - 'mmlu:subject=marketing,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_marketing'
+    - 'mmlu:subject=medical_genetics,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_medical_genetics'
+    - 'mmlu:subject=miscellaneous,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_miscellaneous'
+    - 'mmlu:subject=moral_disputes,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_moral_disputes'
+    - 'mmlu:subject=moral_scenarios,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_moral_scenarios'
+    - 'mmlu:subject=nutrition,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_nutrition'
+    - 'mmlu:subject=philosophy,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_philosophy'
+    - 'mmlu:subject=prehistory,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_prehistory'
+    - 'mmlu:subject=professional_accounting,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_professional_accounting'
+    - 'mmlu:subject=professional_law,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_professional_law'
+    - 'mmlu:subject=professional_medicine,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_professional_medicine'
+    - 'mmlu:subject=professional_psychology,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_professional_psychology'
+    - 'mmlu:subject=public_relations,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_public_relations'
+    - 'mmlu:subject=security_studies,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_security_studies'
+    - 'mmlu:subject=sociology,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_sociology'
+    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base'
+    - 'mmlu:subject=us_foreign_policy,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_us_foreign_policy'
+    - 'mmlu:subject=virology,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_virology'
+    - 'mmlu:subject=world_religions,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base,eval_split=test,groups=mmlu_world_religions'
+    - 'narrative_qa:model=qwen/qwen3.5-9b-base'
+    - 'natural_qa:mode=closedbook,model=qwen/qwen3.5-9b-base'
+    - 'natural_qa:mode=openbook_longans,model=qwen/qwen3.5-9b-base'
+    - 'wmt_14:language_pair=cs-en,model=qwen/qwen3.5-9b-base'
+    - 'wmt_14:language_pair=de-en,model=qwen/qwen3.5-9b-base'
+    - 'wmt_14:language_pair=fr-en,model=qwen/qwen3.5-9b-base'
+    - 'wmt_14:language_pair=hi-en,model=qwen/qwen3.5-9b-base'
+    - 'wmt_14:language_pair=ru-en,model=qwen/qwen3.5-9b-base'
+    'suite': 'audit-qwen35-vllm-full'
+    'max_eval_instances': 1000
+    'container_network': 'host'
+    'hf_cache_dir': '~/.cache/eval-audit-hf'
+    'container_gpus': 'none'

@@ -172,20 +172,38 @@ def test_kwdagger_manifest_propagates_model_override(tmp_path: Path):
     assert str((repo_root() / "configs/debug/repro_model_overrides.yaml").resolve()) in params_text
 
 
-def test_qwen35_vllm_manifest_propagates_local_override_and_local_path():
-    # This config lives in a frozen/archival runbook (reproduce/qwen35_vllm) that
-    # bakes no container_image; supply one here since containerization is now
-    # mandatory. The test is about override + local_path propagation, not the
-    # (removed) bare path.
-    manifest_fpath = repo_root() / "configs/qwen35_vllm_smoke_manifest.yaml"
-    request = prepare_schedule_request(
-        manifest_fpath, run=False, container_image=_PINNED_IMAGE
+def test_manifest_propagates_registry_sidecars(tmp_path: Path):
+    # Registry sidecars (net-new model ids, e.g. qwen/qwen3.5-9b-base): both
+    # fpaths must reach the node params resolved to absolute host paths,
+    # exactly like the deployments override, so the in-container magnet CLI
+    # can copy them into prod_env. Repo-relative paths in the manifest resolve
+    # against the repo root (the qwen35 sidecars double as the fixture).
+    manifest_fpath = tmp_path / "manifest.yaml"
+    manifest_fpath.write_text(
+        "\n".join(
+            [
+                "experiment_name: sidecar-demo",
+                "description: demo",
+                "run_entries:",
+                "  - mmlu:subject=anatomy,method=multiple_choice_joint,model=qwen/qwen3.5-9b-base",
+                "suite: audit-smoke",
+                "max_eval_instances: 5",
+                "backend: tmux",
+                "model_deployments_fpath: configs/debug/repro_model_overrides.yaml",
+                "model_metadata_fpath: configs/local_models/qwen35_9b_vllm/model_metadata.yaml",
+                "tokenizer_configs_fpath: configs/local_models/qwen35_9b_vllm/tokenizer_configs.yaml",
+                f"container_image: {_PINNED_IMAGE}",
+            ]
+        )
+        + "\n"
     )
+    request = prepare_schedule_request(manifest_fpath, run=False)
     params_text = request.params_text
-    assert "qwen/qwen3.5-9b" in params_text
-    assert "helm.local_path" in params_text
-    assert "prod_env" in params_text
-    assert "helm.model_deployments_fpath" in params_text
+    assert "helm.model_metadata_fpath" in params_text
     assert str(
-        (repo_root() / "configs/local_models/qwen35_9b_vllm/model_deployments.yaml").resolve()
+        (repo_root() / "configs/local_models/qwen35_9b_vllm/model_metadata.yaml").resolve()
+    ) in params_text
+    assert "helm.tokenizer_configs_fpath" in params_text
+    assert str(
+        (repo_root() / "configs/local_models/qwen35_9b_vllm/tokenizer_configs.yaml").resolve()
     ) in params_text

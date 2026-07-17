@@ -25,6 +25,7 @@ from eval_audit.integrations.infer_stack.serving_facts import (
     _default_deployment_name,
     _default_gateway_base_url,
     _infer_stack_config_root,
+    _infer_stack_data_root,
     _resolve_api_key,
 )
 from eval_audit.integrations.infer_stack.freeze import _freeze_run_spec_sources
@@ -41,6 +42,7 @@ def _model_deployment_entry(
     model_deployment_name: str | None = None,
     base_url: str | None = None,
     api_key_value: str | None = None,
+    newline_tolerant: bool = False,
 ) -> dict[str, Any]:
     # default-B: the front door is the LiteLLM gateway (openai-compatible) for
     # every preset; vllm-direct is a fallback-only marker (migration plan §5.G3).
@@ -53,7 +55,27 @@ def _model_deployment_entry(
             "size the prompt+generation budget."
         )
     max_model_len = int(facts.max_model_len)
-    client_class = _benchmark_client_class(protocol_mode, kind)
+    if newline_tolerant and protocol_mode != "completions":
+        raise ValueError(
+            f"newline_tolerant is a completions-only knob (profile "
+            f"{facts.endpoint!r} declares protocol_mode={protocol_mode!r}): chat "
+            "transports have no server-side '\\n' stop hazard to relax."
+        )
+    client_class = _benchmark_client_class(
+        protocol_mode, kind, newline_tolerant=newline_tolerant
+    )
+    resolved_name = model_deployment_name or _default_deployment_name(served_name, kind)
+    if newline_tolerant and "nlstrip" not in resolved_name:
+        # Declared substitution: a non-canonical client produced these runs, and
+        # the produced run_spec's model_deployment is where that fact must live.
+        # Force the preset author to name it rather than silently branding runs
+        # with a canonical-looking deployment.
+        raise ValueError(
+            f"newline_tolerant preset must carry an 'nlstrip' marker in its "
+            f"model_deployment_name (got {resolved_name!r}) so the produced runs "
+            "declare the non-canonical completions client — e.g. "
+            f"{resolved_name + '-nlstrip'!r}."
+        )
     if kind == "vllm-direct":
         # vllm-direct talks to the vLLM server directly and sends api_key="EMPTY";
         # it MUST NOT fall back to the auth-protected LiteLLM gateway base_url
@@ -70,7 +92,7 @@ def _model_deployment_entry(
     else:
         resolved_base_url = base_url or _default_gateway_base_url()
     entry = {
-        "name": model_deployment_name or _default_deployment_name(served_name, kind),
+        "name": resolved_name,
         # HELM-domain aliases are preset-authoritative; the catalog hf_model_id is
         # only a last-resort fallback (and _assert_helm_aliases_exist fails loudly
         # if it isn't a registered HELM alias — no silent wrong alias).
@@ -199,7 +221,21 @@ def _helm_config_paths() -> tuple[Path, Path]:
     return helm_root / "model_metadata.yaml", helm_root / "tokenizer_configs.yaml"
 
 
-def _assert_helm_aliases_exist(model_name: str, tokenizer_name: str) -> None:
+def _assert_helm_aliases_exist(
+    model_name: str,
+    tokenizer_name: str,
+    *,
+    model_metadata_fpath: str | None = None,
+    tokenizer_configs_fpath: str | None = None,
+) -> None:
+    """Assert the HELM model/tokenizer aliases resolve at export time.
+
+    The universe is the vendored HELM's builtin registry UNION the preset's
+    optional registry sidecars (``model_metadata_fpath`` /
+    ``tokenizer_configs_fpath``) — the same union helm-run itself sees once the
+    materializer copies the sidecars into ``--local-path``. Net-new ids
+    therefore need only sidecar files, never a HELM-source edit.
+    """
     import yaml
 
     model_metadata_path, tokenizer_configs_path = _helm_config_paths()
@@ -207,13 +243,27 @@ def _assert_helm_aliases_exist(model_name: str, tokenizer_name: str) -> None:
     tokenizer_docs = yaml.safe_load(tokenizer_configs_path.read_text(encoding="utf-8")) or {}
     known_models = {item.get("name") for item in model_docs.get("models", []) or []}
     known_tokenizers = {item.get("name") for item in tokenizer_docs.get("tokenizer_configs", []) or []}
+    if model_metadata_fpath:
+        sidecar_path = repo_root() / model_metadata_fpath
+        sidecar_docs = yaml.safe_load(sidecar_path.read_text(encoding="utf-8")) or {}
+        known_models |= {item.get("name") for item in sidecar_docs.get("models", []) or []}
+    if tokenizer_configs_fpath:
+        sidecar_path = repo_root() / tokenizer_configs_fpath
+        sidecar_docs = yaml.safe_load(sidecar_path.read_text(encoding="utf-8")) or {}
+        known_tokenizers |= {
+            item.get("name") for item in sidecar_docs.get("tokenizer_configs", []) or []
+        }
     if model_name not in known_models:
         raise ValueError(
-            f"HELM model alias missing for {model_name!r}; update the benchmark export override before launching the run."
+            f"HELM model alias missing for {model_name!r}; register it in the vendored "
+            "HELM or ship a model_metadata.yaml sidecar (preset model_metadata_fpath) "
+            "before launching the run."
         )
     if tokenizer_name not in known_tokenizers:
         raise ValueError(
-            f"HELM tokenizer alias missing for {tokenizer_name!r}; update the benchmark export override before launching the run."
+            f"HELM tokenizer alias missing for {tokenizer_name!r}; register it in the "
+            "vendored HELM or ship a tokenizer_configs.yaml sidecar (preset "
+            "tokenizer_configs_fpath) before launching the run."
         )
 
 
@@ -241,6 +291,10 @@ def _profile_specs(profile: str, preset_cfg: dict[str, Any]) -> list[dict[str, A
         "helm_max_sequence_and_generated_tokens_length": preset_cfg.get(
             "helm_max_sequence_and_generated_tokens_length"
         ),
+        # Declared substitution (paragraph-style base models): selects the
+        # newline-tolerant completions client; requires an 'nlstrip'-marked
+        # deployment name (enforced in _model_deployment_entry).
+        "newline_tolerant": preset_cfg.get("newline_tolerant"),
     }]
 
 
@@ -273,6 +327,8 @@ def _lease_facts(
     *,
     preset_cfg: dict[str, Any],
     lease_catalog: Path | str | None,
+    lease_config_dir: Path | str | None = None,
+    lease_data_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Build the per-run GPU-lease facts baked into the generated manifest.
 
@@ -309,6 +365,10 @@ def _lease_facts(
     out["lease_ttl"] = str(preset_cfg.get("lease_ttl") or DEFAULT_LEASE_TTL)
     if lease_catalog is not None:
         out["lease_catalog"] = str(Path(lease_catalog).resolve())
+    if lease_config_dir is not None:
+        out["lease_config_dir"] = str(Path(lease_config_dir).resolve())
+    if lease_data_dir is not None:
+        out["lease_data_dir"] = str(Path(lease_data_dir).resolve())
     return out
 
 
@@ -322,6 +382,8 @@ def _manifest_doc(
     model_deployment: str | None = None,
     run_spec_sources: list[dict[str, Any]] | None = None,
     era: str | None = None,
+    model_metadata_fpath: str | None = None,
+    tokenizer_configs_fpath: str | None = None,
 ) -> dict[str, Any]:
     # From-spec replay: the generated manifest must carry from_run_spec: true and a
     # precomputed_root (the recipe SOURCE the bridge requires). Because this builder
@@ -352,6 +414,12 @@ def _manifest_doc(
         "enable_huggingface_models": [],
         "enable_local_huggingface_models": [],
     }
+    # HELM registry sidecars (net-new model/tokenizer ids): only emitted when the
+    # preset declares them, so existing manifests stay byte-compatible.
+    if model_metadata_fpath is not None:
+        doc["model_metadata_fpath"] = model_metadata_fpath
+    if tokenizer_configs_fpath is not None:
+        doc["tokenizer_configs_fpath"] = tokenizer_configs_fpath
     if from_run_spec:
         doc["from_run_spec"] = True
         # Deployment-rewrite target: the LOCAL deployment name the replay records
@@ -424,6 +492,8 @@ def materialize_benchmark_bundle(
     base_url: str | None = None,
     api_key_value: str | None = None,
     lease_catalog: Path | str | None = None,
+    lease_config_dir: Path | str | None = None,
+    lease_data_dir: Path | str | None = None,
     from_run_spec: bool = False,
     precomputed_root: str | None = None,
     freeze_rel_paths: bool = False,
@@ -444,6 +514,12 @@ def materialize_benchmark_bundle(
     # in this function.
     resolved_era = era or preset_cfg.get("era")
     era_mode = resolved_era is not None
+    # HELM registry sidecars (net-new model/tokenizer ids): preset-level,
+    # repo-relative paths. They widen the alias-assert universe below and are
+    # forwarded into both generated manifests (the bridge resolves + mounts them
+    # and the materializer copies them into prod_env at run time).
+    sidecar_model_metadata_fpath = preset_cfg.get("model_metadata_fpath")
+    sidecar_tokenizer_configs_fpath = preset_cfg.get("tokenizer_configs_fpath")
     model_entries = []
     selected_accesses = []
     for fact, spec in zip(facts, specs, strict=True):
@@ -515,17 +591,35 @@ def materialize_benchmark_bundle(
                     model_deployment_name=deployment_name,
                     base_url=base_url,
                     api_key_value=api_key_value,
+                    newline_tolerant=bool(
+                        spec.get("newline_tolerant")
+                        or preset_cfg.get("newline_tolerant")
+                    ),
                 )
             )
-            _assert_helm_aliases_exist(model_entries[-1]["model_name"], model_entries[-1]["tokenizer_name"])
+            _assert_helm_aliases_exist(
+                model_entries[-1]["model_name"],
+                model_entries[-1]["tokenizer_name"],
+                model_metadata_fpath=sidecar_model_metadata_fpath,
+                tokenizer_configs_fpath=sidecar_tokenizer_configs_fpath,
+            )
         # The old contract carried a rich access dict; under default-B the only
         # facts worth recording are the resolved transport (for bundle.yaml
-        # traceability — nothing downstream parses it).
+        # traceability — nothing downstream parses it) plus the serving
+        # substrate provenance: engine image, dtype, and revision are exactly
+        # the "unrecorded execution substrate" parameters the reproducibility
+        # work pins down, so every bundle self-describes what served it.
         selected_accesses.append(
             {
                 "kind": selected_kind,
                 "base_url": model_entries[-1]["client_spec"]["args"]["base_url"],
                 "request_model_name": fact.served_model_name,
+                "serving": {
+                    "engine_image": fact.serving_image,
+                    "dtype": fact.dtype,
+                    "revision": fact.revision,
+                    "max_model_len": fact.max_model_len,
+                },
             }
         )
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -598,6 +692,8 @@ def materialize_benchmark_bundle(
         model_entries,
         preset_cfg=preset_cfg,
         lease_catalog=lease_catalog,
+        lease_config_dir=lease_config_dir,
+        lease_data_dir=lease_data_dir,
     )
     # From-spec replay records the LOCAL deployment so the audit reports
     # same_deployment=no. The rewrite target is the bundle's own deployment name —
@@ -662,6 +758,8 @@ def materialize_benchmark_bundle(
         model_deployment=rewrite_deployment,
         run_spec_sources=smoke_sources,
         era=resolved_era,
+        model_metadata_fpath=sidecar_model_metadata_fpath,
+        tokenizer_configs_fpath=sidecar_tokenizer_configs_fpath,
     )
     benchmark_full_manifest = _manifest_doc(
         spec=full_spec,
@@ -672,6 +770,8 @@ def materialize_benchmark_bundle(
         model_deployment=rewrite_deployment,
         run_spec_sources=full_sources,
         era=resolved_era,
+        model_metadata_fpath=sidecar_model_metadata_fpath,
+        tokenizer_configs_fpath=sidecar_tokenizer_configs_fpath,
     )
     benchmark_smoke_path = output_dir / "benchmark_smoke_manifest.yaml"
     benchmark_full_path = output_dir / "benchmark_full_manifest.yaml"
@@ -757,7 +857,17 @@ def export_benchmark_bundle(
     # The catalog the lease facts point at — the same one the facts resolved
     # against. Baked into the manifest as an absolute path so `infer-stack
     # acquire --catalog` works from any kwdagger job cwd.
-    lease_catalog = _infer_stack_config_root(resolved_config_dir) / "catalog.yaml"
+    lease_config_dir = _infer_stack_config_root(resolved_config_dir)
+    lease_catalog = lease_config_dir / "catalog.yaml"
+    # The infer-stack WORLD (config dir + data dir) as resolved at export time.
+    # Baked into the manifest so the scheduled jobs' acquire/release run
+    # against the SAME world (ledger, compose state, managed LiteLLM master
+    # key) that minted the api key baked into model_deployments.yaml. A
+    # cmd_queue tmux job is a fresh login shell — without these pins it
+    # resolves its own world from its own env/settings, and a divergent world
+    # converges the shared gateway with a DIFFERENT master key (observed as
+    # LiteLLM 400 "No connected db." on every HELM request).
+    lease_data_dir = _infer_stack_data_root()
     if bundle_root is None:
         # Allow presets to override the target bundle root path. If the
         # preset sets `bundle_root`, interpret absolute paths directly
@@ -782,6 +892,8 @@ def export_benchmark_bundle(
         base_url=base_url,
         api_key_value=api_key_value,
         lease_catalog=lease_catalog,
+        lease_config_dir=lease_config_dir,
+        lease_data_dir=lease_data_dir,
         from_run_spec=from_run_spec,
         precomputed_root=precomputed_root,
         freeze_rel_paths=freeze_rel_paths,

@@ -247,6 +247,16 @@ def build_broadcast_lease_knobs(
     catalog = catalog_override or manifest.get("lease_catalog")
     if catalog:
         entries["helm.lease_catalog"] = [str(Path(catalog).expanduser().resolve())]
+    # The infer-stack world (config dir + data dir) the bundle was exported
+    # against. Broadcast so every job's acquire/release runs in that SAME world
+    # — a tmux job's fresh login shell must not resolve its own (see
+    # lease_bracket: rendered as --config-dir/--data-dir).
+    for world_key in ("lease_config_dir", "lease_data_dir"):
+        world_dir = manifest.get(world_key)
+        if world_dir:
+            entries[f"helm.{world_key}"] = [
+                str(Path(world_dir).expanduser().resolve())
+            ]
     # Reserve-only lease (in-process HuggingFace): broadcast the GPU count to
     # every run so its bracket renders `acquire --reserve-gpus N` and the docker
     # node pins the container to the reserved card (see helm_docker_pipeline).
@@ -305,6 +315,12 @@ def build_schedule_params(
     model_deployments_fpath = manifest.get("model_deployments_fpath", None)
     if model_deployments_fpath is not None:
         matrix["helm.model_deployments_fpath"] = [model_deployments_fpath]
+    model_metadata_fpath = manifest.get("model_metadata_fpath", None)
+    if model_metadata_fpath is not None:
+        matrix["helm.model_metadata_fpath"] = [model_metadata_fpath]
+    tokenizer_configs_fpath = manifest.get("tokenizer_configs_fpath", None)
+    if tokenizer_configs_fpath is not None:
+        matrix["helm.tokenizer_configs_fpath"] = [tokenizer_configs_fpath]
     enable_hf = manifest.get("enable_huggingface_models", [])
     if enable_hf:
         matrix["helm.enable_huggingface_models"] = [json.dumps(enable_hf)]
@@ -437,6 +453,12 @@ def prepare_schedule_request(
     manifest = dict(manifest)
     manifest["model_deployments_fpath"] = _resolve_manifest_override_path(
         manifest.get("model_deployments_fpath", None)
+    )
+    manifest["model_metadata_fpath"] = _resolve_manifest_override_path(
+        manifest.get("model_metadata_fpath", None)
+    )
+    manifest["tokenizer_configs_fpath"] = _resolve_manifest_override_path(
+        manifest.get("tokenizer_configs_fpath", None)
     )
     experiment_name = str(manifest["experiment_name"])
     runtime_queue_name = (queue_name or f"audit-{experiment_name}").translate(

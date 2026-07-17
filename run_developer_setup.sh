@@ -4,11 +4,16 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
 
-VENV_DIR="${VENV_DIR:-.venv}"
+# Target env resolution: an explicit VENV_DIR wins; otherwise an ACTIVATED
+# virtualenv is respected (install into the env the developer already uses,
+# rather than forcing a repo-local .venv); only with neither do we fall back
+# to creating ./.venv. PYTHON_BIN is consulted only if the env must be created.
+VENV_DIR="${VENV_DIR:-${VIRTUAL_ENV:-.venv}}"
 PYTHON_BIN="${PYTHON_BIN:-python3.12}"
 VENV_PYTHON="$VENV_DIR/bin/python"
 
 echo "[eval_audit] repo root: $REPO_ROOT"
+echo "[eval_audit] target environment: $VENV_DIR"
 
 need_cmd() {
     if ! command -v "$1" >/dev/null 2>&1; then

@@ -64,20 +64,47 @@ def _infer_stack_config_root(config_dir: Path | None = None) -> Path:
     return paths.config_root()
 
 
+def _infer_stack_data_root() -> Path:
+    """Resolve the infer-stack data dir (leasing ledger, compose state, managed
+    LiteLLM master key) AS THE CURRENT PROCESS SEES IT — env >
+    settings.yaml-in-config_root > XDG default.
+
+    Export-time capture of this is what pins the scheduled jobs to the SAME
+    infer-stack world the exporter/bootstrap ran in: a cmd_queue tmux job is a
+    fresh login shell whose environment resolves its own (possibly different)
+    world, and two worlds converging the shared compose project means the
+    gateway's managed master key silently diverges from the key baked into the
+    bundle (observed as LiteLLM 400 "No connected db.")."""
+    _ensure_importable_infer_stack()
+    paths = importlib.import_module("infer_stack.paths")
+    return paths.data_root()
+
+
 @dataclass(frozen=True)
 class ServingFacts:
     """The transport facts the serving catalog uniquely supplies for one endpoint.
 
     Everything HELM-domain (model/tokenizer alias, protocol mode) comes from the
     eval_audit preset; everything transport (base_url, api key, access kind) is
-    caller-supplied. The catalog only authoritatively knows the served name, the
-    backing HF model id, and the served context window — so those are the only
-    fields this carries (see the §3 strategic decision in the migration plan)."""
+    caller-supplied. The catalog authoritatively knows the served name, the
+    backing HF model id, and the served context window (see the §3 strategic
+    decision in the migration plan) — plus the serving-substrate provenance
+    fields below, which exist purely to be RECORDED in the exported bundle
+    (the engine image/dtype/revision are exactly the "unrecorded execution
+    substrate" parameters the reproducibility work exists to pin down)."""
 
     endpoint: str
     served_model_name: str
     hf_model_id: str
     max_model_len: int | None = None
+    # Serving-substrate provenance (record-only; never used for routing).
+    # serving_image: the effective vLLM container image — the endpoint's
+    # runtime.image override when set, else infer-stack's PINNED default.
+    # dtype / revision: the catalog's model-level pins (None = engine default,
+    # i.e. deliberately unpinned — record that fact too).
+    serving_image: str | None = None
+    dtype: str | None = None
+    revision: str | None = None
 
 
 def resolve_serving_facts(
@@ -103,31 +130,55 @@ def resolve_serving_facts(
             "benchmark export only supports vLLM endpoints."
         )
     served = request.served
+    spec = getattr(request, "spec", None) or {}
+    runtime = spec.get("runtime") or {}
+    serving_image = runtime.get("image")
+    if not serving_image:
+        # No per-endpoint override -> the effective image is infer-stack's
+        # pinned default. Record the actual value, not "default".
+        try:
+            config_mod = importlib.import_module("infer_stack.config")
+            serving_image = config_mod.PINNED_IMAGES.get("vllm")
+        except Exception:
+            serving_image = None
     return ServingFacts(
         endpoint=endpoint,
         served_model_name=served["served_model_name"],
         hf_model_id=served["hf_model_id"],
         max_model_len=request.capacity.get("max_model_len"),
+        serving_image=serving_image,
+        dtype=spec.get("dtype"),
+        revision=spec.get("revision"),
     )
 
 
-def _benchmark_client_class(protocol_mode: str, access_kind: str) -> str:
+def _benchmark_client_class(
+    protocol_mode: str, access_kind: str, *, newline_tolerant: bool = False
+) -> str:
     # Chat protocol -> eval_audit's null-safe subclasses (helm_clients.py): reasoning
     # models can return message.content=null on a successful chat response, which HELM
     # would crash on downstream (`NoneType.strip()`). The subclass normalizes null->""
     # via HELM's own client_spec.class_name seam, matching what the official
     # together/gpt-oss-20b run already emitted. Completions protocol returns text
-    # directly and never hits this, so it keeps the stock HELM client.
+    # directly and never hits this, so it keeps the stock HELM client — unless the
+    # preset opts into ``newline_tolerant`` (paragraph-style base models whose
+    # answers a server-side "\n" stop would truncate to ""; the tolerant subclass
+    # relaxes the stop and restores it client-side after stripping leading
+    # newlines — a DECLARED substitution, reflected in the deployment name).
     if access_kind == "vllm-direct":
+        if protocol_mode != "completions":
+            return "eval_audit.integrations.helm_clients.NullSafeVLLMChatClient"
         return (
-            "helm.clients.vllm_client.VLLMClient"
-            if protocol_mode == "completions"
-            else "eval_audit.integrations.helm_clients.NullSafeVLLMChatClient"
+            "eval_audit.integrations.helm_clients.NewlineTolerantVLLMClient"
+            if newline_tolerant
+            else "helm.clients.vllm_client.VLLMClient"
         )
+    if protocol_mode != "completions":
+        return "eval_audit.integrations.helm_clients.NullSafeOpenAIChatClient"
     return (
-        "helm.clients.openai_client.OpenAILegacyCompletionsClient"
-        if protocol_mode == "completions"
-        else "eval_audit.integrations.helm_clients.NullSafeOpenAIChatClient"
+        "eval_audit.integrations.helm_clients.NewlineTolerantOpenAICompletionsClient"
+        if newline_tolerant
+        else "helm.clients.openai_client.OpenAILegacyCompletionsClient"
     )
 
 

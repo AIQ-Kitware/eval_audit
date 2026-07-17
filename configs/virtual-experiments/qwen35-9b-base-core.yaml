@@ -1,0 +1,30 @@
+schema_version: 1
+name: qwen35-9b-base-core
+description: >
+  Qwen3.5-9B-Base EXTENSION batch (new results, not a reproduction): the
+  authored 85-entry classic/Lite core (docs/planning/qwen36-core-new-results-plan.md
+  §6.1) plus the boolq '<think>'-leakage probe, computed locally through the
+  leased infer-stack vLLM service with the newline-tolerant completions client
+  (declared substitution; 'nlstrip' deployment marker). The run keys are
+  identical to the reproduced Qwen 1.5/2/2.5 grids so the scores sit directly
+  beside them, but there is NO official public HELM Qwen3.5 run to pair
+  against — comparison is intentionally OFF (no official_public_index source),
+  and every local run reports standalone with missing_official_component.
+
+scope:
+  # Only the Qwen3.5 extension model; defensive narrowing on the model axis
+  # (include_experiments below is the hard bound).
+  models:
+    - "regex:^qwen/qwen3\\.5"
+
+sources:
+  - kind: audit_index
+    fpath: /data/crfm-helm-audit-store/indexes/audit_results_index.csv
+    include_experiments:
+      - audit-qwen35-9b-base-vllm-full
+  # NO official_public_index source — this is net-new coverage; there is no
+  # public HELM Qwen3.5 run to replay or compare with. See the qwen36 plan §9
+  # for the local-only shape this mirrors.
+
+output:
+  root: /data/crfm-helm-audit-store/virtual-experiments/qwen35-9b-base-core
