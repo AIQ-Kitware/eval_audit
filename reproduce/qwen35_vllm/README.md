@@ -55,7 +55,7 @@ officials were served, making **base-3.5 vs base-1.5** the clean comparison.
 ./06_check_profiles.sh         # endpoint qwen3-5-9b-base-single in the active catalog
 ./07_check_container_image.sh  # docker + pinned image + stale-digest probe
 ./10_run_smoke.sh              # gc -> gateway bootstrap -> export (compute) -> run --lease
-./15_run_full.sh               # full manifest (PLACEHOLDER scope — see below)
+./15_run_full.sh               # full 86-entry core grid (overnight-scale; see below)
 ./40_verify_artifacts.sh <run-dir>   # run_spec.json records the base model + local deployment
 ```
 
@@ -71,12 +71,18 @@ brings up vLLM + LiteLLM, the containerized HELM client (no GPU,
 2. `10` leases the endpoint, vLLM loads the model (the architecture-support
    gate), and both smoke runs land `stats.json` + `per_instance_stats.json`.
 3. `40` confirms `adapter_spec.model=qwen/qwen3.5-9b-base` and
-   `model_deployment=vllm/qwen3.5-9b-base-local`.
+   `model_deployment=vllm/qwen3.5-9b-base-nlstrip-local` (the `nlstrip`
+   marker = the newline-tolerant completions client, a **declared
+   substitution**: the shim only rewrites requests carrying a `"\n"` stop,
+   where this paragraph-style base model would otherwise be server-truncated
+   to `""`; MC shapes pass through byte-identically).
 
 ## Knobs (env vars)
 
 - `QWEN35_CONTAINER_IMAGE` (default `eval-audit-helm-runner:dev`)
-- `QWEN35_TMUX_WORKERS` (default `1` — one model, one endpoint)
+- `QWEN35_TMUX_WORKERS` (default `2` — deliberate despite the single endpoint:
+  overlapping lease brackets keep the refcount ≥ 1 across the batch, so the
+  `reclaim: stop` endpoint is never cold-cycled between consecutive runs)
 - `QWEN35_FORCE_RERUN` (default on for smoke, off for full)
 - `INFER_STACK_CONFIG_DIR` / `INFER_STACK_DATA_DIR` / `INFER_STACK_ALLOWED_GPUS`
   — standard infer-stack knobs; the shipped config lives in
@@ -84,13 +90,32 @@ brings up vLLM + LiteLLM, the containerized HELM client (no GPU,
   48GB card with `INFER_STACK_ALLOWED_GPUS=0` if GPU 1 (16GB) grabs the lease.
 - `AUDIT_STORE_ROOT` / `AUDIT_RESULTS_ROOT` (defaults under `/data`)
 
+## The full grid (`15_run_full.sh`)
+
+The `full_manifest` is the authored **85-entry classic/Lite core** (qwen36
+plan §6.1) — the same run keys as the reproduced Qwen1.5/2/2.5 grids
+(commonsense, gsm, 5×legalbench, 7×math, med_qa, 62×mmlu, narrative_qa,
+2×natural_qa, 5×wmt_14), model token swapped to `qwen/qwen3.5-9b-base` — plus
+`boolq` at full instance count as the **`<think>`-leakage probe** (the smoke
+found the base model spontaneously opening reasoning tags on 1/5 boolq
+instances; n=1000 turns that anecdote into a rate).
+
+Overnight run notes:
+
+- **Wall-clock**: expect several hours on the RTX 8000. The MC-heavy mmlu
+  block is fast; `narrative_qa`, `wmt_14`, and the CoT `math` entries dominate.
+  Cold-start is now <5 min (mm-profiling disabled + keyed compile caches).
+- **Interrupted? Just re-run `15_run_full.sh`.** Completed runs are skipped
+  (force-rerun is off for full); the batch picks up where it stopped.
+- Verify afterwards with `./40_verify_artifacts.sh` against any run dir under
+  `$AUDIT_RESULTS_ROOT/audit-qwen35-9b-base-vllm-full/`.
+- The post-run report is the **local-only** virtual experiment
+  [`configs/virtual-experiments/qwen35-9b-base-core.yaml`](../../configs/virtual-experiments/qwen35-9b-base-core.yaml)
+  (no official side exists — comparability facts pair nothing, by design).
+
 ## What comes next (not this runbook)
 
-The `full_manifest` is currently a **placeholder** (the smoke pair at 1000
-instances). The real breadth target is the authored ~85-entry classic/Lite
-core (qwen36 plan §6.1) with the model token swapped to
-`qwen/qwen3.5-9b-base`, grouped as a **local-only** virtual experiment (no
-official side exists) and reported beside the reproduced Qwen1.5/2/2.5
-numbers. Later arcs: post-trained Qwen3.5-9B (chat protocol), and LoRA
-fine-tunes such as `Achilles1089/fable-coder-35B-A3B` (35B-A3B MoE — needs
-quantization to fit 48GB; separate serving design).
+Later arcs: post-trained Qwen3.5-9B (chat protocol), and LoRA fine-tunes such
+as `Achilles1089/fable-coder-35B-A3B` (35B-A3B MoE — needs quantization to fit
+48GB; separate serving design), plus measuring `<think>` leakage per task as a
+reportable finding.

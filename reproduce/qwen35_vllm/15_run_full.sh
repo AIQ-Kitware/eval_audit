@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Full run: same shape as 10_run_smoke.sh against the full_manifest. NOTE the
-# preset's full grid is currently a PLACEHOLDER (the smoke pair at
-# max_eval_instances=1000); swap the preset's full run_entries for the authored
-# ~85-entry classic/Lite core (docs/planning/qwen36-core-new-results-plan.md
-# §6.1) once the smoke path is proven. Force-rerun is OFF by default
+# Full run: same shape as 10_run_smoke.sh against the full_manifest — the
+# authored 85-entry classic/Lite core (docs/planning/qwen36-core-new-results-plan.md
+# §6.1; identical run keys to the reproduced Qwen 1.5/2/2.5 grids) plus boolq
+# at full instance count as the '<think>'-leakage probe. Expect several hours
+# of wall-clock on a single RTX 8000. Force-rerun is OFF by default
 # (expensive); set QWEN35_FORCE_RERUN=1 to clear a prior result.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"

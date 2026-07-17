@@ -75,6 +75,11 @@ QWEN35_EXPERIMENT_SMOKE="audit-qwen35-9b-base-vllm-smoke"
 QWEN35_EXPERIMENT_FULL="audit-qwen35-9b-base-vllm-full"
 QWEN35_BUNDLE_ROOT="$STORE_ROOT/local-bundles/$QWEN35_PRESET"
 
-# One model, one endpoint -> one worker. Raising this only parallelizes the two
-# smoke run_entries against the same leased server (they ref-count one lease).
-QWEN35_TMUX_WORKERS="${QWEN35_TMUX_WORKERS:-1}"
+# Two workers, ON PURPOSE, even though there is one model/one endpoint: the
+# catalog endpoint is `reclaim: stop`, so a lone worker's release between
+# consecutive runs drops the lease refcount to 0 and the converge STOPS vLLM —
+# an 86-job batch would cold-cycle the server ~86 times (hours of pure churn).
+# With 2 workers the overlapping brackets keep refcount >= 1 for the whole
+# batch (design §4 ref-count coalescing), so vLLM stays up end to end; both
+# workers share the one leased server (vLLM batches concurrent requests fine).
+QWEN35_TMUX_WORKERS="${QWEN35_TMUX_WORKERS:-2}"
