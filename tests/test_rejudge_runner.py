@@ -13,15 +13,18 @@ import json
 from pathlib import Path
 
 import pytest
-from judging_fixture_lib import build_xstest_source_run, write_json
+from judging_fixture_lib import (
+    FAKE_JUDGE_DEPLOYMENT as FAKE_DEPLOYMENT,
+    FAKE_JUDGE_MODEL as FAKE_MODEL,
+    build_xstest_source_run,
+    make_fake_judge_spec as make_judge,
+    write_fake_judge_sidecar,
+    write_json,
+)
 
 from eval_audit.integrations.helm_judging import fake_judge_client
 from eval_audit.judging import response_snapshot as snap
-from eval_audit.judging.rejudge import DONE_FNAME, RejudgeError, run_rejudge
-from eval_audit.judging.specs import JudgeSpec
-
-FAKE_DEPLOYMENT = "fakejudge/fake-safety-judge"
-FAKE_MODEL = "fakejudge/fake-safety-judge-model"
+from eval_audit.judging.rejudge import DONE_FNAME, run_rejudge
 
 
 @pytest.fixture(autouse=True)
@@ -33,37 +36,7 @@ def _reset_fake_judge():
 
 @pytest.fixture()
 def sidecar_dpath(tmp_path: Path) -> Path:
-    """A judge sidecar config dir registering the fake deployment."""
-    dpath = tmp_path / "judge_sidecars"
-    dpath.mkdir()
-    (dpath / "model_deployments.yaml").write_text(
-        f"""model_deployments:
-  - name: {FAKE_DEPLOYMENT}
-    model_name: {FAKE_MODEL}
-    tokenizer_name: simple/model1
-    max_sequence_length: 32768
-    client_spec:
-      class_name: eval_audit.integrations.helm_judging.fake_judge_client.FakeSafetyJudgeClient
-"""
-    )
-    return dpath
-
-
-def make_judge() -> JudgeSpec:
-    return JudgeSpec(
-        id="fake_judge",
-        model=FAKE_MODEL,
-        model_deployment=FAKE_DEPLOYMENT,
-        lease_endpoint="fake-endpoint",
-        temperature=0.0,
-        max_tokens=256,
-        parser_version="safety-v1",
-        prompt_version="xstest-official-v1",
-        thinking_mode="server_default",
-        client_class=(
-            "eval_audit.integrations.helm_judging.fake_judge_client.FakeSafetyJudgeClient"
-        ),
-    )
+    return write_fake_judge_sidecar(tmp_path / "judge_sidecars")
 
 
 @pytest.fixture()
@@ -145,10 +118,12 @@ def test_artifact_contents_and_provenance(snapshot_dpath, tmp_path, sidecar_dpat
         assert annotation["fake_judge_score"] in (0.0, 0.5, 1.0)
         assert annotation["raw_response"].startswith("<reasoning>")
 
-    # The derived run_spec carries our annotator and never the official
-    # metric specs; judge identity is recoverable from it.
+    # The derived run_spec carries our annotator and ONLY the
+    # judge-attributed metric; judge identity is recoverable from it.
     run_spec = json.loads((out / "run_spec.json").read_text())
-    assert run_spec["metric_specs"] == []
+    (metric_spec,) = run_spec["metric_specs"]
+    assert metric_spec["class_name"].endswith("SingleJudgeSafetyMetric")
+    assert metric_spec["args"] == {"judge_id": "fake_judge", "annotator_name": "xstest"}
     (annotator,) = run_spec["annotators"]
     assert annotator["args"]["judge_model"] == FAKE_MODEL
     assert annotator["args"]["judge_spec_hash"] == make_judge().spec_hash()

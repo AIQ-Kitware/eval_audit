@@ -57,6 +57,10 @@ from eval_audit.judging.response_snapshot import (
     normalized_response_records,
     verify_snapshot,
 )
+from eval_audit.integrations.helm_judging.metrics import (
+    build_judge_metric,
+    judge_metric_spec_dict,
+)
 from eval_audit.judging.specs import JudgeSpec, JudgmentAttemptSpec, default_request_random
 
 REJUDGE_ARTIFACT_FORMAT = "helm_rejudge_v1"
@@ -246,9 +250,12 @@ def run_rejudge(
     derived_run_spec["annotators"] = [
         {"class_name": annotator_class, "args": annotator_args}
     ]
-    # Judge-attributed metric specs land with the Phase 6 metric; the
-    # canonical official metric specs must NOT survive into a rejudge.
-    derived_run_spec["metric_specs"] = []
+    # Only the judge-attributed metric: the canonical official metric
+    # specs must NOT survive into a rejudge (their names imply the
+    # original ensemble aggregation).
+    derived_run_spec["metric_specs"] = [
+        judge_metric_spec_dict(benchmark, judge.id, snapshot_manifest["annotator_name"])
+    ]
 
     rejudge_manifest = {
         "artifact_format": REJUDGE_ARTIFACT_FORMAT,
@@ -296,7 +303,7 @@ def run_rejudge(
         )
         _write_json(tmp_dpath / "rejudge_manifest.json", rejudge_manifest)
         _write_json(tmp_dpath / "process_context.json", process_context)
-        _write_metrics(tmp_dpath, annotated_state, benchmark, judge)
+        _write_metrics(tmp_dpath, annotated_state, benchmark, judge, annotator_name)
         with open(tmp_dpath / DONE_FNAME, "w", encoding="utf-8") as file:
             file.write(attempt_hash + "\n")
         os.replace(tmp_dpath, out_dpath)
@@ -313,12 +320,29 @@ def _write_json(fpath: Path, obj: Any) -> None:
 
 
 def _write_metrics(
-    tmp_dpath: Path, annotated_state: ScenarioState, benchmark: str, judge: JudgeSpec
+    tmp_dpath: Path,
+    annotated_state: ScenarioState,
+    benchmark: str,
+    judge: JudgeSpec,
+    annotator_name: str,
 ) -> None:
-    """Evaluate the judge-attributed metric (§12.1 step 13). Lands with
-    the Phase 6 metric commit; until then rejudge artifacts carry
-    judgments but no stats files."""
-    del tmp_dpath, annotated_state, benchmark, judge
+    """Evaluate ONLY the judge-attributed metric (§12.1 step 13) via
+    HELM's own Metric.evaluate, writing stats.json/per_instance_stats.json
+    in the ordinary HELM shape (judge-attributed names inside)."""
+    metric = build_judge_metric(benchmark, judge.id, annotator_name)
+    if metric is None:
+        raise RejudgeError(f"no judge-attributed metric for benchmark {benchmark!r}")
+    eval_cache_dpath = tmp_dpath / ".metric_eval_cache"
+    eval_cache_dpath.mkdir()
+    result = metric.evaluate(
+        annotated_state,
+        metric_service=None,  # judge metrics read annotations only
+        eval_cache_path=str(eval_cache_dpath),
+        parallelism=1,
+    )
+    (tmp_dpath / "stats.json").write_text(to_json(result.aggregated_stats))
+    (tmp_dpath / "per_instance_stats.json").write_text(to_json(result.per_instance_stats))
+    shutil.rmtree(eval_cache_dpath, ignore_errors=True)
 
 
 __all__ = [

@@ -21,6 +21,47 @@ import json
 from pathlib import Path
 from typing import Any
 
+FAKE_JUDGE_DEPLOYMENT = "fakejudge/fake-safety-judge"
+FAKE_JUDGE_MODEL = "fakejudge/fake-safety-judge-model"
+FAKE_JUDGE_CLIENT_CLASS = (
+    "eval_audit.integrations.helm_judging.fake_judge_client.FakeSafetyJudgeClient"
+)
+
+
+def write_fake_judge_sidecar(dpath: Path) -> Path:
+    """A HELM sidecar config dir registering the deterministic offline
+    fake judge deployment (Milestone-A serving stand-in)."""
+    dpath.mkdir(parents=True, exist_ok=True)
+    (dpath / "model_deployments.yaml").write_text(
+        f"""model_deployments:
+  - name: {FAKE_JUDGE_DEPLOYMENT}
+    model_name: {FAKE_JUDGE_MODEL}
+    tokenizer_name: simple/model1
+    max_sequence_length: 32768
+    client_spec:
+      class_name: {FAKE_JUDGE_CLIENT_CLASS}
+"""
+    )
+    return dpath
+
+
+def make_fake_judge_spec():
+    """A complete JudgeSpec pointing at the fake deployment."""
+    from eval_audit.judging.specs import JudgeSpec
+
+    return JudgeSpec(
+        id="fake_judge",
+        model=FAKE_JUDGE_MODEL,
+        model_deployment=FAKE_JUDGE_DEPLOYMENT,
+        lease_endpoint="fake-endpoint",
+        temperature=0.0,
+        max_tokens=256,
+        parser_version="safety-v1",
+        prompt_version="xstest-official-v1",
+        thinking_mode="server_default",
+        client_class=FAKE_JUDGE_CLIENT_CLASS,
+    )
+
 
 def write_json(fpath: Path, obj: Any) -> None:
     fpath.parent.mkdir(parents=True, exist_ok=True)
