@@ -2577,3 +2577,30 @@ fresh; the old failed helm_id_* dirs are inert — a failed job left no
 run_spec.json so the skip check re-runs it). Morning-after:
 `40_verify_artifacts.sh` (expect 72 passes), then the qwen35-9b-base-core
 virtual experiment.
+
+### Addendum (same day, 12:10) — VRAM-aware placement plan written into infer-stack
+
+Model switch mid-session: this addendum and the infer_stack work are
+claude-fable-5[1m] (Fable), not Opus.
+
+Planning for the small Qwen3.5 models (0.8B/2B/4B on yardrat's 16GiB RTX
+5000) surfaced that infer-stack placement is count-based first-fit with no
+VRAM awareness — Opus's draft plan compensated with per-runbook
+INFER_STACK_ALLOWED_GPUS pinning, which Jon rejected: he wants infer-stack to
+know that "a request for a particular endpoint can only be satisfied by
+certain GPUs." The chosen design (catalog-declared placement.min_vram_gib +
+eligibility filter + most-constrained-first + best-fit in plan_placement,
+capacity-subtraction internals to leave co-hosting open) is written up as
+infer_stack docs/planning/vram-aware-placement.md — objective stated first,
+rejected alternatives recorded (pinning, undocumented gpu_indices, SLURM),
+submodule commit 1679f8e on jons/tui-async-startup; this superproject commit
+is the intentional gitlink bump. HF research that fed it: all three small
+sizes exist as both -Base and post-trained; all are DENSE hybrid-GDN
+(9B too — its sidecar's "sparse MoE" description is wrong, fix pending);
+same Qwen3_5ForConditionalGeneration arch + vision_config as the 9B, so same
+vLLM image + --limit-mm-per-prompt {"image":0,"video":0}. fp16 weights:
+1.7/4.5/9.3 GB (all fit 16GiB); 9B is 19.3 GB (GPU-0 only — which is exactly
+why placement must be eligibility-aware).
+
+Deferred, per Jon: base-vs-instruct variant choice, runbook packaging, and
+implementation green-light (Phase 0 = tests first).
