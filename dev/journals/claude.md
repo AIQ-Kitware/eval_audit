@@ -2693,3 +2693,99 @@ Design takeaway: when reviewing a generated plan, the highest-value pass is
 fact-verification against the tree (all held here — rare) and then
 *risk-ordering*: a plan can be entirely correct and still wrong about what
 belongs on the critical path.
+
+## 2026-07-17 17:11:42 -0400
+
+**User intent.** "Please implement the new plan" — begin executing the
+reviewed/revised `docs/planning/open-judge-plan.md` (open-weight judge
+rejudging). Model: Fable (`claude-fable-5`, 1M context), Claude Code harness,
+autonomous session on aivm-2404-yardrat.
+
+**What landed: Milestone A complete (Commits 1–8 of the plan's v1
+sequence).** Eight commits, each independently green, 80 new tests, full fast
+suite 671 passed (4 pre-existing store-path failures unrelated):
+
+- `cc2240c` Commit 1 — source-artifact audit (`eval_audit/judging/`
+  package, canonical display-key module, JSON-level per-run shape
+  validation, `eval-audit-audit-judge-sources`).
+- `68bc1cf` Commit 2 — immutable content-addressed response snapshots
+  (judge-neutral reconstructed ScenarioState via HELM codec, detached
+  official annotations, DONE-last atomicity, hash covers only
+  judging-relevant facts).
+- `8f7f871` Commit 3 — official-annotation identity replay gate (reattach
+  originals, real `Metric.evaluate`, 1e-12 vs published stats).
+- `b1cb780` Commit 4 — JudgeSpec/JudgmentAttemptSpec (canonical hashing over
+  inference-affecting fields only; flat annotator args recoverable by the
+  existing `extract_judge_models`).
+- `d26e372` Commit 5 — ConfigurableXSTestAnnotator + shared judge
+  request/provenance helper; prompt-parity tests vs the official annotator.
+- `6742f23` Commit 6 — annotation-only rejudge runner (`helm_rejudge_v1`
+  artifacts, per-(snapshot, judge, replicate) SQLite caches,
+  `Request.random` replicate identity, candidates proven unchanged;
+  deterministic offline fake-judge deployment drives the REAL
+  AnnotatorFactory→AutoClient path in tests).
+- `9e1c709` Commit 7 — SingleJudgeSafetyMetric (judge-attributed names,
+  explicit-field read, stop gate pinned) + stats wired into the runner;
+  taxonomy: `*_annotator_success*` → bookkeeping.
+- `def0847` Commit 8 — ConfigurableWildBenchAnnotator + metric (official
+  template/regex/empty-output semantics, 1..10 range check) + the §10.6
+  cross-annotator parse-failure matrix.
+
+**Environment note.** No persistent Python env existed for user `agent` on
+this VM; created the CLAUDE.md-documented env at
+`~/.local/uv/envs/uvpy3.13.2` (uv, Python 3.13.14) and installed
+eval_audit + aiq-magnet + infer_stack editable. Phase 0 baseline: 25
+passed / 5 skipped before any new code.
+
+**Two findings worth keeping (both caught by the gates the plan insisted
+on):**
+
+1. *The identity-replay gate caught my own fixture twice.* Official
+   `safety_score` aggregation is judge-count-weighted (per-instance Stat
+   gets one `.add()` per parsed judge, then trial-merge + `take_mean`), not
+   mean-of-instance-means (0.85 vs 0.875 on the fixture); and real published
+   `stats.json` carries derived `computed_on=worst` robustness/fairness rows
+   even for unperturbed runs (`compute_worst_case_metrics` emits them
+   unconditionally). Exactly the class of misreconstruction the gate exists
+   to stop before a judge request is ever sent.
+2. *The official safety judge ensemble is HELM-version-dependent.* The
+   installed (newer) crfm-helm has commented out the Llama-405B judge
+   (deprecated 2026-03-06) — GPT-only now — while the pinned submodule and
+   the published gpt-oss-20b artifacts have both. Prompt-parity tests
+   therefore assert prompt bytes and budgets but not ensemble size, and the
+   source audit accepts any-of the official judge fields. The judge_registry
+   maintenance note ("suite-version-qualified entries") anticipated this.
+
+**Design choices beyond the plan text (documented in-module):** snapshots
+also carry verbatim `source_stats.json`/`source_per_instance_stats.json` so
+the replay gate survives corpus moves (excluded from hash identity);
+out-of-range judge scores are recorded as `out_of_range` with a null score
+rather than silently accepted (official parsers accept any float) — never
+affects identity replay, which uses original annotations; the fake judge
+client answers in whichever official format the prompt calls for, keeping
+one deployment for both benchmarks' fixtures.
+
+**Not done / next steps (serving-facing half, needs Jon's input):**
+
+- The Phase 1 stop gate ("at least one real XSTest + WildBench source passes
+  the audit") needs a host that mounts `/data/crfm-helm-public` — not this
+  VM. Run `eval-audit-audit-judge-sources` there first.
+- Commit 9 (judge sidecar export + optional Qwen thinking client — plan
+  says only if live smoke proves the switch is needed), Commit 11 (kwdagger
+  rejudge pipeline), Commit 12 (indexing + judge-variance analysis),
+  Commit 13 (aiq-gpu runbook incl. §14.3 context-length preflight),
+  Commit 14 (remaining safety benchmarks + Omni-MATH). Commit 10
+  (multi-replica) stays DEFERRED per the review.
+- Milestone B (XSTest 20-instance live smoke, Qwen3.5-27B on aiq-gpu) is the
+  first GPU step; the §14.1 catalog declaration (TP1, min_vram_gib 60 guess)
+  is written in the plan.
+
+**Reusable insights.** (1) A replay-identity gate pays for itself during
+*development* — it debugs your reconstruction long before it validates the
+experiment. (2) When mirroring an upstream pipeline, generate fixtures from
+the upstream's own aggregation semantics or the gate will correctly refuse
+your fixtures — hand-derived "obvious" aggregation (mean-of-means) was wrong
+twice. (3) Registering a deterministic fake deployment through the real
+config/factory/cache stack tests an order of magnitude more plumbing than
+injecting a mock client — the cache-restart and replicate-isolation tests
+run against HELM's actual SQLite layer.
