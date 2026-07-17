@@ -2604,3 +2604,60 @@ why placement must be eligibility-aware).
 
 Deferred, per Jon: base-vs-instruct variant choice, runbook packaging, and
 implementation green-light (Phase 0 = tests first).
+
+### Addendum 2 (same day, 14:45) — VRAM-aware placement Phases 0–4 + the small-family runbook
+
+Fable (claude-fable-5[1m]) continuing. Jon green-lit implementation in two
+steps ("do phase 0, 1, and 2", then "do phase 3 and 4 now"), with the
+directive that the smalls get their own runbook (9B results mostly done) and
+that the small batch exercises the everything-eligible path: "when all your
+GPUs are big enough to fit the models you use all your GPUs."
+
+**infer_stack side (commits 16f6bb9 Phases 0–2, 06f2ec2 Phase 3):**
+eligibility-constrained placement per docs/planning/vram-aware-placement.md.
+Catalog `placement: {min_vram_gib}` (strict-keyed, vllm-only); planner
+eligibility + most-constrained-first + best-fit for DECLARED deployments,
+byte-identical legacy behavior for undeclared; heterogeneous
+simulate_inventory ('48,16' = yardrat); vram.py (vLLM profile parser, weight-
+bytes floor from HF cache, measurements overlay, OOM classifier); plan-time
+enrichment (declared > measured > floor); guided OOM error naming the exact
+`infer-stack measure <ep> --record` fix; kubeai warn-and-ignore. Two
+backward-compat subtleties caught and test-pinned: (1) undeclared deployments
+keep index-order selection so pre-declaration catalogs never move; (2) the
+auto-enriched floor gates ELIGIBILITY only — downloading weights must never
+flip an undeclared deployment into best-fit. 376/376 suite green.
+
+**eval_audit side (this commit):** the qwen35_small_vllm arc.
+- Preset `qwen35_small_vllm`: combined 3-model COMPUTE preset (profiles ×3,
+  per-profile nlstrip/completions facts), 216 full entries = 3 × the 9B's
+  corrected 72-entry core token-swapped with inline model_deployment= lease
+  keys, GROUPED BY MODEL (reclaim:stop + refcount coalescing ⇒ 3 cold starts
+  total, not per-entry thrash); 6-entry smoke. One sidecar pair registers all
+  three ids (configs/local_models/qwen35_small_vllm/) — and the descriptions
+  are architecture-CORRECT (dense hybrid-GDN; the 9B sidecar's "sparse MoE"
+  error is not repeated; fixing the 9B's own file is still pending).
+- Runbook reproduce/qwen35_small_vllm/: port of the 9B runbook, QWEN35S_*
+  names, THREE endpoints, and the point of the exercise — NO
+  INFER_STACK_ALLOWED_GPUS anywhere; the catalog declares min_vram_gib
+  best guesses (4 / 7 / 13 GiB; measurement-is-optional per Jon: wrong-low
+  fails guided, wrong-high just wastes a card). 06_check_profiles enforces
+  the declarations exist (an undeclared endpoint is a config regression in
+  this runbook). 40_verify checks the per-run model↔deployment PAIRING
+  (a 2B run claiming the 4B deployment is dirty).
+- Virtual experiment configs/virtual-experiments/qwen35-small-core.yaml
+  (local-only, no official side, same scoping family as the 9B's).
+
+**Validated end-to-end against the REAL new planner** (scratch env with
+Phase 0–3 infer_stack installed): the shipped catalog loads through
+Catalog.load (placement validation active); resolve → plan on
+simulate_inventory('48,16') gives {0.8B→gpu1, 2B→gpu0} for two concurrent
+smalls (both GPUs used, zero pinning) and {9B→gpu0, 4B→gpu1} for the
+cross-runbook concurrency case. That is precisely the behavior Jon asked
+for, demonstrated pre-GPU.
+
+**Not yet validated on yardrat:** the measure command's acquire-once path,
+the real vLLM log-format parse against v0.25.1 output, and the 4B-on-16GiB
+best guess (13 GiB — the tightest fit; the guided error is the designed
+recovery if it's wrong). First real run: ./10_run_smoke.sh in the new
+runbook, ideally with the 9B re-run going concurrently to watch eligibility
+keep them apart.

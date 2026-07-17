@@ -1,0 +1,99 @@
+# infer-stack serving catalog for the Qwen3.5 SMALL base-family runbook
+# (0.8B / 2B / 4B). Three models, three endpoints, ONE deliberate difference
+# from the 9B catalog: every endpoint declares placement.min_vram_gib, so
+# infer-stack's VRAM-aware planner (vram-aware-placement.md, Phases 0-3)
+# places each lease on whichever ELIGIBLE GPU is free — no
+# INFER_STACK_ALLOWED_GPUS, no gpu_indices, no per-host pinning anywhere.
+#
+# On yardrat (48 GiB RTX 8000 + 16 GiB RTX 5000) all three smalls fit BOTH
+# cards, so this batch exercises the "everything eligible => any free GPU"
+# path; declared smalls best-fit onto the SMALLEST eligible free card, which
+# keeps the 48 GiB card available for the 9B whenever both runbooks run
+# concurrently (its 24 GiB declaration is eligible only there).
+#
+# min_vram_gib values are BEST GUESSES (weights + engine overhead + KV at our
+# 4096 window), per the plan's measurement-is-optional resolution. If one is
+# too low the acquire fails with a guided OOM error naming the exact
+# `infer-stack measure <endpoint> --record` command; the weight-bytes floor
+# clamps anything unsoundly low automatically once weights are in the HF
+# cache. fp16 weight bytes for reference: 0.8B=1.7GB, 2B=4.5GB, 4B=9.3GB.
+#
+# Everything else mirrors reproduce/qwen35_vllm/config/infer_stack/catalog.yaml
+# — same vLLM image pin (the ONE image verified to load the Qwen3.5 hybrid-GDN
+# arch), same fp16 pin for the pre-Ampere cards, same completions protocol
+# (base models, no chat template), same vision-modality disable (all Qwen3.5
+# checkpoints are VL-packaged; the mm-profiling pass costs >25 min on Turing).
+
+models:
+  qwen3-5-0-8b-base:
+    source: hf://Qwen/Qwen3.5-0.8B-Base
+    # dtype is a MODEL-level knob (part of the deployment compat key); pin
+    # fp16 explicitly so the precision is a recorded fact, not a
+    # driver-dependent sm_75 fallback.
+    dtype: float16
+  qwen3-5-2b-base:
+    source: hf://Qwen/Qwen3.5-2B-Base
+    dtype: float16
+  qwen3-5-4b-base:
+    source: hf://Qwen/Qwen3.5-4B-Base
+    dtype: float16
+
+endpoints:
+  qwen3-5-0-8b-base-single:
+    engine: vllm
+    reclaim: stop                # free the GPU on last release (per-run leasing owns lifecycle)
+    model: qwen3-5-0-8b-base
+    protocol: completions        # base model -> probe /completions
+    placement:
+      min_vram_gib: 4            # best guess: 1.6 weights + overhead + KV
+    runtime:
+      image: vllm/vllm-openai:v0.25.1
+      max_model_len: 4096        # preserves the 4064 preset reserve
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+      enable_prefix_caching: true
+      extra_args:
+        - '--limit-mm-per-prompt'
+        - '{"image": 0, "video": 0}'
+
+  qwen3-5-2b-base-single:
+    engine: vllm
+    reclaim: stop
+    model: qwen3-5-2b-base
+    protocol: completions
+    placement:
+      min_vram_gib: 7            # best guess: 4.2 weights + overhead + KV
+    runtime:
+      image: vllm/vllm-openai:v0.25.1
+      max_model_len: 4096
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+      enable_prefix_caching: true
+      extra_args:
+        - '--limit-mm-per-prompt'
+        - '{"image": 0, "video": 0}'
+
+  qwen3-5-4b-base-single:
+    engine: vllm
+    reclaim: stop
+    model: qwen3-5-4b-base
+    protocol: completions
+    placement:
+      min_vram_gib: 13           # best guess: 8.7 weights + overhead + KV.
+                                 # Eligible on the 16 GiB card by design —
+                                 # the tightest fit in the family; if it OOMs
+                                 # there, the guided error points at
+                                 # `infer-stack measure` and bumping this
+                                 # above 16 moves it to the 48 GiB card.
+    runtime:
+      image: vllm/vllm-openai:v0.25.1
+      max_model_len: 4096
+      gpu_memory_utilization: 0.85
+      max_num_batched_tokens: 4096
+      max_num_seqs: 16
+      enable_prefix_caching: true
+      extra_args:
+        - '--limit-mm-per-prompt'
+        - '{"image": 0, "video": 0}'

@@ -1,0 +1,27 @@
+schema_version: 1
+name: qwen35-small-core
+description: >
+  Qwen3.5 small base-family EXTENSION batch (0.8B/2B/4B, new results, not a
+  reproduction): 3 x the authored 72-entry classic/Lite compute core
+  (docs/planning/qwen36-core-new-results-plan.md §6.1; mmlu in canonical
+  compute form, math+natural_qa dropped as data-access barriers), computed
+  locally through leased infer-stack vLLM serving with the newline-tolerant
+  completions client (declared substitution; 'nlstrip' deployment markers)
+  and UNPINNED VRAM-aware GPU placement (infer_stack
+  docs/planning/vram-aware-placement.md Phase 4 — endpoints declare
+  min_vram_gib; no GPU indices in any config). The run keys are identical to
+  the reproduced Qwen 1.5/2/2.5 grids and to the qwen35-9b-base-core batch,
+  so the four sizes sit directly beside each other as a base-scaling column —
+  but there is NO official public HELM Qwen3.5 run to pair against;
+  comparison is intentionally OFF (no official_public_index source) and
+  every local run reports standalone with missing_official_component.
+scope:
+  models:
+    - "regex:^qwen/qwen3\\.5"
+sources:
+  - kind: audit_index
+    fpath: /data/crfm-helm-audit-store/indexes/audit_results_index.csv
+    include_experiments:
+      - audit-qwen35-small-vllm-full
+output:
+  root: /data/crfm-helm-audit-store/virtual-experiments/qwen35-small-core
