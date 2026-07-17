@@ -2387,3 +2387,42 @@ add `newline_tolerant: true` + rename model_deployment_name to
 'vllm/qwen3.5-9b-base-nlstrip-local' in the preset (+ docker/build.sh
 rebuild so the container's baked eval_audit has the new class). Decision
 on WHICH tasks get it awaits the narrative_qa/natural_qa probes.
+
+**Addendum 8 (2026-07-17, ~00:45): vLLM compile-cache poisoning — a
+first-class unrecorded-substrate wart, now fixed structurally.** The
+Option-A validation smoke crashed at engine init: AttributeError
+"'NoneType' object has no attribute 'size'" INSIDE the AOT-compiled
+graph loaded from cache. Root cause: **vLLM's compile-cache key omits at
+least `limit_mm_per_prompt`** — the cache hash (71a3a486…) was IDENTICAL
+before and after we disabled the vision modalities, so the engine
+reloaded a graph traced under multimodal-enabled inputs and fed it None
+where a tensor was baked in. We got the LOUD failure mode; the quiet one
+is the scary one: **a serving-config change silently reusing compiled
+artifacts from a different config could produce wrong numerics with no
+error at all.** For a reproducibility project this is a textbook
+substrate wart — the compiled-graph provenance is invisible to the
+run_spec, invisible to vLLM's own cache key, and (before today)
+invisible to our serving records.
+
+Wart taxonomy entry: "compiled-artifact cache keyed narrower than the
+config space that shapes the artifacts." Mitigation landed in
+infer_stack @ 6616c51 (branch jons/tui-async-startup): the vLLM
+compile-cache mount is now keyed
+`<vllm_cache>/cfg-<sha256(image+command+generation-env)[:12]>` — any
+serve-arg change (including deliberately non-structural extra_args like
+--limit-mm-per-prompt) starts a fresh cache dir; identical configs keep
+full reuse. Cache-hit economics measured in the same log: graph load
+2.5s + torch.compile 11.6s total (vs 87s cold) — the mount works.
+Disk cost: one ~270MB subdir per distinct serve config; no GC yet
+(acceptable; note if it grows). Upstream-worthy: vLLM should widen its
+cache key; our per-config mount is defense-in-depth we keep regardless.
+
+Also worth recording the epistemics: this was caught ONLY because the
+config change happened between two runs sharing a cache — a fresh
+machine would never see it, and a long-running grid would. Cross-machine
+reproduction runs are implicitly also cache-freshness controls.
+
+Full suite 384 passed / 2 skipped. Superproject gitlink bump to follow
+with the smoke-validation commit. Jon's next action: infer-stack gc,
+re-run 10_run_smoke.sh — the keyed mount gives the mm-limited config a
+fresh cache automatically (no manual sudo rm of root-owned cache files).
