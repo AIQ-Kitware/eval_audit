@@ -2451,3 +2451,60 @@ serving -> newline-tolerant declared-substitution client -> verified
 artifacts. Next unit of work: author the ~85-entry classic/Lite core
 grid (qwen36 plan §6.1) in the preset's full_manifest and run the first
 real breadth batch.
+
+**Addendum 10 (2026-07-16, overnight prep): 86-entry full grid authored
++ batch hardening (commit e78676d).** Jon asked to prepare the full run
+for overnight. Model: claude-opus-4-8[1m] (Claude Code). Three design
+decisions worth recording:
+
+1. **The grid is lifted, not authored fresh.** The 85 core run_entries
+   are copied verbatim from the qwen-1-5-7b preset's full grid (sed on
+   the model token only). Rationale: the qwen36 plan §6.1 observed the
+   core specs are identical across every reproduced Qwen grid — that
+   identity IS the comparability claim. Any hand-authoring risk
+   (different mmlu variants, dropped eval_split/groups suffixes) would
+   silently break run-key pairing with Edward's grids. The 5 "duplicate"
+   mmlu subjects (plain + eval_split=test,groups=… variants) are kept
+   deliberately: they mirror the classic-vs-Lite duality in the official
+   corpus and cost pennies. boolq rides along at n=1000 as the
+   '<think>'-leakage probe (1/5 in the smoke; n=1000 makes it a rate).
+
+2. **workers=2 is a leasing-correctness knob, not a throughput knob.**
+   Reading controller.desired_deployments() showed `reclaim: stop` +
+   refcount 0 => the converge stops vLLM. With 1 worker, EVERY gap
+   between consecutive runs bounces the server: ~86 cold cycles, hours
+   of churn. Two workers' overlapping acquire/release brackets keep
+   refcount >= 1 across the whole batch (design §4 coalescing) — the
+   deployment stays up end to end without touching the reclaim policy,
+   so a crashed batch still frees the GPU via gc/TTL. Alternative
+   considered and rejected: keep-warm in the catalog (leaves the GPU
+   held after a crash, needs an explicit evict step).
+
+3. **lease_ttl 8h: the TTL must exceed the RUN, not the cold-load.**
+   The soft TTL is a crash backstop, but a healthy run that outlives it
+   gets reclaimed mid-run. 4h is probably fine for every entry; 8h is
+   free insurance on a single-model overnight batch (a leaked lease
+   blocks nothing — same-endpoint acquires just ref-count on top).
+
+Also: 40_verify_artifacts.sh now sweeps an experiment root with a
+pass/fail tally (validated 2/2 against the real smoke artifacts from
+this VM — verify_run_artifacts.py is stdlib-only, so it runs even where
+the venv is absent); local-only virtual experiment yaml
+(qwen35-9b-base-core.yaml, no official_public_index source, per plan
+§9). NOTE this analysis VM currently has NO python env with eval_audit
+installed (recycled) — YAML/structural validation done here; the
+import-level preflights (05/06) re-run on yardrat as part of the
+runbook anyway. Uncertainty worth watching on the first overnight: (a)
+whether any single run approaches the TTL (narrative_qa n=1000 is the
+candidate), (b) whether two concurrent HELM containers contend on the
+shared hf_cache dir during first-time dataset downloads (the combined
+runbook ran this shape without issue), (c) legalbench/med_qa/wmt_14
+first-run dataset downloads need network from the container
+(--network host, same as smoke). Resume semantics: force-rerun is OFF
+for full — re-running 15_run_full.sh after any interruption skips
+completed runs.
+
+Next: Jon runs reproduce/qwen35_vllm/15_run_full.sh on yardrat
+overnight; morning-after checklist = 40_verify_artifacts.sh (no arg =
+full-suite sweep), then the qwen35-9b-base-core virtual experiment for
+the report beside the reproduced Qwen 1.5/2/2.5 numbers.
