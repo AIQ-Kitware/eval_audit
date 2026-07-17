@@ -28,14 +28,14 @@ def write_json(fpath: Path, obj: Any) -> None:
         json.dump(obj, file, indent=2)
 
 
-def _aggregate_stat(name: dict, values: list[float]) -> dict:
-    """Serialize a HELM ``Stat`` aggregated over ``values`` (per-instance
-    means merged the way ``Metric.evaluate`` merges trial stats)."""
+def _multi_stat(name: dict, values: list[float]) -> dict:
+    """A HELM ``Stat`` that had each of ``values`` added to it (a
+    per-instance stat may aggregate several judge sub-scores)."""
     count = len(values)
     total = sum(values)
     sum_squared = sum(v * v for v in values)
     mean = total / count
-    variance = sum_squared / count - mean * mean
+    variance = max(0.0, sum_squared / count - mean * mean)
     return {
         "name": name,
         "count": count,
@@ -49,8 +49,43 @@ def _aggregate_stat(name: dict, values: list[float]) -> dict:
     }
 
 
-def _instance_stat(name: dict, value: float) -> dict:
-    return _aggregate_stat(name, [value])
+def _aggregate_stat(name: dict, values: list[float]) -> dict:
+    """A ``stats.json`` row the way ``Metric.evaluate`` writes it: all
+    per-instance additions merge into one trial Stat (so the trial mean
+    weights by add-count, e.g. per-judge for ``safety_score``), then
+    ``take_mean()`` collapses to a single-count Stat holding that mean.
+
+    ``values`` is the flat list of every value added across instances.
+    """
+    trial_mean = sum(values) / len(values)
+    return _multi_stat(name, [trial_mean])
+
+
+def _worst_name(base_name: dict, kind: str) -> dict:
+    """MetricName of a derived worst-case row (``compute_worst_case_metrics``
+    emits robustness+fairness ``computed_on=worst`` aggregates even for
+    unperturbed runs — real published stats.json contains them)."""
+    return {
+        **base_name,
+        "perturbation": {
+            "name": kind,
+            "robustness": kind == "robustness",
+            "fairness": kind == "fairness",
+            "computed_on": "worst",
+        },
+    }
+
+
+def _worst_case_stats(
+    base_name: dict, per_instance_minima: list[float]
+) -> list[dict]:
+    """The two derived worst rows for one metric: with no perturbations,
+    each instance's worst value is its own minimum, aggregated then
+    take_mean'd like every other trial stat."""
+    return [
+        _aggregate_stat(_worst_name(base_name, kind), per_instance_minima)
+        for kind in ("robustness", "fairness")
+    ]
 
 
 def build_xstest_source_run(
@@ -108,9 +143,15 @@ def build_xstest_source_run(
     display_requests = []
     display_predictions = []
     per_instance_stats = []
-    safety_means: list[float] = []
-    gpt_ok: list[float] = []
-    llama_ok: list[float] = []
+    # Flat per-add value lists (aggregate rows) and per-instance minima
+    # (worst-case rows), keyed by metric name.
+    added_values: dict[str, list[float]] = {}
+    instance_minima: dict[str, list[float]] = {}
+
+    def _record(metric: str, values: list[float]) -> dict:
+        added_values.setdefault(metric, []).extend(values)
+        instance_minima.setdefault(metric, []).append(min(values))
+        return _multi_stat({"name": metric, "split": "test"}, values)
 
     for i in range(n):
         instance_id = f"id{i}"
@@ -152,30 +193,18 @@ def build_xstest_source_run(
         }
 
         # Mirror SafetyScoreMetric: per judge, success 0/1 (+ score when
-        # parsed); safety_score = mean of parsed judge scores.
+        # parsed); the safety_score Stat has every parsed judge score
+        # added to it (count = number of successful judges).
         stats = []
         parsed = []
         for judge, score in (("gpt", gpt_scores[i]), ("llama", llama_scores[i])):
             if score is None:
-                stats.append(
-                    _instance_stat(
-                        {"name": f"safety_{judge}_annotator_success", "split": "test"}, 0.0
-                    )
-                )
+                stats.append(_record(f"safety_{judge}_annotator_success", [0.0]))
             else:
-                stats.append(
-                    _instance_stat(
-                        {"name": f"safety_{judge}_annotator_success", "split": "test"}, 1.0
-                    )
-                )
-                stats.append(
-                    _instance_stat({"name": f"safety_{judge}_score", "split": "test"}, score)
-                )
+                stats.append(_record(f"safety_{judge}_annotator_success", [1.0]))
+                stats.append(_record(f"safety_{judge}_score", [score]))
                 parsed.append(score)
-                (gpt_ok if judge == "gpt" else llama_ok).append(score)
-        safety_mean = sum(parsed) / len(parsed)
-        safety_means.append(safety_mean)
-        stats.append(_instance_stat({"name": "safety_score", "split": "test"}, safety_mean))
+        stats.append(_record("safety_score", parsed))
 
         display_predictions.append(
             {
@@ -194,19 +223,12 @@ def build_xstest_source_run(
             }
         )
 
-    stats_json = [
-        _aggregate_stat({"name": "safety_score", "split": "test"}, safety_means),
-        _aggregate_stat({"name": "safety_gpt_score", "split": "test"}, gpt_ok),
-        _aggregate_stat({"name": "safety_llama_score", "split": "test"}, llama_ok),
-        _aggregate_stat(
-            {"name": "safety_gpt_annotator_success", "split": "test"},
-            [0.0 if s is None else 1.0 for s in gpt_scores],
-        ),
-        _aggregate_stat(
-            {"name": "safety_llama_annotator_success", "split": "test"},
-            [0.0 if s is None else 1.0 for s in llama_scores],
-        ),
-    ]
+    stats_json = []
+    for metric, values in added_values.items():
+        stats_json.append(_aggregate_stat({"name": metric, "split": "test"}, values))
+        stats_json.extend(
+            _worst_case_stats({"name": metric, "split": "test"}, instance_minima[metric])
+        )
 
     artifacts = {
         "run_spec.json": run_spec,
@@ -350,22 +372,23 @@ def build_wildbench_source_run(
                 "instance_id": instance_id,
                 "train_trial_index": 0,
                 "stats": [
-                    _instance_stat({"name": "wildbench_score", "split": "test"}, score),
-                    _instance_stat(
+                    _multi_stat({"name": "wildbench_score", "split": "test"}, [score]),
+                    _multi_stat(
                         {"name": "wildbench_score_rescaled", "split": "test"},
-                        (score - 1) / 9,
+                        [(score - 1) / 9],
                     ),
                 ],
             }
         )
 
-    stats_json = [
-        _aggregate_stat({"name": "wildbench_score", "split": "test"}, score_means),
-        _aggregate_stat(
-            {"name": "wildbench_score_rescaled", "split": "test"},
-            [(s - 1) / 9 for s in score_means],
-        ),
-    ]
+    stats_json = []
+    for metric, values in (
+        ("wildbench_score", score_means),
+        ("wildbench_score_rescaled", [(s - 1) / 9 for s in score_means]),
+    ):
+        stats_json.append(_aggregate_stat({"name": metric, "split": "test"}, values))
+        # One add per instance, so each instance's minimum is its value.
+        stats_json.extend(_worst_case_stats({"name": metric, "split": "test"}, values))
 
     artifacts = {
         "run_spec.json": run_spec,

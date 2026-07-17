@@ -168,5 +168,7 @@ def test_manifest_contract(tmp_path: Path):
         "instances.json",
         "display_requests.json",
         "display_predictions.json",
+        "stats.json",
+        "per_instance_stats.json",
     }
     json.dumps(manifest)

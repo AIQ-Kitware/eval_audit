@@ -15,6 +15,8 @@ Layout (``<snapshot_root>/<response_set_hash>/``)::
     instances.json                  verbatim source instances
     display_requests.json           verbatim source requests
     display_predictions.json        verbatim source predictions
+    source_stats.json               verbatim source stats (replay gate input)
+    source_per_instance_stats.json  verbatim source per-instance stats
     response_scenario_state.json    judge-neutral reconstructed state (§7.3)
     official_annotations.jsonl      detached original annotations (§7.4)
     DONE                            written last; absent => not a snapshot
@@ -55,12 +57,18 @@ SNAPSHOT_SCHEMA_VERSION = 1
 SNAPSHOT_ARTIFACT_TYPE = "helm_response_snapshot"
 DONE_FNAME = "DONE"
 
-#: Source files copied verbatim into the snapshot.
+#: Source files copied verbatim into the snapshot. The stats copies are
+#: not part of the plan §7.1 layout but are required by the Phase 3
+#: identity-replay gate, which must stay meaningful after the source
+#: corpus moves; they are excluded from hash identity like everything
+#: else outside the normalized response records.
 _COPIED_SOURCE_FILES = {
     "run_spec.json": "source_run_spec.json",
     "instances.json": "instances.json",
     "display_requests.json": "display_requests.json",
     "display_predictions.json": "display_predictions.json",
+    "stats.json": "source_stats.json",
+    "per_instance_stats.json": "source_per_instance_stats.json",
 }
 
 
