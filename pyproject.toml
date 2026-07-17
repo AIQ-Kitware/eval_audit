@@ -96,6 +96,7 @@ eval-audit-build-virtual-experiment = "eval_audit.cli.build_virtual_experiment:m
 eval-audit-from-eee = "eval_audit.cli.from_eee:main"
 eval-audit-compare-pair-eee = "eval_audit.cli.compare_pair_eee:main"
 eval-audit-audit-judge-sources = "eval_audit.cli.audit_judge_sources:main"
+eval-audit-build-response-snapshot = "eval_audit.cli.build_response_snapshot:main"
 
 [tool.uv.build-backend]
 # Flat layout: the package lives at the repo root as ``eval_audit/``,
