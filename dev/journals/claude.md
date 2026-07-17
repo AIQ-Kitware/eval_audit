@@ -2508,3 +2508,72 @@ Next: Jon runs reproduce/qwen35_vllm/15_run_full.sh on yardrat
 overnight; morning-after checklist = 40_verify_artifacts.sh (no arg =
 full-suite sweep), then the qwen35-9b-base-core virtual experiment for
 the report beside the reproduced Qwen 1.5/2/2.5 numbers.
+
+## 2026-07-17 09:40:46 -0400
+
+**Model/harness:** claude-opus-4-8[1m], Claude Code (VSCode extension).
+
+**User intent:** The overnight full run finished 20 pass / 66 fail. "Are
+the failures logged to disk?" → then: "Drop math and natural_qa. Fix our
+code, a working rule is that we should never modify HELM."
+
+**Failures are fully logged.** Each job writes a bundle under
+`$RESULTS_ROOT/audit-qwen35-9b-base-vllm-full/helm/helm_id_*/`:
+`cmd_stderr.txt` (parent-shell traceback for errors before HELM's logger
+is up), `helm-run.log` / `helm-run.debug.log` (in-HELM errors),
+`cmd_stdout.txt`, `job_config.json` (the run_entry). A failed job = no
+`benchmark_output/runs/**/run_spec.json`. Triage CLI:
+`python -m eval_audit.cli.summarize_experiment_failures <experiment-root>`
+(needs the eval_audit env; the recycled analysis VM lacks `scriptconfig`/
+`kwutil`, so I read the logs directly).
+
+**Root-cause split of the 66 (this is the reproducibility-vs-environment
+distinction the paper hinges on):**
+
+- **57 × mmlu — OUR recipe bug, now fixed.**
+  `TypeError: get_mmlu_spec() got an unexpected keyword argument 'groups'`.
+  The overnight grid was lifted verbatim from the `qwen-1-5-7b` grid, which
+  is a **from-spec reproduction**. In from-spec mode the
+  `…,eval_split=test,groups=mmlu_<subject>` tokens are official-run-NAME
+  matcher metadata — HELM replays a frozen `run_spec.json` and never calls
+  `get_mmlu_spec(**args)`. This preset is **compute** (no `--from-spec`), so
+  every run_entry is parsed and handed straight to `get_mmlu_spec(**args)`,
+  whose signature is `(subject, method=…)` — it rejects both `eval_split`
+  and `groups` (confirmed against `submodules/helm/.../lite_run_specs.py`).
+  The 5 mmlu entries that PASSED were the short-form duplicates already in
+  the grid. Fix: collapse mmlu to the **57 canonical compute-form subjects**
+  (`mmlu:subject=X,method=multiple_choice_joint,model=…`), dropping the
+  5 short+long duplicate pairs to one each. **HELM untouched** — the rule
+  held; the bug was entirely in the authored grid.
+
+- **7 × math + 2 × natural_qa — data-access barriers, DROPPED per Jon.**
+  math: `DatasetNotFoundError: 'hendrycks/competition_math'` (pulled from
+  the HF Hub). natural_qa: `HTTP Error 403: Forbidden` on the source
+  download. These are filter reasons, not reproducibility failures; removed
+  from the grid with a note to re-add the 7+2 entries if the datasets
+  return.
+
+**Grid now 72 entries** (was 86 lines / 85 nominal): boolq 1, commonsense
+1, gsm 1, legalbench 5, med_qa 1, **mmlu 57**, narrative_qa 1, wmt_14 5.
+Verified via raw-YAML family count (loader needs kwutil, absent here).
+
+**Design insight worth keeping:** a from-spec grid and a compute grid are
+NOT interchangeable even for the "same" benchmark. The from-spec run_entry
+is a *lookup key into the official corpus* (carries name-metadata like
+`groups`/`eval_split`); the compute run_entry is a *constructor call*
+(`run_spec_function(**args)`). Lifting one into the other silently smuggles
+lookup-only kwargs into a constructor that rejects them. Any future
+"port a reproduced grid to a compute extension" must strip run_entry args
+down to what the `@run_spec_function` actually accepts.
+
+**Files touched:** `preset_configs.yaml` (qwen35 full_manifest run_entries
++ description + block comment), `reproduce/qwen35_vllm/README.md`,
+`15_run_full.sh`, `_lib.sh` (72-job comment),
+`configs/virtual-experiments/qwen35-9b-base-core.yaml` (count/description).
+
+**Next:** Jon re-runs `15_run_full.sh` on yardrat (force-rerun OFF → the
+20 good runs are skipped, the 57 corrected mmlu + everything else runs
+fresh; the old failed helm_id_* dirs are inert — a failed job left no
+run_spec.json so the skip check re-runs it). Morning-after:
+`40_verify_artifacts.sh` (expect 72 passes), then the qwen35-9b-base-core
+virtual experiment.

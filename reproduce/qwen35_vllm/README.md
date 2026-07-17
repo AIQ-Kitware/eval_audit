@@ -55,7 +55,7 @@ officials were served, making **base-3.5 vs base-1.5** the clean comparison.
 ./06_check_profiles.sh         # endpoint qwen3-5-9b-base-single in the active catalog
 ./07_check_container_image.sh  # docker + pinned image + stale-digest probe
 ./10_run_smoke.sh              # gc -> gateway bootstrap -> export (compute) -> run --lease
-./15_run_full.sh               # full 86-entry core grid (overnight-scale; see below)
+./15_run_full.sh               # full 72-entry compute core grid (overnight-scale; see below)
 ./40_verify_artifacts.sh <run-dir>   # run_spec.json records the base model + local deployment
 ```
 
@@ -92,18 +92,32 @@ brings up vLLM + LiteLLM, the containerized HELM client (no GPU,
 
 ## The full grid (`15_run_full.sh`)
 
-The `full_manifest` is the authored **85-entry classic/Lite core** (qwen36
-plan §6.1) — the same run keys as the reproduced Qwen1.5/2/2.5 grids
-(commonsense, gsm, 5×legalbench, 7×math, med_qa, 62×mmlu, narrative_qa,
-2×natural_qa, 5×wmt_14), model token swapped to `qwen/qwen3.5-9b-base` — plus
-`boolq` at full instance count as the **`<think>`-leakage probe** (the smoke
-found the base model spontaneously opening reasoning tags on 1/5 boolq
-instances; n=1000 turns that anecdote into a rate).
+The `full_manifest` is the authored **72-entry classic/Lite COMPUTE core**
+(qwen36 plan §6.1) — the same run keys as the reproduced Qwen1.5/2/2.5 grids
+(commonsense, gsm, 5×legalbench, med_qa, 57×mmlu, narrative_qa, 5×wmt_14),
+model token swapped to `qwen/qwen3.5-9b-base` — plus `boolq` at full instance
+count as the **`<think>`-leakage probe** (the smoke found the base model
+spontaneously opening reasoning tags on 1/5 boolq instances; n=1000 turns that
+anecdote into a rate).
+
+**mmlu is the 57 canonical *compute*-form subjects**, not the from-spec grid's
+`…,eval_split=test,groups=mmlu_<subject>` shape. Those extra tokens are
+official-run-name matcher metadata that only exist in *reproduction* (from-spec
+replays a frozen `run_spec.json`); in this **compute** path each run_entry is
+handed straight to HELM's `get_mmlu_spec(**args)`, which accepts only
+`(subject, method)` and rejects `eval_split`/`groups`. The first overnight run
+hit this (57 mmlu `TypeError`s) — the fix is entirely on our side (the authored
+grid); HELM is unchanged.
+
+**`math` and `natural_qa` are intentionally dropped** as data-access barriers,
+not reproducibility failures: `hendrycks/competition_math` is gone from the HF
+Hub and `natural_qa`'s source returns HTTP 403. They are filter reasons; if the
+datasets become available again, re-add the 7 `math` + 2 `natural_qa` entries.
 
 Overnight run notes:
 
 - **Wall-clock**: expect several hours on the RTX 8000. The MC-heavy mmlu
-  block is fast; `narrative_qa`, `wmt_14`, and the CoT `math` entries dominate.
+  block is fast; `narrative_qa` and the `wmt_14` entries dominate.
   Cold-start is now <5 min (mm-profiling disabled + keyed compile caches).
 - **Interrupted? Just re-run `15_run_full.sh`.** Completed runs are skipped
   (force-rerun is off for full); the batch picks up where it stopped.

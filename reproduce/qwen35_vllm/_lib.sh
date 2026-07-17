@@ -78,7 +78,7 @@ QWEN35_BUNDLE_ROOT="$STORE_ROOT/local-bundles/$QWEN35_PRESET"
 # Two workers, ON PURPOSE, even though there is one model/one endpoint: the
 # catalog endpoint is `reclaim: stop`, so a lone worker's release between
 # consecutive runs drops the lease refcount to 0 and the converge STOPS vLLM —
-# an 86-job batch would cold-cycle the server ~86 times (hours of pure churn).
+# a 72-job batch would cold-cycle the server ~72 times (hours of pure churn).
 # With 2 workers the overlapping brackets keep refcount >= 1 for the whole
 # batch (design §4 ref-count coalescing), so vLLM stays up end to end; both
 # workers share the one leased server (vLLM batches concurrent requests fine).

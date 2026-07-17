@@ -2,8 +2,9 @@ schema_version: 1
 name: qwen35-9b-base-core
 description: >
   Qwen3.5-9B-Base EXTENSION batch (new results, not a reproduction): the
-  authored 85-entry classic/Lite core (docs/planning/qwen36-core-new-results-plan.md
-  §6.1) plus the boolq '<think>'-leakage probe, computed locally through the
+  authored 72-entry classic/Lite compute core (docs/planning/qwen36-core-new-results-plan.md
+  §6.1; mmlu in canonical compute form, math+natural_qa dropped as data-access
+  barriers) plus the boolq '<think>'-leakage probe, computed locally through the
   leased infer-stack vLLM service with the newline-tolerant completions client
   (declared substitution; 'nlstrip' deployment marker). The run keys are
   identical to the reproduced Qwen 1.5/2/2.5 grids so the scores sit directly

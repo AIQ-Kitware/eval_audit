@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Full run: same shape as 10_run_smoke.sh against the full_manifest — the
-# authored 85-entry classic/Lite core (docs/planning/qwen36-core-new-results-plan.md
-# §6.1; identical run keys to the reproduced Qwen 1.5/2/2.5 grids) plus boolq
-# at full instance count as the '<think>'-leakage probe. Expect several hours
-# of wall-clock on a single RTX 8000. Force-rerun is OFF by default
-# (expensive); set QWEN35_FORCE_RERUN=1 to clear a prior result.
+# authored 72-entry classic/Lite COMPUTE core (docs/planning/qwen36-core-new-results-plan.md
+# §6.1; run keys mirror the reproduced Qwen 1.5/2/2.5 grids, mmlu in canonical
+# compute form, math+natural_qa dropped as data-access barriers) plus boolq at
+# full instance count as the '<think>'-leakage probe. Expect several hours of
+# wall-clock on a single RTX 8000. Force-rerun is OFF by default (expensive);
+# set QWEN35_FORCE_RERUN=1 to clear a prior result.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
