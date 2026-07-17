@@ -1,6 +1,11 @@
 # Open-weight judge reproduction plan
 
-**Status:** PLANNED — implementation has not started.  
+**Status:** IN PROGRESS — Milestone A (fixture-only validation) complete
+2026-07-17: Commits 1–8 landed (`cc2240c`…`def0847`; source audit,
+response snapshots, identity replay, judge specs, XSTest + WildBench
+configurable annotators, annotation-only runner, judge-attributed
+metrics; 80 tests). Next: Phase 1 stop gate against the real public
+corpus, then the serving-facing commits (9, 11–14).  
 **Primary target:** reproduce selected HELM LLM-as-a-judge benchmark scores on
 `aiq-gpu` while varying the judge among modern open-weight models.  
 **Initial candidate source:** published or locally retained HELM outputs for
