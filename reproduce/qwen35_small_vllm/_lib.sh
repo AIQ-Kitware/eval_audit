@@ -30,7 +30,19 @@ PYTHON_BIN="${PYTHON_BIN:-$(command -v python || command -v python3)}"
 # infer-stack catalog providing the three models + endpoints. Defaults to the
 # config dir shipped alongside this runbook; override to point at your own
 # infer-stack config if the endpoints already live there.
+#
+# ANNOUNCE the resolved dir + whether it was INHERITED from the environment.
+# A leftover INFER_STACK_CONFIG_DIR from a sibling runbook (e.g. the 9B, still
+# exported after an overnight run) would silently shadow this runbook's shipped
+# catalog and make 06_check_profiles fail with "endpoint not defined" — the
+# `source:` tag below turns that footgun into a one-line tell.
+if [[ -n "${INFER_STACK_CONFIG_DIR:-}" ]]; then
+  _qwen35s_cfg_src="env (inherited — may shadow this runbook's catalog)"
+else
+  _qwen35s_cfg_src="runbook default"
+fi
 export INFER_STACK_CONFIG_DIR="${INFER_STACK_CONFIG_DIR:-$ROOT/reproduce/qwen35_small_vllm/config/infer_stack}"
+echo "[qwen35s] infer-stack config dir: $INFER_STACK_CONFIG_DIR (source: $_qwen35s_cfg_src)" >&2
 
 # data_root resolution (env > settings.yaml pin > /data/service default) — same
 # contract as qwen35_vllm/_lib.sh; the dir is BIND-MOUNTED into the

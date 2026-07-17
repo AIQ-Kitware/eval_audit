@@ -8,6 +8,13 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 cd "$ROOT"
 
+# The catalog infer-stack will actually read (config_root()/catalog.yaml,
+# where config_root honors INFER_STACK_CONFIG_DIR). Print it so a shadowing
+# env var is obvious, not silent.
+resolved_catalog="$INFER_STACK_CONFIG_DIR/catalog.yaml"
+shipped_catalog="$ROOT/reproduce/qwen35_small_vllm/config/infer_stack/catalog.yaml"
+echo "inspecting catalog: $resolved_catalog"
+
 available="$(infer-stack catalog endpoint list 2>/dev/null || true)"
 if [[ -z "$available" ]]; then
   echo "WARN: 'infer-stack catalog endpoint list' produced no output; cannot validate." >&2
@@ -26,9 +33,17 @@ for endpoint in $QWEN35S_ENDPOINTS; do
   fi
 done
 if [[ $fail -ne 0 ]]; then
-  echo "Define the models + endpoints in your infer-stack catalog (see" >&2
-  echo "config/infer_stack/catalog.yaml) or point INFER_STACK_CONFIG_DIR at" >&2
-  echo "a config that has them." >&2
+  if [[ "$resolved_catalog" != "$shipped_catalog" ]]; then
+    echo >&2
+    echo "NOTE: infer-stack is reading a DIFFERENT catalog than this runbook ships:" >&2
+    echo "        reading:  $resolved_catalog" >&2
+    echo "        shipped:  $shipped_catalog" >&2
+    echo "      A leftover INFER_STACK_CONFIG_DIR (e.g. from the 9B runbook) shadows" >&2
+    echo "      this one. Fix with:  unset INFER_STACK_CONFIG_DIR   then re-run." >&2
+  else
+    echo "Define the models + endpoints in your infer-stack catalog (see" >&2
+    echo "config/infer_stack/catalog.yaml)." >&2
+  fi
   exit 1
 fi
 
