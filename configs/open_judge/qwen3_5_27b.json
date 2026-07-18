@@ -1,0 +1,12 @@
+{
+  "id": "qwen3_5_27b",
+  "model": "qwen/qwen3.5-27b",
+  "model_deployment": "litellm/qwen3.5-27b-judge",
+  "lease_endpoint": "qwen3.5-27b-judge",
+  "parser_version": "official-v1",
+  "prompt_version": "official-v1",
+  "thinking_mode": "disabled",
+  "client_class": "eval_audit.integrations.helm_clients.NullSafeOpenAIChatClient",
+  "temperature": null,
+  "max_tokens": null
+}

@@ -100,6 +100,7 @@ eval-audit-build-response-snapshot = "eval_audit.cli.build_response_snapshot:mai
 eval-audit-verify-judge-replay = "eval_audit.cli.verify_judge_replay:main"
 eval-audit-rejudge-helm = "eval_audit.cli.rejudge_helm_run:main"
 eval-audit-analyze-judges = "eval_audit.cli.analyze_judge_variance:main"
+eval-audit-export-judge-bundle = "eval_audit.cli.export_judge_bundle:main"
 
 [tool.uv.build-backend]
 # Flat layout: the package lives at the repo root as ``eval_audit/``,

@@ -76,6 +76,22 @@ def test_incomplete_or_invalid_specs_rejected():
         _judge(parser_version="")
 
 
+def test_optional_budgets_default_to_official():
+    # None budgets are valid (means "use the benchmark's official budget")
+    # and are omitted from the annotator args so the annotator's official
+    # per-benchmark default wins (parity, §10.6/§19.1).
+    judge = _judge(temperature=None, max_tokens=None)
+    args = judge.annotator_args("exp:qwen3_5_27b:r0")
+    assert "temperature" not in args
+    assert "max_tokens" not in args
+    # An explicit budget IS forwarded (deliberate override).
+    args = _judge(temperature=0.7, max_tokens=1024).annotator_args("x:y:r0")
+    assert args["temperature"] == 0.7
+    assert args["max_tokens"] == 1024
+    # None vs explicit are distinct judge identities.
+    assert _judge(max_tokens=None).spec_hash() != _judge(max_tokens=256).spec_hash()
+
+
 def test_attempt_hash_includes_response_set_and_replicate():
     judge = _judge()
     attempt = JudgmentAttemptSpec(

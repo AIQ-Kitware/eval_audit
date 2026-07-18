@@ -1,0 +1,29 @@
+# HELM registry sidecar for the OPEN-WEIGHT JUDGE models used by the
+# open-judge experiment (docs/planning/open-judge-plan.md Phase 10 / §15).
+# Shipped into the HELM runner via register_configs_from_directory so
+# neither id needs an edit to HELM itself. These are the CHAT/instruct
+# checkpoints (not -Base) — they are used purely as judges, never as
+# candidates; a Qwen judge must never wear an official GPT-4o/Llama name.
+#
+# num_parameters / release_date are informational only (leaderboard
+# metadata, not load-bearing for the experiment). Values below are best
+# estimates from the model cards; CONFIRM against the HF repos before a
+# publication-grade run. num_parameters for the MoE judge is the TOTAL
+# parameter count (active is ~3B).
+models:
+  - name: qwen/qwen3.5-27b
+    display_name: Qwen3.5 27B
+    description: Qwen3.5 27B is the post-trained (instruct) dense model of the Qwen3.5 family, a dense hybrid architecture interleaving linear attention (Gated Delta Networks) with periodic full attention. Used as an open-weight judge. ([HF](https://huggingface.co/Qwen/Qwen3.5-27B))
+    creator_organization_name: Qwen
+    access: open
+    num_parameters: 27000000000  # approximate; confirm against the HF repo
+    release_date: 2026-03-02      # Qwen3.5 family; confirm
+    tags: [TEXT_MODEL_TAG, FULL_FUNCTIONALITY_TEXT_MODEL_TAG, INSTRUCTION_FOLLOWING_MODEL_TAG]
+  - name: qwen/qwen3.6-35b-a3b
+    display_name: Qwen3.6 35B-A3B
+    description: Qwen3.6 35B-A3B is the post-trained (instruct) sparse mixture-of-experts model of the Qwen3.6 family (~35B total parameters, ~3B active per token). Used as an open-weight judge. ([HF](https://huggingface.co/Qwen/Qwen3.6-35B-A3B))
+    creator_organization_name: Qwen
+    access: open
+    num_parameters: 35000000000  # TOTAL params (active ~3B); approximate, confirm
+    release_date: 2026-06-01      # approximate; confirm against the HF repo
+    tags: [TEXT_MODEL_TAG, FULL_FUNCTIONALITY_TEXT_MODEL_TAG, INSTRUCTION_FOLLOWING_MODEL_TAG]

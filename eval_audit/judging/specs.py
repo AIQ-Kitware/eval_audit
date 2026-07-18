@@ -59,12 +59,18 @@ class JudgeSpec:
     model: str
     model_deployment: str
     lease_endpoint: str
-    temperature: float
-    max_tokens: int
     parser_version: str
     prompt_version: str
     thinking_mode: str
     client_class: str
+    # Inference budgets are per-BENCHMARK official facts (safety judges use
+    # max_tokens=256, WildBench 2000; all v1 benchmarks use temperature 0.0).
+    # A judge arm is reused across benchmarks, so these default to None =
+    # "use the benchmark's official budget" (the rejudge runner resolves
+    # them), preserving prompt/budget parity (§10.6/§19.1). Set them only to
+    # deliberately override the official budget (e.g. a temperature sweep).
+    temperature: float | None = None
+    max_tokens: int | None = None
     model_revision: str | None = None
     quantization: str | None = None
 
@@ -87,10 +93,14 @@ class JudgeSpec:
             raise SpecValidationError(
                 f"JudgeSpec.thinking_mode {self.thinking_mode!r} not in {THINKING_MODES}"
             )
-        if not isinstance(self.temperature, (int, float)) or self.temperature < 0:
-            raise SpecValidationError("JudgeSpec.temperature must be a number >= 0")
-        if not isinstance(self.max_tokens, int) or self.max_tokens <= 0:
-            raise SpecValidationError("JudgeSpec.max_tokens must be a positive int")
+        if self.temperature is not None and (
+            not isinstance(self.temperature, (int, float)) or self.temperature < 0
+        ):
+            raise SpecValidationError("JudgeSpec.temperature must be None or a number >= 0")
+        if self.max_tokens is not None and (
+            not isinstance(self.max_tokens, int) or self.max_tokens <= 0
+        ):
+            raise SpecValidationError("JudgeSpec.max_tokens must be None or a positive int")
 
     def spec_hash(self) -> str:
         """Identity over every inference-affecting field — and nothing
@@ -122,11 +132,15 @@ class JudgeSpec:
             "judge_id": self.id,
             "judge_model": self.model,
             "judge_model_deployment": self.model_deployment,
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
             "request_random": request_random,
             "thinking_mode": self.thinking_mode,
         }
+        # Only override the annotator's official per-benchmark budget when the
+        # judge explicitly declares one (else parity is preserved by default).
+        if self.temperature is not None:
+            args["temperature"] = self.temperature
+        if self.max_tokens is not None:
+            args["max_tokens"] = self.max_tokens
         if self.model_revision is not None:
             args["judge_model_revision"] = self.model_revision
         if self.quantization is not None:

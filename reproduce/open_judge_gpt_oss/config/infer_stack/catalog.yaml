@@ -1,0 +1,60 @@
+# infer-stack serving catalog for the OPEN-JUDGE experiment on aiq-gpu
+# (docs/planning/open-judge-plan.md Phase 9 / §14). Two judge endpoints,
+# one per v1 arm; single replica, static routing (§2.8 revision — no
+# dynamic routing in v1). Every endpoint declares placement.min_vram_gib
+# (§2.9, house style) so the same catalog is correct on any host; on
+# aiq-gpu's homogeneous 4x96 GiB pool eligibility is trivially satisfied.
+#
+# These are the CHAT/instruct judges (used ONLY as judges, never as
+# candidates). Vision is disabled (all Qwen3.5/3.6 checkpoints are
+# VL-packaged; a judge sends text-only prompts and the mm-profiling pass
+# wastes VRAM + startup time). max_model_len is a starting value — run
+# 08_prompt_length_preflight.sh (§14.3) against the real snapshots and
+# adjust if p99(prompt) + max_tokens + margin exceeds it.
+
+models:
+  qwen3-5-27b:
+    source: hf://Qwen/Qwen3.5-27B
+    dtype: bfloat16          # Ampere+ (aiq-gpu 96 GiB cards); recorded fact
+  qwen3-6-35b-a3b:
+    source: hf://Qwen/Qwen3.6-35B-A3B
+    dtype: bfloat16
+
+endpoints:
+  # --- Arm 1: Qwen3.5-27B, dense, one GPU -------------------------------
+  qwen3.5-27b-judge:
+    engine: vllm
+    reclaim: stop            # free the GPU on last release (per-run leasing)
+    model: qwen3-5-27b
+    protocol: chat           # instruct model -> chat completions
+    placement:
+      min_vram_gib: 60       # best guess: ~54 GiB bf16 weights + KV + overhead;
+                             # refine with `infer-stack measure qwen3.5-27b-judge --record`
+    runtime:
+      image: vllm/vllm-openai:v0.25.1
+      tensor_parallel_size: 1
+      max_model_len: 32768   # starting value; confirm with the §14.3 preflight
+      gpu_memory_utilization: 0.90
+      enable_prefix_caching: true
+      extra_args:
+        - '--limit-mm-per-prompt'
+        - '{"image": 0, "video": 0}'
+
+  # --- Arm 2: Qwen3.6-35B-A3B, MoE, one TP2 instance --------------------
+  qwen3.6-35b-a3b-judge:
+    engine: vllm
+    reclaim: stop
+    model: qwen3-6-35b-a3b
+    protocol: chat
+    placement:
+      min_vram_gib: 40       # per TP shard; ~70 GiB bf16 weights across TP2 + KV;
+                             # refine with `infer-stack measure qwen3.6-35b-a3b-judge --record`
+    runtime:
+      image: vllm/vllm-openai:v0.25.1
+      tensor_parallel_size: 2
+      max_model_len: 32768   # starting value; confirm with the §14.3 preflight
+      gpu_memory_utilization: 0.90
+      enable_prefix_caching: true
+      extra_args:
+        - '--limit-mm-per-prompt'
+        - '{"image": 0, "video": 0}'

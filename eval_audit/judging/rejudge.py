@@ -61,7 +61,26 @@ from eval_audit.integrations.helm_judging.metrics import (
     build_judge_metric,
     judge_metric_spec_dict,
 )
+from eval_audit.integrations.helm_judging.safety import (
+    OFFICIAL_SAFETY_JUDGE_MAX_TOKENS,
+    OFFICIAL_SAFETY_JUDGE_TEMPERATURE,
+)
+from eval_audit.integrations.helm_judging.wildbench import (
+    OFFICIAL_WILDBENCH_JUDGE_MAX_TOKENS,
+    OFFICIAL_WILDBENCH_JUDGE_TEMPERATURE,
+)
 from eval_audit.judging.specs import JudgeSpec, JudgmentAttemptSpec, default_request_random
+
+#: Official (temperature, max_tokens) per benchmark — the judge budget the
+#: configurable annotators default to when a JudgeSpec leaves them None,
+#: preserving parity with the official annotators (§10.6/§19.1).
+_OFFICIAL_JUDGE_BUDGETS: dict[str, tuple[float, int]] = {
+    "xstest": (OFFICIAL_SAFETY_JUDGE_TEMPERATURE, OFFICIAL_SAFETY_JUDGE_MAX_TOKENS),
+    "simple_safety_tests": (OFFICIAL_SAFETY_JUDGE_TEMPERATURE, OFFICIAL_SAFETY_JUDGE_MAX_TOKENS),
+    "harm_bench": (OFFICIAL_SAFETY_JUDGE_TEMPERATURE, OFFICIAL_SAFETY_JUDGE_MAX_TOKENS),
+    "anthropic_red_team": (OFFICIAL_SAFETY_JUDGE_TEMPERATURE, OFFICIAL_SAFETY_JUDGE_MAX_TOKENS),
+    "wildbench": (OFFICIAL_WILDBENCH_JUDGE_TEMPERATURE, OFFICIAL_WILDBENCH_JUDGE_MAX_TOKENS),
+}
 
 REJUDGE_ARTIFACT_FORMAT = "helm_rejudge_v1"
 DONE_FNAME = "DONE"
@@ -260,6 +279,9 @@ def run_rejudge(
         judge_metric_spec_dict(benchmark, judge.id, snapshot_manifest["annotator_name"])
     ]
 
+    official_temp, official_max = _OFFICIAL_JUDGE_BUDGETS.get(benchmark, (None, None))
+    effective_temperature = judge.temperature if judge.temperature is not None else official_temp
+    effective_max_tokens = judge.max_tokens if judge.max_tokens is not None else official_max
     rejudge_manifest = {
         "artifact_format": REJUDGE_ARTIFACT_FORMAT,
         "execution_kind": "rejudge",
@@ -271,6 +293,13 @@ def run_rejudge(
         "benchmark": benchmark,
         "judge_id": judge.id,
         "request_random": request_random,
+        "effective_temperature": effective_temperature,
+        "effective_max_tokens": effective_max_tokens,
+        "budget_source": (
+            "judge_override"
+            if (judge.temperature is not None or judge.max_tokens is not None)
+            else "official_per_benchmark"
+        ),
         "annotator_class": annotator_class,
         "snapshot_dpath": str(snapshot_dpath),
         "source_run": snapshot_manifest["source_run"],
