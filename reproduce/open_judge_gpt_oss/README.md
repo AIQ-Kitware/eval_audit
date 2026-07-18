@@ -92,19 +92,50 @@ recurs (raise the endpoint's `max_model_len` / the judge `max_tokens`);
 final content is often empty while reasoning is nonempty (thinking-mode
 issue — see plan §13); or replicate variation is large.
 
-## What comes next (not this runbook yet)
+## The overnight run (`50_overnight_run.sh`)
 
-Milestone C (WildBench smoke) reuses `20`'s pattern against the wildbench
-snapshot; the 100-instance replicated pilot (Milestone D) and the kwdagger
-rejudge pipeline (Commit 11, grouped-by-judge-arm scheduling) are the
-scale-out once the smoke path is proven. The remaining safety benchmarks +
-Omni-MATH (Commit 14) reuse the same annotators/metrics.
+Once the smokes pass, `50` is the unattended full run: full benchmarks x both
+judge arms x replicates, then the per-benchmark analysis. It leases ONE judge
+at a time (the model stays up across its whole arm, so the slow first-acquire
+weight download happens twice total), rejudges each configured
+(benchmark, replicate) at `OJ_PARALLELISM` concurrency, releases, then runs
+`eval-audit-analyze-judges` per benchmark. It is idempotent (a completed
+attempt is served from its DONE gate) and never aborts the night on a single
+rejudge failure — every attempt's status is in the tail summary and in
+`$OJ_ANALYSIS_ROOT/overnight-logs/overnight.log`.
+
+Scope is env-tunable per (benchmark, judge); an empty replicate list skips
+that pair. Defaults: full XSTest x3 replicates on both judges (cheap — XSTest
+is ~1–7 s/inst), full WildBench x1 replicate on both (the dense-27B WildBench
+arm is ~20–30 s/inst, the run's cost center). Widen WildBench replicates once
+a night's real timing is known.
+
+    OJ_REPS_XSTEST_QWEN35    (default "0 1 2")
+    OJ_REPS_XSTEST_QWEN36    (default "0 1 2")
+    OJ_REPS_WILDBENCH_QWEN35 (default "0")
+    OJ_REPS_WILDBENCH_QWEN36 (default "0")
+    OJ_PARALLELISM           (default 8)
+
+Real-run judge budget: `reasoning_headroom_tokens=4096` in both JudgeSpecs
+(vs the smokes' effective official-only budget) — the thinking judges need it
+(WildBench truncated ~50% at a 3024-token cap). At temperature 0 `max_tokens`
+is a ceiling, so the extra headroom is free for judgments that finish early;
+it only lets the long-thinkers complete. Both benchmarks' max prompt + 6144
+output stay under the catalog `max_model_len=32768`.
+
+## What comes next (beyond the overnight run)
+
+The kwdagger rejudge pipeline (Commit 11, grouped-by-judge-arm scheduling)
+replaces `50`'s serial per-judge leasing for larger fan-out; the remaining
+safety benchmarks + Omni-MATH (Commit 14) reuse the same annotators/metrics.
 
 ## Knobs (env vars)
 
 - `OJ_CORPUS` (default `/data/crfm-helm-public`)
 - `OJ_ROOT` (default `$AUDIT_STORE_ROOT/open-judge`) — snapshots/results/cache/analysis
 - `OJ_SMOKE_INSTANCES` (default `20`)
+- `OJ_PARALLELISM` (default `8`) — concurrent judge requests in the overnight run
+- `OJ_REPS_{XSTEST,WILDBENCH}_{QWEN35,QWEN36}` — per-pair replicate lists (see above)
 - `OJ_PROMPT_TOKENIZER` (default `Qwen/Qwen3.5-27B`)
 - `INFER_STACK_CONFIG_DIR` — standard; defaults to this runbook's `config/infer_stack/`.
   Deliberately **no** `INFER_STACK_ALLOWED_GPUS` (eligibility is declared in the catalog).

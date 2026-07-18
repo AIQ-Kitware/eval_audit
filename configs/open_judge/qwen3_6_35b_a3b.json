@@ -9,5 +9,5 @@
   "client_class": "eval_audit.integrations.helm_clients.NullSafeOpenAIChatClient",
   "temperature": null,
   "max_tokens": null,
-  "reasoning_headroom_tokens": 1024
+  "reasoning_headroom_tokens": 4096
 }
