@@ -2896,3 +2896,57 @@ Jon to run 00->20->30 on aiq-gpu.
 Still deferred: Commit 11 (kwdagger rejudge pipeline — grouped-by-arm
 scheduling; the smoke uses manual lease instead), Commit 14 (remaining
 safety benchmarks + Omni-MATH). Commit 10 (multi-replica) stays out.
+
+## 2026-07-18 18:29:24 -0400
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**User intent:** Continue "implement the new plan" (open-judge). Debug the
+Milestone-B live judge smoke on aiq-gpu to a clean parse rate, then record the
+milestone and line up Milestone C.
+
+**Milestone B is DONE — first live judge run validated.** XSTest / 20
+instances / Qwen3.5-27B / 1 replicate, served via infer-stack+LiteLLM. Final:
+18/20 parse ok, **18/18 verdict agreement with the official GPT-4o+Llama
+ensemble** (every parsed Qwen score exactly matched both official judges),
+`safety_score:judge=qwen3_5_27b`=0.833 (15/18). The 2 failures are legitimate
+token-budget truncations (`finish_reason=length`, no `</think>`), not parser
+bugs.
+
+**Two debugging insights worth reusing:**
+
+1. *A parser code-change with no spec field is invisible to the attempt cache.*
+   The strip_thinking fix (2d78e4b) first returned a stale `cache-hit`: the
+   whole attempt short-circuited on its DONE file because `attempt_hash` (←
+   `spec_hash` ← parser_version + budget + …) hadn't moved, so it served the
+   pre-fix malformed results and the fix never ran. Fixed by bumping
+   `parser_version` "official-v1"→"official-v1+strip-think" (d251e2a). This is
+   the identity guardrail working as designed ("silent defaults become silent
+   experiment configuration") — the honest record of a parser behavior change
+   is also exactly what invalidates the cache. **Rule: any change to parser or
+   prompt behavior MUST bump its `*_version` field.** Because parser_version
+   also keys the SQLite request-cache path, the bump forces a genuine GPU
+   regeneration (fine here — no committed full run depends on the old hash).
+
+2. *Qwen thinking judges draft the answer tags as placeholders inside their
+   thinking.* The real bug behind the earlier 6 malformed-stop cases was the
+   non-greedy `<reasoning>/<score>` regex matching PLACEHOLDER tags the model
+   writes while reasoning, before the real `</think>`-terminated answer.
+   `strip_thinking` (split on last `</think>`, parse only the suffix) fixes it
+   and is a strict no-op on official non-thinking responses, so parse parity
+   with the official annotators is preserved. The 2 remaining truncations are a
+   budget matter, not a parser matter (judge still mid-thinking at 1280 tokens).
+
+**Design tradeoff still open:** `reasoning_headroom_tokens`=1024 (→1280 for
+safety, 256 official + headroom) leaves ~10% truncated at temp=0. Raising it
+(e.g. 2048) cuts truncations but slows every judgment (~6.6s/instance already,
+since thinking can't be disabled on the deployed vLLM v0.25.1). Deferred the
+decision to see the strip-think result cleanly first (done); recommend raising
+before the full run and flagging it to Jon.
+
+**Next:** generalize the hardcoded `20_smoke_xstest_qwen35.sh` into a
+parameterized smoke (benchmark × judge) so Milestone C (WildBench, Qwen3.5-27B)
+and the Qwen3.6-35B-A3B arm (TP2) reuse one script; commit; hand Jon the next
+runs. Still deferred: Commit 11 (kwdagger rejudge pipeline), Commit 14
+(remaining safety benchmarks + Omni-MATH). `submodules/every_eval_ever` gitlink
+remains modified/unstaged (flagged, not committed).

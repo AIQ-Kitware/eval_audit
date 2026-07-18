@@ -65,6 +65,17 @@ LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:$LITELLM_PORT}"
 # and block with `infer-stack wait` up to this budget instead.
 OJ_LEASE_WAIT_TIMEOUT="${OJ_LEASE_WAIT_TIMEOUT:-3600}"
 
+# Resolve a judge key to "<lease-endpoint> <judge-json>". Accepts the short
+# key (qwen35/qwen36) or the JudgeSpec id. Prints the pair or returns nonzero
+# so the caller can fail loudly on an unknown judge (never a silent default).
+oj_judge_spec() {
+  case "$1" in
+    qwen35|qwen3_5_27b|qwen3.5-27b) echo "qwen3.5-27b-judge $OJ_JUDGE_JSON_QWEN35" ;;
+    qwen36|qwen3_6_35b_a3b|qwen3.6-35b-a3b) echo "qwen3.6-35b-a3b-judge $OJ_JUDGE_JSON_QWEN36" ;;
+    *) return 1 ;;
+  esac
+}
+
 # Resolve the snapshot directory for a benchmark by reading manifests under
 # OJ_SNAPSHOT_ROOT (built by 08). Prints the dir path or returns nonzero.
 oj_snapshot_for_benchmark() {

@@ -30,6 +30,13 @@ steps `05`/`08`/`09` are re-runs that should stay green.
 ./30_analyze_judges.sh xstest        # judge-substitution report
 ```
 
+The smoke is parameterized — `./20_smoke.sh [BENCHMARK] [JUDGE]` with
+`BENCHMARK` in `{xstest, wildbench}` and `JUDGE` in `{qwen35, qwen36}`
+(defaults `xstest qwen35`; `20_smoke_xstest_qwen35.sh` is the back-compat
+wrapper for that default). Milestone C is `./20_smoke.sh wildbench qwen35`;
+the second arm is `./20_smoke.sh xstest qwen36` (and `wildbench qwen36`).
+`OJ_SMOKE_INSTANCES` overrides the 20-instance subset.
+
 ## The serving model (how a rejudge run works)
 
 Unlike the candidate runbooks, this does **not** use kwdagger per-run
@@ -60,13 +67,23 @@ hand-authored there and copied into the exported bundle.
 `max_model_len` in the catalog is a starting value (32768). Run `10` and
 raise it if the recommendation exceeds it.
 
-## Success criteria (Milestone B)
+## Success criteria (Milestone B) — ACHIEVED 2026-07-18
 
 1. `03`/`09`/`10` all pass (endpoints declared, replay exact, prompts fit).
 2. `20` leases the judge, serves it, and writes a `helm_rejudge_v1`
    artifact for 20 XSTest instances with `parse_status=ok` on (nearly) all,
    raw judge responses retained, and `safety_score:judge=qwen3_5_27b` stats.
 3. `30` renders the comparison vs the official GPT/Llama baseline.
+
+**Result:** 18/20 `parse_status=ok`; the 2 failures are legitimate
+token-budget truncations (`finish_reason=length`, no `</think>` — the judge
+was still mid-thinking at the 1280-token cap), not parser bugs. Every one of
+the 18 parsed Qwen scores exactly matched **both** official judges → 18/18
+verdict agreement with the GPT-4o+Llama ensemble. Two lessons folded back
+into the code: Qwen thinking judges draft the answer tags as placeholders
+inside their reasoning, so the parsers strip everything up to the last
+`</think>` (`strip_thinking`); and a parser behavior change must bump the
+JudgeSpec `parser_version` or the attempt cache serves stale results.
 
 ## Investigation triggers (do not silently filter — plan §20)
 
