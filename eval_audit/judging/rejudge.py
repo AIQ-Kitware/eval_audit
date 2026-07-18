@@ -145,6 +145,8 @@ def _assert_candidates_unchanged(
         record = expected.get(key)
         if record is None:
             raise RejudgeError(f"annotated state contains unknown display key {key}")
+        if key in seen:
+            raise RejudgeError(f"annotated state duplicated display key {key}")
         seen.add(key)
         result = request_state.result
         if result is None or not result.success or len(result.completions) != 1:
@@ -157,7 +159,9 @@ def _assert_candidates_unchanged(
             raise RejudgeError(f"candidate thinking mutated for {key}")
         if request_state.reference_index != record.get("reference_index"):
             raise RejudgeError(f"reference index mutated for {key}")
-    if seen != set(expected):
+    # seen may be a strict subset of the snapshot when max_instances limits a
+    # smoke; every judged key must still be a real snapshot key (checked above).
+    if len(seen) != len(annotated_state.request_states):
         raise RejudgeError("annotated state lost display keys")
 
 
@@ -179,8 +183,15 @@ def run_rejudge(
     request_random: str | None = None,
     sidecar_config_dpaths: tuple[str, ...] = (),
     parallelism: int = 4,
+    max_instances: int | None = None,
 ) -> RejudgeResult:
-    """Execute one judgment attempt; idempotent per attempt hash."""
+    """Execute one judgment attempt; idempotent per attempt hash.
+
+    ``max_instances`` judges only the first N snapshot instances (a
+    smoke subset). It is folded into the attempt/request identity so a
+    limited smoke never collides with — or gets served from — a full
+    run's artifacts or cache.
+    """
     snapshot_dpath = Path(snapshot_dpath)
     out_root = Path(out_root)
     cache_root = Path(cache_root)
@@ -197,6 +208,9 @@ def run_rejudge(
 
     if request_random is None:
         request_random = default_request_random(experiment_name, judge.id, replicate)
+    if max_instances is not None:
+        # Distinct identity + distinct request cache keys from the full run.
+        request_random = f"{request_random}:limit{max_instances}"
     attempt = JudgmentAttemptSpec(
         response_set_hash=response_set_hash,
         benchmark=benchmark,
@@ -219,6 +233,15 @@ def run_rejudge(
             raise RejudgeError("snapshot request state lacks a successful candidate result")
         if request_state.annotations is not None:
             raise RejudgeError("snapshot request state already carries annotations")
+
+    if max_instances is not None:
+        # Snapshot states are stored in canonical display-key order, so the
+        # first N is a deterministic subset.
+        scenario_state = ScenarioState(
+            adapter_spec=scenario_state.adapter_spec,
+            request_states=scenario_state.request_states[:max_instances],
+            annotator_specs=scenario_state.annotator_specs,
+        )
 
     annotator_args = judge.annotator_args(request_random)
     annotator_args["judge_spec_hash"] = judge.spec_hash()
@@ -293,6 +316,8 @@ def run_rejudge(
         "benchmark": benchmark,
         "judge_id": judge.id,
         "request_random": request_random,
+        "max_instances": max_instances,
+        "num_judged": len(annotated_state.request_states),
         "effective_temperature": effective_temperature,
         "effective_max_tokens": effective_max_tokens,
         "budget_source": (

@@ -186,6 +186,38 @@ def test_malformed_judgment_is_structured_and_does_not_abort(
     assert malformed["annotation"]["raw_response"]  # raw output retained
 
 
+def test_max_instances_smoke_subset_isolated_from_full_run(
+    snapshot_dpath, tmp_path, sidecar_dpath
+):
+    # A 2-of-3 smoke and the full run must produce distinct artifacts and
+    # not serve each other from cache.
+    smoke = run_rejudge(
+        snapshot_dpath=snapshot_dpath, judge=make_judge(), replicate=0,
+        out_root=tmp_path / "results", cache_root=tmp_path / "cache",
+        experiment_name="fixture-exp", sidecar_config_dpaths=(str(sidecar_dpath),),
+        parallelism=1, max_instances=2,
+    )
+    smoke_judgments = (smoke.out_dpath / "judgments.jsonl").read_text().splitlines()
+    assert len([line for line in smoke_judgments if line.strip()]) == 2
+    manifest = json.loads((smoke.out_dpath / "rejudge_manifest.json").read_text())
+    assert manifest["max_instances"] == 2
+    assert manifest["num_judged"] == 2
+
+    full = run_rejudge(
+        snapshot_dpath=snapshot_dpath, judge=make_judge(), replicate=0,
+        out_root=tmp_path / "results", cache_root=tmp_path / "cache",
+        experiment_name="fixture-exp", sidecar_config_dpaths=(str(sidecar_dpath),),
+        parallelism=1,
+    )
+    assert full.attempt_hash != smoke.attempt_hash
+    assert not full.cache_hit
+    full_judgments = [
+        line for line in (full.out_dpath / "judgments.jsonl").read_text().splitlines()
+        if line.strip()
+    ]
+    assert len(full_judgments) == 3
+
+
 def test_tampered_snapshot_is_refused(snapshot_dpath, tmp_path, sidecar_dpath):
     predictions = json.loads((snapshot_dpath / "display_predictions.json").read_text())
     predictions[0]["predicted_text"] = "tampered"

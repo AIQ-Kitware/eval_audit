@@ -50,6 +50,13 @@ def main(argv: list[str] | None = None) -> None:
         help="HELM config dir with judge model/deployment/tokenizer sidecars (repeatable).",
     )
     parser.add_argument("--parallelism", type=int, default=4)
+    parser.add_argument(
+        "--max-instances",
+        type=int,
+        default=None,
+        help="Judge only the first N snapshot instances (a smoke subset; "
+             "folded into the attempt identity so it never collides with a full run).",
+    )
     args = parser.parse_args(argv)
 
     with open(args.judge_json, "r", encoding="utf-8") as file:
@@ -66,6 +73,7 @@ def main(argv: list[str] | None = None) -> None:
         experiment_name=args.experiment_name,
         sidecar_config_dpaths=tuple(args.sidecar_config),
         parallelism=args.parallelism,
+        max_instances=args.max_instances,
     )
     state = "cache-hit" if result.cache_hit else "completed"
     print(f"{state}: {result.out_dpath}")
