@@ -35,8 +35,11 @@ steps `05`/`08`/`09` are re-runs that should stay green.
 Unlike the candidate runbooks, this does **not** use kwdagger per-run
 leasing. A judge endpoint is leased for the whole pass (the model must stay
 up across many judge requests): `20_smoke` runs
-`infer-stack acquire qwen3.5-27b-judge` (waits until ready), exports the
-sidecar bundle against the live gateway
+`infer-stack acquire qwen3.5-27b-judge --no-wait` (holds the lease while
+the weights load — the default wait-mode releases the lease if a slow
+first-time load misses its 600s timeout) then `infer-stack wait` (up to
+`OJ_LEASE_WAIT_TIMEOUT`, default 1h — the first acquire downloads tens of
+GiB of judge weights), exports the sidecar bundle against the live gateway
 (`eval-audit-export-judge-bundle`), runs `eval-audit-rejudge-helm`
 in-process against the gateway, then releases on exit (trap). No candidate
 inference happens — only the annotation stage runs, and the runner proves

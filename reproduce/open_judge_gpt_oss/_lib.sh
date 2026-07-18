@@ -58,6 +58,13 @@ OJ_EXPERIMENT="${OJ_EXPERIMENT:-gpt-oss-20b-open-judge-v1}"
 LITELLM_PORT="${LITELLM_PORT:-14042}"
 LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:$LITELLM_PORT}"
 
+# Readiness wait for a judge lease. A 27B/35B judge's FIRST acquire must
+# download tens of GiB of weights from HF before it can serve, which blows
+# past the default 600s acquire timeout (that mode RELEASES the lease on
+# timeout). So we acquire with --no-wait (holds the lease while it loads)
+# and block with `infer-stack wait` up to this budget instead.
+OJ_LEASE_WAIT_TIMEOUT="${OJ_LEASE_WAIT_TIMEOUT:-3600}"
+
 # Resolve the snapshot directory for a benchmark by reading manifests under
 # OJ_SNAPSHOT_ROOT (built by 08). Prints the dir path or returns nonzero.
 oj_snapshot_for_benchmark() {

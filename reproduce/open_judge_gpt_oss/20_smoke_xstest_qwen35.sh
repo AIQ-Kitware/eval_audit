@@ -23,15 +23,31 @@ infer-stack gc --yes || echo "WARN: 'infer-stack gc' returned nonzero; continuin
 
 lease_env="$(mktemp)"
 cleanup() {
-  infer-stack release --env-file "$lease_env" --evict --yes \
-    || echo "WARN: release returned nonzero; run 'infer-stack gc --yes'." >&2
+  # Only release if the acquire actually wrote a lease (env-file non-empty).
+  if [[ -s "$lease_env" ]]; then
+    infer-stack release --env-file "$lease_env" --evict --yes \
+      || echo "WARN: release returned nonzero; run 'infer-stack gc --yes'." >&2
+  fi
   rm -f "$lease_env"
 }
 trap cleanup EXIT
 
-echo "Acquiring $ENDPOINT (waits until the model is READY)…"
-infer-stack acquire "$ENDPOINT" --yes --env-file "$lease_env"
+# Acquire with --no-wait so the lease is HELD while the model loads (the
+# default wait-mode RELEASES the lease if a slow model misses its 600s
+# timeout — a first-time 27B weight download does). Then block on the
+# companion `wait` up to OJ_LEASE_WAIT_TIMEOUT.
+echo "Acquiring $ENDPOINT (--no-wait: holds the lease while weights load)…"
+infer-stack acquire "$ENDPOINT" --no-wait --yes --env-file "$lease_env"
 MASTER_KEY="$(infer-stack env LITELLM_MASTER_KEY)"
+
+echo "Waiting up to ${OJ_LEASE_WAIT_TIMEOUT}s for $ENDPOINT to become READY…"
+echo "  (first acquire downloads the judge weights from HF — this can take a while)"
+infer-stack wait "$ENDPOINT" --timeout "$OJ_LEASE_WAIT_TIMEOUT" || {
+  echo "FAIL: $ENDPOINT not ready within ${OJ_LEASE_WAIT_TIMEOUT}s." >&2
+  echo "  Check the vLLM container logs; if it is still downloading weights," >&2
+  echo "  re-run (the lease is released on exit) or raise OJ_LEASE_WAIT_TIMEOUT." >&2
+  exit 1
+}
 
 echo "Exporting the judge sidecar bundle against the live gateway…"
 LITELLM_MASTER_KEY="$MASTER_KEY" eval-audit-export-judge-bundle \
