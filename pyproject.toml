@@ -97,6 +97,7 @@ eval-audit-from-eee = "eval_audit.cli.from_eee:main"
 eval-audit-compare-pair-eee = "eval_audit.cli.compare_pair_eee:main"
 eval-audit-audit-judge-sources = "eval_audit.cli.audit_judge_sources:main"
 eval-audit-build-response-snapshot = "eval_audit.cli.build_response_snapshot:main"
+eval-audit-verify-judge-replay = "eval_audit.cli.verify_judge_replay:main"
 eval-audit-rejudge-helm = "eval_audit.cli.rejudge_helm_run:main"
 
 [tool.uv.build-backend]
