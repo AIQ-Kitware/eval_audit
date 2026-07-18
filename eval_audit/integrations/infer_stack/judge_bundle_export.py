@@ -39,7 +39,11 @@ JUDGE_BUNDLE_SCHEMA_VERSION = 1
 # OpenAI chat client normalizes a reasoning model's content=null -> "".
 _JUDGE_PROTOCOL_MODE = "chat"
 _JUDGE_ACCESS_KIND = "openai-compatible"
-_EXPECTED_CLIENT_CLASS = "eval_audit.integrations.helm_clients.NullSafeOpenAIChatClient"
+# _model_deployment_entry resolves chat -> this base client; when the judge
+# declares an explicit thinking policy we swap to the Qwen subclass that
+# enforces it (§13).
+_BASE_CHAT_CLIENT = "eval_audit.integrations.helm_clients.NullSafeOpenAIChatClient"
+_QWEN_JUDGE_CLIENT = "eval_audit.integrations.helm_clients.QwenJudgeOpenAIChatClient"
 
 
 def _sha256_file(fpath: Path) -> str:
@@ -79,12 +83,18 @@ def build_judge_deployment_entry(
         api_key_value=api_key_value,
     )
     client_class = entry["client_spec"]["class_name"]
-    if client_class != _EXPECTED_CLIENT_CLASS:
+    if client_class != _BASE_CHAT_CLIENT:
         raise ValueError(
             f"judge deployment resolved to unexpected client {client_class!r}; "
-            f"expected {_EXPECTED_CLIENT_CLASS!r} (chat protocol). Check the "
+            f"expected {_BASE_CHAT_CLIENT!r} (chat protocol). Check the "
             f"catalog endpoint {judge.lease_endpoint!r}."
         )
+    # Enforce the declared thinking policy (§13): swap to the Qwen client that
+    # sends enable_thinking on every request. server_default sends no switch,
+    # so the base null-safe client is left in place.
+    if judge.thinking_mode in ("disabled", "enabled"):
+        entry["client_spec"]["class_name"] = _QWEN_JUDGE_CLIENT
+        entry["client_spec"]["args"]["enable_thinking"] = judge.thinking_mode == "enabled"
     return entry, facts
 
 

@@ -36,6 +36,40 @@ def prompt_hash(prompt_text: str) -> str:
     return hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
 
 
+def coerce_enable_thinking(value: Any) -> bool | None:
+    """Normalize a thinking flag from config (bool or string) to bool/None.
+
+    ``None`` means "send no switch" (server default). Kept here (no HELM
+    client import) so the Qwen judge client and its tests share one
+    implementation.
+    """
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in ("true", "1", "yes", "enabled", "on"):
+            return True
+        if v in ("false", "0", "no", "disabled", "off"):
+            return False
+    raise ValueError(f"cannot interpret enable_thinking={value!r} as a bool")
+
+
+def qwen_thinking_extra_body(enable_thinking: Any) -> dict[str, Any] | None:
+    """vLLM ``extra_body`` toggling Qwen's chat-template thinking, or None.
+
+    Qwen chat models think by default; vLLM honors
+    ``chat_template_kwargs.enable_thinking`` in the request body to turn it
+    off (verify per vLLM/Qwen version — see open-judge-plan.md §13). A
+    disabled judge that reasons anyway overflows the official token budget
+    and its judgment gets truncated before the score tag (observed on
+    Qwen3.5-27B, 2026-07-18).
+    """
+    et = coerce_enable_thinking(enable_thinking)
+    if et is None:
+        return None
+    return {"chat_template_kwargs": {"enable_thinking": et}}
+
+
 @dataclass(frozen=True)
 class JudgeRequestOutcome:
     """Everything observable about one judge request, success or not."""
@@ -141,6 +175,8 @@ __all__ = [
     "JudgeRequestOutcome",
     "PARSE_STATUSES",
     "base_annotation_record",
+    "coerce_enable_thinking",
     "execute_judge_request",
     "prompt_hash",
+    "qwen_thinking_extra_body",
 ]

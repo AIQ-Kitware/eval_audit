@@ -31,6 +31,8 @@ from helm.clients.openai_client import OpenAIClient, OpenAILegacyCompletionsClie
 from helm.clients.vllm_client import VLLMChatClient, VLLMClient
 from helm.common.request import Request, RequestResult
 
+from eval_audit.integrations.helm_judging.common import qwen_thinking_extra_body
+
 
 class _NullSafeChatMixin:
     """Normalize any ``GeneratedOutput.text is None`` to ``""`` on the result.
@@ -60,6 +62,38 @@ class NullSafeOpenAIChatClient(_NullSafeChatMixin, OpenAIClient):
 
 class NullSafeVLLMChatClient(_NullSafeChatMixin, VLLMChatClient):
     """``VLLMChatClient`` (chat) that maps null completion text to ``""``."""
+
+
+class QwenJudgeOpenAIChatClient(NullSafeOpenAIChatClient):
+    """Null-safe chat client that also controls Qwen's chat-template thinking.
+
+    Open-judge §13: Qwen chat models reason by default; served as a judge with
+    the official (short) safety token budget, that reasoning overflows the
+    budget and the judgment is truncated (``finish_reason=length``) before the
+    ``<score>`` tag — observed on Qwen3.5-27B (2026-07-18), 60% of XSTest
+    judgments malformed. ``thinking_mode: disabled`` was previously only
+    recorded; this client enforces it by sending vLLM's
+    ``extra_body.chat_template_kwargs.enable_thinking`` on every chat request.
+
+    ``enable_thinking`` (from the deployment's ``client_spec.args``): ``False``
+    to suppress thinking, ``True`` to force it, ``None`` to send no switch
+    (server default). The exact key must be honored by the deployed vLLM/Qwen
+    versions (open-judge-plan.md §13); if a re-smoke still shows
+    ``finish_reason=length``, the switch was not applied and the judge token
+    budget must be raised instead.
+    """
+
+    def __init__(self, *args, enable_thinking=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._thinking_extra_body = qwen_thinking_extra_body(enable_thinking)
+
+    def _make_chat_raw_request(self, request: Request):  # type: ignore[override]
+        raw_request = super()._make_chat_raw_request(request)
+        if self._thinking_extra_body is not None:
+            extra_body = dict(raw_request.get("extra_body") or {})
+            extra_body.update(self._thinking_extra_body)
+            raw_request["extra_body"] = extra_body
+        return raw_request
 
 
 # ---------------------------------------------------------------------------

@@ -38,7 +38,10 @@ def test_shipped_judge_specs_and_catalog_resolve():
         )
         assert entry["name"] == judge.model_deployment
         assert entry["model_name"] == judge.model
-        assert entry["client_spec"]["class_name"].endswith("NullSafeOpenAIChatClient")
+        # thinking_mode=disabled => the Qwen thinking-control client with
+        # enable_thinking=False enforced (§13).
+        assert entry["client_spec"]["class_name"].endswith("QwenJudgeOpenAIChatClient")
+        assert entry["client_spec"]["args"]["enable_thinking"] is False
         # gateway base_url + served alias present
         assert entry["client_spec"]["args"]["base_url"].startswith("http")
         assert entry["client_spec"]["args"]["openai_model_name"]
@@ -77,6 +80,33 @@ def test_export_writes_complete_registerable_bundle(tmp_path: Path):
         assert j["helm_deployment_name"].startswith("litellm/")
         assert "gpt-4o" not in j["helm_deployment_name"]
         assert j["judge_spec_hash"]
+
+
+def test_server_default_thinking_keeps_base_client(tmp_path: Path):
+    import dataclasses
+
+    judge = dataclasses.replace(_load_judge("qwen3_5_27b"), thinking_mode="server_default")
+    entry, _ = build_judge_deployment_entry(
+        judge, config_dir=AIQ_CONFIG_DIR, api_key_value="test-key"
+    )
+    # No thinking switch declared -> base null-safe client, no enable_thinking arg.
+    assert entry["client_spec"]["class_name"].endswith("NullSafeOpenAIChatClient")
+    assert "enable_thinking" not in entry["client_spec"]["args"]
+
+
+def test_qwen_thinking_extra_body_helper():
+    from eval_audit.integrations.helm_judging.common import (
+        coerce_enable_thinking,
+        qwen_thinking_extra_body,
+    )
+
+    assert qwen_thinking_extra_body(False) == {"chat_template_kwargs": {"enable_thinking": False}}
+    assert qwen_thinking_extra_body(True) == {"chat_template_kwargs": {"enable_thinking": True}}
+    assert qwen_thinking_extra_body(None) is None
+    # config-string coercion
+    assert coerce_enable_thinking("disabled") is False
+    assert coerce_enable_thinking("true") is True
+    assert coerce_enable_thinking(None) is None
 
 
 def test_export_refuses_official_judge_deployment_name(tmp_path: Path):

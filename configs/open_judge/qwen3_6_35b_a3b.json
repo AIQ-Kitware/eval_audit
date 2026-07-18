@@ -6,7 +6,7 @@
   "parser_version": "official-v1",
   "prompt_version": "official-v1",
   "thinking_mode": "disabled",
-  "client_class": "eval_audit.integrations.helm_clients.NullSafeOpenAIChatClient",
+  "client_class": "eval_audit.integrations.helm_clients.QwenJudgeOpenAIChatClient",
   "temperature": null,
   "max_tokens": null
 }
