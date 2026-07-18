@@ -2789,3 +2789,38 @@ twice. (3) Registering a deterministic fake deployment through the real
 config/factory/cache stack tests an order of magnitude more plumbing than
 injecting a mock client — the cache-restart and replicate-isolation tests
 run against HELM's actual SQLite layer.
+
+## 2026-07-18 (addendum) — Phases 1–3 validated on real public data
+
+Jon ran the three-command validation on aiq-gpu (corpus-mounted host).
+Both gpt-oss-20b closed-judge sources now audit OK and reproduce their
+published judge metrics exactly through the identity-replay gate:
+
+- xstest (safety/v1.14.0): max_err 0, 2250 instance + 15 aggregate rows.
+- wildbench (capabilities/v1.12.0): max_err 1.95e-14 (< 1e-12 gate),
+  2000 instance + 6 aggregate rows.
+
+One real-data fix in between (`9f3cdc5`): official WildBench public runs
+use `adapter_method=chat`, not generation — the audit had whitelisted
+generation only and (correctly, loudly) skipped WildBench. Made
+supported adapter methods a per-benchmark profile field and allowed
+{generation, chat} for WildBench (its annotator reads
+instance.input.messages + the single completion, consumes no
+reconstruction-default fields → chat is shape-equivalent). Kept it a
+curated allow-list, NOT a blanket chat accept (safety stays
+generation-only), per the plan's inspect-the-actual-shape rule. Also
+fixed the fixture builder, which had wrongly labeled WildBench
+generation — had it matched reality, this surfaces in CI not on the GPU
+box. The replay gate on the real chat run then *proved* the
+reconstruction faithful (max_err ~2e-14) rather than me asserting it.
+
+Also added `eval-audit-verify-judge-replay` (`f91ddd7`) — the runbook
+interface for the Phase 3 gate (09_verify_official_identity_replay.sh).
+
+This closes the offline correctness core against real data. Next
+buildable-offline: Commit 9 (judge sidecar bundle export) and Commit 12
+(indexing + judge-variance analysis, which can run against the rejudge
+fixture artifacts). Commit 12 carries one design decision worth Jon's
+input (dedicated judge-analysis table vs virtual-experiment
+integration — plan §17 recommends the dedicated path first). Serving
+commits (9 partially, 11, 13) and Milestone B need the GPU box.
