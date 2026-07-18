@@ -2824,3 +2824,29 @@ fixture artifacts). Commit 12 carries one design decision worth Jon's
 input (dedicated judge-analysis table vs virtual-experiment
 integration — plan §17 recommends the dedicated path first). Serving
 commits (9 partially, 11, 13) and Milestone B need the GPU box.
+
+## 2026-07-18 (addendum 2) — Commit 12: indexing + judge analysis (offline)
+
+After real-data validation, continued the plan with the next
+cleanly-offline piece. Commit 9 (judge sidecar export) turned out to
+couple to the infer-stack catalog + §14.3 context preflight (Commit 13
+territory), so building it in isolation would mean guessing the serving
+interface — deferred it to land with 13. Did Commit 12 instead
+(`73cb1d7`): eval_audit/judging/indexing.py + analysis.py +
+eval-audit-analyze-judges. Joins rejudge artifacts + snapshot official
+annotations strictly by (response_set_hash, display key); reports
+per-arm aggregate/failure/replicate-variance and pairwise
+open-vs-official / open-vs-open / official gpt-vs-llama baseline with
+diffs, Pearson/Spearman, agreement, kappa (label kind), bootstrap CI.
+numpy-only stats (no scipy dep). Tested by running the real fake-judge
+runner for 2 arms x 2 replicates and analyzing — 81 tests in the
+open-judge suite now.
+
+Remaining is serving/GPU-facing and needs Jon's direction: Commit 9
+(sidecars, with 13), Commit 11 (kwdagger rejudge pipeline — orchestration
+best validated near real infra), Commit 13 (aiq-gpu runbook + §14.3
+prompt-length preflight to size max_model_len + judge catalog with
+declared min_vram_gib), Commit 14 (remaining safety benchmarks +
+Omni-MATH), then Milestone B (XSTest live smoke, Qwen3.5-27B). The
+offline correctness + analysis stack is complete and real-data-proven;
+what's left produces judge requests and costs GPU time.
