@@ -311,7 +311,9 @@ def build_wildbench_source_run(
             "args": {"subset": "v2"},
         },
         "adapter_spec": {
-            "method": "generation",
+            # WildBench is conversational — the official public runs use
+            # the chat adapter (confirmed on the real gpt-oss-20b run).
+            "method": "chat",
             "model": model,
             "model_deployment": model,
             "max_tokens": 2000,

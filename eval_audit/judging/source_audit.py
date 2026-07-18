@@ -35,10 +35,16 @@ REQUIRED_FILES = (
 #: Files we note but do not require (public mirrors usually omit them).
 OPTIONAL_FILES = ("scenario_state.json",)
 
-#: The only adapter method whose response reconstruction is supported:
-#: one generation request per instance, no calibration requests, no
-#: output mapping, no per-reference request fan-out (§7.3).
-SUPPORTED_ADAPTER_METHODS = frozenset({"generation"})
+#: Adapter methods whose response reconstruction is supported by
+#: default: one request per instance, one completion, no calibration
+#: requests, no output mapping, no per-reference request fan-out (§7.3).
+#: Overridable per benchmark (WildBench is inherently ``chat`` — its
+#: annotator reads instance.input.messages + the single completion and
+#: consumes none of the reconstruction-default fields, so ``chat`` is
+#: shape-equivalent there). Kept a curated per-benchmark allow-list
+#: rather than a blanket ``chat`` accept, per the plan's "inspect the
+#: actual shape" rule (§6.3).
+DEFAULT_SUPPORTED_ADAPTER_METHODS = frozenset({"generation"})
 
 
 def _instance_has_correct_safety_reference(instance: Mapping[str, Any]) -> bool:
@@ -92,6 +98,7 @@ class BenchmarkJudgingProfile:
     judge_metrics: tuple[str, ...]
     instance_requirement: Callable[[Mapping[str, Any]], bool]
     instance_requirement_desc: str
+    supported_adapter_methods: frozenset[str] = DEFAULT_SUPPORTED_ADAPTER_METHODS
 
 
 _SAFETY_JUDGE_FIELDS = ("gpt_score", "llama_score")
@@ -150,6 +157,9 @@ BENCHMARK_PROFILES: dict[str, BenchmarkJudgingProfile] = {
             judge_metrics=("wildbench_score", "wildbench_score_rescaled"),
             instance_requirement=_instance_has_messages_and_checklist,
             instance_requirement_desc="input.messages + extra_data.checklist",
+            # WildBench is a conversational benchmark: the official runs
+            # use the chat adapter, which is shape-equivalent here.
+            supported_adapter_methods=frozenset({"generation", "chat"}),
         ),
         BenchmarkJudgingProfile(
             benchmark="omni_math",
@@ -281,7 +291,7 @@ def audit_run(run_path: str | Path) -> SourceAuditRecord:
         )
 
     # --- adapter shape (§6.3 items 4-5) ---------------------------------
-    if record.adapter_method not in SUPPORTED_ADAPTER_METHODS:
+    if record.adapter_method not in profile.supported_adapter_methods:
         record.add_reason(f"unsupported_adapter_method:{record.adapter_method}")
     num_outputs = int(adapter_spec.get("num_outputs", 1) or 1)
     if num_outputs > 1:

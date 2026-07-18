@@ -139,6 +139,29 @@ def test_unsupported_adapter_method_rejected(tmp_path: Path):
     )
 
 
+def test_wildbench_chat_adapter_supported(tmp_path: Path):
+    # WildBench's official public runs use the chat adapter; the profile
+    # allows it (shape-equivalent — real gpt-oss-20b finding 2026-07-17).
+    run_dpath = tmp_path / "run"
+    build_wildbench_source_run(run_dpath, empty_output_index=1)
+    record = audit_run(run_dpath)
+    assert record.adapter_method == "chat"
+    assert record.unsupported_reasons == []
+    assert record.supported_for_rejudging
+
+
+def test_xstest_chat_adapter_rejected(tmp_path: Path):
+    # chat is NOT a blanket allow: safety benchmarks stay generation-only.
+    run_dpath = tmp_path / "run"
+    artifacts = build_xstest_source_run(run_dpath)
+    run_spec = artifacts["run_spec.json"]
+    run_spec["adapter_spec"]["method"] = "chat"
+    write_json(run_dpath / "run_spec.json", run_spec)
+    record = audit_run(run_dpath)
+    assert not record.supported_for_rejudging
+    assert "unsupported_adapter_method:chat" in record.unsupported_reasons
+
+
 def test_unknown_benchmark_rejected(tmp_path: Path):
     run_dpath = tmp_path / "run"
     artifacts = build_xstest_source_run(run_dpath)
