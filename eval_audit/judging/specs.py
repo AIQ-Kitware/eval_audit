@@ -71,6 +71,15 @@ class JudgeSpec:
     # deliberately override the official budget (e.g. a temperature sweep).
     temperature: float | None = None
     max_tokens: int | None = None
+    # Extra output tokens ADDED to the (per-benchmark) official budget, to
+    # accommodate a thinking judge whose reasoning would otherwise overflow
+    # the official budget and truncate its verdict before the score tag
+    # (observed on Qwen3.5-27B when enable_thinking cannot be disabled on the
+    # deployed vLLM — open-judge-plan.md §13). Added per benchmark so it never
+    # shrinks a larger official budget. Does not affect prompt bytes or
+    # temperature (parity preserved); the larger cap is a documented
+    # accommodation, recorded in the artifact.
+    reasoning_headroom_tokens: int | None = None
     model_revision: str | None = None
     quantization: str | None = None
 
@@ -101,6 +110,13 @@ class JudgeSpec:
             not isinstance(self.max_tokens, int) or self.max_tokens <= 0
         ):
             raise SpecValidationError("JudgeSpec.max_tokens must be None or a positive int")
+        if self.reasoning_headroom_tokens is not None and (
+            not isinstance(self.reasoning_headroom_tokens, int)
+            or self.reasoning_headroom_tokens <= 0
+        ):
+            raise SpecValidationError(
+                "JudgeSpec.reasoning_headroom_tokens must be None or a positive int"
+            )
 
     def spec_hash(self) -> str:
         """Identity over every inference-affecting field — and nothing
@@ -116,6 +132,7 @@ class JudgeSpec:
                 "prompt_version": self.prompt_version,
                 "thinking_mode": self.thinking_mode,
                 "client_class": self.client_class,
+                "reasoning_headroom_tokens": self.reasoning_headroom_tokens,
                 "model_revision": self.model_revision,
                 "quantization": self.quantization,
             }

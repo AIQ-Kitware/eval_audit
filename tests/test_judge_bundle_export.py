@@ -38,14 +38,29 @@ def test_shipped_judge_specs_and_catalog_resolve():
         )
         assert entry["name"] == judge.model_deployment
         assert entry["model_name"] == judge.model
-        # thinking_mode=disabled => the Qwen thinking-control client with
-        # enable_thinking=False enforced (§13).
-        assert entry["client_spec"]["class_name"].endswith("QwenJudgeOpenAIChatClient")
-        assert entry["client_spec"]["args"]["enable_thinking"] is False
+        # Shipped v1 specs use thinking_mode=server_default (enable_thinking
+        # errors on the deployed vLLM/Qwen — §13); the base null-safe chat
+        # client is left in place, no thinking switch sent.
+        assert entry["client_spec"]["class_name"].endswith("NullSafeOpenAIChatClient")
+        assert "enable_thinking" not in entry["client_spec"]["args"]
         # gateway base_url + served alias present
         assert entry["client_spec"]["args"]["base_url"].startswith("http")
         assert entry["client_spec"]["args"]["openai_model_name"]
         assert facts.max_model_len == 32768
+
+
+def test_disabled_thinking_uses_qwen_client(tmp_path: Path):
+    # When a spec explicitly declares disabled/enabled, the export DOES swap
+    # in the Qwen thinking-control client (kept for a vLLM version that
+    # honors the switch).
+    import dataclasses
+
+    judge = dataclasses.replace(_load_judge("qwen3_5_27b"), thinking_mode="disabled")
+    entry, _ = build_judge_deployment_entry(
+        judge, config_dir=AIQ_CONFIG_DIR, api_key_value="test-key"
+    )
+    assert entry["client_spec"]["class_name"].endswith("QwenJudgeOpenAIChatClient")
+    assert entry["client_spec"]["args"]["enable_thinking"] is False
 
 
 def test_export_writes_complete_registerable_bundle(tmp_path: Path):

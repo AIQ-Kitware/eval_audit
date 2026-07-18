@@ -5,8 +5,9 @@
   "lease_endpoint": "qwen3.6-35b-a3b-judge",
   "parser_version": "official-v1",
   "prompt_version": "official-v1",
-  "thinking_mode": "disabled",
-  "client_class": "eval_audit.integrations.helm_clients.QwenJudgeOpenAIChatClient",
+  "thinking_mode": "server_default",
+  "client_class": "eval_audit.integrations.helm_clients.NullSafeOpenAIChatClient",
   "temperature": null,
-  "max_tokens": null
+  "max_tokens": null,
+  "reasoning_headroom_tokens": 1024
 }

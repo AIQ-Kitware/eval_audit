@@ -243,8 +243,22 @@ def run_rejudge(
             annotator_specs=scenario_state.annotator_specs,
         )
 
+    # Resolve the effective budget: official per-benchmark (or an explicit
+    # JudgeSpec override) + reasoning headroom, and inject it into the
+    # annotator so the value used is explicit in the artifact.
+    official_temp, official_max = _OFFICIAL_JUDGE_BUDGETS.get(benchmark, (None, None))
+    effective_temperature = judge.temperature if judge.temperature is not None else official_temp
+    base_max = judge.max_tokens if judge.max_tokens is not None else official_max
+    effective_max_tokens = base_max
+    if base_max is not None and judge.reasoning_headroom_tokens:
+        effective_max_tokens = base_max + judge.reasoning_headroom_tokens
+
     annotator_args = judge.annotator_args(request_random)
     annotator_args["judge_spec_hash"] = judge.spec_hash()
+    if effective_temperature is not None:
+        annotator_args["temperature"] = effective_temperature
+    if effective_max_tokens is not None:
+        annotator_args["max_tokens"] = effective_max_tokens
     annotator_spec = AnnotatorSpec(class_name=annotator_class, args=annotator_args)
     judging_state = ScenarioState(
         adapter_spec=scenario_state.adapter_spec,
@@ -302,9 +316,6 @@ def run_rejudge(
         judge_metric_spec_dict(benchmark, judge.id, snapshot_manifest["annotator_name"])
     ]
 
-    official_temp, official_max = _OFFICIAL_JUDGE_BUDGETS.get(benchmark, (None, None))
-    effective_temperature = judge.temperature if judge.temperature is not None else official_temp
-    effective_max_tokens = judge.max_tokens if judge.max_tokens is not None else official_max
     rejudge_manifest = {
         "artifact_format": REJUDGE_ARTIFACT_FORMAT,
         "execution_kind": "rejudge",
@@ -320,6 +331,7 @@ def run_rejudge(
         "num_judged": len(annotated_state.request_states),
         "effective_temperature": effective_temperature,
         "effective_max_tokens": effective_max_tokens,
+        "reasoning_headroom_tokens": judge.reasoning_headroom_tokens,
         "budget_source": (
             "judge_override"
             if (judge.temperature is not None or judge.max_tokens is not None)
