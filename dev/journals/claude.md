@@ -2850,3 +2850,49 @@ declared min_vram_gib), Commit 14 (remaining safety benchmarks +
 Omni-MATH), then Milestone B (XSTest live smoke, Qwen3.5-27B). The
 offline correctness + analysis stack is complete and real-data-proven;
 what's left produces judge requests and costs GPU time.
+
+## 2026-07-18 (addendum 3) — serving-facing build: Commits 9 + 13 (runbook ready)
+
+Jon green-lit aiq-gpu ("free, want to utilize it") and confirmed the v1
+judges, so I built the full serving-facing scaffolding toward a live
+Milestone B. Landed:
+
+- Commit 9 (`c11fef1`): judge HELM sidecars (configs/open_judge/
+  model_metadata + tokenizer for qwen/qwen3.5-27b + qwen/qwen3.6-35b-a3b,
+  chat/instruct) + judge_bundle_export.py (reuses the pure-static
+  resolve_serving_facts + _model_deployment_entry; chat ->
+  NullSafeOpenAIChatClient; §23 anti-goal guarded up front) +
+  eval-audit-export-judge-bundle + the aiq-gpu judge catalog/settings +
+  two JudgeSpec JSONs.
+- Commit 13a (`8c8dbf2`): §14.3 prompt-length preflight
+  (eval-audit-judge-prompt-lengths) — renders the real judge prompts over
+  a snapshot (excludes the empty-candidate shortcut) and sizes
+  max_model_len; HF tokenizer optional, char estimate fallback.
+- Commit 13b (`6c25c85`): reproduce/open_judge_gpt_oss/ runbook (00/03/05/
+  08/09/10/20/30 + README) and run_rejudge(max_instances=N) for a smoke
+  subset (folded into attempt/request identity via a ':limitN'
+  request_random suffix so it can't collide with a full run).
+
+Design decision made mid-build (correct, prevents a latent bug): JudgeSpec
+temperature/max_tokens are now OPTIONAL (default None = the benchmark's
+official budget). A judge arm is reused across benchmarks whose official
+max_tokens differ (safety 256, WildBench 2000); baking one in would have
+truncated WildBench judges. The runner resolves the official per-benchmark
+budget when None and records the effective value + source in the manifest.
+
+Commit 9's sidecar export was originally deferred as "needs the catalog
+(Commit 13)" — but resolve_serving_facts is pure-static (reads catalog.yaml,
+no live gateway), so once I hand-authored the aiq-gpu catalog the export
+became fully offline-testable. Good reminder to check whether a "needs
+serving" dependency is actually a runtime dependency or just a config file.
+
+Full open-judge suite now 119 tests. Everything that can be validated
+without a GPU is validated. The runbook's live scripts (20/30) and the
+infer-stack acquire/gateway idioms are UNTESTED against real serving —
+mirrored from the qwen35 runbooks; the first Milestone-B run on aiq-gpu is
+the validation, exactly as the candidate runbooks were built. Handed to
+Jon to run 00->20->30 on aiq-gpu.
+
+Still deferred: Commit 11 (kwdagger rejudge pipeline — grouped-by-arm
+scheduling; the smoke uses manual lease instead), Commit 14 (remaining
+safety benchmarks + Omni-MATH). Commit 10 (multi-replica) stays out.
