@@ -3,7 +3,7 @@
   "model": "qwen/qwen3.5-27b",
   "model_deployment": "litellm/qwen3.5-27b-judge",
   "lease_endpoint": "qwen3.5-27b-judge",
-  "parser_version": "official-v1",
+  "parser_version": "official-v1+strip-think",
   "prompt_version": "official-v1",
   "thinking_mode": "server_default",
   "client_class": "eval_audit.integrations.helm_clients.NullSafeOpenAIChatClient",
