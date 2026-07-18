@@ -36,6 +36,30 @@ def prompt_hash(prompt_text: str) -> str:
     return hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()
 
 
+_THINK_CLOSE = "</think>"
+
+
+def strip_thinking(text: str) -> str:
+    """Return a reasoning judge's answer, i.e. the text after its thinking block.
+
+    Qwen chat judges wrap their reasoning in ``<think>…</think>`` (or a
+    ``Thinking Process:`` preamble closed by ``</think>``) before the tagged
+    answer, and they routinely draft the official ``<reasoning>``/``<score>``
+    tags as PLACEHOLDERS inside that thinking. The official-format parsers must
+    see only the post-think answer, or a non-greedy regex matches the
+    placeholder tags and fails (observed on Qwen3.5-27B, 2026-07-18).
+
+    Split on the LAST ``</think>`` (the real answer follows the final close).
+    No ``</think>`` — the official GPT-4o/Llama responses, or any non-thinking
+    judge — returns the text unchanged, so this is a strict no-op there and
+    preserves parse parity with the official annotators.
+    """
+    idx = text.rfind(_THINK_CLOSE)
+    if idx == -1:
+        return text
+    return text[idx + len(_THINK_CLOSE):]
+
+
 def coerce_enable_thinking(value: Any) -> bool | None:
     """Normalize a thinking flag from config (bool or string) to bool/None.
 
@@ -179,4 +203,5 @@ __all__ = [
     "execute_judge_request",
     "prompt_hash",
     "qwen_thinking_extra_body",
+    "strip_thinking",
 ]

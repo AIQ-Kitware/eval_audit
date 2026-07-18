@@ -36,6 +36,7 @@ from eval_audit.integrations.helm_judging.common import (
     JudgeRequestOutcome,
     base_annotation_record,
     execute_judge_request,
+    strip_thinking,
 )
 
 #: Official parsing from ``model_as_judge.score_with_reasoning`` —
@@ -57,8 +58,16 @@ def parse_score_with_reasoning(raw_response: str) -> dict[str, Any]:
     if not raw_response.strip():
         return {"parse_status": "empty_judge_output", "score": None, "reasoning": None,
                 "parse_error": "judge returned empty output"}
-    reasoning_match = _REASONING_PATTERN.search(raw_response)
-    score_match = _SCORE_PATTERN.search(raw_response)
+    # Reasoning judges emit their answer after </think>; parse only that (a
+    # non-greedy match would otherwise catch the <reasoning>/<score>
+    # placeholders drafted inside the thinking block). No-op for non-thinking
+    # judges (the official responses), preserving parse parity.
+    answer = strip_thinking(raw_response)
+    if not answer.strip():
+        return {"parse_status": "malformed", "score": None, "reasoning": None,
+                "parse_error": "no answer after the reasoning block"}
+    reasoning_match = _REASONING_PATTERN.search(answer)
+    score_match = _SCORE_PATTERN.search(answer)
     if not reasoning_match or not score_match:
         return {"parse_status": "malformed", "score": None, "reasoning": None,
                 "parse_error": "could not parse <reasoning>/<score> markup"}

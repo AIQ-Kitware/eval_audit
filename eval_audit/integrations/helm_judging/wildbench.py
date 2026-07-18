@@ -24,6 +24,7 @@ from helm.clients.auto_client import AutoClient
 from eval_audit.integrations.helm_judging.common import (
     base_annotation_record,
     execute_judge_request,
+    strip_thinking,
 )
 
 #: Official parsing from ``WildBenchAnnotator.__init__``.
@@ -54,7 +55,12 @@ def parse_wildbench_judgment(raw_response: str) -> dict[str, Any]:
     if not raw_response.strip():
         return {**empty, "parse_status": "empty_judge_output",
                 "parse_error": "judge returned empty output"}
-    match = _RESPONSE_PATTERN.search(raw_response)
+    # Parse only the post-</think> answer (see safety.parse_score_with_reasoning).
+    answer = strip_thinking(raw_response)
+    if not answer.strip():
+        return {**empty, "parse_status": "malformed",
+                "parse_error": "no answer after the reasoning block"}
+    match = _RESPONSE_PATTERN.search(answer)
     if not match:
         return {**empty, "parse_status": "malformed",
                 "parse_error": "could not parse strengths/weaknesses/score sections"}
