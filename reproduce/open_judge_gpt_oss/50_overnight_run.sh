@@ -7,15 +7,15 @@
 #   ./50_overnight_run.sh            # uses the scope below
 #
 # Scope is env-tunable (a judge/benchmark's replicate list is a space-separated
-# string; empty string = skip that pair). Defaults encode the recommended
-# overnight plan: full XSTest on both judges x3 replicates (cheap, fast), full
-# WildBench x1 replicate (the dense-27B WildBench arm is the slow one). Widen
-# via env once a night's timing is known.
+# string; empty string = skip that pair). Defaults encode the full v1
+# experiment: both benchmarks x both judges x3 replicates (~21 h at
+# parallelism 8 on the smoke timings; the dense-27B WildBench arm is the cost
+# center). Narrow via env for a quick run (e.g. OJ_REPS_WILDBENCH_QWEN35="0").
 #
 #   OJ_REPS_XSTEST_QWEN35   (default "0 1 2")
 #   OJ_REPS_XSTEST_QWEN36   (default "0 1 2")
-#   OJ_REPS_WILDBENCH_QWEN35(default "0")
-#   OJ_REPS_WILDBENCH_QWEN36(default "0")
+#   OJ_REPS_WILDBENCH_QWEN35(default "0 1 2")
+#   OJ_REPS_WILDBENCH_QWEN36(default "0 1 2")
 #   OJ_PARALLELISM          (default 8) — concurrent judge requests
 #
 # Idempotent: a completed (snapshot, judge_spec, replicate) attempt is served
@@ -30,8 +30,8 @@ P="${OJ_PARALLELISM:-8}"
 declare -A REPS=(
   [xstest:qwen35]="${OJ_REPS_XSTEST_QWEN35:-0 1 2}"
   [xstest:qwen36]="${OJ_REPS_XSTEST_QWEN36:-0 1 2}"
-  [wildbench:qwen35]="${OJ_REPS_WILDBENCH_QWEN35:-0}"
-  [wildbench:qwen36]="${OJ_REPS_WILDBENCH_QWEN36:-0}"
+  [wildbench:qwen35]="${OJ_REPS_WILDBENCH_QWEN35:-0 1 2}"
+  [wildbench:qwen36]="${OJ_REPS_WILDBENCH_QWEN36:-0 1 2}"
 )
 
 log_dir="$OJ_ANALYSIS_ROOT/overnight-logs"

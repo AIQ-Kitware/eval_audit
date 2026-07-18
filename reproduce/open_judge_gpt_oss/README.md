@@ -105,16 +105,22 @@ rejudge failure — every attempt's status is in the tail summary and in
 `$OJ_ANALYSIS_ROOT/overnight-logs/overnight.log`.
 
 Scope is env-tunable per (benchmark, judge); an empty replicate list skips
-that pair. Defaults: full XSTest x3 replicates on both judges (cheap — XSTest
-is ~1–7 s/inst), full WildBench x1 replicate on both (the dense-27B WildBench
-arm is ~20–30 s/inst, the run's cost center). Widen WildBench replicates once
-a night's real timing is known.
+that pair. Defaults encode the full v1 experiment: both benchmarks x both
+judges x3 replicates (~21 h at parallelism 8 on the smoke timings). XSTest is
+cheap (~1–7 s/inst); WildBench+qwen35 (the dense 27B, ~20 s/inst with the
+real-run headroom) is the cost center. Narrow via env for a quick run.
 
     OJ_REPS_XSTEST_QWEN35    (default "0 1 2")
     OJ_REPS_XSTEST_QWEN36    (default "0 1 2")
-    OJ_REPS_WILDBENCH_QWEN35 (default "0")
-    OJ_REPS_WILDBENCH_QWEN36 (default "0")
+    OJ_REPS_WILDBENCH_QWEN35 (default "0 1 2")
+    OJ_REPS_WILDBENCH_QWEN36 (default "0 1 2")
     OJ_PARALLELISM           (default 8)
+
+Measured smoke agreement (20-instance subsets, official ensemble): XSTest
+qwen35 18/18 & qwen36 20/20 exact verdict match; WildBench (1–10 scale)
+qwen35 mean|Δ|=0.43, qwen36 mean|Δ|=1.42 (the A3B scores WildBench
+systematically ~1 pt lower — a real judge-substitution effect the full run
+characterizes, not a defect).
 
 Real-run judge budget: `reasoning_headroom_tokens=4096` in both JudgeSpecs
 (vs the smokes' effective official-only budget) — the thinking judges need it
