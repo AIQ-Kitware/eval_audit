@@ -6,9 +6,12 @@ plus the replay CLI + chat-adapter fix landed
 (`cc2240c`…`9f3cdc5`). Identity replay reproduced the published
 gpt-oss-20b judge metrics exactly: xstest max_err 0 (2250 instance +
 15 aggregate rows), wildbench max_err 1.95e-14 (2000 + 6), both under
-the 1e-12 gate. Next: serving-facing commits (9 judge sidecars,
-11 kwdagger pipeline, 12 indexing/analysis, 13 aiq-gpu runbook,
-14 remaining benchmarks), then Milestone B live smoke.  
+the 1e-12 gate. Commits 7, 8, 9, 12, 13, plus the §14.3 preflight and
+the analysis CLIs have since landed (through `6c25c85`); the aiq-gpu
+runbook (reproduce/open_judge_gpt_oss/) is ready for the Milestone B
+live smoke. Remaining: Milestone B run on aiq-gpu, then Commit 11
+(kwdagger rejudge pipeline) and Commit 14 (remaining safety benchmarks
++ Omni-MATH). Commit 10 (multi-replica) stays deferred.  
 **Primary target:** reproduce selected HELM LLM-as-a-judge benchmark scores on
 `aiq-gpu` while varying the judge among modern open-weight models.  
 **Initial candidate source:** published or locally retained HELM outputs for
