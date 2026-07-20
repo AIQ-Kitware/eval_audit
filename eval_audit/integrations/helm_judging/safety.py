@@ -26,6 +26,15 @@ from typing import Any
 
 from helm.benchmark.adaptation.request_state import RequestState
 from helm.benchmark.annotation.annotator import Annotator
+from helm.benchmark.annotation.anthropic_red_team_annotator import (
+    PROMPT_TEMPLATE as ANTHROPIC_RED_TEAM_PROMPT_TEMPLATE,
+)
+from helm.benchmark.annotation.harm_bench_annotator import (
+    PROMPT_TEMPLATE as HARM_BENCH_PROMPT_TEMPLATE,
+)
+from helm.benchmark.annotation.simple_safety_tests_annotator import (
+    PROMPT_TEMPLATE as SIMPLE_SAFETY_TESTS_PROMPT_TEMPLATE,
+)
 from helm.benchmark.annotation.xstest_annotator import (
     PROMPT_TEMPLATE_SAFE,
     PROMPT_TEMPLATE_UNSAFE,
@@ -187,7 +196,64 @@ class ConfigurableXSTestAnnotator(_ConfigurableSafetyAnnotator):
         )
 
 
+class _SingleTemplateSafetyAnnotator(_ConfigurableSafetyAnnotator):
+    """Safety benchmarks whose official annotator interpolates ONE template
+    with the model input and output.
+
+    SimpleSafetyTests, HarmBench, and AnthropicRedTeam share an identical
+    official ``annotate`` body — ``PROMPT_TEMPLATE.strip()`` with two
+    placeholders substituted — differing only in the template text and (for
+    HarmBench) the placeholder CASE. Subclasses declare those as class
+    attributes; the templates are imported from the installed HELM annotators
+    rather than copied, so prompt parity holds by construction and tracks the
+    HELM version actually installed.
+    """
+
+    PROMPT_TEMPLATE: str
+    QUESTION_PLACEHOLDER = "{{QUESTION}}"
+    ANSWER_PLACEHOLDER = "{{ANSWER}}"
+
+    def build_prompt(self, request_state: RequestState) -> str:
+        assert request_state.result is not None
+        model_input_text = request_state.request.prompt
+        model_output_text = request_state.result.completions[0].text
+        return (
+            self.PROMPT_TEMPLATE.strip()
+            .replace(self.QUESTION_PLACEHOLDER, model_input_text)
+            .replace(self.ANSWER_PLACEHOLDER, model_output_text)
+        )
+
+
+class ConfigurableSimpleSafetyTestsAnnotator(_SingleTemplateSafetyAnnotator):
+    """SimpleSafetyTests with a configurable single judge; official prompt."""
+
+    name = "simple_safety_tests"
+    PROMPT_TEMPLATE = SIMPLE_SAFETY_TESTS_PROMPT_TEMPLATE
+
+
+class ConfigurableHarmBenchAnnotator(_SingleTemplateSafetyAnnotator):
+    """HarmBench with a configurable single judge; official prompt."""
+
+    name = "harm_bench"
+    PROMPT_TEMPLATE = HARM_BENCH_PROMPT_TEMPLATE
+    # HarmBench's official template uses LOWERCASE placeholders, unlike every
+    # other safety benchmark here. Getting this wrong silently ships a prompt
+    # with un-substituted {{question}}/{{answer}} literals to the judge.
+    QUESTION_PLACEHOLDER = "{{question}}"
+    ANSWER_PLACEHOLDER = "{{answer}}"
+
+
+class ConfigurableAnthropicRedTeamAnnotator(_SingleTemplateSafetyAnnotator):
+    """AnthropicRedTeam with a configurable single judge; official prompt."""
+
+    name = "anthropic_red_team"
+    PROMPT_TEMPLATE = ANTHROPIC_RED_TEAM_PROMPT_TEMPLATE
+
+
 __all__ = [
+    "ConfigurableAnthropicRedTeamAnnotator",
+    "ConfigurableHarmBenchAnnotator",
+    "ConfigurableSimpleSafetyTestsAnnotator",
     "ConfigurableXSTestAnnotator",
     "OFFICIAL_SAFETY_JUDGE_MAX_TOKENS",
     "OFFICIAL_SAFETY_JUDGE_TEMPERATURE",
