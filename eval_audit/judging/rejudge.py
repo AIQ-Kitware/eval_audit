@@ -65,6 +65,10 @@ from eval_audit.integrations.helm_judging.safety import (
     OFFICIAL_SAFETY_JUDGE_MAX_TOKENS,
     OFFICIAL_SAFETY_JUDGE_TEMPERATURE,
 )
+from eval_audit.integrations.helm_judging.omni_math import (
+    OFFICIAL_OMNI_MATH_JUDGE_MAX_TOKENS,
+    OFFICIAL_OMNI_MATH_JUDGE_TEMPERATURE,
+)
 from eval_audit.integrations.helm_judging.wildbench import (
     OFFICIAL_WILDBENCH_JUDGE_MAX_TOKENS,
     OFFICIAL_WILDBENCH_JUDGE_TEMPERATURE,
@@ -80,6 +84,7 @@ _OFFICIAL_JUDGE_BUDGETS: dict[str, tuple[float, int]] = {
     "harm_bench": (OFFICIAL_SAFETY_JUDGE_TEMPERATURE, OFFICIAL_SAFETY_JUDGE_MAX_TOKENS),
     "anthropic_red_team": (OFFICIAL_SAFETY_JUDGE_TEMPERATURE, OFFICIAL_SAFETY_JUDGE_MAX_TOKENS),
     "wildbench": (OFFICIAL_WILDBENCH_JUDGE_TEMPERATURE, OFFICIAL_WILDBENCH_JUDGE_MAX_TOKENS),
+    "omni_math": (OFFICIAL_OMNI_MATH_JUDGE_TEMPERATURE, OFFICIAL_OMNI_MATH_JUDGE_MAX_TOKENS),
 }
 
 REJUDGE_ARTIFACT_FORMAT = "helm_rejudge_v1"
@@ -101,6 +106,9 @@ CONFIGURABLE_ANNOTATOR_CLASSES: dict[str, str] = {
     ),
     "wildbench": (
         "eval_audit.integrations.helm_judging.wildbench.ConfigurableWildBenchAnnotator"
+    ),
+    "omni_math": (
+        "eval_audit.integrations.helm_judging.omni_math.ConfigurableOmniMATHAnnotator"
     ),
 }
 

@@ -60,15 +60,23 @@ OJ_SIDECAR_DIR="${OJ_SIDECAR_DIR:-$OJ_ROOT/judge-sidecars}"
 OJ_ANALYSIS_ROOT="${OJ_ANALYSIS_ROOT:-$OJ_ROOT/analysis}"
 OJ_AUDIT_JSON="${OJ_AUDIT_JSON:-$OJ_ROOT/source-audit.json}"
 
-# Candidate model + benchmarks in scope. Cheap label-metric benchmarks first,
-# WildBench last: it is the cost center (~20 s/inst on the dense 27B vs ~1-7 s
-# for the safety family), so a night that runs short still yields the complete
-# safety picture. Omni-MATH joins when its annotator lands.
+# Candidate model + benchmarks in scope, ordered CHEAP FIRST so a night that
+# runs short still yields the complete cheap picture: the safety family
+# (official budget 256 tok, ~1-7 s/inst) then Omni-MATH (4096 tok) then
+# WildBench last (the measured cost center, ~20 s/inst on the dense 27B).
+#
+# The set deliberately spans both metric shapes the v1 run found to behave
+# differently: LABEL metrics (the four safety benchmarks; Omni-MATH's boolean
+# equivalence) vs a CONTINUOUS rubric (WildBench 1..10). Omni-MATH is the
+# out-of-domain test of that split — binary like XSTest but mathematics, so it
+# should be replicate-stable if metric granularity (not subject matter) is what
+# drives fragility.
+#
 # NOTE: a benchmark only runs once 05 (audit) + 08 (snapshot) + 09 (replay
 # gate) have covered it; the overnight driver skips uncovered ones as
 # NO_SNAPSHOT rather than failing.
 OJ_CANDIDATE_MODEL="${OJ_CANDIDATE_MODEL:-openai/gpt-oss-20b}"
-OJ_BENCHMARKS="${OJ_BENCHMARKS:-xstest simple_safety_tests harm_bench anthropic_red_team wildbench}"
+OJ_BENCHMARKS="${OJ_BENCHMARKS:-xstest simple_safety_tests harm_bench anthropic_red_team omni_math wildbench}"
 
 # Judge arms (v1). Endpoint names must match config/infer_stack/catalog.yaml;
 # JudgeSpec JSONs live in configs/open_judge/.

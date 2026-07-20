@@ -119,13 +119,71 @@ class SingleJudgeWildBenchMetric(Metric):
         return stats
 
 
+class SingleJudgeOmniMATHMetric(Metric):
+    """Omni-MATH accuracy from exactly one declared judge.
+
+    The OFFICIAL metric scans every annotation key ending in
+    ``_equivalence_judgement`` and averages them — precisely the key scan §11
+    forbids for a substitute judge, since it would silently fold in unrelated
+    judges' verdicts. This reads two explicit fields instead:
+    ``<judge_id>_equivalence_judgement`` and the official
+    ``empty_output_equivalence_judgement`` shortcut.
+
+    Empty-candidate semantics are the official ones and are the OPPOSITE of
+    WildBench's: an empty candidate is judged WRONG (False -> 0.0), and counts
+    as a successful annotation because the judge was deliberately never asked.
+    A failed or unparseable judgement yields annotator_success 0 and NO score
+    stat — never 0.0, which would be indistinguishable from "judged incorrect".
+    """
+
+    def __init__(self, judge_id: str, annotator_name: str = "omni_math"):
+        super().__init__()
+        self._judge_id = judge_id
+        self._annotator_name = annotator_name
+        self._judgement_field = f"{judge_id}_equivalence_judgement"
+
+    def evaluate_generation(
+        self,
+        adapter_spec: AdapterSpec,
+        request_state: RequestState,
+        metric_service: MetricService,
+        eval_cache_path: str,
+    ) -> List[Stat]:
+        if not request_state.annotations or self._annotator_name not in request_state.annotations:
+            raise ValueError(
+                f"request state has no {self._annotator_name!r} annotations; "
+                f"SingleJudgeOmniMATHMetric must run on rejudged states"
+            )
+        annotation = request_state.annotations[self._annotator_name]
+        judgement = annotation.get(self._judgement_field)
+        if judgement is None and "empty_output_equivalence_judgement" in annotation:
+            judgement = annotation["empty_output_equivalence_judgement"]
+            success = 1  # official semantics: not a judge failure
+        else:
+            success = 1 if judgement is not None else 0
+        stats = [
+            Stat(
+                MetricName(f"omni_math_annotator_success:judge={self._judge_id}")
+            ).add(success)
+        ]
+        if judgement is not None:
+            stats.append(
+                Stat(MetricName(f"omni_math_accuracy:judge={self._judge_id}")).add(
+                    int(bool(judgement))
+                )
+            )
+        return stats
+
+
 #: benchmark -> judge-attributed metric class for rejudge artifacts.
-#: (Omni-MATH lands with its annotator.)
 _SAFETY_METRIC_CLASS = (
     "eval_audit.integrations.helm_judging.metrics.SingleJudgeSafetyMetric"
 )
 _WILDBENCH_METRIC_CLASS = (
     "eval_audit.integrations.helm_judging.metrics.SingleJudgeWildBenchMetric"
+)
+_OMNI_MATH_METRIC_CLASS = (
+    "eval_audit.integrations.helm_judging.metrics.SingleJudgeOmniMATHMetric"
 )
 JUDGE_METRIC_CLASSES: dict[str, str] = {
     "xstest": _SAFETY_METRIC_CLASS,
@@ -133,11 +191,13 @@ JUDGE_METRIC_CLASSES: dict[str, str] = {
     "harm_bench": _SAFETY_METRIC_CLASS,
     "anthropic_red_team": _SAFETY_METRIC_CLASS,
     "wildbench": _WILDBENCH_METRIC_CLASS,
+    "omni_math": _OMNI_MATH_METRIC_CLASS,
 }
 
 _METRIC_CLASS_REGISTRY = {
     _SAFETY_METRIC_CLASS: SingleJudgeSafetyMetric,
     _WILDBENCH_METRIC_CLASS: SingleJudgeWildBenchMetric,
+    _OMNI_MATH_METRIC_CLASS: SingleJudgeOmniMATHMetric,
 }
 
 
