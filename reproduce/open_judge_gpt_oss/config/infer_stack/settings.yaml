@@ -1,0 +1,13 @@
+# infer-stack durable settings for the open-judge experiment (aiq-gpu).
+#
+# The rejudge runs route HELM through the LiteLLM gateway (litellm: true);
+# no Open WebUI for a benchmark run (ui: false). data_dir is BIND-MOUNTED
+# into the vLLM/LiteLLM containers (HF weight cache + gateway route table),
+# so it must live on a docker-mountable big disk — never an NFS $HOME.
+# Override per host via INFER_STACK_DATA_DIR.
+backend: compose
+litellm: true
+ui: false
+skip_display_gpus: false
+reverse_proxy: false
+data_dir: /data/service/infer-stack

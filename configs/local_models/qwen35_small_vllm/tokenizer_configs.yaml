@@ -1,0 +1,28 @@
+# HELM registry sidecar for the Qwen3.5 SMALL base family: shipped into
+# prod_env via the preset's tokenizer_configs_fpath (see model_metadata.yaml
+# alongside). All three sizes share the family tokenizer (vocab 248320) but
+# each id points at its own repo so the tokenizer is loaded from exactly the
+# weights being served.
+tokenizer_configs:
+  - name: qwen/qwen3.5-0.8b-base
+    tokenizer_spec:
+      class_name: "helm.tokenizers.huggingface_tokenizer.HuggingFaceTokenizer"
+      args:
+        pretrained_model_name_or_path: Qwen/Qwen3.5-0.8B-Base
+    # Base-model EOT convention mirrors qwen/qwen1.5-7b (chat variants use <|im_end|>).
+    end_of_text_token: "<|endoftext|>"
+    prefix_token: ""
+  - name: qwen/qwen3.5-2b-base
+    tokenizer_spec:
+      class_name: "helm.tokenizers.huggingface_tokenizer.HuggingFaceTokenizer"
+      args:
+        pretrained_model_name_or_path: Qwen/Qwen3.5-2B-Base
+    end_of_text_token: "<|endoftext|>"
+    prefix_token: ""
+  - name: qwen/qwen3.5-4b-base
+    tokenizer_spec:
+      class_name: "helm.tokenizers.huggingface_tokenizer.HuggingFaceTokenizer"
+      args:
+        pretrained_model_name_or_path: Qwen/Qwen3.5-4B-Base
+    end_of_text_token: "<|endoftext|>"
+    prefix_token: ""

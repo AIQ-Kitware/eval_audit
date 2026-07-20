@@ -1,0 +1,153 @@
+# infer-stack serving catalog for the OPEN-JUDGE experiment on aiq-gpu
+# (docs/planning/open-judge-plan.md Phase 9 / §14). Two judge endpoints,
+# one per v1 arm; single replica, static routing (§2.8 revision — no
+# dynamic routing in v1). Every endpoint declares placement.min_vram_gib
+# (§2.9, house style) so the same catalog is correct on any host; on
+# aiq-gpu's homogeneous 4x96 GiB pool eligibility is trivially satisfied.
+#
+# These are the CHAT/instruct judges (used ONLY as judges, never as
+# candidates). Vision is disabled (all Qwen3.5/3.6 checkpoints are
+# VL-packaged; a judge sends text-only prompts and the mm-profiling pass
+# wastes VRAM + startup time). max_model_len is a starting value — run
+# 08_prompt_length_preflight.sh (§14.3) against the real snapshots and
+# adjust if p99(prompt) + max_tokens + margin exceeds it.
+
+models:
+  # --- Judge-SIZE sweep: the Qwen3.5 post-trained ladder ------------------
+  # POST-TRAINED (instruct) checkpoints, NOT the -Base variants used by the
+  # candidate runbooks: a judge must follow the tagged-output instruction,
+  # which a base model cannot reliably do. Qwen/Qwen3.5-9B is post-trained;
+  # Qwen/Qwen3.5-9B-Base is not (see reproduce/qwen35_vllm).
+  qwen3-5-0-8b:
+    source: hf://Qwen/Qwen3.5-0.8B
+    dtype: bfloat16
+  qwen3-5-2b:
+    source: hf://Qwen/Qwen3.5-2B
+    dtype: bfloat16
+  qwen3-5-4b:
+    source: hf://Qwen/Qwen3.5-4B
+    dtype: bfloat16
+  qwen3-5-9b:
+    source: hf://Qwen/Qwen3.5-9B
+    dtype: bfloat16
+  qwen3-5-27b:
+    source: hf://Qwen/Qwen3.5-27B
+    dtype: bfloat16          # Ampere+ (aiq-gpu 96 GiB cards); recorded fact
+  qwen3-6-35b-a3b:
+    source: hf://Qwen/Qwen3.6-35B-A3B
+    dtype: bfloat16
+
+endpoints:
+  # --- Size-sweep arms: Qwen3.5 0.8B / 2B / 4B / 9B, dense, one GPU each --
+  # Same image pin, chat protocol, window, and vision-disable as the 27B; the
+  # ONLY deliberate difference across the ladder is the weights, so an
+  # agreement-vs-size curve is attributable to judge capacity and not to a
+  # serving difference. min_vram_gib are best guesses (weights + engine
+  # overhead + KV at the 32768 window); refine with
+  # `infer-stack measure <endpoint> --record`. bf16 weight bytes for
+  # reference: 0.8B=1.6, 2B=4.0, 4B=8.0, 9B=18.0 GiB.
+  qwen3.5-0.8b-judge:
+    engine: vllm
+    reclaim: stop
+    model: qwen3-5-0-8b
+    protocol: chat
+    placement:
+      min_vram_gib: 8
+    runtime:
+      image: vllm/vllm-openai:v0.25.1
+      tensor_parallel_size: 1
+      max_model_len: 32768
+      gpu_memory_utilization: 0.90
+      enable_prefix_caching: true
+      extra_args:
+        - '--limit-mm-per-prompt'
+        - '{"image": 0, "video": 0}'
+
+  qwen3.5-2b-judge:
+    engine: vllm
+    reclaim: stop
+    model: qwen3-5-2b
+    protocol: chat
+    placement:
+      min_vram_gib: 12
+    runtime:
+      image: vllm/vllm-openai:v0.25.1
+      tensor_parallel_size: 1
+      max_model_len: 32768
+      gpu_memory_utilization: 0.90
+      enable_prefix_caching: true
+      extra_args:
+        - '--limit-mm-per-prompt'
+        - '{"image": 0, "video": 0}'
+
+  qwen3.5-4b-judge:
+    engine: vllm
+    reclaim: stop
+    model: qwen3-5-4b
+    protocol: chat
+    placement:
+      min_vram_gib: 20
+    runtime:
+      image: vllm/vllm-openai:v0.25.1
+      tensor_parallel_size: 1
+      max_model_len: 32768
+      gpu_memory_utilization: 0.90
+      enable_prefix_caching: true
+      extra_args:
+        - '--limit-mm-per-prompt'
+        - '{"image": 0, "video": 0}'
+
+  qwen3.5-9b-judge:
+    engine: vllm
+    reclaim: stop
+    model: qwen3-5-9b
+    protocol: chat
+    placement:
+      min_vram_gib: 32
+    runtime:
+      image: vllm/vllm-openai:v0.25.1
+      tensor_parallel_size: 1
+      max_model_len: 32768
+      gpu_memory_utilization: 0.90
+      enable_prefix_caching: true
+      extra_args:
+        - '--limit-mm-per-prompt'
+        - '{"image": 0, "video": 0}'
+
+  # --- Arm 1: Qwen3.5-27B, dense, one GPU -------------------------------
+  qwen3.5-27b-judge:
+    engine: vllm
+    reclaim: stop            # free the GPU on last release (per-run leasing)
+    model: qwen3-5-27b
+    protocol: chat           # instruct model -> chat completions
+    placement:
+      min_vram_gib: 60       # best guess: ~54 GiB bf16 weights + KV + overhead;
+                             # refine with `infer-stack measure qwen3.5-27b-judge --record`
+    runtime:
+      image: vllm/vllm-openai:v0.25.1
+      tensor_parallel_size: 1
+      max_model_len: 32768   # starting value; confirm with the §14.3 preflight
+      gpu_memory_utilization: 0.90
+      enable_prefix_caching: true
+      extra_args:
+        - '--limit-mm-per-prompt'
+        - '{"image": 0, "video": 0}'
+
+  # --- Arm 2: Qwen3.6-35B-A3B, MoE, one TP2 instance --------------------
+  qwen3.6-35b-a3b-judge:
+    engine: vllm
+    reclaim: stop
+    model: qwen3-6-35b-a3b
+    protocol: chat
+    placement:
+      min_vram_gib: 40       # per TP shard; ~70 GiB bf16 weights across TP2 + KV;
+                             # refine with `infer-stack measure qwen3.6-35b-a3b-judge --record`
+    runtime:
+      image: vllm/vllm-openai:v0.25.1
+      tensor_parallel_size: 2
+      max_model_len: 32768   # starting value; confirm with the §14.3 preflight
+      gpu_memory_utilization: 0.90
+      enable_prefix_caching: true
+      extra_args:
+        - '--limit-mm-per-prompt'
+        - '{"image": 0, "video": 0}'

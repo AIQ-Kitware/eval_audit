@@ -72,6 +72,13 @@ class METRIC_PREFIXES:
         'ece_',
         'platt_',
         'selective_',
+        # judge-annotator diagnostics: whether a judge request parsed,
+        # not model quality (covers the official safety_gpt_/llama_
+        # variants and the rejudge ':judge=<id>'-attributed form).
+        'safety_gpt_annotator_success',
+        'safety_llama_annotator_success',
+        'safety_annotator_success',
+        'wildbench_annotator_success',
         # meta / dataset sizing
         'num_instances',
         'num_train_',

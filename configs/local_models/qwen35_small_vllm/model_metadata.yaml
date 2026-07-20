@@ -1,0 +1,38 @@
+# HELM registry sidecar for the Qwen3.5 SMALL base family (0.8B / 2B / 4B):
+# shipped into prod_env via the preset's model_metadata_fpath so none of these
+# net-new ids needs an edit to HELM itself (HELM merges this with its builtin
+# registry via register_configs_from_directory). One sidecar pair covers all
+# three ids — the combined preset forwards a single fpath.
+#
+# Architecture note (verified against each repo's config.json, 2026-07-17):
+# every Qwen3.5 non-A*B model — these three AND the 9B — is a DENSE hybrid
+# that interleaves Gated-DeltaNet linear attention with full attention every
+# 4th layer (full_attention_interval: 4). Only the -A{N}B family members
+# (35B-A3B, 122B-A10B, 397B-A17B) are sparse-MoE. num_parameters comes from
+# the safetensors weight bytes / 2 (fp16).
+models:
+  - name: qwen/qwen3.5-0.8b-base
+    display_name: Qwen3.5 0.8B Base
+    description: Qwen3.5 0.8B Base is the pre-trained (base, not post-trained) 0.8B model of the Qwen3.5 family, a dense hybrid architecture interleaving linear attention (Gated Delta Networks) with periodic full attention. ([HF](https://huggingface.co/Qwen/Qwen3.5-0.8B-Base))
+    creator_organization_name: Qwen
+    access: open
+    num_parameters: 870000000
+    release_date: 2026-03-02  # Source: https://github.com/QwenLM/Qwen3.5 README
+    # Base-model tag convention mirrors qwen/qwen1.5-7b (no INSTRUCTION_FOLLOWING).
+    tags: [TEXT_MODEL_TAG, LIMITED_FUNCTIONALITY_TEXT_MODEL_TAG]
+  - name: qwen/qwen3.5-2b-base
+    display_name: Qwen3.5 2B Base
+    description: Qwen3.5 2B Base is the pre-trained (base, not post-trained) 2B model of the Qwen3.5 family, a dense hybrid architecture interleaving linear attention (Gated Delta Networks) with periodic full attention. ([HF](https://huggingface.co/Qwen/Qwen3.5-2B-Base))
+    creator_organization_name: Qwen
+    access: open
+    num_parameters: 2270000000
+    release_date: 2026-03-02
+    tags: [TEXT_MODEL_TAG, LIMITED_FUNCTIONALITY_TEXT_MODEL_TAG]
+  - name: qwen/qwen3.5-4b-base
+    display_name: Qwen3.5 4B Base
+    description: Qwen3.5 4B Base is the pre-trained (base, not post-trained) 4B model of the Qwen3.5 family, a dense hybrid architecture interleaving linear attention (Gated Delta Networks) with periodic full attention. ([HF](https://huggingface.co/Qwen/Qwen3.5-4B-Base))
+    creator_organization_name: Qwen
+    access: open
+    num_parameters: 4660000000
+    release_date: 2026-03-02
+    tags: [TEXT_MODEL_TAG, LIMITED_FUNCTIONALITY_TEXT_MODEL_TAG]

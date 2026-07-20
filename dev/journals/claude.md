@@ -2567,3 +2567,565 @@ Next: Jon runs reproduce/qwen35_vllm/15_run_full.sh on yardrat
 overnight; morning-after checklist = 40_verify_artifacts.sh (no arg =
 full-suite sweep), then the qwen35-9b-base-core virtual experiment for
 the report beside the reproduced Qwen 1.5/2/2.5 numbers.
+
+## 2026-07-17 09:40:46 -0400
+
+**Model/harness:** claude-opus-4-8[1m], Claude Code (VSCode extension).
+
+**User intent:** The overnight full run finished 20 pass / 66 fail. "Are
+the failures logged to disk?" → then: "Drop math and natural_qa. Fix our
+code, a working rule is that we should never modify HELM."
+
+**Failures are fully logged.** Each job writes a bundle under
+`$RESULTS_ROOT/audit-qwen35-9b-base-vllm-full/helm/helm_id_*/`:
+`cmd_stderr.txt` (parent-shell traceback for errors before HELM's logger
+is up), `helm-run.log` / `helm-run.debug.log` (in-HELM errors),
+`cmd_stdout.txt`, `job_config.json` (the run_entry). A failed job = no
+`benchmark_output/runs/**/run_spec.json`. Triage CLI:
+`python -m eval_audit.cli.summarize_experiment_failures <experiment-root>`
+(needs the eval_audit env; the recycled analysis VM lacks `scriptconfig`/
+`kwutil`, so I read the logs directly).
+
+**Root-cause split of the 66 (this is the reproducibility-vs-environment
+distinction the paper hinges on):**
+
+- **57 × mmlu — OUR recipe bug, now fixed.**
+  `TypeError: get_mmlu_spec() got an unexpected keyword argument 'groups'`.
+  The overnight grid was lifted verbatim from the `qwen-1-5-7b` grid, which
+  is a **from-spec reproduction**. In from-spec mode the
+  `…,eval_split=test,groups=mmlu_<subject>` tokens are official-run-NAME
+  matcher metadata — HELM replays a frozen `run_spec.json` and never calls
+  `get_mmlu_spec(**args)`. This preset is **compute** (no `--from-spec`), so
+  every run_entry is parsed and handed straight to `get_mmlu_spec(**args)`,
+  whose signature is `(subject, method=…)` — it rejects both `eval_split`
+  and `groups` (confirmed against `submodules/helm/.../lite_run_specs.py`).
+  The 5 mmlu entries that PASSED were the short-form duplicates already in
+  the grid. Fix: collapse mmlu to the **57 canonical compute-form subjects**
+  (`mmlu:subject=X,method=multiple_choice_joint,model=…`), dropping the
+  5 short+long duplicate pairs to one each. **HELM untouched** — the rule
+  held; the bug was entirely in the authored grid.
+
+- **7 × math + 2 × natural_qa — data-access barriers, DROPPED per Jon.**
+  math: `DatasetNotFoundError: 'hendrycks/competition_math'` (pulled from
+  the HF Hub). natural_qa: `HTTP Error 403: Forbidden` on the source
+  download. These are filter reasons, not reproducibility failures; removed
+  from the grid with a note to re-add the 7+2 entries if the datasets
+  return.
+
+**Grid now 72 entries** (was 86 lines / 85 nominal): boolq 1, commonsense
+1, gsm 1, legalbench 5, med_qa 1, **mmlu 57**, narrative_qa 1, wmt_14 5.
+Verified via raw-YAML family count (loader needs kwutil, absent here).
+
+**Design insight worth keeping:** a from-spec grid and a compute grid are
+NOT interchangeable even for the "same" benchmark. The from-spec run_entry
+is a *lookup key into the official corpus* (carries name-metadata like
+`groups`/`eval_split`); the compute run_entry is a *constructor call*
+(`run_spec_function(**args)`). Lifting one into the other silently smuggles
+lookup-only kwargs into a constructor that rejects them. Any future
+"port a reproduced grid to a compute extension" must strip run_entry args
+down to what the `@run_spec_function` actually accepts.
+
+**Files touched:** `preset_configs.yaml` (qwen35 full_manifest run_entries
++ description + block comment), `reproduce/qwen35_vllm/README.md`,
+`15_run_full.sh`, `_lib.sh` (72-job comment),
+`configs/virtual-experiments/qwen35-9b-base-core.yaml` (count/description).
+
+**Next:** Jon re-runs `15_run_full.sh` on yardrat (force-rerun OFF → the
+20 good runs are skipped, the 57 corrected mmlu + everything else runs
+fresh; the old failed helm_id_* dirs are inert — a failed job left no
+run_spec.json so the skip check re-runs it). Morning-after:
+`40_verify_artifacts.sh` (expect 72 passes), then the qwen35-9b-base-core
+virtual experiment.
+
+### Addendum (same day, 12:10) — VRAM-aware placement plan written into infer-stack
+
+Model switch mid-session: this addendum and the infer_stack work are
+claude-fable-5[1m] (Fable), not Opus.
+
+Planning for the small Qwen3.5 models (0.8B/2B/4B on yardrat's 16GiB RTX
+5000) surfaced that infer-stack placement is count-based first-fit with no
+VRAM awareness — Opus's draft plan compensated with per-runbook
+INFER_STACK_ALLOWED_GPUS pinning, which Jon rejected: he wants infer-stack to
+know that "a request for a particular endpoint can only be satisfied by
+certain GPUs." The chosen design (catalog-declared placement.min_vram_gib +
+eligibility filter + most-constrained-first + best-fit in plan_placement,
+capacity-subtraction internals to leave co-hosting open) is written up as
+infer_stack docs/planning/vram-aware-placement.md — objective stated first,
+rejected alternatives recorded (pinning, undocumented gpu_indices, SLURM),
+submodule commit 1679f8e on jons/tui-async-startup; this superproject commit
+is the intentional gitlink bump. HF research that fed it: all three small
+sizes exist as both -Base and post-trained; all are DENSE hybrid-GDN
+(9B too — its sidecar's "sparse MoE" description is wrong, fix pending);
+same Qwen3_5ForConditionalGeneration arch + vision_config as the 9B, so same
+vLLM image + --limit-mm-per-prompt {"image":0,"video":0}. fp16 weights:
+1.7/4.5/9.3 GB (all fit 16GiB); 9B is 19.3 GB (GPU-0 only — which is exactly
+why placement must be eligibility-aware).
+
+Deferred, per Jon: base-vs-instruct variant choice, runbook packaging, and
+implementation green-light (Phase 0 = tests first).
+
+### Addendum 2 (same day, 14:45) — VRAM-aware placement Phases 0–4 + the small-family runbook
+
+Fable (claude-fable-5[1m]) continuing. Jon green-lit implementation in two
+steps ("do phase 0, 1, and 2", then "do phase 3 and 4 now"), with the
+directive that the smalls get their own runbook (9B results mostly done) and
+that the small batch exercises the everything-eligible path: "when all your
+GPUs are big enough to fit the models you use all your GPUs."
+
+**infer_stack side (commits 16f6bb9 Phases 0–2, 06f2ec2 Phase 3):**
+eligibility-constrained placement per docs/planning/vram-aware-placement.md.
+Catalog `placement: {min_vram_gib}` (strict-keyed, vllm-only); planner
+eligibility + most-constrained-first + best-fit for DECLARED deployments,
+byte-identical legacy behavior for undeclared; heterogeneous
+simulate_inventory ('48,16' = yardrat); vram.py (vLLM profile parser, weight-
+bytes floor from HF cache, measurements overlay, OOM classifier); plan-time
+enrichment (declared > measured > floor); guided OOM error naming the exact
+`infer-stack measure <ep> --record` fix; kubeai warn-and-ignore. Two
+backward-compat subtleties caught and test-pinned: (1) undeclared deployments
+keep index-order selection so pre-declaration catalogs never move; (2) the
+auto-enriched floor gates ELIGIBILITY only — downloading weights must never
+flip an undeclared deployment into best-fit. 376/376 suite green.
+
+**eval_audit side (this commit):** the qwen35_small_vllm arc.
+- Preset `qwen35_small_vllm`: combined 3-model COMPUTE preset (profiles ×3,
+  per-profile nlstrip/completions facts), 216 full entries = 3 × the 9B's
+  corrected 72-entry core token-swapped with inline model_deployment= lease
+  keys, GROUPED BY MODEL (reclaim:stop + refcount coalescing ⇒ 3 cold starts
+  total, not per-entry thrash); 6-entry smoke. One sidecar pair registers all
+  three ids (configs/local_models/qwen35_small_vllm/) — and the descriptions
+  are architecture-CORRECT (dense hybrid-GDN; the 9B sidecar's "sparse MoE"
+  error is not repeated; fixing the 9B's own file is still pending).
+- Runbook reproduce/qwen35_small_vllm/: port of the 9B runbook, QWEN35S_*
+  names, THREE endpoints, and the point of the exercise — NO
+  INFER_STACK_ALLOWED_GPUS anywhere; the catalog declares min_vram_gib
+  best guesses (4 / 7 / 13 GiB; measurement-is-optional per Jon: wrong-low
+  fails guided, wrong-high just wastes a card). 06_check_profiles enforces
+  the declarations exist (an undeclared endpoint is a config regression in
+  this runbook). 40_verify checks the per-run model↔deployment PAIRING
+  (a 2B run claiming the 4B deployment is dirty).
+- Virtual experiment configs/virtual-experiments/qwen35-small-core.yaml
+  (local-only, no official side, same scoping family as the 9B's).
+
+**Validated end-to-end against the REAL new planner** (scratch env with
+Phase 0–3 infer_stack installed): the shipped catalog loads through
+Catalog.load (placement validation active); resolve → plan on
+simulate_inventory('48,16') gives {0.8B→gpu1, 2B→gpu0} for two concurrent
+smalls (both GPUs used, zero pinning) and {9B→gpu0, 4B→gpu1} for the
+cross-runbook concurrency case. That is precisely the behavior Jon asked
+for, demonstrated pre-GPU.
+
+**Not yet validated on yardrat:** the measure command's acquire-once path,
+the real vLLM log-format parse against v0.25.1 output, and the 4B-on-16GiB
+best guess (13 GiB — the tightest fit; the guided error is the designed
+recovery if it's wrong). First real run: ./10_run_smoke.sh in the new
+runbook, ideally with the 9B re-run going concurrently to watch eligibility
+keep them apart.
+
+### Addendum 3 (same day, 15:30) — open-judge plan review (Fable)
+
+Jon had GPT 5.6 draft docs/planning/open-judge-plan.md (rejudge frozen
+official candidate responses with open-weight judges — Qwen3.5-27B /
+Qwen3.6-35B-A3B on aiq-gpu; measure judge-substitution effect). Reviewed and
+revised. Verification-first: every load-bearing repo claim in the draft
+CHECKED OUT against the tree (plugin seams, Phase-0 tests, codec, the six
+hard-coded annotators + model_as_judge TODO, extract_judge_models, the
+qwen3.6-35b-a3b-dual-tp2-4x96 recipe, both judges on HF). The core design —
+immutable response snapshot → attributable judgment attempts, identity-replay
+stop gate, prompt-parity tests, judge-attributed metric names — endorsed
+unchanged.
+
+Revisions: (1) multi-replica + dynamic routing DEMOTED from v1 requirement
+to post-pilot scale-out — it's a throughput optimization presented as a
+correctness requirement, and it put the least-proven infra (Postgres LiteLLM
+dynamic routing) on the critical path; v1 = one replica per judge arm,
+static routing, and Milestone D *measures* whether scale-out is ever needed.
+(2) Stitched in same-day VRAM-aware placement (§2.9: judge endpoints declare
+min_vram_gib, measure --record refines, lease_ttl lesson). (3) Fixed Phase-0
+env instructions (wrong repo name, per-project .venv vs Jon's top-level-venv
+convention). (4) New §19.1: at T=0, replicates measure SERVING
+nondeterminism, not sampling variance — reportable as such, with a
+Milestone-D drop-to-1 decision point; prompt-parity must assert official
+temperatures rather than assuming 0.0. (5) Concrete v1 topologies with
+declared placements. Review record appended to the doc itself (§25).
+
+Design takeaway: when reviewing a generated plan, the highest-value pass is
+fact-verification against the tree (all held here — rare) and then
+*risk-ordering*: a plan can be entirely correct and still wrong about what
+belongs on the critical path.
+
+## 2026-07-17 17:11:42 -0400
+
+**User intent.** "Please implement the new plan" — begin executing the
+reviewed/revised `docs/planning/open-judge-plan.md` (open-weight judge
+rejudging). Model: Fable (`claude-fable-5`, 1M context), Claude Code harness,
+autonomous session on aivm-2404-yardrat.
+
+**What landed: Milestone A complete (Commits 1–8 of the plan's v1
+sequence).** Eight commits, each independently green, 80 new tests, full fast
+suite 671 passed (4 pre-existing store-path failures unrelated):
+
+- `cc2240c` Commit 1 — source-artifact audit (`eval_audit/judging/`
+  package, canonical display-key module, JSON-level per-run shape
+  validation, `eval-audit-audit-judge-sources`).
+- `68bc1cf` Commit 2 — immutable content-addressed response snapshots
+  (judge-neutral reconstructed ScenarioState via HELM codec, detached
+  official annotations, DONE-last atomicity, hash covers only
+  judging-relevant facts).
+- `8f7f871` Commit 3 — official-annotation identity replay gate (reattach
+  originals, real `Metric.evaluate`, 1e-12 vs published stats).
+- `b1cb780` Commit 4 — JudgeSpec/JudgmentAttemptSpec (canonical hashing over
+  inference-affecting fields only; flat annotator args recoverable by the
+  existing `extract_judge_models`).
+- `d26e372` Commit 5 — ConfigurableXSTestAnnotator + shared judge
+  request/provenance helper; prompt-parity tests vs the official annotator.
+- `6742f23` Commit 6 — annotation-only rejudge runner (`helm_rejudge_v1`
+  artifacts, per-(snapshot, judge, replicate) SQLite caches,
+  `Request.random` replicate identity, candidates proven unchanged;
+  deterministic offline fake-judge deployment drives the REAL
+  AnnotatorFactory→AutoClient path in tests).
+- `9e1c709` Commit 7 — SingleJudgeSafetyMetric (judge-attributed names,
+  explicit-field read, stop gate pinned) + stats wired into the runner;
+  taxonomy: `*_annotator_success*` → bookkeeping.
+- `def0847` Commit 8 — ConfigurableWildBenchAnnotator + metric (official
+  template/regex/empty-output semantics, 1..10 range check) + the §10.6
+  cross-annotator parse-failure matrix.
+
+**Environment note.** No persistent Python env existed for user `agent` on
+this VM; created the CLAUDE.md-documented env at
+`~/.local/uv/envs/uvpy3.13.2` (uv, Python 3.13.14) and installed
+eval_audit + aiq-magnet + infer_stack editable. Phase 0 baseline: 25
+passed / 5 skipped before any new code.
+
+**Two findings worth keeping (both caught by the gates the plan insisted
+on):**
+
+1. *The identity-replay gate caught my own fixture twice.* Official
+   `safety_score` aggregation is judge-count-weighted (per-instance Stat
+   gets one `.add()` per parsed judge, then trial-merge + `take_mean`), not
+   mean-of-instance-means (0.85 vs 0.875 on the fixture); and real published
+   `stats.json` carries derived `computed_on=worst` robustness/fairness rows
+   even for unperturbed runs (`compute_worst_case_metrics` emits them
+   unconditionally). Exactly the class of misreconstruction the gate exists
+   to stop before a judge request is ever sent.
+2. *The official safety judge ensemble is HELM-version-dependent.* The
+   installed (newer) crfm-helm has commented out the Llama-405B judge
+   (deprecated 2026-03-06) — GPT-only now — while the pinned submodule and
+   the published gpt-oss-20b artifacts have both. Prompt-parity tests
+   therefore assert prompt bytes and budgets but not ensemble size, and the
+   source audit accepts any-of the official judge fields. The judge_registry
+   maintenance note ("suite-version-qualified entries") anticipated this.
+
+**Design choices beyond the plan text (documented in-module):** snapshots
+also carry verbatim `source_stats.json`/`source_per_instance_stats.json` so
+the replay gate survives corpus moves (excluded from hash identity);
+out-of-range judge scores are recorded as `out_of_range` with a null score
+rather than silently accepted (official parsers accept any float) — never
+affects identity replay, which uses original annotations; the fake judge
+client answers in whichever official format the prompt calls for, keeping
+one deployment for both benchmarks' fixtures.
+
+**Not done / next steps (serving-facing half, needs Jon's input):**
+
+- The Phase 1 stop gate ("at least one real XSTest + WildBench source passes
+  the audit") needs a host that mounts `/data/crfm-helm-public` — not this
+  VM. Run `eval-audit-audit-judge-sources` there first.
+- Commit 9 (judge sidecar export + optional Qwen thinking client — plan
+  says only if live smoke proves the switch is needed), Commit 11 (kwdagger
+  rejudge pipeline), Commit 12 (indexing + judge-variance analysis),
+  Commit 13 (aiq-gpu runbook incl. §14.3 context-length preflight),
+  Commit 14 (remaining safety benchmarks + Omni-MATH). Commit 10
+  (multi-replica) stays DEFERRED per the review.
+- Milestone B (XSTest 20-instance live smoke, Qwen3.5-27B on aiq-gpu) is the
+  first GPU step; the §14.1 catalog declaration (TP1, min_vram_gib 60 guess)
+  is written in the plan.
+
+**Reusable insights.** (1) A replay-identity gate pays for itself during
+*development* — it debugs your reconstruction long before it validates the
+experiment. (2) When mirroring an upstream pipeline, generate fixtures from
+the upstream's own aggregation semantics or the gate will correctly refuse
+your fixtures — hand-derived "obvious" aggregation (mean-of-means) was wrong
+twice. (3) Registering a deterministic fake deployment through the real
+config/factory/cache stack tests an order of magnitude more plumbing than
+injecting a mock client — the cache-restart and replicate-isolation tests
+run against HELM's actual SQLite layer.
+
+## 2026-07-18 (addendum) — Phases 1–3 validated on real public data
+
+Jon ran the three-command validation on aiq-gpu (corpus-mounted host).
+Both gpt-oss-20b closed-judge sources now audit OK and reproduce their
+published judge metrics exactly through the identity-replay gate:
+
+- xstest (safety/v1.14.0): max_err 0, 2250 instance + 15 aggregate rows.
+- wildbench (capabilities/v1.12.0): max_err 1.95e-14 (< 1e-12 gate),
+  2000 instance + 6 aggregate rows.
+
+One real-data fix in between (`9f3cdc5`): official WildBench public runs
+use `adapter_method=chat`, not generation — the audit had whitelisted
+generation only and (correctly, loudly) skipped WildBench. Made
+supported adapter methods a per-benchmark profile field and allowed
+{generation, chat} for WildBench (its annotator reads
+instance.input.messages + the single completion, consumes no
+reconstruction-default fields → chat is shape-equivalent). Kept it a
+curated allow-list, NOT a blanket chat accept (safety stays
+generation-only), per the plan's inspect-the-actual-shape rule. Also
+fixed the fixture builder, which had wrongly labeled WildBench
+generation — had it matched reality, this surfaces in CI not on the GPU
+box. The replay gate on the real chat run then *proved* the
+reconstruction faithful (max_err ~2e-14) rather than me asserting it.
+
+Also added `eval-audit-verify-judge-replay` (`f91ddd7`) — the runbook
+interface for the Phase 3 gate (09_verify_official_identity_replay.sh).
+
+This closes the offline correctness core against real data. Next
+buildable-offline: Commit 9 (judge sidecar bundle export) and Commit 12
+(indexing + judge-variance analysis, which can run against the rejudge
+fixture artifacts). Commit 12 carries one design decision worth Jon's
+input (dedicated judge-analysis table vs virtual-experiment
+integration — plan §17 recommends the dedicated path first). Serving
+commits (9 partially, 11, 13) and Milestone B need the GPU box.
+
+## 2026-07-18 (addendum 2) — Commit 12: indexing + judge analysis (offline)
+
+After real-data validation, continued the plan with the next
+cleanly-offline piece. Commit 9 (judge sidecar export) turned out to
+couple to the infer-stack catalog + §14.3 context preflight (Commit 13
+territory), so building it in isolation would mean guessing the serving
+interface — deferred it to land with 13. Did Commit 12 instead
+(`73cb1d7`): eval_audit/judging/indexing.py + analysis.py +
+eval-audit-analyze-judges. Joins rejudge artifacts + snapshot official
+annotations strictly by (response_set_hash, display key); reports
+per-arm aggregate/failure/replicate-variance and pairwise
+open-vs-official / open-vs-open / official gpt-vs-llama baseline with
+diffs, Pearson/Spearman, agreement, kappa (label kind), bootstrap CI.
+numpy-only stats (no scipy dep). Tested by running the real fake-judge
+runner for 2 arms x 2 replicates and analyzing — 81 tests in the
+open-judge suite now.
+
+Remaining is serving/GPU-facing and needs Jon's direction: Commit 9
+(sidecars, with 13), Commit 11 (kwdagger rejudge pipeline — orchestration
+best validated near real infra), Commit 13 (aiq-gpu runbook + §14.3
+prompt-length preflight to size max_model_len + judge catalog with
+declared min_vram_gib), Commit 14 (remaining safety benchmarks +
+Omni-MATH), then Milestone B (XSTest live smoke, Qwen3.5-27B). The
+offline correctness + analysis stack is complete and real-data-proven;
+what's left produces judge requests and costs GPU time.
+
+## 2026-07-18 (addendum 3) — serving-facing build: Commits 9 + 13 (runbook ready)
+
+Jon green-lit aiq-gpu ("free, want to utilize it") and confirmed the v1
+judges, so I built the full serving-facing scaffolding toward a live
+Milestone B. Landed:
+
+- Commit 9 (`c11fef1`): judge HELM sidecars (configs/open_judge/
+  model_metadata + tokenizer for qwen/qwen3.5-27b + qwen/qwen3.6-35b-a3b,
+  chat/instruct) + judge_bundle_export.py (reuses the pure-static
+  resolve_serving_facts + _model_deployment_entry; chat ->
+  NullSafeOpenAIChatClient; §23 anti-goal guarded up front) +
+  eval-audit-export-judge-bundle + the aiq-gpu judge catalog/settings +
+  two JudgeSpec JSONs.
+- Commit 13a (`8c8dbf2`): §14.3 prompt-length preflight
+  (eval-audit-judge-prompt-lengths) — renders the real judge prompts over
+  a snapshot (excludes the empty-candidate shortcut) and sizes
+  max_model_len; HF tokenizer optional, char estimate fallback.
+- Commit 13b (`6c25c85`): reproduce/open_judge_gpt_oss/ runbook (00/03/05/
+  08/09/10/20/30 + README) and run_rejudge(max_instances=N) for a smoke
+  subset (folded into attempt/request identity via a ':limitN'
+  request_random suffix so it can't collide with a full run).
+
+Design decision made mid-build (correct, prevents a latent bug): JudgeSpec
+temperature/max_tokens are now OPTIONAL (default None = the benchmark's
+official budget). A judge arm is reused across benchmarks whose official
+max_tokens differ (safety 256, WildBench 2000); baking one in would have
+truncated WildBench judges. The runner resolves the official per-benchmark
+budget when None and records the effective value + source in the manifest.
+
+Commit 9's sidecar export was originally deferred as "needs the catalog
+(Commit 13)" — but resolve_serving_facts is pure-static (reads catalog.yaml,
+no live gateway), so once I hand-authored the aiq-gpu catalog the export
+became fully offline-testable. Good reminder to check whether a "needs
+serving" dependency is actually a runtime dependency or just a config file.
+
+Full open-judge suite now 119 tests. Everything that can be validated
+without a GPU is validated. The runbook's live scripts (20/30) and the
+infer-stack acquire/gateway idioms are UNTESTED against real serving —
+mirrored from the qwen35 runbooks; the first Milestone-B run on aiq-gpu is
+the validation, exactly as the candidate runbooks were built. Handed to
+Jon to run 00->20->30 on aiq-gpu.
+
+Still deferred: Commit 11 (kwdagger rejudge pipeline — grouped-by-arm
+scheduling; the smoke uses manual lease instead), Commit 14 (remaining
+safety benchmarks + Omni-MATH). Commit 10 (multi-replica) stays out.
+
+## 2026-07-18 18:29:24 -0400
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**User intent:** Continue "implement the new plan" (open-judge). Debug the
+Milestone-B live judge smoke on aiq-gpu to a clean parse rate, then record the
+milestone and line up Milestone C.
+
+**Milestone B is DONE — first live judge run validated.** XSTest / 20
+instances / Qwen3.5-27B / 1 replicate, served via infer-stack+LiteLLM. Final:
+18/20 parse ok, **18/18 verdict agreement with the official GPT-4o+Llama
+ensemble** (every parsed Qwen score exactly matched both official judges),
+`safety_score:judge=qwen3_5_27b`=0.833 (15/18). The 2 failures are legitimate
+token-budget truncations (`finish_reason=length`, no `</think>`), not parser
+bugs.
+
+**Two debugging insights worth reusing:**
+
+1. *A parser code-change with no spec field is invisible to the attempt cache.*
+   The strip_thinking fix (2d78e4b) first returned a stale `cache-hit`: the
+   whole attempt short-circuited on its DONE file because `attempt_hash` (←
+   `spec_hash` ← parser_version + budget + …) hadn't moved, so it served the
+   pre-fix malformed results and the fix never ran. Fixed by bumping
+   `parser_version` "official-v1"→"official-v1+strip-think" (d251e2a). This is
+   the identity guardrail working as designed ("silent defaults become silent
+   experiment configuration") — the honest record of a parser behavior change
+   is also exactly what invalidates the cache. **Rule: any change to parser or
+   prompt behavior MUST bump its `*_version` field.** Because parser_version
+   also keys the SQLite request-cache path, the bump forces a genuine GPU
+   regeneration (fine here — no committed full run depends on the old hash).
+
+2. *Qwen thinking judges draft the answer tags as placeholders inside their
+   thinking.* The real bug behind the earlier 6 malformed-stop cases was the
+   non-greedy `<reasoning>/<score>` regex matching PLACEHOLDER tags the model
+   writes while reasoning, before the real `</think>`-terminated answer.
+   `strip_thinking` (split on last `</think>`, parse only the suffix) fixes it
+   and is a strict no-op on official non-thinking responses, so parse parity
+   with the official annotators is preserved. The 2 remaining truncations are a
+   budget matter, not a parser matter (judge still mid-thinking at 1280 tokens).
+
+**Design tradeoff still open:** `reasoning_headroom_tokens`=1024 (→1280 for
+safety, 256 official + headroom) leaves ~10% truncated at temp=0. Raising it
+(e.g. 2048) cuts truncations but slows every judgment (~6.6s/instance already,
+since thinking can't be disabled on the deployed vLLM v0.25.1). Deferred the
+decision to see the strip-think result cleanly first (done); recommend raising
+before the full run and flagging it to Jon.
+
+**Next:** generalize the hardcoded `20_smoke_xstest_qwen35.sh` into a
+parameterized smoke (benchmark × judge) so Milestone C (WildBench, Qwen3.5-27B)
+and the Qwen3.6-35B-A3B arm (TP2) reuse one script; commit; hand Jon the next
+runs. Still deferred: Commit 11 (kwdagger rejudge pipeline), Commit 14
+(remaining safety benchmarks + Omni-MATH). `submodules/every_eval_ever` gitlink
+remains modified/unstaged (flagged, not committed).
+
+## 2026-07-19 16:35:00 -0400
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**User intent:** Get a full overnight open-judge run launched and analyzed.
+
+**The v1 experiment is COMPLETE.** 12/12 attempts OK in ~20.3 h (est. 21 h) on
+aiq-gpu: full XSTest (450) and WildBench (1000), both judge arms, 3 replicates,
+temp 0, headroom 4096. Driver `50_overnight_run.sh` worked unattended end to
+end — per-judge leasing, idempotent DONE-gated attempts, auto-analysis.
+
+**Three findings, in ascending order of interest.**
+
+1. *XSTest: open judges are a drop-in replacement.* Agreement with official
+   GPT-4o is kappa 0.936 (qwen35) / 0.928 (qwen36); the two OFFICIAL judges
+   agree with each other at only kappa 0.829. The open-vs-closed perturbation
+   is **smaller than the closed ensemble's own internal disagreement**. Parse
+   99.6/99.8% (the 4096 headroom fixed the smoke's ~10% truncation).
+
+2. *WildBench: aggregate reproduces, instances do not.* Open judges run ~0.8
+   lower than officials, but open-vs-open agreement (abs 0.66, pearson 0.935)
+   ≈ official-vs-official (abs 0.63, pearson 0.936). Run-level mean is stable
+   across replicates (stddev ~0.22 on ~6.7, ~3%) while **43–46% of individual
+   instances change score** (max range 5–6 points on a 1–10 scale).
+
+3. *The mechanism.* Judge TEXT is non-deterministic at temp 0 on both
+   benchmarks — 87–96% of instances generate different raw output across
+   replicates (vLLM continuous batching → batch-composition-dependent FP
+   reduction order → different argmax at near-ties → divergent token →
+   cascading CoT). Whether that reaches the metric depends on **metric
+   granularity**: XSTest's near-binary label absorbs it (0.2–0.7% score
+   change); WildBench's 1–10 rubric has no attractor (43–46%). So **judge
+   non-determinism is universal; metric fragility is a property of the metric,
+   not the judge.** That lands squarely in the project's per-metric-fragility
+   framing.
+
+**The check that made finding 3 trustworthy.** We vary `Request.random` per
+replicate for cache keys, which would have been a self-inflicted explanation
+for the divergence. Verified it is cache-key-only for our client: our judges
+derive from `OpenAIClient`, `helm/clients/openai_client.py` has NO seed
+handling, and `client.py:make_cache_key` only appends random to the key. Worth
+remembering that bedrock/cohere/mistral/reka/google_genai DO map random→seed —
+the same reasoning would be wrong there. General lesson: before attributing
+variance to the environment, prove your own experimental knobs aren't the cause.
+
+**Honest caveat.** WildBench+qwen35 still truncates 14.2% (142/1000) at the
+6096 ceiling; its replicate stats rest on the 594/1000 parsed in all three
+replicates — plausibly a biased subset (long/hard instances drop out). qwen36
+(2% parse fail, 883/1000) shows the same effect, which corroborates but does
+not fully substitute. Fix truncation before publishing qwen35 WildBench numbers.
+
+**Next:** raise headroom for the WildBench+qwen35 arm specifically (a
+per-benchmark headroom would be better than the current single JudgeSpec field)
+and re-run that arm; then Commit 11 (kwdagger pipeline) and Commit 14
+(remaining safety benchmarks + Omni-MATH). `submodules/every_eval_ever` gitlink
+still modified/unstaged (flagged, uncommitted).
+
+## 2026-07-20 09:15:00 -0400
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**User intent:** After the v1 results landed — keep the GPUs busy and "finish it
+out": judge-size sweep, remaining benchmarks, and the scheduler.
+
+**Landed this session (after the v1 analysis):** the Qwen3.5 judge-size ladder
+(`2b0b867`..`e152496` era configs), the safety trio (`b5816b9`), concurrency
+fixes to the serial driver (`27d8cad`), the kwdagger rejudge pipeline
+(Commit 11), and Omni-MATH (Commit 14b). The benchmark surface is now complete:
+4 safety + Omni-MATH + WildBench, six judge arms, all wired end to end.
+
+**The thing worth writing down is a process failure, not a technical one.**
+Jon asked whether `50_overnight_run.sh` would use all 4 GPUs. It would not — it
+is serial over judges and every arm is TP1, so one worker holds one card. That
+was knowable from the moment I wrote the driver. Worse, I had carried Commit 11
+(the kwdagger fan-out) as "deferred" all session, including when he explicitly
+asked *what is valuable to run next* — and I answered with benchmarks and
+sweeps, never mentioning that the execution substrate was wasting 75% of the
+box. He only found out by asking directly, and then apologized for not checking.
+
+Root cause is a sentence I wrote in `_lib.sh` during Commit 13b: "Unlike the
+candidate runbooks this does NOT use kwdagger per-run leasing". The *reason* is
+sound — the candidate runbooks' per-run acquire→infer→release idiom would
+reload judge weights every job. But the sentence hardened "this idiom does not
+fit" into "this tool is not used here", and every later decision inherited it.
+The plan itself contradicted it: Commit 11's spec is literally "reuse one
+serving session across several rejudge jobs."
+
+**Two reusable lessons.** (1) When you write down *why not*, scope the negation
+precisely — "not this idiom" and "not this tool" are different claims, and the
+looser one propagates. I left the correction in the header explicitly rather
+than quietly deleting it, because a reader who only sees clean code will
+re-derive the original conclusion. (2) A deferral is a decision with a shelf
+life. "Serial is fine" was true for 2 judges x 2 benchmarks; at 6 judges x 6
+benchmarks x 3 replicates it is a 4x waste. Deferrals should be re-costed when
+the workload changes, not carried as settled. The tell was that my recommended
+workaround — open four tmux panes and pin one judge each — was me hand-executing
+a scheduler.
+
+**Design notes from the new code.** The rejudge matrix planner is deliberately
+free of kwdagger AND helm imports so fan-out logic is unit-testable with no
+scheduler and no GPU (it is; 10/10 pass locally via a pytest shim, since this
+workstation has neither pytest nor helm). Rows group by judge because contiguity
+keeps infer-stack's demand refcount above zero and the weights resident —
+interleaving would reload multi-GiB weights under `reclaim: stop`. And
+`judge_spec_hash` rides as job identity because a JSON *path* does not change
+when the file is edited — the identical trap that produced a stale `cache-hit`
+earlier in the session when a parser fix did not move `parser_version`. That bug
+class has now appeared three times (safety tags, WildBench JSON, Omni-MATH
+headings drafted inside a thinking block); `strip_thinking` before official
+parsing is the standing fix.
+
+**Unvalidated — the honest list.** Nothing from this session has executed. The
+safety trio, Omni-MATH, and the kwdagger pipeline are compile-checked and
+unit-tested where possible, but HELM/kwdagger/pytest are all absent locally, so
+the parity tests and the fan-out have never run. Next on aiq-gpu: `05`/`08`/`09`
+for the four new benchmarks — the replay gate is the real check on the new
+prompt-construction code and costs zero GPU — then a small `--max-instances`
+kwdagger fan-out before trusting it with a night. `submodules/every_eval_ever`
+gitlink remains modified/unstaged (flagged, uncommitted) throughout.
