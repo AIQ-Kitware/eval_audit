@@ -30,8 +30,22 @@ def _load_judge(name: str) -> JudgeSpec:
     return JudgeSpec(**fields)
 
 
+#: Every shipped judge arm: the Qwen3.5 post-trained size ladder (the
+#: judge-size sweep) plus the Qwen3.6 MoE. All must resolve against the
+#: aiq-gpu catalog with identical serving facts, so an agreement-vs-size
+#: curve is attributable to judge capacity and not to a serving difference.
+SHIPPED_JUDGES = (
+    "qwen3_5_0_8b",
+    "qwen3_5_2b",
+    "qwen3_5_4b",
+    "qwen3_5_9b",
+    "qwen3_5_27b",
+    "qwen3_6_35b_a3b",
+)
+
+
 def test_shipped_judge_specs_and_catalog_resolve():
-    for name in ("qwen3_5_27b", "qwen3_6_35b_a3b"):
+    for name in SHIPPED_JUDGES:
         judge = _load_judge(name)
         entry, facts = build_judge_deployment_entry(
             judge, config_dir=AIQ_CONFIG_DIR, api_key_value="test-key"

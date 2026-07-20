@@ -65,16 +65,30 @@ LITELLM_BASE_URL="${LITELLM_BASE_URL:-http://localhost:$LITELLM_PORT}"
 # and block with `infer-stack wait` up to this budget instead.
 OJ_LEASE_WAIT_TIMEOUT="${OJ_LEASE_WAIT_TIMEOUT:-3600}"
 
-# Resolve a judge key to "<lease-endpoint> <judge-json>". Accepts the short
-# key (qwen35/qwen36) or the JudgeSpec id. Prints the pair or returns nonzero
-# so the caller can fail loudly on an unknown judge (never a silent default).
+# Resolve a judge key to "<lease-endpoint> <judge-json>". Accepts the
+# JudgeSpec id (qwen3_5_9b), the endpoint-ish form (qwen3.5-9b), or the
+# legacy short keys (qwen35/qwen36 -> the two v1 arms). Prints the pair or
+# returns nonzero so the caller fails loudly on an unknown judge (never a
+# silent default).
 oj_judge_spec() {
-  case "$1" in
-    qwen35|qwen3_5_27b|qwen3.5-27b) echo "qwen3.5-27b-judge $OJ_JUDGE_JSON_QWEN35" ;;
-    qwen36|qwen3_6_35b_a3b|qwen3.6-35b-a3b) echo "qwen3.6-35b-a3b-judge $OJ_JUDGE_JSON_QWEN36" ;;
+  local key="$1" id ep
+  case "$key" in
+    qwen35) id=qwen3_5_27b;       ep=qwen3.5-27b ;;
+    qwen36) id=qwen3_6_35b_a3b;   ep=qwen3.6-35b-a3b ;;
+    qwen3_5_0_8b|qwen3.5-0.8b) id=qwen3_5_0_8b; ep=qwen3.5-0.8b ;;
+    qwen3_5_2b|qwen3.5-2b)     id=qwen3_5_2b;   ep=qwen3.5-2b ;;
+    qwen3_5_4b|qwen3.5-4b)     id=qwen3_5_4b;   ep=qwen3.5-4b ;;
+    qwen3_5_9b|qwen3.5-9b)     id=qwen3_5_9b;   ep=qwen3.5-9b ;;
+    qwen3_5_27b|qwen3.5-27b)   id=qwen3_5_27b;  ep=qwen3.5-27b ;;
+    qwen3_6_35b_a3b|qwen3.6-35b-a3b) id=qwen3_6_35b_a3b; ep=qwen3.6-35b-a3b ;;
     *) return 1 ;;
   esac
+  echo "${ep}-judge $ROOT/configs/open_judge/${id}.json"
 }
+
+# The judge-SIZE sweep, small -> large (the Qwen3.5 post-trained ladder plus
+# the Qwen3.6 MoE). Used as the default judge list for the overnight run.
+OJ_JUDGE_LADDER="${OJ_JUDGE_LADDER:-qwen3_5_0_8b qwen3_5_2b qwen3_5_4b qwen3_5_9b qwen3_5_27b qwen3_6_35b_a3b}"
 
 # Resolve the snapshot directory for a benchmark by reading manifests under
 # OJ_SNAPSHOT_ROOT (built by 08). Prints the dir path or returns nonzero.

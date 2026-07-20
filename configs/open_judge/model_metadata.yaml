@@ -11,6 +11,43 @@
 # publication-grade run. num_parameters for the MoE judge is the TOTAL
 # parameter count (active is ~3B).
 models:
+  # --- Judge-size sweep: the Qwen3.5 post-trained ladder ---------------
+  # All post-trained (instruct) checkpoints, never the -Base variants: a
+  # judge must follow the tagged-output instruction. Same family and
+  # post-training recipe across the ladder, so agreement-vs-size is
+  # attributable to capacity.
+  - name: qwen/qwen3.5-0.8b
+    display_name: Qwen3.5 0.8B
+    description: Qwen3.5 0.8B is the smallest post-trained (instruct) dense model of the Qwen3.5 family. Used as an open-weight judge in the judge-size sweep. ([HF](https://huggingface.co/Qwen/Qwen3.5-0.8B))
+    creator_organization_name: Qwen
+    access: open
+    num_parameters: 800000000     # approximate; confirm against the HF repo
+    release_date: 2026-03-02      # Qwen3.5 family; confirm
+    tags: [TEXT_MODEL_TAG, FULL_FUNCTIONALITY_TEXT_MODEL_TAG, INSTRUCTION_FOLLOWING_MODEL_TAG]
+  - name: qwen/qwen3.5-2b
+    display_name: Qwen3.5 2B
+    description: Qwen3.5 2B is a post-trained (instruct) dense model of the Qwen3.5 family. Used as an open-weight judge in the judge-size sweep. ([HF](https://huggingface.co/Qwen/Qwen3.5-2B))
+    creator_organization_name: Qwen
+    access: open
+    num_parameters: 2000000000    # approximate; confirm against the HF repo
+    release_date: 2026-03-02      # Qwen3.5 family; confirm
+    tags: [TEXT_MODEL_TAG, FULL_FUNCTIONALITY_TEXT_MODEL_TAG, INSTRUCTION_FOLLOWING_MODEL_TAG]
+  - name: qwen/qwen3.5-4b
+    display_name: Qwen3.5 4B
+    description: Qwen3.5 4B is a post-trained (instruct) dense model of the Qwen3.5 family. Used as an open-weight judge in the judge-size sweep. ([HF](https://huggingface.co/Qwen/Qwen3.5-4B))
+    creator_organization_name: Qwen
+    access: open
+    num_parameters: 4000000000    # approximate; confirm against the HF repo
+    release_date: 2026-03-02      # Qwen3.5 family; confirm
+    tags: [TEXT_MODEL_TAG, FULL_FUNCTIONALITY_TEXT_MODEL_TAG, INSTRUCTION_FOLLOWING_MODEL_TAG]
+  - name: qwen/qwen3.5-9b
+    display_name: Qwen3.5 9B
+    description: Qwen3.5 9B is a post-trained (instruct) dense model of the Qwen3.5 family. Used as an open-weight judge in the judge-size sweep. ([HF](https://huggingface.co/Qwen/Qwen3.5-9B))
+    creator_organization_name: Qwen
+    access: open
+    num_parameters: 9000000000    # approximate; confirm against the HF repo
+    release_date: 2026-03-02      # Qwen3.5 family; confirm
+    tags: [TEXT_MODEL_TAG, FULL_FUNCTIONALITY_TEXT_MODEL_TAG, INSTRUCTION_FOLLOWING_MODEL_TAG]
   - name: qwen/qwen3.5-27b
     display_name: Qwen3.5 27B
     description: Qwen3.5 27B is the post-trained (instruct) dense model of the Qwen3.5 family, a dense hybrid architecture interleaving linear attention (Gated Delta Networks) with periodic full attention. Used as an open-weight judge. ([HF](https://huggingface.co/Qwen/Qwen3.5-27B))

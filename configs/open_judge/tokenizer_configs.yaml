@@ -4,6 +4,34 @@
 # family (<|endoftext|>). Each id loads its tokenizer from its own repo so
 # window sizing reflects exactly the weights being served.
 tokenizer_configs:
+  - name: qwen/qwen3.5-0.8b
+    tokenizer_spec:
+      class_name: "helm.tokenizers.huggingface_tokenizer.HuggingFaceTokenizer"
+      args:
+        pretrained_model_name_or_path: Qwen/Qwen3.5-0.8B
+    end_of_text_token: "<|im_end|>"
+    prefix_token: ""
+  - name: qwen/qwen3.5-2b
+    tokenizer_spec:
+      class_name: "helm.tokenizers.huggingface_tokenizer.HuggingFaceTokenizer"
+      args:
+        pretrained_model_name_or_path: Qwen/Qwen3.5-2B
+    end_of_text_token: "<|im_end|>"
+    prefix_token: ""
+  - name: qwen/qwen3.5-4b
+    tokenizer_spec:
+      class_name: "helm.tokenizers.huggingface_tokenizer.HuggingFaceTokenizer"
+      args:
+        pretrained_model_name_or_path: Qwen/Qwen3.5-4B
+    end_of_text_token: "<|im_end|>"
+    prefix_token: ""
+  - name: qwen/qwen3.5-9b
+    tokenizer_spec:
+      class_name: "helm.tokenizers.huggingface_tokenizer.HuggingFaceTokenizer"
+      args:
+        pretrained_model_name_or_path: Qwen/Qwen3.5-9B
+    end_of_text_token: "<|im_end|>"
+    prefix_token: ""
   - name: qwen/qwen3.5-27b
     tokenizer_spec:
       class_name: "helm.tokenizers.huggingface_tokenizer.HuggingFaceTokenizer"

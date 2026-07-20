@@ -52,6 +52,27 @@ in-process against the gateway, then releases on exit (trap). No candidate
 inference happens — only the annotation stage runs, and the runner proves
 every candidate response byte-unchanged before writing the artifact.
 
+## The judge-size sweep
+
+`OJ_JUDGE_LADDER` is the Qwen3.5 post-trained ladder **0.8B → 2B → 4B → 9B →
+27B** plus the Qwen3.6-35B-A3B MoE — six arms spanning ~1.5 orders of
+magnitude, used to answer *how big must an open judge be before it stops
+matching GPT-4o?* All six declare **identical serving facts** (chat protocol,
+`max_model_len=32768`, same vLLM image, same judge budget), so an
+agreement-vs-size curve is attributable to judge capacity and not to a serving
+difference. All are POST-TRAINED checkpoints, never the `-Base` variants the
+candidate runbooks use: a judge must follow the tagged-output instruction.
+
+Read the sweep as **two curves, not one** — the `parse_status` vocabulary
+separates *"the judge cannot follow the output format"* from *"the judge
+disagrees"*, and small models are expected to fail the first way:
+
+- **parse rate** (`parser_ok`) — can this size produce a well-formed verdict?
+- **agreement among parsed** (kappa / mean|Δ| vs the official judges)
+
+A 0.8B arm at 40% parse but high agreement-on-parsed is a very different
+finding from one at 99% parse and low agreement. Do not collapse them.
+
 ## Judges & catalog
 
 Two v1 arms, single replica, static routing (no dynamic routing in v1).
