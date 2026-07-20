@@ -57,6 +57,16 @@ def main(argv: list[str] | None = None) -> None:
         help="Judge only the first N snapshot instances (a smoke subset; "
              "folded into the attempt identity so it never collides with a full run).",
     )
+    parser.add_argument(
+        "--max-request-error-rate",
+        type=float,
+        default=0.5,
+        help="Refuse to finalize an attempt when more than this share of judge "
+             "REQUESTS fail (default 0.5). Guards against caching an "
+             "infrastructure outage as a completed attempt, which would block "
+             "every retry. Judge responses that arrive but do not parse are "
+             "results, not failures, and never count here. 1.0 disables it.",
+    )
     args = parser.parse_args(argv)
 
     with open(args.judge_json, "r", encoding="utf-8") as file:
@@ -74,6 +84,7 @@ def main(argv: list[str] | None = None) -> None:
         sidecar_config_dpaths=tuple(args.sidecar_config),
         parallelism=args.parallelism,
         max_instances=args.max_instances,
+        max_request_error_rate=args.max_request_error_rate,
     )
     state = "cache-hit" if result.cache_hit else "completed"
     print(f"{state}: {result.out_dpath}")
