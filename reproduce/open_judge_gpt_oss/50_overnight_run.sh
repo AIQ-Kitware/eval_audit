@@ -17,6 +17,18 @@
 #   OJ_REPS_<BENCHMARK>_<JUDGE>      e.g. OJ_REPS_WILDBENCH_QWEN3_5_27B="0"
 #   OJ_PARALLELISM                   (default 8) concurrent judge requests
 #
+# CONCURRENCY. The driver is SERIAL over judges and every ladder arm is TP1, so
+# ONE worker holds one GPU and leaves the rest idle. To use a 4-GPU host, run
+# several workers, each pinned to a DIFFERENT judge:
+#   OJ_JUDGES=qwen3_5_2b OJ_SKIP_ANALYSIS=1 ./50_overnight_run.sh
+# Partition by JUDGE, not by benchmark: two workers leasing the same endpoint
+# share one refcounted deployment on one GPU (more request concurrency, no extra
+# GPU). Distinct judges get distinct deployments, which VRAM-aware placement
+# lands on distinct free GPUs. Results are safe to share: attempts are
+# content-addressed, written atomically, and DONE-gated, and the SQLite caches
+# are keyed per (response set, judge spec, replicate). `infer-stack gc` sweeps
+# only TTL-EXPIRED leases, so it never reclaims a peer worker's live lease.
+#
 # Idempotent: a completed (snapshot, judge_spec, replicate) attempt is served
 # from its DONE gate, so a re-run resumes instead of recomputing. Individual
 # rejudge failures are logged and skipped (the night is never aborted by one
@@ -40,9 +52,12 @@ oj_reps_for() {
   else printf '0 1 2'; fi
 }
 
+# Per-run log so CONCURRENT workers (one per judge, to use >1 GPU) do not
+# interleave into one file. Label defaults to the judge list.
+OJ_RUN_LABEL="${OJ_RUN_LABEL:-$(printf '%s' "$OJ_JUDGES" | tr ' ' '+')}"
 log_dir="$OJ_ANALYSIS_ROOT/overnight-logs"
 mkdir -p "$log_dir"
-run_log="$log_dir/overnight.log"
+run_log="$log_dir/overnight-${OJ_RUN_LABEL}.log"
 say() { echo "[$(date '+%F %T %z')] $*" | tee -a "$run_log" >&2; }
 
 declare -a SUMMARY=()
@@ -121,6 +136,16 @@ done
 for judge_key in $OJ_JUDGES; do
   run_judge "$judge_key"
 done
+
+if [[ -n "${OJ_SKIP_ANALYSIS:-}" ]]; then
+  # Concurrent workers should skip this: every worker would regenerate the
+  # SAME per-benchmark report (the analyzer scans the whole results root), so
+  # they would race on one output path and the early finishers would publish a
+  # partial picture. Run 30_analyze_judges.sh once after the last worker exits.
+  say "OJ_SKIP_ANALYSIS set — skipping report generation (run 30 when all workers finish)."
+  say "Attempt summary:"; for s in "${SUMMARY[@]}"; do say "  $s"; done
+  exit 0
+fi
 
 say "generating per-benchmark analysis reports…"
 mkdir -p "$OJ_ANALYSIS_ROOT"
