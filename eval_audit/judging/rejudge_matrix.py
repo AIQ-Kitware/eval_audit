@@ -63,6 +63,14 @@ class RejudgeMatrixSpec:
     judges: Sequence[JudgeArm]            # ordered; keep small -> large
     out_root: str
     cache_root: str
+    #: ROOT for judge sidecar bundles. Each job gets its own
+    #: ``<sidecar_config>/<judge_id>`` subdirectory, never this path directly —
+    #: ``export_judge_bundle`` writes a model_deployments.yaml containing only
+    #: the judges it was given, so two arms sharing one directory clobber each
+    #: other's registration. The loser's deployment disappears, HELM falls back
+    #: to the ``litellm/`` name prefix, and every judge request dies with
+    #: OptionalDependencyNotInstalled (observed 2026-07-19: 14 of one arm's 15
+    #: attempts destroyed while still reporting exit status 0).
     sidecar_config: str
     experiment_name: str = "open-judge"
     parallelism: int = 8
@@ -119,7 +127,10 @@ def build_rejudge_matrix(spec: RejudgeMatrixSpec) -> list[dict[str, Any]]:
                         # --- placement / perf ---
                         "out_root": str(spec.out_root),
                         "cache_root": str(spec.cache_root),
-                        "sidecar_config": str(spec.sidecar_config),
+                        # Private per judge: see RejudgeMatrixSpec.sidecar_config.
+                        "sidecar_config": str(
+                            Path(spec.sidecar_config) / arm.judge_id
+                        ),
                         "parallelism": spec.parallelism,
                         "lease_endpoint": arm.lease_endpoint,
                         # --- labels (not consumed by the CLI; for reporting) ---

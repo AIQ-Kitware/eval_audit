@@ -146,3 +146,18 @@ def test_summary_reports_the_fan_out_size():
     text = summarize_matrix(build_rejudge_matrix(_spec()))
     assert "12 job(s)" in text
     assert "small" in text and "wildbench" in text
+
+
+def test_sidecar_dirs_are_private_per_judge():
+    """Regression (2026-07-19): export_judge_bundle writes a
+    model_deployments.yaml containing only the judges it was given, so two arms
+    sharing one sidecar directory clobber each other's registration. The loser's
+    deployment vanishes, HELM falls back to the 'litellm/' name prefix, and every
+    request dies with OptionalDependencyNotInstalled -- 14 of one arm's 15
+    attempts were destroyed this way while still exiting 0."""
+    rows = build_rejudge_matrix(_spec())
+    by_judge = {r["_judge_id"]: r["sidecar_config"] for r in rows}
+    assert len(set(by_judge.values())) == len(by_judge), by_judge
+    for judge_id, path in by_judge.items():
+        assert path.endswith(f"/{judge_id}")
+        assert path != "/store/sidecars"  # never the shared root
