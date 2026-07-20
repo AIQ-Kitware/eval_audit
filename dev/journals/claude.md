@@ -2950,3 +2950,60 @@ and the Qwen3.6-35B-A3B arm (TP2) reuse one script; commit; hand Jon the next
 runs. Still deferred: Commit 11 (kwdagger rejudge pipeline), Commit 14
 (remaining safety benchmarks + Omni-MATH). `submodules/every_eval_ever` gitlink
 remains modified/unstaged (flagged, not committed).
+
+## 2026-07-19 16:35:00 -0400
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**User intent:** Get a full overnight open-judge run launched and analyzed.
+
+**The v1 experiment is COMPLETE.** 12/12 attempts OK in ~20.3 h (est. 21 h) on
+aiq-gpu: full XSTest (450) and WildBench (1000), both judge arms, 3 replicates,
+temp 0, headroom 4096. Driver `50_overnight_run.sh` worked unattended end to
+end — per-judge leasing, idempotent DONE-gated attempts, auto-analysis.
+
+**Three findings, in ascending order of interest.**
+
+1. *XSTest: open judges are a drop-in replacement.* Agreement with official
+   GPT-4o is kappa 0.936 (qwen35) / 0.928 (qwen36); the two OFFICIAL judges
+   agree with each other at only kappa 0.829. The open-vs-closed perturbation
+   is **smaller than the closed ensemble's own internal disagreement**. Parse
+   99.6/99.8% (the 4096 headroom fixed the smoke's ~10% truncation).
+
+2. *WildBench: aggregate reproduces, instances do not.* Open judges run ~0.8
+   lower than officials, but open-vs-open agreement (abs 0.66, pearson 0.935)
+   ≈ official-vs-official (abs 0.63, pearson 0.936). Run-level mean is stable
+   across replicates (stddev ~0.22 on ~6.7, ~3%) while **43–46% of individual
+   instances change score** (max range 5–6 points on a 1–10 scale).
+
+3. *The mechanism.* Judge TEXT is non-deterministic at temp 0 on both
+   benchmarks — 87–96% of instances generate different raw output across
+   replicates (vLLM continuous batching → batch-composition-dependent FP
+   reduction order → different argmax at near-ties → divergent token →
+   cascading CoT). Whether that reaches the metric depends on **metric
+   granularity**: XSTest's near-binary label absorbs it (0.2–0.7% score
+   change); WildBench's 1–10 rubric has no attractor (43–46%). So **judge
+   non-determinism is universal; metric fragility is a property of the metric,
+   not the judge.** That lands squarely in the project's per-metric-fragility
+   framing.
+
+**The check that made finding 3 trustworthy.** We vary `Request.random` per
+replicate for cache keys, which would have been a self-inflicted explanation
+for the divergence. Verified it is cache-key-only for our client: our judges
+derive from `OpenAIClient`, `helm/clients/openai_client.py` has NO seed
+handling, and `client.py:make_cache_key` only appends random to the key. Worth
+remembering that bedrock/cohere/mistral/reka/google_genai DO map random→seed —
+the same reasoning would be wrong there. General lesson: before attributing
+variance to the environment, prove your own experimental knobs aren't the cause.
+
+**Honest caveat.** WildBench+qwen35 still truncates 14.2% (142/1000) at the
+6096 ceiling; its replicate stats rest on the 594/1000 parsed in all three
+replicates — plausibly a biased subset (long/hard instances drop out). qwen36
+(2% parse fail, 883/1000) shows the same effect, which corroborates but does
+not fully substitute. Fix truncation before publishing qwen35 WildBench numbers.
+
+**Next:** raise headroom for the WildBench+qwen35 arm specifically (a
+per-benchmark headroom would be better than the current single JudgeSpec field)
+and re-run that arm; then Commit 11 (kwdagger pipeline) and Commit 14
+(remaining safety benchmarks + Omni-MATH). `submodules/every_eval_ever` gitlink
+still modified/unstaged (flagged, uncommitted).
