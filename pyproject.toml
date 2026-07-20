@@ -100,6 +100,7 @@ eval-audit-build-response-snapshot = "eval_audit.cli.build_response_snapshot:mai
 eval-audit-verify-judge-replay = "eval_audit.cli.verify_judge_replay:main"
 eval-audit-rejudge-helm = "eval_audit.cli.rejudge_helm_run:main"
 eval-audit-analyze-judges = "eval_audit.cli.analyze_judge_variance:main"
+eval-audit-schedule-rejudge = "eval_audit.cli.schedule_rejudge:main"
 eval-audit-export-judge-bundle = "eval_audit.cli.export_judge_bundle:main"
 eval-audit-judge-prompt-lengths = "eval_audit.cli.judge_prompt_lengths:main"
 

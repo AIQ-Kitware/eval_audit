@@ -3,12 +3,28 @@
 # Source from the numbered scripts: `source "$(dirname "$0")/_lib.sh"`.
 #
 # Rejudges frozen HELM candidate responses (gpt-oss-20b closed-judge rows)
-# with open-weight judges (Qwen3.5-27B, Qwen3.6-35B-A3B) served via
-# infer-stack + LiteLLM. Unlike the candidate runbooks this does NOT use
-# kwdagger per-run leasing: a judge endpoint is leased for the duration of
-# a rejudge pass (the model must stay up across many judge requests), the
-# sidecar bundle is exported against the live gateway, the rejudge CLI runs
-# in-process against the gateway, then the lease is released.
+# with open-weight judges (the Qwen3.5 size ladder + Qwen3.6-35B-A3B) served
+# via infer-stack + LiteLLM.
+#
+# THE SCRIPTS HERE ARE THE SERIAL PATH: one judge endpoint is leased for a
+# whole pass (the model must stay up across many judge requests), the sidecar
+# bundle is exported against the live gateway, the rejudge CLI runs in-process
+# against the gateway, then the lease is released. That is SERIAL over judges,
+# and every judge arm is TP1, so ONE worker occupies ONE GPU and the rest of a
+# multi-GPU host idles.
+#
+# For fan-out use the kwdagger path instead: `eval-audit-schedule-rejudge`
+# (eval_audit/pipelines/rejudge_pipeline.py) emits one job per
+# (judge, benchmark, replicate), each bracketing its own infer-stack lease, so
+# kwdagger fans the matrix out and the admission queue decides what co-hosts.
+#
+# HISTORICAL NOTE, because this comment previously said the opposite and shaped
+# the whole runbook: what does not fit here is the candidate runbooks' PER-RUN
+# leasing idiom (acquire -> infer -> release for each run), which would reload
+# judge weights per job. That is an argument against one idiom, NOT against
+# kwdagger — the plan always specced Commit 11 as "reuse one serving session
+# across several rejudge jobs". Do not read "serial" as "kwdagger cannot do
+# this".
 #
 # GPU placement is UNPINNED (vram-aware-placement): each judge endpoint
 # declares placement.min_vram_gib; on aiq-gpu's homogeneous 4x96 GiB pool
