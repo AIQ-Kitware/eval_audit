@@ -3007,3 +3007,66 @@ per-benchmark headroom would be better than the current single JudgeSpec field)
 and re-run that arm; then Commit 11 (kwdagger pipeline) and Commit 14
 (remaining safety benchmarks + Omni-MATH). `submodules/every_eval_ever` gitlink
 still modified/unstaged (flagged, uncommitted).
+
+## 2026-07-20 09:15:00 -0400
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**User intent:** After the v1 results landed — keep the GPUs busy and "finish it
+out": judge-size sweep, remaining benchmarks, and the scheduler.
+
+**Landed this session (after the v1 analysis):** the Qwen3.5 judge-size ladder
+(`2b0b867`..`e152496` era configs), the safety trio (`b5816b9`), concurrency
+fixes to the serial driver (`27d8cad`), the kwdagger rejudge pipeline
+(Commit 11), and Omni-MATH (Commit 14b). The benchmark surface is now complete:
+4 safety + Omni-MATH + WildBench, six judge arms, all wired end to end.
+
+**The thing worth writing down is a process failure, not a technical one.**
+Jon asked whether `50_overnight_run.sh` would use all 4 GPUs. It would not — it
+is serial over judges and every arm is TP1, so one worker holds one card. That
+was knowable from the moment I wrote the driver. Worse, I had carried Commit 11
+(the kwdagger fan-out) as "deferred" all session, including when he explicitly
+asked *what is valuable to run next* — and I answered with benchmarks and
+sweeps, never mentioning that the execution substrate was wasting 75% of the
+box. He only found out by asking directly, and then apologized for not checking.
+
+Root cause is a sentence I wrote in `_lib.sh` during Commit 13b: "Unlike the
+candidate runbooks this does NOT use kwdagger per-run leasing". The *reason* is
+sound — the candidate runbooks' per-run acquire→infer→release idiom would
+reload judge weights every job. But the sentence hardened "this idiom does not
+fit" into "this tool is not used here", and every later decision inherited it.
+The plan itself contradicted it: Commit 11's spec is literally "reuse one
+serving session across several rejudge jobs."
+
+**Two reusable lessons.** (1) When you write down *why not*, scope the negation
+precisely — "not this idiom" and "not this tool" are different claims, and the
+looser one propagates. I left the correction in the header explicitly rather
+than quietly deleting it, because a reader who only sees clean code will
+re-derive the original conclusion. (2) A deferral is a decision with a shelf
+life. "Serial is fine" was true for 2 judges x 2 benchmarks; at 6 judges x 6
+benchmarks x 3 replicates it is a 4x waste. Deferrals should be re-costed when
+the workload changes, not carried as settled. The tell was that my recommended
+workaround — open four tmux panes and pin one judge each — was me hand-executing
+a scheduler.
+
+**Design notes from the new code.** The rejudge matrix planner is deliberately
+free of kwdagger AND helm imports so fan-out logic is unit-testable with no
+scheduler and no GPU (it is; 10/10 pass locally via a pytest shim, since this
+workstation has neither pytest nor helm). Rows group by judge because contiguity
+keeps infer-stack's demand refcount above zero and the weights resident —
+interleaving would reload multi-GiB weights under `reclaim: stop`. And
+`judge_spec_hash` rides as job identity because a JSON *path* does not change
+when the file is edited — the identical trap that produced a stale `cache-hit`
+earlier in the session when a parser fix did not move `parser_version`. That bug
+class has now appeared three times (safety tags, WildBench JSON, Omni-MATH
+headings drafted inside a thinking block); `strip_thinking` before official
+parsing is the standing fix.
+
+**Unvalidated — the honest list.** Nothing from this session has executed. The
+safety trio, Omni-MATH, and the kwdagger pipeline are compile-checked and
+unit-tested where possible, but HELM/kwdagger/pytest are all absent locally, so
+the parity tests and the fan-out have never run. Next on aiq-gpu: `05`/`08`/`09`
+for the four new benchmarks — the replay gate is the real check on the new
+prompt-construction code and costs zero GPU — then a small `--max-instances`
+kwdagger fan-out before trusting it with a night. `submodules/every_eval_ever`
+gitlink remains modified/unstaged (flagged, uncommitted) throughout.
