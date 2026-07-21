@@ -3327,3 +3327,63 @@ in-flight kwdagger smoke (`./55_schedule_rejudge.sh omni_math --smoke
 --run`, fixes in `22f72d5`) remains queued and unexecuted; nothing in this
 session changed executable code. `submodules/every_eval_ever` gitlink
 remains modified/unstaged per the standing rule.
+
+## 2026-07-21 13:20:00 -0400 — Round 2: GPT 5.6 rebuttal absorbed into the thesis doc
+
+**Model/harness:** claude-fable-5[1m] (Fable 5, 1M context) via Claude Code.
+
+**User intent:** Jon relayed GPT 5.6's response to my adversarial
+assessment. It accepted the single-candidate diagnosis and the 3-RQ
+structure and pushed back on seven points. My job: adjudicate, verify its
+literature claims, and fold what survives into
+`docs/planning/tmlr-paper-thesis.md`.
+
+**Literature verification (the load-bearing step).** GPT cited two papers
+against our RQ3/novelty framing; one postdated my knowledge cutoff and
+carried a ChatGPT-sourced URL, so I refused to treat it as real until
+web-searched. Both check out: JuStRank (2412.09569, Dec 2024) benchmarks
+48 judges by induced system rankings — the broad "instance metrics ≠
+ranking quality" claim is occupied. SLMJury (2606.07810, June 2026)
+sweeps 16 SLM judges 0.6B–14B over ten benchmarks — the "consumer-sized
+judge sweep" FRAMING is occupied, meaning our size ladder can never be
+the headline. Neither touches substitution inside a published
+leaderboard's official pipeline under exact replay; the wedge survives,
+narrower. Lesson worth keeping: when two models argue about novelty, the
+citations are the part to verify first — a hallucinated occupier would
+have wrongly shrunk our claim, a real one wrongly ignored would have
+sunk the intro.
+
+**Adopted from GPT round 2** (all now in the doc): two-level design
+(broad tier = ALL leaderboard candidates on XSTest+WildBench with 2–3
+judges, deep tier = pre-registered 8–12 across all six benchmarks);
+candidate selection rule frozen before rejudging and computed only from
+official public scores; RQ3 narrowed to the exact-replay/published-
+conclusions form with out-of-group prediction, demoted to consequence of
+RQ1; the conclusions.py statistical spec (predefined estimands, paired
+joint bootstrap, MNAR parse-failure sensitivity — never per-model
+denominators — no pseudo-replication); iso-VRAM renamed iso-hardware with
+resource differences reported; consumer data points measured on the
+actual 3090; S(R,J*) unobtainability framed as problem-evidence, never
+solution-evidence; Edward's fresh responses stated narrowly as a
+response-level-memorization control.
+
+**Where I pushed back (also in the doc):** the broad tier's
+one-replicate economy is unsafe for WildBench close pairs — the paired
+bootstrap captures instance-sampling noise but not judge
+non-determinism, and WildBench instance judgments are 43–46%
+replicate-divergent, so broad-tier decisions carry the deep grid's
+replicate-flip rate as an uncertainty floor or close pairs get
+replicates≥2. Also flagged ops reality GPT skipped: infer-stack has
+never been provisioned on the 3090 host; that's a scheduled work item,
+not an assumption.
+
+**Converged thesis (verbatim in the doc §4):** exactly reconstruct the
+released scoring pipeline of a proprietary-judge-dependent leaderboard;
+determine which published model-comparison conclusions remain
+independently recoverable with open judges on a single 24 GB GPU;
+measure how judge diagnostics, candidate drift, and metric structure
+explain the boundary.
+
+**State:** doc updated and committed this session; no executable code
+changed; the kwdagger omni_math smoke remains queued and unexecuted;
+`submodules/every_eval_ever` gitlink still deliberately unstaged.
