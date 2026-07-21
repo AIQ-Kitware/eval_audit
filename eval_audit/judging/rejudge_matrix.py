@@ -79,6 +79,16 @@ class RejudgeMatrixSpec:
     #: then :data:`DEFAULT_REPLICATES`. An EMPTY sequence skips that pair.
     replicates_by_pair: Mapping[tuple[str, str], Sequence[int]] = field(default_factory=dict)
     replicates_by_benchmark: Mapping[str, Sequence[int]] = field(default_factory=dict)
+    #: Extra ``lease_*`` knobs copied verbatim into every row (see
+    #: eval_audit.pipelines.lease_bracket.LEASE_KEYS). These are NOT optional in
+    #: practice: a kwdagger job runs in a FRESH LOGIN SHELL, so it inherits none
+    #: of the runbook's exported INFER_STACK_CONFIG_DIR / INFER_STACK_DATA_DIR.
+    #: Without ``lease_catalog`` + ``lease_config_dir`` + ``lease_data_dir`` the
+    #: acquire resolves infer-stack's DEFAULT world, cannot find the judge
+    #: endpoint, and fails as a cmd_queue gating precondition — which skips the
+    #: command entirely, so the job dies with no log at all (observed
+    #: 2026-07-21: 6/6 jobs failed this way).
+    lease_knobs: Mapping[str, Any] = field(default_factory=dict)
 
     def replicates_for(self, benchmark: str, judge_id: str) -> tuple[int, ...]:
         if (benchmark, judge_id) in self.replicates_by_pair:
@@ -133,6 +143,7 @@ def build_rejudge_matrix(spec: RejudgeMatrixSpec) -> list[dict[str, Any]]:
                         ),
                         "parallelism": spec.parallelism,
                         "lease_endpoint": arm.lease_endpoint,
+                        **{k: v for k, v in spec.lease_knobs.items() if v is not None},
                         # --- labels (not consumed by the CLI; for reporting) ---
                         "_benchmark": benchmark,
                         "_judge_id": arm.judge_id,

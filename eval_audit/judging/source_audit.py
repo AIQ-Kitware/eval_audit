@@ -65,11 +65,26 @@ def _instance_has_messages_and_checklist(instance: Mapping[str, Any]) -> bool:
 
 
 def _instance_has_reference_answer(instance: Mapping[str, Any]) -> bool:
-    """Omni-MATH substitutes ``references[0].output.text`` into the prompt."""
+    """Omni-MATH substitutes ``references[0].output.text`` into the prompt.
+
+    Requires ``references[0].output.text`` to EXIST, and deliberately allows it
+    to be EMPTY. The official ``OmniMATHAnnotator`` indexes ``references[0]``
+    unconditionally (so a missing reference really would break reconstruction)
+    but substitutes an empty answer without complaint — it judges the instance
+    and counts it in ``omni_math_accuracy``.
+
+    Demanding NONEMPTY text here rejected the whole gpt-oss-20b Omni-MATH run
+    over 2 instances (2026-07-20). That was wrong twice over: those instances
+    are reconstructible, and excluding them would drop them from the snapshot,
+    changing the aggregate denominator relative to the published run and
+    failing the 1e-12 identity-replay gate. Faithful reproduction means
+    carrying the official run's degenerate instances, not improving on them.
+    """
     refs = instance.get("references") or []
     if not refs:
         return False
-    return bool(((refs[0].get("output") or {}).get("text") or "").strip())
+    output = refs[0].get("output") or {}
+    return isinstance(output.get("text"), str)
 
 
 def _instance_has_input_text(instance: Mapping[str, Any]) -> bool:
@@ -172,7 +187,7 @@ BENCHMARK_PROFILES: dict[str, BenchmarkJudgingProfile] = {
             empty_output_fields=("empty_output_equivalence_judgement",),
             judge_metrics=("omni_math_accuracy",),
             instance_requirement=_instance_has_reference_answer,
-            instance_requirement_desc="nonempty references[0].output.text",
+            instance_requirement_desc="references[0].output.text present (may be empty)",
         ),
     )
 }

@@ -161,3 +161,25 @@ def test_sidecar_dirs_are_private_per_judge():
     for judge_id, path in by_judge.items():
         assert path.endswith(f"/{judge_id}")
         assert path != "/store/sidecars"  # never the shared root
+
+
+def test_lease_world_knobs_reach_every_row():
+    """Regression (2026-07-21): the fan-out passed only lease_endpoint. A
+    kwdagger job runs in a FRESH LOGIN SHELL and inherits no INFER_STACK_*
+    exports, so the acquire resolved infer-stack's default world, could not
+    find the judge endpoint, and failed as a cmd_queue GATING precondition --
+    which skips the command, so all 6 jobs died with no log at all."""
+    rows = build_rejudge_matrix(_spec(lease_knobs={
+        "lease_catalog": "/cfg/catalog.yaml",
+        "lease_config_dir": "/cfg",
+        "lease_data_dir": "/data/infer-stack",
+        "lease_ttl": "8h",
+        "lease_timeout": None,          # unset knobs must not be emitted
+    }))
+    for row in rows:
+        assert row["lease_catalog"] == "/cfg/catalog.yaml"
+        assert row["lease_config_dir"] == "/cfg"
+        assert row["lease_data_dir"] == "/data/infer-stack"
+        assert row["lease_ttl"] == "8h"
+        assert "lease_timeout" not in row       # None is omitted, not rendered
+        assert row["lease_endpoint"]            # still per-judge

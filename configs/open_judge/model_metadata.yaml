@@ -6,9 +6,14 @@
 # candidates; a Qwen judge must never wear an official GPT-4o/Llama name.
 #
 # num_parameters / release_date are informational only (leaderboard
-# metadata, not load-bearing for the experiment). Values below are best
-# estimates from the model cards; CONFIRM against the HF repos before a
-# publication-grade run. num_parameters for the MoE judge is the TOTAL
+# metadata, not load-bearing for the experiment) EXCEPT for one purpose that
+# IS load-bearing: judge release dates bound the training-data contamination
+# window against the public HELM judgments we compare to. See the
+# contamination caveat in docs/helm-reproduction-research-journal.md.
+#
+# Qwen3.5 family launched 2026-02-16; the 0.8B-9B small models were released
+# ~2026-03-02. Verified 2026-07-20 against public reporting, NOT against the HF
+# repos themselves — confirm there before publication. num_parameters for the MoE judge is the TOTAL
 # parameter count (active is ~3B).
 models:
   # --- Judge-size sweep: the Qwen3.5 post-trained ladder ---------------
@@ -22,7 +27,7 @@ models:
     creator_organization_name: Qwen
     access: open
     num_parameters: 800000000     # approximate; confirm against the HF repo
-    release_date: 2026-03-02      # Qwen3.5 family; confirm
+    release_date: 2026-03-02      # Qwen3.5 smalls (0.8B-9B) rollout; family launched 2026-02-16
     tags: [TEXT_MODEL_TAG, FULL_FUNCTIONALITY_TEXT_MODEL_TAG, INSTRUCTION_FOLLOWING_MODEL_TAG]
   - name: qwen/qwen3.5-2b
     display_name: Qwen3.5 2B
@@ -30,7 +35,7 @@ models:
     creator_organization_name: Qwen
     access: open
     num_parameters: 2000000000    # approximate; confirm against the HF repo
-    release_date: 2026-03-02      # Qwen3.5 family; confirm
+    release_date: 2026-03-02      # Qwen3.5 smalls (0.8B-9B) rollout; family launched 2026-02-16
     tags: [TEXT_MODEL_TAG, FULL_FUNCTIONALITY_TEXT_MODEL_TAG, INSTRUCTION_FOLLOWING_MODEL_TAG]
   - name: qwen/qwen3.5-4b
     display_name: Qwen3.5 4B
@@ -38,7 +43,7 @@ models:
     creator_organization_name: Qwen
     access: open
     num_parameters: 4000000000    # approximate; confirm against the HF repo
-    release_date: 2026-03-02      # Qwen3.5 family; confirm
+    release_date: 2026-03-02      # Qwen3.5 smalls (0.8B-9B) rollout; family launched 2026-02-16
     tags: [TEXT_MODEL_TAG, FULL_FUNCTIONALITY_TEXT_MODEL_TAG, INSTRUCTION_FOLLOWING_MODEL_TAG]
   - name: qwen/qwen3.5-9b
     display_name: Qwen3.5 9B
@@ -46,7 +51,7 @@ models:
     creator_organization_name: Qwen
     access: open
     num_parameters: 9000000000    # approximate; confirm against the HF repo
-    release_date: 2026-03-02      # Qwen3.5 family; confirm
+    release_date: 2026-03-02      # Qwen3.5 smalls (0.8B-9B) rollout; family launched 2026-02-16
     tags: [TEXT_MODEL_TAG, FULL_FUNCTIONALITY_TEXT_MODEL_TAG, INSTRUCTION_FOLLOWING_MODEL_TAG]
   - name: qwen/qwen3.5-27b
     display_name: Qwen3.5 27B
@@ -54,7 +59,7 @@ models:
     creator_organization_name: Qwen
     access: open
     num_parameters: 27000000000  # approximate; confirm against the HF repo
-    release_date: 2026-03-02      # Qwen3.5 family; confirm
+    release_date: 2026-03-02      # Qwen3.5 smalls (0.8B-9B) rollout; family launched 2026-02-16
     tags: [TEXT_MODEL_TAG, FULL_FUNCTIONALITY_TEXT_MODEL_TAG, INSTRUCTION_FOLLOWING_MODEL_TAG]
   - name: qwen/qwen3.6-35b-a3b
     display_name: Qwen3.6 35B-A3B

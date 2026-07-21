@@ -234,3 +234,25 @@ def test_display_key_perturbation_serialization_is_canonical():
     )
     assert a == b
     assert serialize_perturbation(None) is None
+
+
+def test_omni_math_accepts_an_empty_reference_answer():
+    """Regression (2026-07-20): requiring NONEMPTY references[0].output.text
+    rejected the entire gpt-oss-20b Omni-MATH run over 2 instances.
+
+    The official OmniMATHAnnotator indexes references[0] unconditionally but
+    substitutes an empty answer without complaint — it judges those instances
+    and counts them in omni_math_accuracy. Excluding them would also drop them
+    from the snapshot, shifting the aggregate denominator away from the
+    published run and failing the 1e-12 identity-replay gate. A MISSING
+    reference is still rejected: that would break reconstruction outright.
+    """
+    from eval_audit.judging.source_audit import BENCHMARK_PROFILES
+
+    accepts = BENCHMARK_PROFILES["omni_math"].instance_requirement
+    assert accepts({"references": [{"output": {"text": "42"}}]})
+    assert accepts({"references": [{"output": {"text": ""}}]})     # the 2 instances
+    assert accepts({"references": [{"output": {"text": "   "}}]})
+    assert not accepts({"references": []})                          # unreconstructible
+    assert not accepts({})
+    assert not accepts({"references": [{"output": {}}]})            # no text key at all

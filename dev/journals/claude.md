@@ -3221,3 +3221,440 @@ clean apart from the user's untracked doc zips. Unpushed: pushing requires the
 `infer_stack` merge commit `b9a8c89` to reach its remote first, or the
 superproject gitlink dangles for others. No code was written toward the plan yet
 — it is PROPOSED only.
+
+## 2026-07-20 17:05:00 -0400
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**User intent:** Check the size-sweep results, orient after a context switch,
+and — raised by Jon — assess training-data contamination risk, verifying the
+Qwen3.5 release date against the publication date of the HELM judgments we
+compare to.
+
+**Results state.** 63 healthy artifacts, zero request_error anywhere. 4B came
+back clean after the purge, so the size sweep is complete except Omni-MATH
+(never snapshotted) and the safety trio for 0.8B/27B/35B-A3B. Two clean
+findings: parse rate tracks METRIC COMPLEXITY (XSTest 100% even at 0.8B;
+WildBench 6.8% → 51.6% → 61.2% → 84.6% → 90.7%), while agreement given a parse
+SATURATES EARLY on label metrics (XSTest ~98–99% from 4B up; the 27B buys
+nothing over the 9B, and the official GPT-vs-Llama baseline is only 96.0%).
+
+**Third finding, which nearly fooled me:** format compliance does not imply
+calibration. Qwen3.5-2B scores 99.9% parse and 25.7% agreement on
+anthropic_red_team — it flags 740/1000 responses unsafe where the official
+ensemble says 989/1000 safe. I nearly wrote that up as an anomaly before
+checking the score distribution. Parse rate and agreement must always be
+reported as separate axes; a "does the judge work?" smoke test based on output
+format would have passed this arm. (Also note these safety sets are ~99%
+one-class, so "agreement" there is essentially a false-positive rate — worth
+stating explicitly in any writeup.)
+
+**Contamination — Jon's point, and he is right.** Verified: the Qwen3.5 family
+launched 2026-02-16 and the 0.8B–9B smalls ~2026-03-02. Every benchmark dataset
+predates that by 2–4 years, and the candidate (gpt-oss-20b) is Aug 2025. What I
+could NOT establish is the publication date of HELM Safety v1.14.0 /
+Capabilities v1.12.0 — the corpus run dirs carry no execution timestamp and
+public sources did not yield it in a reasonable search. That is exactly the
+date that matters, because HELM publishes the official gpt_score/llama_score
+values AND the judges' reasoning text; if those were scraped before Qwen3.5's
+cutoff, "open judge agrees with GPT-4o" is partly a memorization result. Full
+analysis (three channels, counter-evidence, proposed tests) is now in
+docs/helm-reproduction-research-journal.md.
+
+Worth recording that our own data argues against WHOLESALE memorization: the 2B
+arm inverts the official labels, agreement is size-graded like a capability
+curve, and WildBench sits at a systematic offset rather than converging. None
+of that is what memorized reproduction looks like. But it is suggestive, not
+decisive, and the honest framing is that every agreement number is an UPPER
+BOUND on independent agreement until tested.
+
+**Cheapest decisive test: swap the candidate model** to one released after the
+judge cutoff. The (prompt, response, judgment) triple then cannot have been
+memorized even though the prompts were public — and our pipeline is already
+parameterized by candidate, so it is a config change, not new code. I would run
+that before any writeup.
+
+**Process note.** I had authored the judge release dates in model_metadata.yaml
+as guesses with "confirm against the HF repo" comments, and they sat unverified
+for days until Jon asked a question that depended on them. Flagging uncertainty
+in a comment is not the same as resolving it; a date that a FINDING depends on
+should be verified when the finding is made, not deferred to a reader. The
+metadata now records the verified launch date and says explicitly what was and
+was not confirmed.
+
+## 2026-07-21 12:29:39 -0400 — CHECKPOINT (pinned before a context compression / pivot)
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+**Branch:** `jons/qwen35-extension`, HEAD `aa153a4`. Working tree clean except
+the `submodules/every_eval_ever` gitlink, which is Jon's pre-existing local
+change and has been deliberately left unstaged throughout. No submodule pin was
+changed by any of this work.
+
+Read this entry first if you are resuming. It states what is TRUE, what is
+merely WRITTEN, and the exact next commands.
+
+### Validated (real execution, real data)
+
+- **Identity replay: 6/6 benchmarks reproduce published stats exactly.** xstest,
+  simple_safety_tests, harm_bench, anthropic_red_team, omni_math all
+  `max_err=0`; wildbench `1.95e-14`. This proves snapshot reconstruction is
+  faithful and the metric denominators match the official runs.
+- **63 healthy rejudge artifacts, zero request_error anywhere.** Judge-size
+  sweep across Qwen3.5 0.8B/2B/4B/9B/27B + Qwen3.6-35B-A3B; xstest + wildbench
+  on the full ladder, the safety trio on 2B/4B/9B.
+
+### Findings so far
+
+1. *Open judges match closed judges on label metrics.* XSTest agreement 93.7%
+   (0.8B) → 96.8% (2B) → ~98–99% from 4B up. Official GPT-vs-Llama baseline is
+   96.0%, so a 4B judge sits INSIDE the closed pair's own disagreement. The 27B
+   buys nothing over the 9B.
+2. *Judge non-determinism is universal; metric fragility is not.* At
+   temperature 0, 87–96% of judgments produce different raw text across
+   replicates (vLLM batching non-determinism — verified NOT caused by our
+   per-replicate `Request.random`, which is cache-key-only for OpenAI-derived
+   clients). Score impact: XSTest 0.2–0.7%, WildBench 43–46%. Run-level means
+   stay reproducible; instance-level judgments do not.
+3. *Parse rate and calibration are INDEPENDENT axes.* WildBench parse climbs
+   6.8% → 51.6% → 61.2% → 84.6% → 90.7% with size while XSTest is ~100%
+   throughout. And Qwen3.5-2B scores 99.9% parse with 25.7% agreement on
+   anthropic_red_team — it flags 740/1000 responses unsafe where the official
+   ensemble says 989/1000 safe. A format-based health check would pass it.
+   Always report the two axes separately; note these safety sets are ~99%
+   one-class, so "agreement" there is essentially a false-positive rate.
+4. *Contamination caveat* (full analysis in
+   `docs/helm-reproduction-research-journal.md`). Qwen3.5 launched 2026-02-16;
+   every benchmark predates it by 2–4 years. The mechanism to worry about is
+   DISTRIBUTION SHIFT, not memorization: a judge trained on this data is
+   plausibly better calibrated on this distribution with no verbatim recall.
+   Our numbers describe judge/benchmark pairs the judge was likely trained on
+   and are an UPPER BOUND on performance for a novel benchmark or private eval.
+   **Still unknown and worth establishing: the publication date of HELM Safety
+   v1.14.0 / Capabilities v1.12.0** — the corpus run dirs carry no execution
+   timestamp and a public search did not resolve it.
+
+### WRITTEN BUT NEVER EXECUTED — do not treat as working
+
+- **The kwdagger fan-out.** `eval-audit-schedule-rejudge` /
+  `reproduce/open_judge_gpt_oss/55_schedule_rejudge.sh`. Its invocation was
+  originally written against a GUESSED kwdagger CLI and was wrong three ways;
+  `64d6881` rebuilt it against the verified interface and now shares
+  `kwdagger_schedule_argv_from_runtime()` with the working candidate bridge.
+  Still unproven: whether kwdagger accepts the `rejudge.*` submatrix keys and
+  resolves the pipeline factory.
+- **The Omni-MATH annotator, live.** Note carefully: the replay gate does NOT
+  exercise it. Replay reattaches the ORIGINAL annotations and runs the OFFICIAL
+  metric, so `build_prompt` / `parse_omni_math_report` have never been invoked
+  against a real judge. (I stated the opposite twice; it was wrong.)
+- **The pytest suites** for the safety trio, Omni-MATH, and the rejudge matrix.
+  Written, compile-checked, and partially exercised via a hand-rolled shim on
+  the workstation, but never run under pytest — this workstation has no pytest,
+  helm, kwdagger, or loguru.
+
+### Exact next commands
+
+    cd ~/code/helm_audit && git pull        # aa153a4
+    python -m pytest tests/test_configurable_omni_math.py \
+                     tests/test_configurable_safety_trio.py \
+                     tests/test_rejudge_matrix.py -q
+    cd reproduce/open_judge_gpt_oss
+    ./55_schedule_rejudge.sh omni_math --smoke --run   # 3 things on trial: kwdagger
+                                                       # graph, omni annotator live,
+                                                       # strip_thinking on a 3rd format
+    ./55_schedule_rejudge.sh omni_math                 # preview job count + argv
+    ./55_schedule_rejudge.sh omni_math --run           # full: 6 judges x 3 reps x 1000
+
+Sizing: Omni-MATH is 1000 instances at a 4096-token budget (the largest in the
+suite) = 18,000 judgments for the full matrix. The 27B arm alone is likely
+several hours per replicate. `OJ_JUDGES="qwen3_5_2b qwen3_5_4b qwen3_5_9b"`
+gives the interesting middle of the curve far cheaper.
+
+### Open items, roughly by value
+
+1. **Contamination test — swap the candidate model** to one released after the
+   judge cutoff. The (prompt, response, judgment) triple then cannot have been
+   trained on even though the prompts were public. The pipeline is already
+   parameterized by candidate, so this is config, not code. Arguably worth more
+   than finishing Omni-MATH: it bears on whether the headline survives review.
+2. Safety trio missing for 0.8B / 27B / 35B-A3B (completes the grid).
+3. Aggregate reports are stale (Jul 19, pre-sweep) — rerun
+   `./30_analyze_judges.sh <benchmark>` per benchmark once runs settle.
+4. **No timeout on the rejudge step** — a wedged CLI held a GPU for 19 hours on
+   2026-07-19. A `timeout` wrapper sized per benchmark would convert that into
+   a logged failure and free the card. Not yet implemented.
+5. HELM leaderboard publication dates (feeds item 1's caveat).
+
+### Gotchas this project has now hit more than once
+
+- **A config change invisible to a cache key serves stale results.** A parser
+  fix that did not move `parser_version` returned a cache-hit; a dead artifact
+  that still wrote `DONE` blocked every retry for a day. Any behavior change
+  must move its `*_version`, and `judge_spec_hash` rides in job identity for
+  the same reason.
+- **Thinking judges draft the official answer tags INSIDE their reasoning.**
+  Hit three times (safety `<reasoning>/<score>`, WildBench JSON, Omni-MATH
+  `##` headings). `strip_thinking` before official parsing is the standing fix;
+  it is a strict no-op on non-thinking official responses.
+- **Shared mutable state breaks hand-partitioned concurrency.** The sidecar
+  directory (last-writer-wins clobbered a judge's deployment registration) and
+  the SQLite request cache (two workers on the same cell deadlock). Content
+  addressing protected the OUTPUTS and I wrongly generalized that to safety.
+  Prefer the scheduler over hand-partitioned tmux panes.
+- **Exit code 0 is not success.** A rejudge whose every request failed still
+  exits 0; attempts are now health-checked by parse status, and DEAD
+  (request_error → infrastructure) is distinguished from DEGRADED (malformed →
+  the judge genuinely cannot produce the format, which is a FINDING to keep).
+
+## 2026-07-21 12:55:57 -0400 — Pivot to conceptual planning: adversarial TMLR thesis assessment
+
+**Model/harness:** claude-fable-5[1m] (Fable 5, 1M context) via Claude Code.
+
+**User intent:** Jon pivoted from execution to planning. He wants an
+adversarial, reviewer-grade assessment of the paper direction (TMLR
+reproducibility track), explicitly not optimized for agreement — including
+against a six-question brainstorm from GPT 5.6 that he pasted in. His
+motivation is fixed and should anchor everything: credible evaluation with
+models ordinary researchers can run; the equity argument against
+frontier-API gatekeeping. Deliverable: a coherent thesis, ≤3–4 RQs,
+must-run vs. distraction triage, coordination with Edward's candidate
+reproduction, and a concrete next-step plan.
+
+**The assessment landed in `docs/planning/tmlr-paper-thesis.md`** — that
+file is the durable artifact; read it before this entry. The one-line
+verdict: the infrastructure is ahead of the science, and every proposed
+headline framing (conclusion preservation, accessibility frontier,
+agreement-predicts-conclusions) is currently unsupported for one structural
+reason — **all 63 artifacts score a single candidate (gpt-oss-20b), and
+every interesting endpoint is defined over a set of candidates.** The fix
+is uniquely cheap in our design: official responses AND official judgments
+for every leaderboard model already sit in the public corpus we mirror, so
+candidate expansion costs zero candidate inference — only judge inference.
+Priority inversion: candidates > judge families > benchmarks > judge sizes.
+Jon's instincts (gemma4, more benchmarks) had the first two axes reversed.
+
+**Design reasoning worth preserving:**
+- *Thesis chosen:* published leaderboard conclusions that depend on
+  proprietary judges are/aren't recoverable with open judges on consumer
+  hardware; characterize the recoverable region, cost, and failure modes
+  via the exact-replay harness. Three RQs: conclusion survival under judge
+  substitution; decomposition with Edward (S(O,J) vs S(R,J), never
+  claiming the factorial); do standard judge-health metrics predict
+  conclusion survival (the red-team 2B cell — 99.9% parse, 25.7%
+  agreement, label inversion — is the one-cell preview, and a negative
+  answer is the most citable insight available). Plus a bounded RQ-S:
+  iso-VRAM quantization (INT4-27B vs BF16-9B at 24 GB) so quantization
+  serves the accessibility frontier instead of becoming a substrate paper.
+- *Novelty wedge vs. PandaLM/JudgeLM/Prometheus/PoLL:* we train nothing
+  and build no harness — we re-instrument the official scoring pipeline of
+  a published leaderboard behind a machine-precision replay gate and ask
+  whether the leaderboard's conclusions survive. The 6/6 replay at ≤2e-14
+  is the methodological signature, not a methods footnote.
+- *Rhetorical asset found while triaging limitations:* the unobservable
+  cell S(R,J*) is impossible not merely for budget reasons — the official
+  judge is a dated proprietary deployment that may no longer exist. The
+  missing cell is itself evidence for the thesis.
+- *Cuts:* off-HELM expansion, rubric-intervention and escalation-protocol
+  studies (both second papers), full substrate grid, remaining Qwen ladder
+  cells, any judge added without a named confound it controls.
+- *Contamination:* Edward's freshly generated responses design out
+  response-level memorization for every S(R,·) cell — the strongest cheap
+  control we have, and the brainstorm missed it.
+
+**Caveats on my own grounding.** Jon noted mid-session that not all results
+are synced to this workstation — confirmed: local `analysis/` holds only
+the two pre-sweep reports and `/data/crfm-helm-public` is absent here. All
+results claims in the assessment rest on the journaled 2026-07-20/21
+checkpoint (derived on aiq-gpu from the full artifact set), not on fresh
+inspection. Two assumptions the plan explicitly requires verifying on
+aiq-gpu before committing to it: per-benchmark model coverage in the
+public corpus, and whether any corpus candidate postdates Qwen3.5's
+2026-02-16 launch (if none, the contamination control lives entirely in
+RQ2 via Edward's fresh responses).
+
+**Next steps:** the §8 checklist in the thesis doc (corpus coverage,
+post-cutoff candidate existence, HELM release dates, annotator-subset
+completeness, Edward's format+list), then §5.1 candidate selection. The
+in-flight kwdagger smoke (`./55_schedule_rejudge.sh omni_math --smoke
+--run`, fixes in `22f72d5`) remains queued and unexecuted; nothing in this
+session changed executable code. `submodules/every_eval_ever` gitlink
+remains modified/unstaged per the standing rule.
+
+## 2026-07-21 13:20:00 -0400 — Round 2: GPT 5.6 rebuttal absorbed into the thesis doc
+
+**Model/harness:** claude-fable-5[1m] (Fable 5, 1M context) via Claude Code.
+
+**User intent:** Jon relayed GPT 5.6's response to my adversarial
+assessment. It accepted the single-candidate diagnosis and the 3-RQ
+structure and pushed back on seven points. My job: adjudicate, verify its
+literature claims, and fold what survives into
+`docs/planning/tmlr-paper-thesis.md`.
+
+**Literature verification (the load-bearing step).** GPT cited two papers
+against our RQ3/novelty framing; one postdated my knowledge cutoff and
+carried a ChatGPT-sourced URL, so I refused to treat it as real until
+web-searched. Both check out: JuStRank (2412.09569, Dec 2024) benchmarks
+48 judges by induced system rankings — the broad "instance metrics ≠
+ranking quality" claim is occupied. SLMJury (2606.07810, June 2026)
+sweeps 16 SLM judges 0.6B–14B over ten benchmarks — the "consumer-sized
+judge sweep" FRAMING is occupied, meaning our size ladder can never be
+the headline. Neither touches substitution inside a published
+leaderboard's official pipeline under exact replay; the wedge survives,
+narrower. Lesson worth keeping: when two models argue about novelty, the
+citations are the part to verify first — a hallucinated occupier would
+have wrongly shrunk our claim, a real one wrongly ignored would have
+sunk the intro.
+
+**Adopted from GPT round 2** (all now in the doc): two-level design
+(broad tier = ALL leaderboard candidates on XSTest+WildBench with 2–3
+judges, deep tier = pre-registered 8–12 across all six benchmarks);
+candidate selection rule frozen before rejudging and computed only from
+official public scores; RQ3 narrowed to the exact-replay/published-
+conclusions form with out-of-group prediction, demoted to consequence of
+RQ1; the conclusions.py statistical spec (predefined estimands, paired
+joint bootstrap, MNAR parse-failure sensitivity — never per-model
+denominators — no pseudo-replication); iso-VRAM renamed iso-hardware with
+resource differences reported; consumer data points measured on the
+actual 3090; S(R,J*) unobtainability framed as problem-evidence, never
+solution-evidence; Edward's fresh responses stated narrowly as a
+response-level-memorization control.
+
+**Where I pushed back (also in the doc):** the broad tier's
+one-replicate economy is unsafe for WildBench close pairs — the paired
+bootstrap captures instance-sampling noise but not judge
+non-determinism, and WildBench instance judgments are 43–46%
+replicate-divergent, so broad-tier decisions carry the deep grid's
+replicate-flip rate as an uncertainty floor or close pairs get
+replicates≥2. Also flagged ops reality GPT skipped: infer-stack has
+never been provisioned on the 3090 host; that's a scheduled work item,
+not an assumption.
+
+**Converged thesis (verbatim in the doc §4):** exactly reconstruct the
+released scoring pipeline of a proprietary-judge-dependent leaderboard;
+determine which published model-comparison conclusions remain
+independently recoverable with open judges on a single 24 GB GPU;
+measure how judge diagnostics, candidate drift, and metric structure
+explain the boundary.
+
+**State:** doc updated and committed this session; no executable code
+changed; the kwdagger omni_math smoke remains queued and unexecuted;
+`submodules/every_eval_ever` gitlink still deliberately unstaged.
+
+## 2026-07-21 15:05:00 -0400 — Round 3: thesis reopened (Socratic round over Edward's draft + PM brief)
+
+**Model/harness:** claude-fable-5[1m] (Fable 5, 1M context) via Claude Code.
+
+**User intent:** Jon reopened the paper thesis before executing the round-2
+plan. New evidence: the PM's deep-research brief and Edward's draft
+(`uncommitted/`). Explicit instruction: Socratic engagement with ten
+questions, challenge premises, report disagreements, do NOT converge; update
+the planning doc only after reasoning. The suspicion driving it: the
+open-judge work — originally a tack-on to Edward's HELM reproduction — may
+have displaced the project that motivated it by being optimized into a
+defensible paper.
+
+**What I read before answering** (the discipline that mattered last round):
+the full deep-research brief, Edward's main.tex skeleton, and the key
+chapters of the 2,179-line claude.tex chronology. The chronology is far
+stronger than "debugging stories": a 34,512→1,109 typed-reason census; the
+fp32 discovery (unpinned-dtype HuggingFaceClient runs executed at float32
+via a transformers 4.x BC default; fp32 recovers official completions
+EXACTLY, quasi≈1.0 vs ≈0.17 fp16; 129/148 deployments unpinned → a
+falsifiable corpus-wide prediction, tested so far on ONE family at n=12);
+and the adaptation-layer pattern (base models reproduce near-exactly,
+instruct models drift via chat-template/tokenizer versioning).
+
+**The position I landed on (weakly held, recorded in §0.2 of the thesis
+doc):** the strongest object of reproduction is the EXPERIMENT, not the
+finding — "a recipe does not identify the experiment" — with the judge work
+as the modern-failure-mode section (substrate lost irrecoverably → 
+substitution + conclusion-survival), not the spine. The hostile reviews of
+the reproduction-first and open-judge directions each patch the other,
+which is the best argument they are one paper. But the decision is gated on
+facts I cannot resolve from the repo, now recorded as D1–D5: the PM's 2023
+constraint (Edward's evidence is later-suite HELM, not 2023), the EEE
+authorship/claim boundary (EEE is a submodule here; reviewers will see
+overlap), and Edward's timeline (who operates a prospective protocol).
+
+**The design contribution of the round:** converting Edward's flagship from
+anecdote to law-like claim via a prospective frozen protocol (§0.4 —
+stratified sample from the 1,109, frozen diagnostic ladder, budget +
+stopping rule, registered fp32 predictions), and four discriminating pilots
+(§0.5) that decide the direction empirically for ~one week of GPU nights +
+two zero-compute afternoons, instead of another argument round. P3
+(fp32 cross-family) and P4 (one-benchmark judge conclusions pilot) carry
+most of the information.
+
+**Reversal to own honestly:** this morning I recommended the
+full-leaderboard XSTest/WildBench sweep; round 3 pauses it. The new
+information is Edward's draft and the PM framing — holding a sweep is
+cheaper than unwinding one. Same lesson as the sankey-header incident from
+the 07-20 entry: a decision optimized under an assumption ("the paper is
+the judge study") must be re-costed when the assumption moves, not carried
+as settled.
+
+**State:** §0 prepended to docs/planning/tmlr-paper-thesis.md marking the
+round-2 plan as the contingent branch plan; no executable code changed; the
+omni_math kwdagger smoke remains queued and thesis-invariant;
+`submodules/every_eval_ever` gitlink remains deliberately unstaged;
+`uncommitted/` left uncommitted (it is other people's unvetted material —
+that is what the folder name says).
+
+## 2026-07-21 17:10:00 -0400 — Tonight's overnight: evidence ledger + fp32 e2e confirm plan
+
+**Model/harness:** claude-fable-5[1m] (Fable 5, 1M context) via Claude Code.
+
+**User intent:** decide exactly what to run tonight on aiq-gpu. Constraint
+reframed by Jon/GPT: the scarce resource is Edward's remaining two weeks and
+unexternalized forensic knowledge, not GPU capacity. Human-audit protocol
+dropped from the near-term plan (open-judge results = fidelity +
+conclusion-preservation, never human validity). Also: results rsync to this
+workstation was IN PROGRESS during this session — ledger built from what was
+synced plus the draft; late-arriving artifacts could revise details.
+
+**Evidence reconciliation (the requested ledger, from PRIMARY artifacts not
+prose).** The "four OLMo models exactly recovered" language overstates: exact
+is literal only for OLMoE (HF fp32 eager, 12/12 quasi+exact, first-token
+0.917, request knobs ast1-agp0); dense OLMo-2 are vLLM fp32 FLASH_ATTN
+MATCH at 10/12, 10/12, 11/12 (7B/13B/32B), all n=12 ifeval probes from the
+07-10 overnight sweeps, all probe-only — the confirm step ("full local run
+vs official") that Edward's own tool emits per sweep has NEVER been
+executed. End-to-end locals (bf16-default vLLM, no dtype pinned in our own
+catalog either — same sin as HELM's) show ifeval_strict_accuracy local
+ABOVE official by +0.098..+0.126 on all four instruct models. Propositions:
+A (unpinned⇒fp32) mechanism-verified, one family; B (fp32 recovers
+completions) probe-only; C (recovered config changes aggregates/conclusions)
+untested.
+
+**Zero-GPU finding this session:** pairwise-ordering flip analysis over the
+existing aggregate_score_diff_headline.json — 4/25 OLMo pairs flip
+official-vs-local (gpqa 3/6 incl. 13B↔32B; bbq 1/6), while ifeval with the
+LARGEST drift flips none (its +0.10 is ~uniform). Qwen experiment: 1/201.
+So procedural drift already flips conclusions in our data, and drift
+magnitude does not predict conclusion damage — a preview of both the
+claim-level layer and the "diagnostics don't predict conclusions" thesis at
+the candidate level. Caveat: gpqa official gaps ≈1.3σ; the paired bootstrap
+must decide which flips are statistically real.
+
+**Tonight (recommended; plan pre-registered in
+reproduce/olmo_models_combined/deployment_match/overnight_confirm_plan.md):**
+PRIMARY = execute the never-run confirm step end-to-end for dense OLMo-2 7B
++ 13B (fp32 dm endpoints from the sweeps' confirm/ catalogs, normal HELM
+from-spec path, ONLY dtype+ast moved vs the bf16 baseline) — tests B at
+full n and C directly against the +0.098/+0.126 targets. CONCURRENT on the
+two free cards: two cross-family deployment-match sweeps chosen by a frozen
+census rule with registered per-cell predictions (pinned-dtype candidate
+kept as a bidirectional control). 32B (tp2, slow) and OLMoE e2e (HF
+in-process routing switch unwired — do not improvise) explicitly excluded.
+FALLBACK if fp32 e2e wiring exceeds ~90 min: all four cards to cross-family
+sweeps. The ast0 probe-only-knob warning in confirm_plan.md is the known
+integration risk; Edward chooses the HELM-native route (tokenizer sibling,
+precedent 74ba33d, vs client patch) — precisely the judgment we are
+spending his time on.
+
+**Why this over the alternatives:** it is the only option that tests B and C
+(not just A), uses infrastructure that already exists end-to-end, needs
+Edward before (wiring judgment) and after (forensic interpretation), and
+yields a flagship-figure-or-major-course-correction by tomorrow. The
+omni_math kwdagger smoke runs only as an optional ~1h early-evening item;
+judge expansion, leaderboard sweeps, 3090 work all stay paused per the
+scarce-resource framing.

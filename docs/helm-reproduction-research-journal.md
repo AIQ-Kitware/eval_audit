@@ -692,3 +692,96 @@ As work continues, the intended split is:
   reusable MAGNeT / HELM infrastructure that should be upstreamed or maintained as general-purpose support
 
 This boundary should be preserved in future edits.
+
+## Contamination caveat for the open-judge experiment (raised 2026-07-20)
+
+Every open-judge finding must be reported with a training-data contamination
+caveat. The judges are **newer than the benchmarks and newer than the public
+HELM judgments they are being compared against**, so "the open judge agrees
+with the closed judge" has a memorization-shaped alternative explanation.
+
+### Established timeline
+
+| item | date | confidence |
+|---|---|---|
+| AnthropicRedTeam dataset | 2022 | public long before |
+| XSTest, SimpleSafetyTests | 2023 | public long before |
+| HarmBench, WildBench, Omni-MATH | 2024 | public long before |
+| `openai/gpt-oss-20b` (the candidate) | Aug 2025 | known |
+| **Qwen3.5 family launch** | **2026-02-16** | verified (public reporting) |
+| **Qwen3.5 0.8B–9B smalls** | **~2026-03-02** | verified (public reporting) |
+| Qwen3.6-35B-A3B | ~2026-06 | unverified estimate |
+| HELM Safety v1.14.0 / Capabilities v1.12.0 publication | **UNKNOWN** | bounded to Aug 2025 – mid 2026 |
+
+The unknown row is the one that matters and it could not be pinned from the
+corpus (the run dirs carry no execution timestamp) or from public sources in a
+reasonable search. It should be established before publication — the HELM
+leaderboard release history is the place to look.
+
+### Three contamination channels, in increasing severity
+
+1. **Benchmark prompts/labels** — near-certain. Every dataset predates the
+   judges by 2–4 years. A judge may recall that a given XSTest prompt is
+   safe/unsafe rather than assessing it. This inflates *absolute* judge quality
+   but does not by itself explain agreement with a *particular* closed judge.
+2. **Official judge outputs** — the dangerous one. HELM publishes the actual
+   `gpt_score` / `llama_score` values AND the judges' reasoning text for each
+   instance. If the gpt-oss-20b run was published before Qwen3.5's data cutoff
+   and scraped, then "open judge agrees with GPT-4o at kappa 0.94" could be
+   partly reproduction of memorized verdicts. This directly threatens the
+   headline finding. NOTE the window is tight but real: the candidate is Aug
+   2025 and the judge launched Feb 2026, so HELM would have had to publish
+   within roughly Aug–Dec 2025 and be scraped.
+3. **Candidate responses** — least concerning; the responses are gpt-oss-20b's
+   and are not themselves the object of comparison.
+
+### The mechanism is DISTRIBUTION SHIFT, not (only) memorization
+
+Sharpened 2026-07-20 (Jon): the concern is not primarily verbatim recall. A
+judge trained on this data will plausibly be **better calibrated on this
+distribution than it would be out of distribution**, with no memorized string
+anywhere. That is both more likely than recitation and much harder to rule out —
+and note that the counter-evidence below argues against MEMORIZATION while
+leaving distributional advantage untouched.
+
+The practical consequence: our numbers describe judge/benchmark pairs the judge
+was very likely trained on. They should NOT be read as an estimate of how an
+open judge performs on a novel benchmark, a novel candidate, or a private
+eval — which is the use case anyone reading this paper actually cares about.
+This is a caveat to state plainly, not a result-killer.
+
+### Empirical evidence against wholesale MEMORIZATION (suggestive; does not address distribution shift)
+
+Our own results contain three patterns that memorization does not predict:
+
+- **The 2B arm is badly miscalibrated.** Same family, same training corpus,
+  same benchmarks — yet Qwen3.5-2B calls 740/1000 anthropic_red_team responses
+  unsafe where the official ensemble says 989/1000 safe (25.7% agreement at
+  99.9% parse). A model reproducing memorized labels would not invert them.
+- **Agreement is size-graded** (93.7% → 96.8% → ~98–99% on XSTest), which looks
+  like an inference-time capability curve. Memorization would be expected to be
+  flatter or more step-like across a family sharing a training corpus.
+- **WildBench shows a systematic ~0.8-point offset** below the official
+  ensemble rather than convergence on it. A memorizing judge would reproduce
+  the official numbers, not sit consistently below them.
+
+### Tests that would actually bound this
+
+Ordered by decisiveness per unit of effort:
+
+1. **Swap the candidate model** to one released after the judge's cutoff. The
+   (prompt, response, judgment) triple then cannot have been memorized even
+   though the prompts were public. Our pipeline is already parameterized by
+   candidate — this is a config change, not new code, and is the cheapest
+   strong test available.
+2. **Perturbation test** — paraphrase candidate responses so memorized surface
+   forms no longer match, and measure agreement degradation. HELM already has
+   perturbation machinery.
+3. **Direct memorization probe** — ask a judge to recall the official verdict
+   for an instance *without* showing it. Success is direct evidence of channel 2.
+4. **Post-cutoff benchmark** — judge a benchmark published after the judge's
+   release. Cleanest, but requires a benchmark with official closed-judge
+   annotations, which is the scarce ingredient.
+
+Until at least (1) is run, every agreement number in this experiment should be
+reported as an **upper bound** on true independent agreement.

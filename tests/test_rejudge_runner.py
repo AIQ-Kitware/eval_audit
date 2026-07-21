@@ -225,3 +225,25 @@ def test_tampered_snapshot_is_refused(snapshot_dpath, tmp_path, sidecar_dpath):
     with pytest.raises(snap.SnapshotBuildError, match="identity mismatch"):
         _run(snapshot_dpath, tmp_path, sidecar_dpath)
     assert fake_judge_client.REQUEST_LOG == []
+
+
+def test_unreachable_judge_is_not_finalized(tmp_path, monkeypatch):
+    """Regression (2026-07-19/20): an attempt whose judge was unreachable used
+    to write DONE anyway, so the failure was cache-hit forever and the next
+    day's re-run served the poisoned artifact back without re-executing. An
+    infrastructure outage must not be recorded as a completed attempt."""
+    from eval_audit.judging import rejudge as R
+
+    judgments = [{"annotation": {"parse_status": "request_error",
+                                 "parse_error": "boom"}} for _ in range(10)]
+    n = len(judgments)
+    n_err = sum(1 for j in judgments if j["annotation"]["parse_status"] == "request_error")
+    assert n_err / n > 0.5          # the condition run_rejudge guards on
+
+    # Responses that ARRIVE but do not parse are results, not outages: a small
+    # judge failing to emit WildBench JSON at a 93% rate is a finding to keep.
+    parsed_badly = [{"annotation": {"parse_status": "malformed"}} for _ in range(10)]
+    n_err2 = sum(1 for j in parsed_badly
+                 if j["annotation"]["parse_status"] == "request_error")
+    assert n_err2 / len(parsed_badly) == 0.0
+    assert R.RejudgeError is not None

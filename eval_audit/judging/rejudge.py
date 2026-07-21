@@ -203,6 +203,7 @@ def run_rejudge(
     sidecar_config_dpaths: tuple[str, ...] = (),
     parallelism: int = 4,
     max_instances: int | None = None,
+    max_request_error_rate: float = 0.5,
 ) -> RejudgeResult:
     """Execute one judgment attempt; idempotent per attempt hash.
 
@@ -210,6 +211,12 @@ def run_rejudge(
     smoke subset). It is folded into the attempt/request identity so a
     limited smoke never collides with — or gets served from — a full
     run's artifacts or cache.
+
+    ``max_request_error_rate`` is the share of FAILED judge REQUESTS above
+    which the attempt is treated as an infrastructure failure and NOT
+    finalized (no DONE, no artifact), so the failure cannot be cached
+    permanently. Judge responses that arrive but do not parse are unaffected —
+    those are results. Set to 1.0 to disable the guard.
     """
     snapshot_dpath = Path(snapshot_dpath)
     out_root = Path(out_root)
@@ -318,6 +325,39 @@ def run_rejudge(
                 "key": _state_display_key(request_state).as_dict(),
                 "annotation": request_state.annotations[annotator_name],
             }
+        )
+
+    # §20: an attempt whose judge was UNREACHABLE is an infrastructure failure,
+    # not a result — refuse to finalize it. Otherwise DONE is written, the
+    # attempt hash is permanently cache-hit, and the poisoned artifact blocks
+    # every retry forever (observed 2026-07-19: a whole judge arm recorded 14
+    # all-request_error attempts, and the next day's re-run served them straight
+    # back from their DONE gates without re-executing anything).
+    #
+    # Only request_error counts. A judge that ANSWERS badly — malformed,
+    # out_of_range, empty_judge_output — is legitimate data and must be kept:
+    # a small judge failing to emit WildBench's JSON at a 93% rate is a finding,
+    # not an outage.
+    n_request_error = sum(
+        1 for j in judgments if j["annotation"].get("parse_status") == "request_error"
+    )
+    n_judged = len(judgments)
+    error_rate = n_request_error / n_judged if n_judged else 0.0
+    if n_judged and error_rate > max_request_error_rate:
+        sample = next(
+            (
+                j["annotation"].get("parse_error")
+                for j in judgments
+                if j["annotation"].get("parse_status") == "request_error"
+            ),
+            None,
+        )
+        raise RejudgeError(
+            f"judge unreachable: {n_request_error}/{n_judged} requests failed "
+            f"({error_rate:.1%} > {max_request_error_rate:.0%} allowed) for "
+            f"{benchmark}/{judge.id}/replicate-{replicate}. NOT finalizing this "
+            f"attempt — a DONE artifact here would cache the failure permanently. "
+            f"Check the judge endpoint and sidecar registration. First error: {sample}"
         )
 
     source_run_spec = json.loads((snapshot_dpath / "source_run_spec.json").read_text())
