@@ -3387,3 +3387,63 @@ explain the boundary.
 **State:** doc updated and committed this session; no executable code
 changed; the kwdagger omni_math smoke remains queued and unexecuted;
 `submodules/every_eval_ever` gitlink still deliberately unstaged.
+
+## 2026-07-21 15:05:00 -0400 — Round 3: thesis reopened (Socratic round over Edward's draft + PM brief)
+
+**Model/harness:** claude-fable-5[1m] (Fable 5, 1M context) via Claude Code.
+
+**User intent:** Jon reopened the paper thesis before executing the round-2
+plan. New evidence: the PM's deep-research brief and Edward's draft
+(`uncommitted/`). Explicit instruction: Socratic engagement with ten
+questions, challenge premises, report disagreements, do NOT converge; update
+the planning doc only after reasoning. The suspicion driving it: the
+open-judge work — originally a tack-on to Edward's HELM reproduction — may
+have displaced the project that motivated it by being optimized into a
+defensible paper.
+
+**What I read before answering** (the discipline that mattered last round):
+the full deep-research brief, Edward's main.tex skeleton, and the key
+chapters of the 2,179-line claude.tex chronology. The chronology is far
+stronger than "debugging stories": a 34,512→1,109 typed-reason census; the
+fp32 discovery (unpinned-dtype HuggingFaceClient runs executed at float32
+via a transformers 4.x BC default; fp32 recovers official completions
+EXACTLY, quasi≈1.0 vs ≈0.17 fp16; 129/148 deployments unpinned → a
+falsifiable corpus-wide prediction, tested so far on ONE family at n=12);
+and the adaptation-layer pattern (base models reproduce near-exactly,
+instruct models drift via chat-template/tokenizer versioning).
+
+**The position I landed on (weakly held, recorded in §0.2 of the thesis
+doc):** the strongest object of reproduction is the EXPERIMENT, not the
+finding — "a recipe does not identify the experiment" — with the judge work
+as the modern-failure-mode section (substrate lost irrecoverably → 
+substitution + conclusion-survival), not the spine. The hostile reviews of
+the reproduction-first and open-judge directions each patch the other,
+which is the best argument they are one paper. But the decision is gated on
+facts I cannot resolve from the repo, now recorded as D1–D5: the PM's 2023
+constraint (Edward's evidence is later-suite HELM, not 2023), the EEE
+authorship/claim boundary (EEE is a submodule here; reviewers will see
+overlap), and Edward's timeline (who operates a prospective protocol).
+
+**The design contribution of the round:** converting Edward's flagship from
+anecdote to law-like claim via a prospective frozen protocol (§0.4 —
+stratified sample from the 1,109, frozen diagnostic ladder, budget +
+stopping rule, registered fp32 predictions), and four discriminating pilots
+(§0.5) that decide the direction empirically for ~one week of GPU nights +
+two zero-compute afternoons, instead of another argument round. P3
+(fp32 cross-family) and P4 (one-benchmark judge conclusions pilot) carry
+most of the information.
+
+**Reversal to own honestly:** this morning I recommended the
+full-leaderboard XSTest/WildBench sweep; round 3 pauses it. The new
+information is Edward's draft and the PM framing — holding a sweep is
+cheaper than unwinding one. Same lesson as the sankey-header incident from
+the 07-20 entry: a decision optimized under an assumption ("the paper is
+the judge study") must be re-costed when the assumption moves, not carried
+as settled.
+
+**State:** §0 prepended to docs/planning/tmlr-paper-thesis.md marking the
+round-2 plan as the contingent branch plan; no executable code changed; the
+omni_math kwdagger smoke remains queued and thesis-invariant;
+`submodules/every_eval_ever` gitlink remains deliberately unstaged;
+`uncommitted/` left uncommitted (it is other people's unvetted material —
+that is what the folder name says).

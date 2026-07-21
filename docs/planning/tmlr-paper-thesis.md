@@ -1,5 +1,132 @@
 # TMLR Paper Thesis: Adversarial Assessment and Experiment Plan
 
+> **STATUS (2026-07-21, round 3): THESIS REOPENED — §0 supersedes.**
+> The round-2 plan below (§1–§8) is the *branch plan for an open-judge-centered
+> paper* and is **contingent**: do not execute its §5.1 candidate expansion,
+> Gemma onboarding, human-audit protocol, or 3090 provisioning until the §0
+> decision points resolve. Everything §0 marks thesis-invariant continues.
+
+## 0. Round 3: thesis reopened (Socratic round, not a converged plan)
+
+*Trigger: the PM's deep-research brief and Edward's draft
+(`uncommitted/deep-research-report.md`, `uncommitted/Eval_Repro_TMLR/`)
+arrived; Jon asked whether the open-judge framing — originally a tack-on to
+Edward's HELM reproduction — has displaced the project that motivated it.
+This section records the evidence read, the positions taken, the decision
+points, and the discriminating pilots. Full reasoning in the session
+transcript and `dev/journals/claude.md`.*
+
+### 0.1 New evidence, verified by reading (not taken on faith)
+
+- **Edward's census**: 34,512 public HELM runs → 1,109 eligible under the
+  open-weight runnable policy (~3%); typed exclusion reasons; only 25/484
+  closed-judge runs excluded *solely* for the judge.
+- **Edward's flagship (fp32)**: every unpinned-dtype HuggingFaceClient run
+  executed at float32 (transformers 4.x BC default); reproducing at fp32
+  recovers official completions *exactly* (quasi ≈1.0 vs ≈0.17 best fp16) on
+  4 OLMo models, mechanism identified in library code; 129/148 HELM
+  HuggingFaceClient deployments are unpinned → a falsifiable corpus-wide
+  prediction, currently tested on ONE family, n=12 instances.
+- **Adaptation-layer pattern**: base-model classic benchmarks reproduce
+  near-exactly; instruct models drift via chat-template version /
+  special-token handling. Possibly the most generalizable fact; same
+  single-family caveat.
+- **Scope mismatch**: Edward's evidence is later-suite HELM (OLMo/Qwen/
+  gpt-oss), NOT the 2023 paper the PM's brief centers. The PM brief's
+  experiments 3–5 (prompt sensitivity, Perspective drift) are occupied by
+  the very papers it cites; its "Experiment 1" (artifact-level score
+  reconstruction) is what our identity replay already does for the judged
+  suites (6/6 at ≤2e-14).
+
+### 0.2 The unifying object (position, weakly held)
+
+The strongest thesis object is **the experiment, not the finding**: *a
+benchmark recipe does not identify the experiment that produced its
+artifacts*. Edward's thread = substrate lost but forensically recoverable
+(fp32). Judge thread = substrate lost irrecoverably (proprietary evaluator
+deployment), where substitution is the only move and conclusion-survival is
+the honest endpoint. One ladder, two severities. The judge work is the
+paper's *modern-failure-mode section*, not its spine — unless pilot P4 says
+otherwise. The hostile reviews of the two directions patch each other
+(§ round-3 Q9 analysis in the journal): strongest argument they are one
+paper with Edward's thread as the spine.
+
+### 0.3 Decision points (blockers, in order)
+
+- **D1 (PM):** Is "2023 HELM + critical findings" a hard constraint or an
+  opening bid for "the HELM public record 2023–2026"? The census is the
+  renegotiation evidence: at 2023-only scope the runnable set is
+  GPT-J/NeoX-class, peripheral to the headline 2023 claims (which depend on
+  dead APIs).
+- **D2 (Jon):** The EEE boundary memo — what EEE's paper claims, author and
+  infrastructure overlap, what this paper may claim. EEE is a submodule of
+  this repo; reviewers will see any overlap. One page, one afternoon, gates
+  the census/methodology claims.
+- **D3 (Jon/Edward):** Edward's timeline. The draft says "work done during
+  an internship" — who operates the prospective protocol (0.4/P3) if he is
+  gone?
+- **D4:** One paper or two — decided by P3/P4 outcomes + D3, not by
+  argument.
+- **D5:** If one paper, the spine. Current lean: reproduction-first, judge
+  as a section (weakly held, pending P3).
+
+### 0.4 The prospective forensic protocol (answer to "can it be systematic?")
+
+Freeze before running: (1) stratified sample drawn by rule from the 1,109
+eligible (family × base/instruct × client type × era), including strata
+Edward never explored; (2) diagnostic-ladder order (from-spec replay →
+tokenizer/template → precision sweep → engine/device → unresolved);
+(3) fixed sweep budget + stopping rule; (4) outcome taxonomy
+(exact / near-with-attributed-cause / unexplained / blocked-typed);
+(5) the registered fp32 prediction for every unpinned row. ~40–60 runs,
+≥5 families. Deliverable: "X% exactly recoverable, Y% with attributed
+cause, Z% underdetermined" — the single strongest experiment available to
+the project; converts Edward's vulnerabilities (post-hoc, hand-selected,
+one-family) into strengths.
+
+### 0.5 Discriminating pilots (run BEFORE any big sweep)
+
+- **P1 (zero compute):** EEE boundary memo (=D2).
+- **P2 (zero compute):** recoverability survival figure from provider
+  deprecation dates × the census. Decides whether "evaluation half-life" is
+  a motivating figure or nothing (position: it is not a thesis — single
+  cross-section, one ecosystem, administrative hazard).
+- **P3 (~days, deployment_match as-is):** fp32 cross-family pilot — 6–10
+  unpinned-dtype HuggingFaceClient officials across ≥4 non-OLMo families,
+  prediction registered first. Generalizes → reproduction-first spine.
+  Fails outside OLMo → case study; judge thread rises.
+- **P4 (~nights):** one-benchmark judge pilot — XSTest, all available
+  candidates, 2 judges, minimal conclusions endpoint (pairwise flips +
+  paired bootstrap only). Clean bounded positive → one section; rich
+  structure → two-paper split gains weight.
+
+### 0.6 Paused vs. thesis-invariant
+
+**Paused pending D1–D5:** full-leaderboard XSTest/WildBench broad tier
+(explicit reversal of the round-2 recommendation, on new information),
+Gemma onboarding, human-audit protocol, 3090 provisioning, Omni-MATH full
+matrix. **Thesis-invariant, continue:** kwdagger omni_math smoke; aiq-gpu
+corpus checks (§8 — they are census inputs); HELM release publication
+dates; minimal `conclusions.py` (Edward's OLMo grid is already multi-model
+on deterministic benchmarks — conclusion-survival endpoints apply to his
+existing data with zero GPU); the Edward sync (now the most urgent item).
+
+### 0.7 Recorded disagreements (per Jon's instruction, not forced to consensus)
+
+- vs GPT-5.6: Edward's main vulnerability is the selection/denominator
+  structure (an evidence problem, fixed by 0.4), not "reads as chronology"
+  (a writing problem). Claim-level-as-skeleton should be dropped, not kept
+  warm: 2023 findings partition into trivially-recomputable /
+  dead-API-blocked / already-relitigated. Claim-level survives only as the
+  endpoint layer (conclusions.py).
+- vs the PM brief: its durable contributions are the three-layer vocabulary
+  and Experiment 1 (already executed here for judged suites); its proposed
+  experiments 3–5 are occupied by its own citations.
+- vs my round-2 self: §1–§8 below was optimal under the assumption "the
+  paper is the judge study"; that assumption is what round 3 withdraws.
+
+---
+
 *2026-07-21. Written as the requested adversarial review of the research
 direction, triggered by Jon's pivot to conceptual planning and a long
 brainstorm from GPT 5.6 (six candidate research questions). This document
