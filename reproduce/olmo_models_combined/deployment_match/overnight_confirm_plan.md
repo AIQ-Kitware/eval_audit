@@ -52,19 +52,25 @@ Per `confirm/confirm_plan.md` in each sweep dir under
    slice of the combined manifest), normal HELM path.
 3. Compare with `eval-audit-compare-pair --run-a <official> --run-b <local>`.
 
-**Pre-flight (Edward judgment, ~30-45 min, BEFORE launch):**
+**Pre-flight findings (resolved 2026-07-21 evening from ranking.txt — do not
+re-derive):**
+- **ast is a NON-FACTOR for OLMo-2.** ast0/ast1 twins score identically in
+  every fp32 cell (7B: 0.915=0.915; 13B: 0.904=0.904), and resolution.json
+  shows `tokenizer_appends_special: None` — the special-token append issue
+  was OLMo-1 only. The confirm plan's ast ⚠️ is the tool being conservative
+  about the winner's label. NO client patch, NO tokenizer override.
+- **agp is LOAD-BEARING.** fp32+agp0 = MATCH (0.915/0.904); fp32+agp1 =
+  PARTIAL (0.158/0.250). And bf16+agp0 also fails (0.157) — so at n=12 the
+  probe already gives the factorial: **precision and template rendering are
+  each necessary and only jointly sufficient.** Tonight's e2e scales the
+  jointly-sufficient cell (fp32 + agp0) to full n and to the metric level;
+  the single-factor cells are already established by the probe.
+- Serve-side fix (the chat path renders agp1 server-side): give vLLM an
+  agp-stripped template via `--chat-template` in the confirm catalog's
+  `extra_args` (steps in the command block below / session transcript).
+  Edward eyeballs the template diff — that is the remaining judgment item.
 - Confirm baseline runs' dtype from the production catalog (expected: vLLM
   default = checkpoint bf16; catalog pins no dtype — note the irony).
-- The ast0 probe-only knob: land it HELM-path-native per the plan's warning
-  (tokenizer-sibling override, precedent 74ba33d, or VLLMClient patch). Record
-  WHICH route was used in this file's log section.
-- agp0 in the winner label: decide whether it was a tie artifact (many cells
-  tie) or load-bearing; if load-bearing and not landable tonight, run fp32
-  with HELM-default rendering anyway — that isolates PRECISION as the single
-  moved factor, and the template layer becomes tomorrow's factor.
-
-**One factor at a time:** tonight's e2e moves ONLY dtype (+ast route) relative
-to the existing bf16 locals. Do not also change tokenizer, template, or engine.
 
 ## E2E outcome definitions (frozen)
 
