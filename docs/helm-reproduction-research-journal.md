@@ -735,7 +735,22 @@ leaderboard release history is the place to look.
 3. **Candidate responses** — least concerning; the responses are gpt-oss-20b's
    and are not themselves the object of comparison.
 
-### Empirical evidence AGAINST wholesale memorization (suggestive, not decisive)
+### The mechanism is DISTRIBUTION SHIFT, not (only) memorization
+
+Sharpened 2026-07-20 (Jon): the concern is not primarily verbatim recall. A
+judge trained on this data will plausibly be **better calibrated on this
+distribution than it would be out of distribution**, with no memorized string
+anywhere. That is both more likely than recitation and much harder to rule out —
+and note that the counter-evidence below argues against MEMORIZATION while
+leaving distributional advantage untouched.
+
+The practical consequence: our numbers describe judge/benchmark pairs the judge
+was very likely trained on. They should NOT be read as an estimate of how an
+open judge performs on a novel benchmark, a novel candidate, or a private
+eval — which is the use case anyone reading this paper actually cares about.
+This is a caveat to state plainly, not a result-killer.
+
+### Empirical evidence against wholesale MEMORIZATION (suggestive; does not address distribution shift)
 
 Our own results contain three patterns that memorization does not predict:
 

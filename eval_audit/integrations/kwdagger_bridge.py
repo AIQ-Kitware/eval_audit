@@ -684,41 +684,45 @@ def _prepare_container_execution(
     return resolved_image, provenance
 
 
-def kwdagger_schedule_argv(
-    request: KWDaggerScheduleRequest, *, params_ref: str | None = None
+def kwdagger_schedule_argv_from_runtime(
+    runtime: KWDaggerRuntime, params: str
 ) -> list[str]:
-    # kwdagger's --params may be either inline YAML text OR a path to an existing
-    # .yaml file (kwutil.Yaml.coerce, path_policy='existing_file_with_extension').
-    # Callers that pass ``params_ref`` (an on-disk params path) opt into the file
-    # form; the default keeps the inline text so the preview/argv stay human-
-    # readable. Execution MUST use the file form — see run_kwdagger_schedule.
+    """The verified ``kwdagger schedule`` argv for a runtime + params reference.
+
+    Split out of :func:`kwdagger_schedule_argv` so non-manifest callers (the
+    rejudge fan-out, which has no HELM manifest) share ONE source of truth for
+    kwdagger's actual flag spelling — underscored ``--queue_name`` /
+    ``--tmux_workers`` / ``--root_dpath`` / ``--skip_existing``, not the
+    hyphenated forms, and ``--params`` rather than any matrix flag.
+    """
     argv = [
         "kwdagger",
         "schedule",
-        f"--queue_name={request.runtime.queue_name}",
-        f"--params={params_ref if params_ref is not None else request.params_text}",
-        f"--devices={request.runtime.devices}",
-        f"--tmux_workers={request.runtime.tmux_workers}",
-        f"--root_dpath={request.runtime.root_dpath}",
-        f"--backend={request.runtime.backend}",
-        f"--skip_existing={1 if request.runtime.skip_existing else 0}",
-        f"--run={1 if request.runtime.run else 0}",
-        # Tee per-node stdout/stderr to info_dpath/status/<pathid>.logs so
-        # cmd_queue's failure surfacing has content to display when a job
-        # crashes before helm-run starts (i.e. before
-        # materialize_helm.run_helm captures cmd_stdout.txt/cmd_stderr.txt).
+        f"--queue_name={runtime.queue_name}",
+        f"--params={params}",
+        f"--devices={runtime.devices}",
+        f"--tmux_workers={runtime.tmux_workers}",
+        f"--root_dpath={runtime.root_dpath}",
+        f"--backend={runtime.backend}",
+        f"--skip_existing={1 if runtime.skip_existing else 0}",
+        f"--run={1 if runtime.run else 0}",
         "--log=True",
         "--monitor=tmux",
-        "--other_session_handler=kill"
+        "--other_session_handler=kill",
     ]
-    # Auto-activate the running venv inside each spawned job. See
-    # _detect_virtualenv_cmd for rationale. This is purely additive —
-    # if no venv is detected, the spawned jobs inherit the parent's
-    # environment as before.
     venv_cmd = _detect_virtualenv_cmd()
     if venv_cmd:
         argv.append(f"--virtualenv_cmd={venv_cmd}")
     return argv
+
+
+def kwdagger_schedule_argv(
+    request: KWDaggerScheduleRequest, *, params_ref: str | None = None
+) -> list[str]:
+    return kwdagger_schedule_argv_from_runtime(
+        request.runtime,
+        params_ref if params_ref is not None else request.params_text,
+    )
 
 
 def kwdagger_schedule_command_text(request: KWDaggerScheduleRequest) -> str:
