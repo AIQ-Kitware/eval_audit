@@ -26,11 +26,16 @@ infer-stack release --env-file "$bootstrap_env" --evict --yes \
 rm -f "$bootstrap_env"
 
 echo
-echo "== exporting the compute bundle =="
+echo "== exporting the compute-from-spec bundle =="
+# --compute-from-spec: expand the authored run_entries ONCE here (offline; needs
+# HELM importable) into frozen synthesized_specs/<run>/run_spec.json and replay
+# THOSE — the frozen spec is the durable identity, not the run-key string (see
+# docs/planning/compute-run-spec-freeze-plan.md).
 "$PYTHON_BIN" -m eval_audit.integrations.infer_stack export-benchmark-bundle \
   --preset "$QWEN35_PRESET" \
   --bundle-root "$QWEN35_BUNDLE_ROOT" \
   --access-kind openai-compatible \
+  --compute-from-spec \
   --base-url "${LITELLM_BASE_URL}/v1" \
   --api-key-value "$LEASE_MASTER_KEY"
 

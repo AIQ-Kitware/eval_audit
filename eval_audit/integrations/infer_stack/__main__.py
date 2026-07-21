@@ -82,6 +82,21 @@ def main(argv: list[str] | None = None) -> None:
         ),
     )
     s.add_argument(
+        "--compute-from-spec",
+        action="store_true",
+        help=(
+            "Compute (de-novo) from-spec: EXPAND the authored run-entries ONCE here "
+            "under the pinned HELM (offline, no inference) into a synthesized "
+            "run_spec.json per run, and freeze those as the recipe source the "
+            "exact-path replay executes. For NEW models with no public HELM run to "
+            "replay: the run-key string becomes a transient authoring input and the "
+            "frozen spec is the durable identity, closing the version-coupling of "
+            "live key expansion (docs/planning/compute-run-spec-freeze-plan.md). "
+            "Implies --from-spec; mutually exclusive with --freeze-rel-paths / --era "
+            "/ --precomputed-root (those replay an EXISTING official run)."
+        ),
+    )
+    s.add_argument(
         "--era",
         default=None,
         help=(
@@ -119,6 +134,7 @@ def main(argv: list[str] | None = None) -> None:
         from_run_spec=args.from_spec,
         precomputed_root=args.precomputed_root,
         freeze_rel_paths=args.freeze_rel_paths,
+        compute_from_spec=args.compute_from_spec,
         era=args.era,
     )
     print(json.dumps({

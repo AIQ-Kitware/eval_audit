@@ -2,9 +2,15 @@
 
 The 0.8B / 2B / 4B **-Base** siblings of [`qwen35_vllm`](../qwen35_vllm/)
 (the 9B runbook), run as **one combined 3-model COMPUTE preset**
-(`qwen35_small_vllm`): no public HELM runs to replay, no `--from-spec`, no
-official pairing — the same net-new extension shape as the 9B, same nlstrip
-completions recipe, so 0.8→2→4→9B is a clean base-scaling column.
+(`qwen35_small_vllm`): no public HELM runs to replay and no official pairing —
+the same net-new extension shape as the 9B, same nlstrip completions recipe, so
+0.8→2→4→9B is a clean base-scaling column. Like the 9B it exports with
+**`--compute-from-spec`**: the authored keys are expanded **once at export**
+(the preset's model_metadata/tokenizer sidecars registered so the qwen3.5 ids
+resolve) into a frozen `run_spec.json` per run, and the multi-model bundle keeps
+each frozen source's own inline `model_deployment=` token. The frozen spec is
+the durable identity, not the run-key string — see
+[`compute-run-spec-freeze-plan.md`](../../docs/planning/compute-run-spec-freeze-plan.md).
 
 **The GPU story is the point of this runbook.** There is no
 `INFER_STACK_ALLOWED_GPUS`, no `gpu_indices`, no per-host mapping anywhere.

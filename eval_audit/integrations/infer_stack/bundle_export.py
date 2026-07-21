@@ -29,6 +29,12 @@ from eval_audit.integrations.infer_stack.serving_facts import (
     _resolve_api_key,
 )
 from eval_audit.integrations.infer_stack.freeze import _freeze_run_spec_sources
+from eval_audit.integrations.infer_stack.synthesize_specs import (
+    helm_version as _helm_version,
+    stage_prod_env,
+    synthesize_compute_run_spec_sources,
+    write_provenance,
+)
 
 
 def _model_deployment_entry(
@@ -497,9 +503,24 @@ def materialize_benchmark_bundle(
     from_run_spec: bool = False,
     precomputed_root: str | None = None,
     freeze_rel_paths: bool = False,
+    compute_from_spec: bool = False,
     era: str | None = None,
 ) -> dict[str, Any]:
     output_dir = output_dir.resolve()
+    # Compute-from-spec is an exact-path replay whose recipe SOURCE is synthesized
+    # (the authored keys expanded once here) rather than an official corpus. It
+    # implies from_run_spec and is mutually exclusive with the official-corpus
+    # knobs (discovery freeze / era / an external precomputed_root) — those pin an
+    # EXISTING run dir, which a de-novo compute run does not have.
+    if compute_from_spec:
+        from_run_spec = True
+        if freeze_rel_paths or era is not None or precomputed_root is not None:
+            raise ValueError(
+                "--compute-from-spec is mutually exclusive with --freeze-rel-paths, "
+                "--era, and --precomputed-root: those replay an EXISTING official "
+                "run dir, but compute-from-spec synthesizes the recipe from the "
+                "authored keys (there is no official run to pin)."
+            )
     preset_cfg = _resolve_preset_cfg(preset)
     specs = profile_specs or _profile_specs("", preset_cfg)
     # Era (pre-v0.5) mode: CLI --era wins, else the preset may declare one. When
@@ -721,7 +742,39 @@ def materialize_benchmark_bundle(
     # generated manifests. Discovery (token-subset) runs exactly here, once. The
     # corpus is enumerated once per distinct root and shared across smoke/full.
     smoke_sources = full_sources = None
-    if freeze_rel_paths:
+    # The precomputed_root stamped into the manifest: the CLI/preset value for the
+    # official-corpus path, or the synthesized root for compute-from-spec.
+    manifest_precomputed_root = precomputed_root
+    if compute_from_spec:
+        # Expand the authored keys ONCE, here, under the pinned HELM, and write a
+        # frozen run_spec.json per run into a synthesized precomputed_root. The
+        # existing exact-path materializer replays those verbatim — the key string
+        # is a transient authoring input; the frozen spec is the durable identity
+        # (docs/planning/compute-run-spec-freeze-plan.md).
+        synth_root = output_dir / "synthesized_specs"
+        prod_env_dir = output_dir / "synth_prod_env"
+        stage_prod_env(
+            prod_env_dir=prod_env_dir,
+            model_deployments_path=model_deployments_path,
+            model_metadata_fpath=sidecar_model_metadata_fpath,
+            tokenizer_configs_fpath=sidecar_tokenizer_configs_fpath,
+        )
+        smoke_sources, smoke_prov = synthesize_compute_run_spec_sources(
+            smoke_spec, synth_root=synth_root, tag="smoke",
+            prod_env_dir=prod_env_dir, model_entries=model_entries,
+            lease_facts=lease_facts,
+        )
+        full_sources, full_prov = synthesize_compute_run_spec_sources(
+            full_spec, synth_root=synth_root, tag="full",
+            prod_env_dir=prod_env_dir, model_entries=model_entries,
+            lease_facts=lease_facts,
+        )
+        write_provenance(
+            synth_root, helm_version=_helm_version(),
+            manifests={"smoke": smoke_prov, "full": full_prov},
+        )
+        manifest_precomputed_root = str(synth_root)
+    elif freeze_rel_paths:
         from eval_audit.integrations.infer_stack import discovery as dc
 
         runs_cache: dict[str, list[Any]] = {}
@@ -754,7 +807,7 @@ def materialize_benchmark_bundle(
         model_deployments_fpath=model_deployments_fpath,
         lease_facts=lease_facts,
         from_run_spec=from_run_spec,
-        precomputed_root=precomputed_root,
+        precomputed_root=manifest_precomputed_root,
         model_deployment=rewrite_deployment,
         run_spec_sources=smoke_sources,
         era=resolved_era,
@@ -766,7 +819,7 @@ def materialize_benchmark_bundle(
         model_deployments_fpath=model_deployments_fpath,
         lease_facts=lease_facts,
         from_run_spec=from_run_spec,
-        precomputed_root=precomputed_root,
+        precomputed_root=manifest_precomputed_root,
         model_deployment=rewrite_deployment,
         run_spec_sources=full_sources,
         era=resolved_era,
@@ -839,6 +892,7 @@ def export_benchmark_bundle(
     from_run_spec: bool = False,
     precomputed_root: str | None = None,
     freeze_rel_paths: bool = False,
+    compute_from_spec: bool = False,
     era: str | None = None,
 ) -> dict[str, Any]:
     # Exact-path replay is a from-spec variant: freezing rel-paths implies it.
@@ -897,5 +951,6 @@ def export_benchmark_bundle(
         from_run_spec=from_run_spec,
         precomputed_root=precomputed_root,
         freeze_rel_paths=freeze_rel_paths,
+        compute_from_spec=compute_from_spec,
         era=era,
     )

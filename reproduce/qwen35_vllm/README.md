@@ -6,8 +6,15 @@ served via **infer-stack** (vLLM behind LiteLLM, GPU acquired per-run via
 `--lease`) and executed through the containerized `eval-audit-run` pipeline —
 the same serving/leasing shape as
 [`qwen_models_combined`](../qwen_models_combined/), with exactly one axis
-flipped: **compute instead of reproduce** (no `--from-spec`, no corpus freeze,
-`precomputed_root: null`). This is the
+flipped: **compute instead of reproduce**. There is no official run to replay,
+but the recipe is still frozen: the runbook exports with **`--compute-from-spec`**,
+which expands the authored keys **once at export** under the pinned HELM into a
+`run_spec.json` per run (under `<bundle>/synthesized_specs/`, with the manifest's
+`precomputed_root` pointing there) and replays *those* — so the run-key string is
+a transient authoring input and the frozen spec is the durable identity, not a
+recipe re-derived live at run time. See
+[`compute-run-spec-freeze-plan.md`](../../docs/planning/compute-run-spec-freeze-plan.md).
+This is the
 [`qwen36-core-new-results-plan.md`](../../docs/planning/qwen36-core-new-results-plan.md)
 design, single non-thinking member (a base model has no thinking toggle),
 smoke-scoped first.
@@ -100,14 +107,15 @@ count as the **`<think>`-leakage probe** (the smoke found the base model
 spontaneously opening reasoning tags on 1/5 boolq instances; n=1000 turns that
 anecdote into a rate).
 
-**mmlu is the 57 canonical *compute*-form subjects**, not the from-spec grid's
-`…,eval_split=test,groups=mmlu_<subject>` shape. Those extra tokens are
-official-run-name matcher metadata that only exist in *reproduction* (from-spec
-replays a frozen `run_spec.json`); in this **compute** path each run_entry is
-handed straight to HELM's `get_mmlu_spec(**args)`, which accepts only
-`(subject, method)` and rejects `eval_split`/`groups`. The first overnight run
-hit this (57 mmlu `TypeError`s) — the fix is entirely on our side (the authored
-grid); HELM is unchanged.
+**mmlu is the 57 canonical *compute*-form subjects**, not the reproduction
+grid's `…,eval_split=test,groups=mmlu_<subject>` shape. Those extra tokens are
+official-run-name matcher metadata that only exist when replaying an *official*
+`run_spec.json`; here each authored run_entry is handed to HELM's
+`get_mmlu_spec(**args)`, which accepts only `(subject, method)` and rejects
+`eval_split`/`groups`. The first overnight run hit this (57 mmlu `TypeError`s) —
+the fix is entirely on our side (the authored grid); HELM is unchanged. Note
+`--compute-from-spec` now expands the keys **at export**, so a malformed grid
+key surfaces its `TypeError` up front (offline, no GPU) rather than mid-run.
 
 **`math` and `natural_qa` are intentionally dropped** as data-access barriers,
 not reproducibility failures: `hendrycks/competition_math` is gone from the HF
