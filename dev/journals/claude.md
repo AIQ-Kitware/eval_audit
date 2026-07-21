@@ -3447,3 +3447,63 @@ omni_math kwdagger smoke remains queued and thesis-invariant;
 `submodules/every_eval_ever` gitlink remains deliberately unstaged;
 `uncommitted/` left uncommitted (it is other people's unvetted material —
 that is what the folder name says).
+
+## 2026-07-21 17:10:00 -0400 — Tonight's overnight: evidence ledger + fp32 e2e confirm plan
+
+**Model/harness:** claude-fable-5[1m] (Fable 5, 1M context) via Claude Code.
+
+**User intent:** decide exactly what to run tonight on aiq-gpu. Constraint
+reframed by Jon/GPT: the scarce resource is Edward's remaining two weeks and
+unexternalized forensic knowledge, not GPU capacity. Human-audit protocol
+dropped from the near-term plan (open-judge results = fidelity +
+conclusion-preservation, never human validity). Also: results rsync to this
+workstation was IN PROGRESS during this session — ledger built from what was
+synced plus the draft; late-arriving artifacts could revise details.
+
+**Evidence reconciliation (the requested ledger, from PRIMARY artifacts not
+prose).** The "four OLMo models exactly recovered" language overstates: exact
+is literal only for OLMoE (HF fp32 eager, 12/12 quasi+exact, first-token
+0.917, request knobs ast1-agp0); dense OLMo-2 are vLLM fp32 FLASH_ATTN
+MATCH at 10/12, 10/12, 11/12 (7B/13B/32B), all n=12 ifeval probes from the
+07-10 overnight sweeps, all probe-only — the confirm step ("full local run
+vs official") that Edward's own tool emits per sweep has NEVER been
+executed. End-to-end locals (bf16-default vLLM, no dtype pinned in our own
+catalog either — same sin as HELM's) show ifeval_strict_accuracy local
+ABOVE official by +0.098..+0.126 on all four instruct models. Propositions:
+A (unpinned⇒fp32) mechanism-verified, one family; B (fp32 recovers
+completions) probe-only; C (recovered config changes aggregates/conclusions)
+untested.
+
+**Zero-GPU finding this session:** pairwise-ordering flip analysis over the
+existing aggregate_score_diff_headline.json — 4/25 OLMo pairs flip
+official-vs-local (gpqa 3/6 incl. 13B↔32B; bbq 1/6), while ifeval with the
+LARGEST drift flips none (its +0.10 is ~uniform). Qwen experiment: 1/201.
+So procedural drift already flips conclusions in our data, and drift
+magnitude does not predict conclusion damage — a preview of both the
+claim-level layer and the "diagnostics don't predict conclusions" thesis at
+the candidate level. Caveat: gpqa official gaps ≈1.3σ; the paired bootstrap
+must decide which flips are statistically real.
+
+**Tonight (recommended; plan pre-registered in
+reproduce/olmo_models_combined/deployment_match/overnight_confirm_plan.md):**
+PRIMARY = execute the never-run confirm step end-to-end for dense OLMo-2 7B
++ 13B (fp32 dm endpoints from the sweeps' confirm/ catalogs, normal HELM
+from-spec path, ONLY dtype+ast moved vs the bf16 baseline) — tests B at
+full n and C directly against the +0.098/+0.126 targets. CONCURRENT on the
+two free cards: two cross-family deployment-match sweeps chosen by a frozen
+census rule with registered per-cell predictions (pinned-dtype candidate
+kept as a bidirectional control). 32B (tp2, slow) and OLMoE e2e (HF
+in-process routing switch unwired — do not improvise) explicitly excluded.
+FALLBACK if fp32 e2e wiring exceeds ~90 min: all four cards to cross-family
+sweeps. The ast0 probe-only-knob warning in confirm_plan.md is the known
+integration risk; Edward chooses the HELM-native route (tokenizer sibling,
+precedent 74ba33d, vs client patch) — precisely the judgment we are
+spending his time on.
+
+**Why this over the alternatives:** it is the only option that tests B and C
+(not just A), uses infrastructure that already exists end-to-end, needs
+Edward before (wiring judgment) and after (forensic interpretation), and
+yields a flagship-figure-or-major-course-correction by tomorrow. The
+omni_math kwdagger smoke runs only as an optional ~1h early-evening item;
+judge expansion, leaderboard sweeps, 3090 work all stay paused per the
+scarce-resource framing.
