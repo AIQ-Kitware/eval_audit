@@ -3253,3 +3253,77 @@ gives the interesting middle of the curve far cheaper.
   exits 0; attempts are now health-checked by parse status, and DEAD
   (request_error → infrastructure) is distinguished from DEGRADED (malformed →
   the judge genuinely cannot produce the format, which is a FINDING to keep).
+
+## 2026-07-21 12:55:57 -0400 — Pivot to conceptual planning: adversarial TMLR thesis assessment
+
+**Model/harness:** claude-fable-5[1m] (Fable 5, 1M context) via Claude Code.
+
+**User intent:** Jon pivoted from execution to planning. He wants an
+adversarial, reviewer-grade assessment of the paper direction (TMLR
+reproducibility track), explicitly not optimized for agreement — including
+against a six-question brainstorm from GPT 5.6 that he pasted in. His
+motivation is fixed and should anchor everything: credible evaluation with
+models ordinary researchers can run; the equity argument against
+frontier-API gatekeeping. Deliverable: a coherent thesis, ≤3–4 RQs,
+must-run vs. distraction triage, coordination with Edward's candidate
+reproduction, and a concrete next-step plan.
+
+**The assessment landed in `docs/planning/tmlr-paper-thesis.md`** — that
+file is the durable artifact; read it before this entry. The one-line
+verdict: the infrastructure is ahead of the science, and every proposed
+headline framing (conclusion preservation, accessibility frontier,
+agreement-predicts-conclusions) is currently unsupported for one structural
+reason — **all 63 artifacts score a single candidate (gpt-oss-20b), and
+every interesting endpoint is defined over a set of candidates.** The fix
+is uniquely cheap in our design: official responses AND official judgments
+for every leaderboard model already sit in the public corpus we mirror, so
+candidate expansion costs zero candidate inference — only judge inference.
+Priority inversion: candidates > judge families > benchmarks > judge sizes.
+Jon's instincts (gemma4, more benchmarks) had the first two axes reversed.
+
+**Design reasoning worth preserving:**
+- *Thesis chosen:* published leaderboard conclusions that depend on
+  proprietary judges are/aren't recoverable with open judges on consumer
+  hardware; characterize the recoverable region, cost, and failure modes
+  via the exact-replay harness. Three RQs: conclusion survival under judge
+  substitution; decomposition with Edward (S(O,J) vs S(R,J), never
+  claiming the factorial); do standard judge-health metrics predict
+  conclusion survival (the red-team 2B cell — 99.9% parse, 25.7%
+  agreement, label inversion — is the one-cell preview, and a negative
+  answer is the most citable insight available). Plus a bounded RQ-S:
+  iso-VRAM quantization (INT4-27B vs BF16-9B at 24 GB) so quantization
+  serves the accessibility frontier instead of becoming a substrate paper.
+- *Novelty wedge vs. PandaLM/JudgeLM/Prometheus/PoLL:* we train nothing
+  and build no harness — we re-instrument the official scoring pipeline of
+  a published leaderboard behind a machine-precision replay gate and ask
+  whether the leaderboard's conclusions survive. The 6/6 replay at ≤2e-14
+  is the methodological signature, not a methods footnote.
+- *Rhetorical asset found while triaging limitations:* the unobservable
+  cell S(R,J*) is impossible not merely for budget reasons — the official
+  judge is a dated proprietary deployment that may no longer exist. The
+  missing cell is itself evidence for the thesis.
+- *Cuts:* off-HELM expansion, rubric-intervention and escalation-protocol
+  studies (both second papers), full substrate grid, remaining Qwen ladder
+  cells, any judge added without a named confound it controls.
+- *Contamination:* Edward's freshly generated responses design out
+  response-level memorization for every S(R,·) cell — the strongest cheap
+  control we have, and the brainstorm missed it.
+
+**Caveats on my own grounding.** Jon noted mid-session that not all results
+are synced to this workstation — confirmed: local `analysis/` holds only
+the two pre-sweep reports and `/data/crfm-helm-public` is absent here. All
+results claims in the assessment rest on the journaled 2026-07-20/21
+checkpoint (derived on aiq-gpu from the full artifact set), not on fresh
+inspection. Two assumptions the plan explicitly requires verifying on
+aiq-gpu before committing to it: per-benchmark model coverage in the
+public corpus, and whether any corpus candidate postdates Qwen3.5's
+2026-02-16 launch (if none, the contamination control lives entirely in
+RQ2 via Edward's fresh responses).
+
+**Next steps:** the §8 checklist in the thesis doc (corpus coverage,
+post-cutoff candidate existence, HELM release dates, annotator-subset
+completeness, Edward's format+list), then §5.1 candidate selection. The
+in-flight kwdagger smoke (`./55_schedule_rejudge.sh omni_math --smoke
+--run`, fixes in `22f72d5`) remains queued and unexecuted; nothing in this
+session changed executable code. `submodules/every_eval_ever` gitlink
+remains modified/unstaged per the standing rule.
