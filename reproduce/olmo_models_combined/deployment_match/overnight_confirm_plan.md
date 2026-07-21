@@ -41,16 +41,21 @@ PROVEN on aiq-gpu's own cards (Jul-10 sweep logs, run as edward.wang,
 GPU 0): serving feasibility is not a risk for tonight's 7B/13B cells; the
 ast0 HELM-path wiring is the only real one.
 
-## E2E runs (test B + C)
+## E2E runs (test B + C) — one command per model
 
-Per `confirm/confirm_plan.md` in each sweep dir under
-`/data/crfm-helm-audit-store/deployment-match/<model>--ifeval-vllm/`:
+```bash
+./60_confirm_fp32_e2e.sh 7b     # own tmux pane; blocks
+./60_confirm_fp32_e2e.sh 13b    # own tmux pane; blocks
+```
 
-1. Serve: `INFER_STACK_CONFIG_DIR=<sweep>/confirm/serve` then
-   `infer-stack acquire dm-<model>-fp32-attnflash-attn --yes --env-file ...`
-2. Replay the official run_spec from-spec against that endpoint (ifeval-only
-   slice of the combined manifest), normal HELM path.
-3. Compare with `eval-audit-compare-pair --run-a <official> --run-b <local>`.
+The script automates the sweep's own confirm plan: builds the agp0 chat
+template (prints the suppressed text — EYEBALL it), patches the confirm
+catalog, generates an ifeval-only fp32 variant bundle under a fresh suite
+name, and launches `eval-audit-run --lease` (self-acquires; placement is
+infer-stack's job). Written 2026-07-21, syntax-checked, NOT yet executed on
+the GPU host — each step fails loudly and independently. Morning compare:
+`eval-audit-compare-pair --run-a <official> --run-b <local>` per
+`confirm/confirm_plan.md`.
 
 **Pre-flight findings (resolved 2026-07-21 evening from ranking.txt — do not
 re-derive):**
@@ -109,8 +114,9 @@ does NOT. Both directions are tests of A's mechanism.
 FP32-DECISIVE: best fp32 cell beats best non-fp32 cell by ≥ 0.10 composite;
 UNRESOLVED otherwise. Preserve infeasible/failed cells with typed reasons.
 
-Launch pattern: copy `run_deployment_match_olmo2_7b.sh` per model, point at the
-selected official run, `DM_PROFILE` per official client class, `auto` phase.
+Launch: `./65_scan_sweep_candidates.sh` applies the frozen rule and PRINTS
+the two `run_deployment_match.sh` commands (GPUs 2-3) — write the per-cell
+predictions here first, then paste them.
 
 ## Edward's morning protocol (~90 min, before anything else)
 
