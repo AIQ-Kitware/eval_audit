@@ -55,6 +55,27 @@ for judge_key in $JUDGES; do
   ARGS+=(--judge-json "$judge_json")
 done
 
+# PRE-FLIGHT: export each judge's sidecar bundle into its PRIVATE directory.
+# The serial driver does this per arm after acquiring; the fan-out never did,
+# so every job pointed --sidecar-config at a directory that did not exist and
+# HELM could not resolve the judge deployment. Export needs only the running
+# LiteLLM gateway (the catalog resolution is static), NOT a judge lease.
+echo "Exporting judge sidecar bundles (pre-flight)…" >&2
+MASTER_KEY="$(infer-stack env LITELLM_MASTER_KEY)" || {
+  echo "FAIL: cannot read LITELLM_MASTER_KEY — is the infer-stack gateway up?" >&2; exit 1; }
+for judge_key in $JUDGES; do
+  spec="$(oj_judge_spec "$judge_key")"; read -r _ep judge_json <<<"$spec"
+  bundle_dir="$OJ_SIDECAR_DIR/$judge_key"
+  mkdir -p "$bundle_dir"
+  LITELLM_MASTER_KEY="$MASTER_KEY" eval-audit-export-judge-bundle \
+    --judge-json "$judge_json" \
+    --config-dir "$INFER_STACK_CONFIG_DIR" \
+    --base-url "${LITELLM_BASE_URL}/v1" \
+    --infer-stack-revision "$(git -C "$ROOT/submodules/infer_stack" rev-parse --short HEAD 2>/dev/null || echo unknown)" \
+    --out "$bundle_dir" >/dev/null || { echo "FAIL: bundle export $judge_key" >&2; exit 1; }
+  echo "  bundle $judge_key -> $bundle_dir" >&2
+done
+
 if [[ -n "$SMOKE" ]]; then
   ARGS+=(--max-instances "${OJ_SMOKE_INSTANCES:-20}" --replicates 0)
   echo "  SMOKE: first ${OJ_SMOKE_INSTANCES:-20} instances, replicate 0 only" >&2
@@ -71,4 +92,9 @@ exec eval-audit-schedule-rejudge \
   --queue-name "${OJ_QUEUE_NAME:-open-judge-rejudge}" \
   --tmux-workers "${OJ_TMUX_WORKERS:-4}" \
   --devices "${OJ_DEVICES:-0,1,2,3}" \
+  --lease-catalog "$INFER_STACK_CONFIG_DIR/catalog.yaml" \
+  --lease-config-dir "$INFER_STACK_CONFIG_DIR" \
+  --lease-data-dir "${INFER_STACK_DATA_DIR:-/data/service/infer-stack}" \
+  --lease-ttl "${OJ_LEASE_TTL:-8h}" \
+  --lease-timeout "${OJ_LEASE_TIMEOUT:-4h}" \
   --run "$RUN"

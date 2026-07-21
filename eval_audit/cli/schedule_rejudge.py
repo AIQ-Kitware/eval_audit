@@ -116,6 +116,19 @@ def main(argv: list[str] | None = None) -> None:
                         help="Concurrent kwdagger workers (default 4: one per GPU).")
     parser.add_argument("--devices", default="0,1,2,3",
                         help="GPUs kwdagger may assign (default 0,1,2,3).")
+    # Lease WORLD knobs. A kwdagger job is a fresh login shell and inherits no
+    # INFER_STACK_* exports, so without these the acquire resolves infer-stack's
+    # default world, cannot find the judge endpoint, and fails as a gating
+    # precondition -- which skips the command and leaves NO log.
+    parser.add_argument("--lease-catalog", default=None,
+                        help="infer-stack catalog.yaml the acquire resolves against.")
+    parser.add_argument("--lease-config-dir", default=None,
+                        help="INFER_STACK_CONFIG_DIR for the job's acquire/release.")
+    parser.add_argument("--lease-data-dir", default=None,
+                        help="INFER_STACK_DATA_DIR for the job's acquire/release.")
+    parser.add_argument("--lease-ttl", default=None, help="e.g. 6h.")
+    parser.add_argument("--lease-timeout", default=None,
+                        help="Acquire budget: admission-queue wait + cold load, e.g. 4h.")
     parser.add_argument("--no-skip-existing", action="store_true",
                         help="Recompute jobs whose node output already exists.")
     parser.add_argument(
@@ -150,6 +163,13 @@ def main(argv: list[str] | None = None) -> None:
         max_instances=args.max_instances,
         replicates_by_benchmark=by_benchmark or {b: _parse_replicates(args.replicates) for b in snapshots},
         replicates_by_pair=by_pair,
+        lease_knobs={
+            "lease_catalog": args.lease_catalog,
+            "lease_config_dir": args.lease_config_dir,
+            "lease_data_dir": args.lease_data_dir,
+            "lease_ttl": args.lease_ttl,
+            "lease_timeout": args.lease_timeout,
+        },
     )
     rows = build_rejudge_matrix(spec)
     print(summarize_matrix(rows), file=sys.stderr)
