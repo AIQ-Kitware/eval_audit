@@ -3070,3 +3070,63 @@ for the four new benchmarks — the replay gate is the real check on the new
 prompt-construction code and costs zero GPU — then a small `--max-instances`
 kwdagger fan-out before trusting it with a night. `submodules/every_eval_ever`
 gitlink remains modified/unstaged (flagged, uncommitted) throughout.
+
+## 2026-07-20 17:05:00 -0400
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**User intent:** Check the size-sweep results, orient after a context switch,
+and — raised by Jon — assess training-data contamination risk, verifying the
+Qwen3.5 release date against the publication date of the HELM judgments we
+compare to.
+
+**Results state.** 63 healthy artifacts, zero request_error anywhere. 4B came
+back clean after the purge, so the size sweep is complete except Omni-MATH
+(never snapshotted) and the safety trio for 0.8B/27B/35B-A3B. Two clean
+findings: parse rate tracks METRIC COMPLEXITY (XSTest 100% even at 0.8B;
+WildBench 6.8% → 51.6% → 61.2% → 84.6% → 90.7%), while agreement given a parse
+SATURATES EARLY on label metrics (XSTest ~98–99% from 4B up; the 27B buys
+nothing over the 9B, and the official GPT-vs-Llama baseline is only 96.0%).
+
+**Third finding, which nearly fooled me:** format compliance does not imply
+calibration. Qwen3.5-2B scores 99.9% parse and 25.7% agreement on
+anthropic_red_team — it flags 740/1000 responses unsafe where the official
+ensemble says 989/1000 safe. I nearly wrote that up as an anomaly before
+checking the score distribution. Parse rate and agreement must always be
+reported as separate axes; a "does the judge work?" smoke test based on output
+format would have passed this arm. (Also note these safety sets are ~99%
+one-class, so "agreement" there is essentially a false-positive rate — worth
+stating explicitly in any writeup.)
+
+**Contamination — Jon's point, and he is right.** Verified: the Qwen3.5 family
+launched 2026-02-16 and the 0.8B–9B smalls ~2026-03-02. Every benchmark dataset
+predates that by 2–4 years, and the candidate (gpt-oss-20b) is Aug 2025. What I
+could NOT establish is the publication date of HELM Safety v1.14.0 /
+Capabilities v1.12.0 — the corpus run dirs carry no execution timestamp and
+public sources did not yield it in a reasonable search. That is exactly the
+date that matters, because HELM publishes the official gpt_score/llama_score
+values AND the judges' reasoning text; if those were scraped before Qwen3.5's
+cutoff, "open judge agrees with GPT-4o" is partly a memorization result. Full
+analysis (three channels, counter-evidence, proposed tests) is now in
+docs/helm-reproduction-research-journal.md.
+
+Worth recording that our own data argues against WHOLESALE memorization: the 2B
+arm inverts the official labels, agreement is size-graded like a capability
+curve, and WildBench sits at a systematic offset rather than converging. None
+of that is what memorized reproduction looks like. But it is suggestive, not
+decisive, and the honest framing is that every agreement number is an UPPER
+BOUND on independent agreement until tested.
+
+**Cheapest decisive test: swap the candidate model** to one released after the
+judge cutoff. The (prompt, response, judgment) triple then cannot have been
+memorized even though the prompts were public — and our pipeline is already
+parameterized by candidate, so it is a config change, not new code. I would run
+that before any writeup.
+
+**Process note.** I had authored the judge release dates in model_metadata.yaml
+as guesses with "confirm against the HF repo" comments, and they sat unverified
+for days until Jon asked a question that depended on them. Flagging uncertainty
+in a comment is not the same as resolving it; a date that a FINDING depends on
+should be verified when the finding is made, not deferred to a reader. The
+metadata now records the verified launch date and says explicitly what was and
+was not confirmed.
