@@ -3129,3 +3129,95 @@ for the four new benchmarks — the replay gate is the real check on the new
 prompt-construction code and costs zero GPU — then a small `--max-instances`
 kwdagger fan-out before trusting it with a night. `submodules/every_eval_ever`
 gitlink remains modified/unstaged (flagged, uncommitted) throughout.
+
+## 2026-07-21 11:44:05 -0400
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**User intent:** After fetching the repo + submodules, work out what needed
+merging, do it, prove it, then chase a research critique to a plan. Four asks
+in sequence: (1) determine branch/submodule sync state; (2) merge
+`origin/jons/qwen35-extension` — superproject *and* submodule — onto
+`impl/run-from-run-spec`; (3) adopt the pre-existing `cmd_queue` gitlink drift;
+(4) confirm whether the qwen runbooks run from-spec or via the key expander,
+then critique the asymmetry and turn the resolution into a plan.
+
+**The merge work (context for the real content below).** Current branch was 48
+commits behind `origin/jons/qwen35-extension` — an entire open-judge/rejudge
+workstream landed on the remote *after* the previous merge (`bff4f7a6`). The
+only non-trivial conflict was the `infer_stack` submodule gitlink: both sides
+had advanced it from base `6616c519` in different directions — ours to
+`38b3f39` (tui-async-startup), theirs to `06f2ec2` (VRAM-aware leasing). Merged
+the two *inside* the submodule first (`b9a8c89`, a clean --no-ff of both
+workstreams, no code conflict), then resolved the superproject gitlink to that
+merge. `every_eval_ever` fast-forwarded (`b1c5a0f`→`f6ae03c`); `cmd_queue` was
+deliberately kept out of the merge per the never-auto-bump-gitlinks rule, then
+adopted as its own commit (`8906ac96`) once the user confirmed. Full suite green
+afterward: **765 passed, 75 skipped** (25:43 wall; one heavy diff test is 1485s
+of it). Process note worth keeping: I fumbled the background run by
+double-backgrounding (`nohup … &` inside a `run_in_background` bash), so the
+first "exit 0" was the *launcher* returning, not pytest. Caught it, waited on
+the real PID, and only then trusted the result — the lesson is that a wrapper's
+exit code is not the wrapped process's exit code, and "completed" on the
+launcher means nothing about the job.
+
+**The content worth writing down is the critique, and it is a genuine one.** The
+qwen runbooks (`qwen35_vllm`, `qwen35_small_vllm`) are *compute*, not
+reproduction, and they author `run_entries` as literal HELM run-key DSL strings
+— e.g. `mmlu:subject=abstract_algebra,method=multiple_choice_joint,model=…,
+data_augmentation=canonical,model_deployment=…` — in `preset_configs.yaml`, then
+hand them to HELM's expander at execution time (no `--from-spec`). That is
+*exactly* the fragile artifact this project criticizes HELM for. The user asked
+the honest question: do we critique HELM for fragile run-key names + expanders,
+then fall back to that pattern for our own new runs?
+
+**Answer: yes, but the strong form ("hypocrisy") overclaims, and the useful
+form is narrower and actionable.** Three things the critique gets right: (1) a
+*provenance asymmetry* — byte-exact frozen-spec replay for others' runs, a
+mutable name for our own; (2) we *manufacture new fragility* — the
+`run_spec.json` a compute run emits is a derivative of our pinned expander, so a
+future reader inherits the version-coupling we criticize; (3) it has already
+bitten — G13 is precisely a stored run-key/class-path that no released expander
+resolves. What blunts the strong form: for de-novo models there is *no prior
+spec to replay*, so authoring is necessary, not backsliding; and the fragility
+is specifically **cross-version** — under a single pinned HELM build,
+key→spec is deterministic, so the risk is *deferred onto the future reader*, not
+incurred now. The runbooks also label themselves "compute instead of reproduce",
+so there is no epistemic sleight of hand.
+
+**The resolution reinforces the thesis rather than undermining it.** A run key
+is a lossy *name*; the `RunSpec` is ground truth. HELM's original sin is
+treating the mutable name as the durable handle and regenerating on demand. Our
+from-spec discipline already fixes that for historical runs; the gap is that we
+don't yet extend it to our own freshly-computed runs. The one-line rule:
+**expand once at authoring, then freeze** — the expander touches each compute
+run exactly once, at birth, and its `run_spec.json` becomes the canonical,
+content-addressed, archived handle. Framed that way, the perceived inconsistency
+becomes *evidence for* the exact principle the paper argues.
+
+**Deliverables this session.** The plan is
+[`docs/planning/compute-run-spec-freeze-plan.md`](../../docs/planning/compute-run-spec-freeze-plan.md):
+an offline expand-and-freeze step (content-addressed specs, HELM-version
+stamped), routing compute execution through the *existing* `--from-spec` replay
+(no second executor), a re-expand-and-diff drift guard that would catch
+G13-class breakage, and docs/paper framing — with the honest caveat that until
+it lands the presets still keep the key string as the stored source of truth, so
+the discipline is aspirational. The blocking unknown is **F1**: whether HELM
+exposes run-key → `RunSpec` expansion *without* running inference (`helm-run`
+writes `run_spec.json` before inference, so a dry-run or a direct
+`run_spec_factory` call may already suffice). Resolve F1 before shaping Change 1.
+
+**Reusable insight.** When you build a reproducibility argument around "the
+frozen spec, not its name, is the identity", audit *your own* artifact-producing
+paths for the same discipline before a reviewer does — the critique you can make
+of an upstream tool is usually latent in your own pipeline wherever you had to
+author something that tool couldn't hand you. The tell here was that the *output*
+`run_spec.json` was treated as a verification target (something to check exists)
+rather than as the *source of truth* (something to freeze and re-run from).
+
+**State at close.** Branch `impl/run-from-run-spec` carries three unpushed
+commits (`20ae5fdc` merge, `8906ac96` cmd_queue bump) plus these docs, tree
+clean apart from the user's untracked doc zips. Unpushed: pushing requires the
+`infer_stack` merge commit `b9a8c89` to reach its remote first, or the
+superproject gitlink dangles for others. No code was written toward the plan yet
+— it is PROPOSED only.
