@@ -57,3 +57,4 @@ paper_draft
 # validation-ladder machine-local artifacts (reproduce/classic_era_replay)
 ladder-out/
 reproduce/classic_era_replay/ladder.env
+uncommitted
