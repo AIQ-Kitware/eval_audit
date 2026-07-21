@@ -8,13 +8,52 @@ path already treats the frozen `run_spec.json` as the durable handle
 HELM run-key **string** as the stored source of truth and re-expands it under
 the installed crfm-helm at execution time.
 
-**Scope:** every compute runbook that authors `run_entries` as run-key strings
-and exports a bundle *without* `--from-spec` — today
-[`reproduce/qwen35_vllm/`](../../reproduce/qwen35_vllm/),
-[`reproduce/qwen35_small_vllm/`](../../reproduce/qwen35_small_vllm/),
-[`reproduce/open_judge_gpt_oss/`](../../reproduce/open_judge_gpt_oss/), and the
-gpt-oss core grids — all sourced from
-[`eval_audit/integrations/infer_stack/preset_configs.yaml`](../../eval_audit/integrations/infer_stack/preset_configs.yaml).
+**Scope:** every runbook that authors `run_entries` as run-key strings and
+exports a bundle *without* `--from-spec` — all sourced from
+[`eval_audit/integrations/infer_stack/preset_configs.yaml`](../../eval_audit/integrations/infer_stack/preset_configs.yaml)
+(or `presets.py`). A pass over `reproduce/*` on 2026-07-21 classifies them (see
+§1a). Two different fixes fall out: **compute extensions** with no public
+counterpart get the freeze discipline here; **reproductions** that still
+reconstruct from run-entries should instead *migrate to `--from-spec`* (the
+existing effort — [`olmo-from-run-spec-migration-plan.md`](olmo-from-run-spec-migration-plan.md)),
+with freeze as the fallback only where from-spec is blocked (the classic-era
+G13 class-path case).
+
+## 1a. Runbook inventory (2026-07-21 pass)
+
+Method: for each `reproduce/*` dir, check whether any real (non-comment)
+command passes `--from-spec`, and whether the model has a public HELM
+counterpart. `export-benchmark-bundle --preset … ` with no `--from-spec` ==
+authored key strings expanded live.
+
+**A — Compliant (already `--from-spec`), no change:**
+`gpt_oss_20b_from_spec`, `olmo_models_combined`, `qwen_models_combined`.
+
+**B — Compute extensions, no public counterpart → THIS PLAN (freeze):**
+| runbook | model | exec path |
+|---|---|---|
+| `qwen35_vllm` | qwen3.5-9b-base | export-bundle (preset) |
+| `qwen35_small_vllm` | qwen3.5 0.8/2/4b-base | export-bundle (preset) |
+| `gpt_oss_20b_core_grid` | gpt-oss-20b (not in classic HELM) | export-bundle (preset) |
+| `gpt_oss_20b_vllm` | gpt-oss-20b | export-bundle (preset) |
+| `extend_grid_falcon_7b` | falcon-7b extension | direct `helm-run` + `eval-audit-run` (no export-bundle) — freeze still applies, different mechanics |
+| `small_models_kubeai` | "small models overnight" (verify model list) | export-bundle (preset) |
+| `qwen2_72b_vllm` | qwen2-72b (verify: public or extension) | export-bundle (preset) |
+| `open_judge_gpt_oss` | gpt-oss-20b re-judged | **already freezes** responses as content-addressed snapshots — response-side prior art; no primary model run to freeze |
+
+**C — Reproductions still reconstructing from run-entries → MIGRATE to `--from-spec`:**
+| runbook | model | note |
+|---|---|---|
+| `finish_qwen25_gptoss` | qwen2.5-7b-instruct + gpt-oss | **Self-documented harm:** its README says 36/38 packets are `execution_spec_drift` "because the local audit didn't [reuse the public run_spec]"; the preset overrides `model_deployment_name` to *approximate* the public spec instead of replaying it. Highest-value migration — from-spec eliminates the drift it already measured. |
+| `llama2_70b_helm_audit` | llama-2-70b | "re-runs the public HELM Classic v0.3.0 LLaMA-2-70B benchmarks locally" (Case Study 3) — reproduction, not extension. |
+| `classic_together_combined` | gpt-j / gpt-neox / opt / redpajama | "reproduction of ALL official runs", era-pinned. **from-spec BLOCKED by G13** (stored flat class-path resolves in no released HELM → needs shim canonicalization first); freeze is the pragmatic interim handle here. |
+
+**Out of scope — consume existing artifacts, no model execution:**
+`eee_only_demo`, `eee_only_reproducibility_heatmap`, `machine_compare`,
+`inspectai_helm_eee_compare`, `apples`, `historic_grid`, `smoke`, `setup`,
+`pythia_smoke_eee_only`, `open_helm_models_reproducibility`,
+`pythia_mmlu_stress`. **Low-priority / verify:** `pythia12b_mmlu_smoke`
+(older `make-manifest` + `helm-run` path; pythia has public runs → migrate-or-drop as a smoke).
 
 **Depends on (all IMPLEMENTED):**
 [`run-from-run-spec-json-plan.md`](run-from-run-spec-json-plan.md) (the replay
