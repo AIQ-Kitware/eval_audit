@@ -3658,3 +3658,73 @@ yields a flagship-figure-or-major-course-correction by tomorrow. The
 omni_math kwdagger smoke runs only as an optional ~1h early-evening item;
 judge expansion, leaderboard sweeps, 3090 work all stay paused per the
 scarce-resource framing.
+
+## 2026-07-21 19:55:00 -0400 — Overnight launched; template bug found and fixed live; session close-out
+
+**Model/harness:** claude-fable-5[1m] (Fable 5, 1M context) via Claude Code.
+
+**State at close: three jobs running on aiq-gpu** (Jon confirmed) — the
+OLMo-2 7B and 13B fp32+agp0 end-to-end ifeval replays (fresh suites
+`audit-allenai-olmo-2-1124-{7b,13b}-instruct-ifeval-fp32`) and the
+marin-8b-instruct ifeval deployment-match sweep. Everything scientific
+about tonight (propositions A/B/C, probe factorial, registered
+predictions, corpus scan facts, interpretation rules) is consolidated in
+`docs/helm-reproduction-research-journal.md` under "The fp32/agp0
+substrate-recovery experiment"; the frozen protocol + morning readout is
+`reproduce/olmo_models_combined/deployment_match/overnight_confirm_plan.md`.
+This entry records the session mechanics and lessons.
+
+**Repo state.** Working on `main` from now on (Jon merged his + Edward's
+branches; `main..jons/qwen35-extension` is empty). Today's commits through
+`1adb0a3` are LOCAL to this workstation clone — it has no GitHub
+credentials (https origin, no gh, no credential helper), so nothing is
+pushed; aiq-gpu picked the commits up by pulling from this checkout over
+the shared home. Someone with credentials should `git push origin main`
+from a machine that has them, or the work exists only on two NFS clones.
+
+**The live failure and its lesson.** Both `60_confirm_fp32_e2e.sh`
+launches failed at step [1/4]: my template patcher matched the exact
+string `{% if add_generation_prompt %}`, but OLMo-2 guards the assistant
+tag with a COMPOUND conditional — `{% if loop.last and
+add_generation_prompt %}` — so zero matches. Fixed by neutralizing the
+bare identifier (word-boundary regex → `false`) and printing each original
+context for the operator eyeball; verified against the real template
+fetched from the hub before recommitting (`1adb0a3`). Lesson, same genus
+as the strip_thinking saga: never match an exact serialized form of
+something a third party generates — match the invariant (here, the
+identifier) and show your work to the operator. Also: the fail-loudly
+step design did its job — nothing half-launched, the operator pasted two
+clean FAIL blocks, and the fix took minutes.
+
+**Scan review caught a burned-night hazard.** The frozen rule picked
+phi-3-small-8k-instruct as sweep #1, but it requires `trust_remote_code`
+and the deployment-match grid hard-pins `trust_remote_code: [False]` —
+every serve cell would have failed on GPU2 all night. Deferred with a
+typed reason; its CONTROL prediction (torch_dtype:auto ⇒ bf16 wins, fp32
+loses) registered before any execution so the pre-declaration is intact.
+~10-line grid.py patch tomorrow (sweep the axis or inherit from the
+official client args), then run it — the treatment/control pair is worth
+having. Also verified from HELM's model_deployments.yaml: gemma-2-it
+officials are TogetherClient — the scan's "skip" was CORRECT, not a bug;
+Together-served officials belong to the irrecoverable-substrate category
+by design.
+
+**Ops facts worth remembering when writing the paper's repro appendix:**
+the e2e path needs NO manual acquire (`eval-audit-run --lease`
+self-acquires from manifest `lease_endpoint`/`lease_catalog`); the variant
+bundle trick is manifest surgery (ifeval-only run_entries, fresh
+suite/experiment name so skip_existing never collides, model_deployments
+`openai_model_name` pointed at the dm endpoint route, api key from
+`infer-stack env LITELLM_MASTER_KEY`); 60/65 scripts are the durable form
+of all of it. 13B may still be running in the morning — expected, don't
+kill it.
+
+**Tomorrow morning, in order:** (1) run the two compare-pairs per
+`confirm/confirm_plan.md`, classify against the frozen outcome classes,
+fill the results table in overnight_confirm_plan.md; (2) read
+marin's `results/ranking.txt` against its registered prediction; (3) rerun
+the pairwise-flip analysis including the fp32 locals — does fp32 restore
+the official orderings?; (4) patch grid.py for trust_remote_code and
+launch the phi-3-small control cell; (5) push main from a credentialed
+machine. The omni_math kwdagger smoke (still queued, still unexecuted)
+remains the open-judge thread's next step whenever a card frees up.

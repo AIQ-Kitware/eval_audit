@@ -785,3 +785,93 @@ Ordered by decisiveness per unit of effort:
 
 Until at least (1) is run, every agreement number in this experiment should be
 reported as an **upper bound** on true independent agreement.
+
+## The fp32/agp0 substrate-recovery experiment (launched 2026-07-21 overnight)
+
+Paper-facing record of what was established today and what went on trial
+tonight. Session narrative in `dev/journals/claude.md` (2026-07-21 entries);
+frozen protocol in
+`reproduce/olmo_models_combined/deployment_match/overnight_confirm_plan.md`.
+
+### Three propositions, kept distinct
+
+- **A. Unpinned dtype ⇒ historical fp32 execution.** Mechanism verified in
+  the transformers 4.x code path (no `torch_dtype` kwarg → fp32 BC default,
+  ignoring the checkpoint config); 129/148 HuggingFaceClient deployments in
+  HELM's `model_deployments.yaml` are unpinned. Empirically confirmed on one
+  family (OLMo) before tonight.
+- **B. Reproducing the recovered substrate recovers the completions.**
+  Probe-level only before tonight (n=12 ifeval): OLMoE exact 12/12 (HF fp32
+  eager); dense OLMo-2 10/12, 10/12, 11/12 (vLLM fp32 FLASH_ATTN, batch-1).
+- **C. The recovered config changes aggregate metrics / conclusions.**
+  Untested before tonight. Targets: local bf16/modern-template runs sit
+  ABOVE the officials on ifeval_strict_accuracy by +0.098 (7B: 0.791 vs
+  0.693) and +0.126 (13B: 0.856 vs 0.730).
+
+### The probe factorial (n=12, already established — a paper figure)
+
+From the 2026-07-10 sweep rankings, OLMo-2-7B ifeval composites:
+fp32+agp0 = 0.915 MATCH; fp32+agp1 = 0.158; bf16+agp0 = 0.157 (13B:
+0.904 / 0.250 / ~0.16). **Precision (fp32) and chat-template rendering
+(no generation prompt, the old-transformers behavior) are each necessary
+and only jointly sufficient** to reproduce the official completions.
+`add_special_tokens` is a non-factor for OLMo-2 (ast0/ast1 identical in
+every cell; the OLMo-1 `<|endoftext|>`-append issue does not apply).
+
+### Conclusion-level finding from EXISTING data (zero new compute)
+
+Pairwise-ordering flip analysis over `aggregate_score_diff_headline.json`:
+**4/25 OLMo pairwise orderings invert between official and local** (gpqa
+3/6 pairs, incl. 13B↔32B; bbq 1/6), while ifeval — the LARGEST aggregate
+drift — flips none, because its +0.10 shift is nearly uniform across
+models. Qwen experiment: 1/201 flips. Two implications for the paper:
+(1) procedural drift can flip published model comparisons; (2) drift
+magnitude does not predict conclusion damage. Caveat: gpqa official gaps
+are ≈1.3σ at n≈450 — a paired bootstrap over instances must decide which
+flips are statistically supported before any of them is claimed.
+
+### Tonight's runs and REGISTERED predictions (frozen before execution)
+
+1. **E2E confirm, OLMo-2-1124-7B + 13B, ifeval, full n** — the sweeps'
+   fp32 endpoints + an agp0 chat template served via vLLM
+   `--chat-template`, replayed through the normal HELM from-spec path
+   under fresh suite names (`audit-allenai-olmo-2-1124-{7b,13b}-instruct-ifeval-fp32`).
+   Prediction: D_fp32 → ~0 (published aggregates recovered). Outcome
+   classes frozen in the plan file (EXACT-RECOVERED / MATERIALLY-IMPROVED /
+   UNCHANGED / ANOMALOUS). Note the design moves dtype AND template
+   together deliberately — the probe factorial already established each
+   factor alone fails; tonight scales the jointly-sufficient cell.
+2. **Cross-family treatment cell: marin-community/marin-8b-instruct,
+   ifeval, deployment-match sweep.** Official is
+   `huggingface/marin-8b-instruct` (HuggingFaceClient, `device_map: auto`
+   only, NO dtype — verified against HELM main-branch
+   model_deployments.yaml; era-tag check pending). Prediction: **the fp32
+   cell wins the ranking.** Same benchmark + suite era (v1.8.0
+   capabilities) as the OLMo cells — family is the only major moved factor.
+3. **Cross-family control cell: microsoft/phi-3-small-8k-instruct, med_qa
+   — DEFERRED (typed: `infeasible:trust-remote-code-not-swept`;
+   deployment-match grid pins trust_remote_code=[False] and phi-3-small
+   requires it).** Prediction registered NOW, before any execution:
+   official pins `torch_dtype: auto` ⇒ checkpoint bf16 ⇒ **bf16 wins and
+   fp32 LOSES.** A confirmed control would show the sweep tracks the
+   RECORDED substrate when one exists, both directions of the mechanism.
+
+### Corpus facts from the frozen selection scan (2026-07-21, aiq-gpu)
+
+Eligible ≤13B non-OLMo models with a HuggingFaceClient official AND
+generative-completion runs are RARE: phi-3-small-8k-instruct (84 runs) and
+marin-8b-instruct (3 runs) were the only two. gemma-2-9b/27b-it officials
+are TogetherClient (correctly outside the fp32 story — irrecoverable-
+substrate category); qwen2.5-7b-instruct and phi-3.5-mini eligible runs
+are MedHELM scenarios only (many gated); gpt2 is mmlu_clinical_afr /
+winogrande_afr. Consequence: the cross-family test of proposition A is
+evidence-limited by corpus composition — worth stating in the paper.
+
+### Interpretation rules for tomorrow
+
+E2E EXACT/IMPROVED ⇒ flagship claim at full scale: published results are
+recoverable once the unrecorded execution context is recovered. UNCHANGED
+⇒ the n=12 probe does not predict full-run aggregates — itself a finding;
+enumerate residual factors while Edward is available. Marin fp32 win ⇒
+proposition A generalizes beyond OLMo; loss ⇒ scope A to "confirmed for
+OLMo, open elsewhere" and say so.
