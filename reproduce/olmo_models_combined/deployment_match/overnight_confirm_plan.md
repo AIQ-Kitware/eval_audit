@@ -31,9 +31,15 @@ deployment-match tool emits (`confirm/confirm_plan.md` per sweep) and the
 | GPU3 | SWEEP-2: non-OLMo family #2, deployment_match `auto` | overnight |
 | (opt, early evening GPU2/3) | omni_math kwdagger smoke (validates fan-out for post-Edward work) | ~1h, release before sweeps |
 
-32B fp32-tp2: NOT tonight (2 cards + slowest; run after 7B/13B verdicts).
-OLMoE e2e: NOT possible without the unwired HF-in-process routing switch — do
-not improvise it tonight.
+32B fp32-tp2: NOT tonight (2 cards + slowest; VRAM is why it needs tp2 —
+128GB fp32 weights vs 96GB cards; run after 7B/13B verdicts).
+OLMoE e2e: NOT POSSIBLE via vLLM at any TP — the Triton fused-MoE kernel
+shared-mem OOMs at fp32 and TP does not help ("per-block tiles, not shard
+count"; journal 2026-07-10, commit 2698389) — and the HF-in-process routing
+switch is unwired. Do not improvise either tonight. Dense fp32 via vLLM is
+PROVEN on aiq-gpu's own cards (Jul-10 sweep logs, run as edward.wang,
+GPU 0): serving feasibility is not a risk for tonight's 7B/13B cells; the
+ast0 HELM-path wiring is the only real one.
 
 ## E2E runs (test B + C)
 
