@@ -3130,3 +3130,126 @@ in a comment is not the same as resolving it; a date that a FINDING depends on
 should be verified when the finding is made, not deferred to a reader. The
 metadata now records the verified launch date and says explicitly what was and
 was not confirmed.
+
+## 2026-07-21 12:29:39 -0400 — CHECKPOINT (pinned before a context compression / pivot)
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+**Branch:** `jons/qwen35-extension`, HEAD `aa153a4`. Working tree clean except
+the `submodules/every_eval_ever` gitlink, which is Jon's pre-existing local
+change and has been deliberately left unstaged throughout. No submodule pin was
+changed by any of this work.
+
+Read this entry first if you are resuming. It states what is TRUE, what is
+merely WRITTEN, and the exact next commands.
+
+### Validated (real execution, real data)
+
+- **Identity replay: 6/6 benchmarks reproduce published stats exactly.** xstest,
+  simple_safety_tests, harm_bench, anthropic_red_team, omni_math all
+  `max_err=0`; wildbench `1.95e-14`. This proves snapshot reconstruction is
+  faithful and the metric denominators match the official runs.
+- **63 healthy rejudge artifacts, zero request_error anywhere.** Judge-size
+  sweep across Qwen3.5 0.8B/2B/4B/9B/27B + Qwen3.6-35B-A3B; xstest + wildbench
+  on the full ladder, the safety trio on 2B/4B/9B.
+
+### Findings so far
+
+1. *Open judges match closed judges on label metrics.* XSTest agreement 93.7%
+   (0.8B) → 96.8% (2B) → ~98–99% from 4B up. Official GPT-vs-Llama baseline is
+   96.0%, so a 4B judge sits INSIDE the closed pair's own disagreement. The 27B
+   buys nothing over the 9B.
+2. *Judge non-determinism is universal; metric fragility is not.* At
+   temperature 0, 87–96% of judgments produce different raw text across
+   replicates (vLLM batching non-determinism — verified NOT caused by our
+   per-replicate `Request.random`, which is cache-key-only for OpenAI-derived
+   clients). Score impact: XSTest 0.2–0.7%, WildBench 43–46%. Run-level means
+   stay reproducible; instance-level judgments do not.
+3. *Parse rate and calibration are INDEPENDENT axes.* WildBench parse climbs
+   6.8% → 51.6% → 61.2% → 84.6% → 90.7% with size while XSTest is ~100%
+   throughout. And Qwen3.5-2B scores 99.9% parse with 25.7% agreement on
+   anthropic_red_team — it flags 740/1000 responses unsafe where the official
+   ensemble says 989/1000 safe. A format-based health check would pass it.
+   Always report the two axes separately; note these safety sets are ~99%
+   one-class, so "agreement" there is essentially a false-positive rate.
+4. *Contamination caveat* (full analysis in
+   `docs/helm-reproduction-research-journal.md`). Qwen3.5 launched 2026-02-16;
+   every benchmark predates it by 2–4 years. The mechanism to worry about is
+   DISTRIBUTION SHIFT, not memorization: a judge trained on this data is
+   plausibly better calibrated on this distribution with no verbatim recall.
+   Our numbers describe judge/benchmark pairs the judge was likely trained on
+   and are an UPPER BOUND on performance for a novel benchmark or private eval.
+   **Still unknown and worth establishing: the publication date of HELM Safety
+   v1.14.0 / Capabilities v1.12.0** — the corpus run dirs carry no execution
+   timestamp and a public search did not resolve it.
+
+### WRITTEN BUT NEVER EXECUTED — do not treat as working
+
+- **The kwdagger fan-out.** `eval-audit-schedule-rejudge` /
+  `reproduce/open_judge_gpt_oss/55_schedule_rejudge.sh`. Its invocation was
+  originally written against a GUESSED kwdagger CLI and was wrong three ways;
+  `64d6881` rebuilt it against the verified interface and now shares
+  `kwdagger_schedule_argv_from_runtime()` with the working candidate bridge.
+  Still unproven: whether kwdagger accepts the `rejudge.*` submatrix keys and
+  resolves the pipeline factory.
+- **The Omni-MATH annotator, live.** Note carefully: the replay gate does NOT
+  exercise it. Replay reattaches the ORIGINAL annotations and runs the OFFICIAL
+  metric, so `build_prompt` / `parse_omni_math_report` have never been invoked
+  against a real judge. (I stated the opposite twice; it was wrong.)
+- **The pytest suites** for the safety trio, Omni-MATH, and the rejudge matrix.
+  Written, compile-checked, and partially exercised via a hand-rolled shim on
+  the workstation, but never run under pytest — this workstation has no pytest,
+  helm, kwdagger, or loguru.
+
+### Exact next commands
+
+    cd ~/code/helm_audit && git pull        # aa153a4
+    python -m pytest tests/test_configurable_omni_math.py \
+                     tests/test_configurable_safety_trio.py \
+                     tests/test_rejudge_matrix.py -q
+    cd reproduce/open_judge_gpt_oss
+    ./55_schedule_rejudge.sh omni_math --smoke --run   # 3 things on trial: kwdagger
+                                                       # graph, omni annotator live,
+                                                       # strip_thinking on a 3rd format
+    ./55_schedule_rejudge.sh omni_math                 # preview job count + argv
+    ./55_schedule_rejudge.sh omni_math --run           # full: 6 judges x 3 reps x 1000
+
+Sizing: Omni-MATH is 1000 instances at a 4096-token budget (the largest in the
+suite) = 18,000 judgments for the full matrix. The 27B arm alone is likely
+several hours per replicate. `OJ_JUDGES="qwen3_5_2b qwen3_5_4b qwen3_5_9b"`
+gives the interesting middle of the curve far cheaper.
+
+### Open items, roughly by value
+
+1. **Contamination test — swap the candidate model** to one released after the
+   judge cutoff. The (prompt, response, judgment) triple then cannot have been
+   trained on even though the prompts were public. The pipeline is already
+   parameterized by candidate, so this is config, not code. Arguably worth more
+   than finishing Omni-MATH: it bears on whether the headline survives review.
+2. Safety trio missing for 0.8B / 27B / 35B-A3B (completes the grid).
+3. Aggregate reports are stale (Jul 19, pre-sweep) — rerun
+   `./30_analyze_judges.sh <benchmark>` per benchmark once runs settle.
+4. **No timeout on the rejudge step** — a wedged CLI held a GPU for 19 hours on
+   2026-07-19. A `timeout` wrapper sized per benchmark would convert that into
+   a logged failure and free the card. Not yet implemented.
+5. HELM leaderboard publication dates (feeds item 1's caveat).
+
+### Gotchas this project has now hit more than once
+
+- **A config change invisible to a cache key serves stale results.** A parser
+  fix that did not move `parser_version` returned a cache-hit; a dead artifact
+  that still wrote `DONE` blocked every retry for a day. Any behavior change
+  must move its `*_version`, and `judge_spec_hash` rides in job identity for
+  the same reason.
+- **Thinking judges draft the official answer tags INSIDE their reasoning.**
+  Hit three times (safety `<reasoning>/<score>`, WildBench JSON, Omni-MATH
+  `##` headings). `strip_thinking` before official parsing is the standing fix;
+  it is a strict no-op on non-thinking official responses.
+- **Shared mutable state breaks hand-partitioned concurrency.** The sidecar
+  directory (last-writer-wins clobbered a judge's deployment registration) and
+  the SQLite request cache (two workers on the same cell deadlock). Content
+  addressing protected the OUTPUTS and I wrongly generalized that to safety.
+  Prefer the scheduler over hand-partitioned tmux panes.
+- **Exit code 0 is not success.** A rejudge whose every request failed still
+  exits 0; attempts are now health-checked by parse status, and DEAD
+  (request_error → infrastructure) is distinguished from DEGRADED (malformed →
+  the judge genuinely cannot produce the format, which is a FINDING to keep).
