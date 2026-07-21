@@ -134,9 +134,9 @@ predictions here first, then paste them.
 
 ## Results log (fill tomorrow)
 
-| Cell | Prediction | Outcome | Verdict | Notes |
+| Cell | Prediction (registered 2026-07-21 pre-launch) | Outcome | Verdict | Notes |
 |---|---|---|---|---|
-| olmo-2-7b ifeval fp32 e2e | D_fp32 → ~0 | | | |
-| olmo-2-13b ifeval fp32 e2e | D_fp32 → ~0 | | | |
-| sweep family #1: ______ | | | | |
-| sweep family #2: ______ | | | | |
+| olmo-2-7b ifeval fp32 e2e | D_fp32 → ~0 (from +0.098) | | | |
+| olmo-2-13b ifeval fp32 e2e | D_fp32 → ~0 (from +0.126) | | | |
+| sweep: marin-8b-instruct / ifeval | official = huggingface/marin-8b-instruct, HuggingFaceClient, NO dtype pinned (device_map:auto only; verified against HELM model_deployments.yaml 2026-07-21) ⇒ **fp32 cell wins**; agp behavior is an open sub-question for a llama-family template | | | treatment cell; same benchmark + era (v1.8.0 capabilities) as the OLMo cells |
+| sweep: phi-3-small-8k / med_qa — **DEFERRED to 2026-07-22**, typed reason `infeasible:trust-remote-code-not-swept` (grid.py pins trust_remote_code:[False]; phi-3-small requires it — ~10-line tool patch first) | official pins `torch_dtype: auto` ⇒ transformers reads the checkpoint dtype (bf16) ⇒ **bf16 wins, fp32 LOSES** — the control cell, prediction registered before any execution | | | do NOT run tonight |

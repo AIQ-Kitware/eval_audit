@@ -53,20 +53,22 @@ done
 echo "== [1/4] agp0 chat template =="
 mkdir -p "$(dirname "$TEMPLATE")"
 "$PYTHON_BIN" - "$HF_ID" "$TEMPLATE" <<'EOF'
-import sys
+import re, sys
 from transformers import AutoTokenizer
 hf_id, out = sys.argv[1], sys.argv[2]
 t = AutoTokenizer.from_pretrained(hf_id).chat_template
-n = t.count("{% if add_generation_prompt %}")
-if n == 0:
-    sys.exit(f"FAIL: no add_generation_prompt block found in {hf_id}'s template - inspect by hand")
-patched = t.replace("{% if add_generation_prompt %}", "{% if false %}")
+# The flag appears inside COMPOUND conditionals (OLMo-2:
+# "{% if loop.last and add_generation_prompt %}"), so replace the bare
+# identifier, never an exact conditional string (that failed 2026-07-21).
+hits = [m for m in re.finditer(r".{0,50}\badd_generation_prompt\b.{0,60}", t)]
+if not hits:
+    sys.exit(f"FAIL: identifier add_generation_prompt not in {hf_id}'s template - inspect by hand")
+patched = re.sub(r"\badd_generation_prompt\b", "false", t)
 open(out, "w").write(patched)
 print(f"  wrote {out}")
-print(f"  disabled {n} add_generation_prompt block(s); EYEBALL the guarded text below:")
-import re
-for m in re.finditer(r"\{% if false %\}(.{0,80})", patched, re.S):
-    print(f"    suppressed: {m.group(1)!r}")
+print(f"  neutralized {len(hits)} use(s); EYEBALL each original context:")
+for m in hits:
+    print(f"    ...{m.group(0)!r}...")
 EOF
 
 echo "== [2/4] patch confirm catalog with --chat-template =="
