@@ -3781,3 +3781,49 @@ a follow-up patch.**
 `13b` → marin rerun with `DM_PROTOCOL=chat`. Predictions unchanged,
 registered in overnight_confirm_plan.md. Push of main from a credentialed
 machine still outstanding; commits remain NFS-local.
+
+## 2026-07-22 (later) — Relaunch: 7B passed e2e; 13B killed by concurrent infer-stack churn
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**Recipe VALIDATED end to end.** After the container-path + permission fixes,
+`60_confirm_fp32_e2e.sh 7b` completed and 13B served successfully for ~54
+minutes (19:31→20:25) — endpoint up, agp0 template loaded, HELM grinding
+IFEval instances through the fp32 vLLM endpoint. Both the 2026-07-21 template
+failure modes are closed.
+
+**13B failed on CONTENTION, not the recipe.** At 20:25:41 the 13B endpoint
+returned a 500 "Connection error" (litellm could not reach the vLLM upstream),
+retried 5× over ~4 min, then got 404 "model does not exist" (route gone), and
+the run died. The teardown compose shows WHY: two other deployments were live
+and being (re)placed — `dm-marin-8b-instruct-bf16-attntorch-sdpa` (the marin
+chat-protocol sweep, mid-grid) and `qwen3-5-2b-judge`. All three shared ONE
+infer-stack. The marin sweep's per-cell acquire→serve→probe→release loop
+converges the compose project on every cell; one of those concurrent
+converges tore down the long-lived, leased 13B endpoint. The 7B escaped only
+because it finished before the churn hit it.
+
+This is the SAME lesson already twice in this journal (shared mutable state +
+hand-partitioned concurrency): the judge fan-out moved to kwdagger for exactly
+this reason. Running a slow e2e confirm, a deployment-match sweep, AND a judge
+against one infer-stack is the hazard. **A held lease on an in-demand endpoint
+should be evict-proof against a concurrent converge; that it wasn't is an
+infer-stack robustness gap worth a follow-up** (demand refcount / placement
+re-solve should never stop a leased container). For now: serialize.
+
+**Fix = run the 13B SOLO.** Let the marin-chat sweep finish (or kill it), then
+`./60_confirm_fp32_e2e.sh 13b` alone. The failed run left a partial
+`prod_env/cache/vllm.sqlite`; HELM's request-keyed cache means the rerun
+RESUMES the ~54 min of completed generations and only redoes the tail, so
+solo-and-slow is not a full restart.
+
+**Blocked on a sync.** The fp32 RESULT dirs
+(`/data/crfm-helm-audit/audit-allenai-olmo-2-1124-{7b,13b}-instruct-ifeval-fp32/`)
+are NOT yet rsynced to the workstation — only the bundles are — so the 7B
+`ifeval_strict_accuracy` (the actual science: does D_fp32→0 from the +0.098
+gap?) cannot be read here yet. That number is the whole point; requested.
+
+**Side note (not a bug):** the 13B log loads the 7B tokenizer
+(`allenai/olmo-2-1124-7b-instruct`) — this is the known HELM quirk where the
+13B deployment's tokenizer_name points at the 7B (identical tokenizer across
+the OLMo-2 dense family); recorded in the 07-10 entry, expected.
