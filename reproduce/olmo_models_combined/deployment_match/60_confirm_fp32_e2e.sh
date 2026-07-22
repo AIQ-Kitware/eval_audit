@@ -67,7 +67,16 @@ echo "Reclaiming any leaked leases before start (infer-stack gc)…"
 infer-stack gc --yes || echo "WARN: 'infer-stack gc' returned nonzero; continuing." >&2
 
 echo "== [1/4] agp0 chat template (host side of the hf-cache mount) =="
-mkdir -p "$(dirname "$TEMPLATE_HOST")"
+TEMPLATE_DIR="$(dirname "$TEMPLATE_HOST")"
+# The hf-cache mount is root-owned (the container writes weights there as root).
+# The template must live ON it so the vLLM container can read it, so its subdir
+# needs to be made writable ONCE — setgid so it stays writable for the team.
+if ! mkdir -p "$TEMPLATE_DIR" 2>/dev/null || [[ ! -w "$TEMPLATE_DIR" ]]; then
+  echo "FAIL: cannot write $TEMPLATE_DIR (root-owned hf-cache mount)." >&2
+  echo "      Create it once, setgid so both you and teammates keep write access:" >&2
+  echo "        sudo install -d -o \"\$USER\" -g \"domain users\" -m 2775 $TEMPLATE_DIR" >&2
+  exit 1
+fi
 "$PYTHON_BIN" - "$HF_ID" "$TEMPLATE_HOST" <<'EOF'
 import re, sys
 from transformers import AutoTokenizer
