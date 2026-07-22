@@ -113,6 +113,14 @@ DM_HF_AST="${DM_HF_AST:-both}"
 DM_HF_AGP="${DM_HF_AGP:-both}"
 # Optional: narrow the attention_backend sweep, e.g. DM_ATTN=none,XFORMERS.
 DM_ATTN="${DM_ATTN:-}"
+# Optional: force the request protocol (completions|chat). The resolver reads
+# the official run's prompts to detect chat markers, and when it cannot, it
+# DEFAULTS to completions with only a note in resolution.json — which silently
+# invalidates a sweep against a chat-templated official (observed 2026-07-21:
+# the marin-8b ifeval sweep probed raw completions against chat-rendered
+# officials; every cell PARTIAL, dtype never got a fair test). If the model is
+# an instruct/chat model, set DM_PROTOCOL=chat explicitly.
+DM_PROTOCOL="${DM_PROTOCOL:-}"
 # Optional: DM_LOG_REQUESTS=1 turns on vLLM request logging so each request's
 # post-chat-template prompt + sampling params appear in the container logs
 # (view with `infer-stack` TUI logs or `docker compose logs <vllm-service>`).
@@ -187,6 +195,7 @@ else
   [[ -n "$DM_DTYPES" ]] && args+=(--dtypes "$DM_DTYPES")
   [[ -n "$DM_FP32_TP" ]] && args+=(--fp32-tensor-parallel-size "$DM_FP32_TP")
   [[ -n "$DM_ATTN" ]] && args+=(--attention-backends "$DM_ATTN")
+  [[ -n "$DM_PROTOCOL" ]] && args+=(--protocol "$DM_PROTOCOL")
   [[ -n "$DM_LOG_REQUESTS" ]] && args+=(--log-requests)
   dm "${args[@]}"
 fi

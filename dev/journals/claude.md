@@ -3728,3 +3728,56 @@ the official orderings?; (4) patch grid.py for trust_remote_code and
 launch the phi-3-small control cell; (5) push main from a credentialed
 machine. The omni_math kwdagger smoke (still queued, still unexecuted)
 remains the open-judge thread's next step whenever a card frees up.
+
+## 2026-07-22 morning — Overnight triage: both failure modes diagnosed from synced artifacts, fixed
+
+**Model/harness:** claude-fable-5[1m] (Fable 5, 1M context) via Claude Code.
+
+**Jon's report:** "I think there were failures." Full audit store + large
+parts of crfm-helm-public and crfm-helm-audit now rsynced locally, so the
+whole triage ran from primary artifacts on this workstation without
+touching aiq-gpu.
+
+**Failure 1 — both e2e fp32 runs died at serve; zero artifacts.** Bundles,
+templates, and patched catalogs all exist (script reached step 4), but no
+`*ifeval-fp32*` suite dirs and NOTHING written after 18:00 anywhere.
+Mechanism, confirmed by code-reading infer-stack: `--chat-template` is
+passed VERBATIM into the container command (profile_runtime.py), and the
+vLLM container mounts ONLY the five cache dirs (compose.py `_vllm_service`)
+— the audit-store path I wrote the templates to does not exist inside the
+container. vLLM crash/unready → acquire timeout → no run. Corroborated:
+the synced confirm catalog still carries the stale
+`--chat-template /data/crfm-helm-audit-store/...` in extra_args. Fix in
+`60_confirm_fp32_e2e.sh`: write the template to the HOST side of the
+hf-cache mount (`$INFER_STACK_DATA_DIR/hf-cache/chat-templates/`),
+reference it by CONTAINER path (`/root/.cache/huggingface/...`), scrub any
+stale extra_args pair, and set the NATIVE `chat_template` runtime key —
+which is in infer-stack's STRUCTURAL_KEYS, so the changed template makes a
+distinct deployment instead of coalescing onto the stale one. Also added a
+pre-start `infer-stack gc` (a failed launch leaves a leaked lease and a
+crash-looping `restart: unless-stopped` container). Patch dry-run
+validated against the real synced catalog. **Lesson (recurring genus):
+a path handed to a containerized service is a claim about the CONTAINER's
+filesystem, not the host's — same family as the fresh-login-shell lease
+bug (22f72d5): state you can see is not state the executor can see.**
+
+**Failure 2 — marin sweep completed but is an INVALID test, not a
+refutation.** `resolution.json`: `protocol_resolved: False` — the resolver
+could not detect chat markers in the marin official (llama3-style template,
+unlike OLMo's) and silently DEFAULTED to raw completions, noting it only in
+a notes field. All 32 cells (incl. fp32 — the grid was right) probed
+wrong-shaped prompts: best cell auto/PARTIAL 0.158, quasi 0.0; snippets
+show on-topic-but-divergent completions and an official REFUSAL where all
+locals answer — assistant-persona behavior the raw-completions probe
+cannot elicit. The registered fp32 prediction is UNTESTED, not falsified;
+plan table updated to say exactly that. Fix: `DM_PROTOCOL` passthrough in
+`run_deployment_match.sh` (cli already had `--protocol`); rerun into a
+fresh `--ifeval-chat-vllm` out dir. **Lesson: a resolver that silently
+defaults on failure converts "I don't know" into a wrong experiment; the
+sweep should hard-fail on unresolved protocol for instruct models — worth
+a follow-up patch.**
+
+**Relaunch (pending Jon):** pull → `./60_confirm_fp32_e2e.sh 7b` /
+`13b` → marin rerun with `DM_PROTOCOL=chat`. Predictions unchanged,
+registered in overnight_confirm_plan.md. Push of main from a credentialed
+machine still outstanding; commits remain NFS-local.

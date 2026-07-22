@@ -26,8 +26,11 @@
 # recovered execution context. Outcome definitions are FROZEN in
 # overnight_confirm_plan.md — classify there, do not improvise.
 #
-# NB: written 2026-07-21 for the overnight confirm; syntax-checked but not
-# yet executed on the GPU host — each step fails loudly and independently.
+# History: 2026-07-21 launch failed twice live — (1) template matcher used an
+# exact string vs OLMo-2's compound conditional (fixed: identifier regex);
+# (2) template written to a path the vLLM container cannot see (fixed: write
+# to the hf-cache mount's host side, reference the container path, scrub the
+# stale extra_args). Steps fail loudly and independently.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../_lib.sh"
 cd "$ROOT"
@@ -44,15 +47,28 @@ ENDPOINT="dm-${SLUG}-fp32-attnflash-attn"
 SERVE_CATALOG="$DM_DIR/confirm/serve/catalog.yaml"
 SRC_BUNDLE="$STORE_ROOT/local-bundles/allenai-${SLUG}"
 VAR_BUNDLE="${SRC_BUNDLE}-ifeval-fp32"
-TEMPLATE="$STORE_ROOT/deployment-match/chat-templates/${HF_ID##*/}-agp0.jinja"
+# The template must be READABLE INSIDE THE vLLM CONTAINER, which mounts ONLY
+# infer-stack's cache dirs (compose.py: hf-cache -> /root/.cache/huggingface).
+# Writing it anywhere else fails at serve time with no artifact written
+# (observed 2026-07-21 overnight: both e2e runs died this way — the audit
+# store is not mounted in the container). So: write to the HOST side of the
+# hf-cache mount, reference by the CONTAINER path.
+DATA_DIR="${INFER_STACK_DATA_DIR:-/data/service/infer-stack}"
+TEMPLATE_HOST="$DATA_DIR/hf-cache/chat-templates/${HF_ID##*/}-agp0.jinja"
+TEMPLATE_CONTAINER="/root/.cache/huggingface/chat-templates/${HF_ID##*/}-agp0.jinja"
 
 for f in "$SERVE_CATALOG" "$SRC_BUNDLE/full_manifest.yaml" "$SRC_BUNDLE/model_deployments.yaml"; do
   [[ -f "$f" ]] || { echo "FAIL: missing $f (rsync incomplete, or confirm phase never ran?)" >&2; exit 1; }
 done
 
-echo "== [1/4] agp0 chat template =="
-mkdir -p "$(dirname "$TEMPLATE")"
-"$PYTHON_BIN" - "$HF_ID" "$TEMPLATE" <<'EOF'
+# A previous failed launch can leave a leaked lease and a crash-looping
+# container (restart: unless-stopped + a bad serve arg). Sweep before start.
+echo "Reclaiming any leaked leases before start (infer-stack gc)…"
+infer-stack gc --yes || echo "WARN: 'infer-stack gc' returned nonzero; continuing." >&2
+
+echo "== [1/4] agp0 chat template (host side of the hf-cache mount) =="
+mkdir -p "$(dirname "$TEMPLATE_HOST")"
+"$PYTHON_BIN" - "$HF_ID" "$TEMPLATE_HOST" <<'EOF'
 import re, sys
 from transformers import AutoTokenizer
 hf_id, out = sys.argv[1], sys.argv[2]
@@ -71,19 +87,26 @@ for m in hits:
     print(f"    ...{m.group(0)!r}...")
 EOF
 
-echo "== [2/4] patch confirm catalog with --chat-template =="
-"$PYTHON_BIN" - "$SERVE_CATALOG" "$ENDPOINT" "$TEMPLATE" <<'EOF'
+echo "== [2/4] patch confirm catalog: chat_template (container path) =="
+"$PYTHON_BIN" - "$SERVE_CATALOG" "$ENDPOINT" "$TEMPLATE_CONTAINER" <<'EOF'
 import sys, yaml
 cat_path, endpoint, template = sys.argv[1:4]
 cat = yaml.safe_load(open(cat_path))
-args = cat["endpoints"][endpoint]["runtime"]["extra_args"]
-if "--chat-template" in args:
+rt = cat["endpoints"][endpoint]["runtime"]
+# Scrub any stale --chat-template pair from extra_args (the 2026-07-21 attempt
+# left a host path the container cannot see; leaving it would still crash the
+# serve even with the runtime key set correctly below).
+args = rt.get("extra_args") or []
+while "--chat-template" in args:
     i = args.index("--chat-template")
-    args[i + 1] = template
-    print(f"  already present; repointed to {template}")
-else:
-    args += ["--chat-template", template]
-    print(f"  appended --chat-template {template}")
+    stale = args[i : i + 2]
+    del args[i : i + 2]
+    print(f"  scrubbed stale extra_args entry: {stale}")
+# Use the NATIVE runtime key: it is part of the endpoint's structural identity
+# (infer_stack models.py STRUCTURAL_KEYS), so changing the template makes a
+# distinct deployment rather than silently reusing a stale container.
+rt["chat_template"] = template
+print(f"  runtime.chat_template = {template}")
 yaml.safe_dump(cat, open(cat_path, "w"), sort_keys=False)
 EOF
 
