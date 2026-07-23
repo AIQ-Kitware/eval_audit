@@ -3931,3 +3931,39 @@ full run (the deferred daytime task).
 
 Scripts committed; run: `./71_overnight_hf_fp32.sh`. Push of main from a
 credentialed machine still outstanding (commits NFS-local).
+
+## 2026-07-23 11:00 -0400 — Overnight over-scoped: HF probe was a 16-cell x 541 sweep; corrected to a small-n config search
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**Bug in my overnight setup.** `70_hf_fp32_fullN_probe.sh` pinned only dtype and
+decode, leaving the hf-probe's forward-pass axes at their sweep defaults —
+attn{eager,sdpa} x device_map{auto,single} x ast{both} x agp{both} = 16 cells,
+each generating all 541 ifeval instances at fp32 batch-1 (~24-48h, not a night).
+Worse, the sweep starts on agp1, which we already know does NOT match OLMo-2
+(agp0 is the effective old-template behavior). rsync looked stalled because
+hf-probe writes per-cell and each cell is hours. Jon caught it at 11am, ~11h in,
+still early in the sweep.
+
+**Root cause = a misread of the 07-10 finding.** I framed the HF probe as a
+faithful full-n reproduction, but 07-10 established that for OLMo-2 DENSE the HF
+probe does NOT reproduce the official out of the box: device_map=auto shards a
+one-GPU model and changes the fp32 reduction order (first-token agreement 0.42).
+So the HF path is a CONFIG SEARCH (which attn x device_map reproduces the
+official), and config search is small-n by nature (07-10 used n=12; OLMoE hit
+quasi 1.0 there). Full-n was overkill on the wrong thing.
+
+**Correction (committed):** renamed 70->`70_hf_fp32_probe.sh`,
+71->`71_hf_fp32_both.sh`. 70 now PINS the known axes (agp0, ast1, fp32,
+decode=helm) and sweeps ONLY the two forward-pass axes that move greedy fp32
+logits (attn{eager,sdpa} x device_map{auto,single} = 4 cells) at DM_N=32
+(~20-40 min). A cell at quasi ~1.0 => HF-fp32-<config> reproduces the official,
+so the official IS HF-fp32 and the vLLM e2e residual is the engine gap; then a
+full-n confirm of the winner via `DM_HF_DEVMAPS=<w> DM_N=541 ./70... <size>`.
+Strong prior from 07-10: device_map=single is the fix.
+
+**Lesson (recurring, now explicit):** when wrapping a tool that SWEEPS by
+default, the wrapper must pin every axis it does not intend to sweep — an
+unpinned axis silently multiplies the job. Same failure family as the earlier
+under-constrained runs; I sized for 1 cell and shipped 16. Killed and corrected;
+no result lost (the partial cells were agp1, already known non-matching).
