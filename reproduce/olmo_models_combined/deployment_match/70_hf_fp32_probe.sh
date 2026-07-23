@@ -42,7 +42,12 @@ export DM_RUN="$RUN"
 export DM_OUT="$STORE_ROOT/deployment-match/olmo-2-1124-${SIZE}-instruct--ifeval-hf-fp32"
 export DM_HF_FP32=1
 export DM_HF_DTYPES=float32
-export DM_HF_DECODE=helm                    # match the official's decode (NOT true-greedy)
+export DM_HF_DECODE="${DM_HF_DECODE:-helm}" # default matches the official's decode;
+                                            # override DM_HF_DECODE=greedy for the
+                                            # engine-vs-decode attribution probe.
+                                            # (greedy cells land as ...agp0-greedy,
+                                            # distinct from the ...agp0-helm cells, so
+                                            # both show in the same ranking.txt.)
 # The hf-probe CLI takes true/false/both (the CELL LABELS are agp0/ast1, but the
 # arg values are false/true). agp0 = add_generation_prompt=false (the effective
 # old-template behavior that matches OLMo-2; agp1/true is known NOT to match).

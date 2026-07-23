@@ -92,6 +92,12 @@ FLAGS=(-avPRz --human-readable --no-owner --no-group --mkpath)
   --exclude='prod_env/model_deployments.yaml'
   --exclude='prod_env/credentials.conf'
   --exclude='lease.env'
+  # Raw scenario dataset dirs under other users' run trees (e.g. era-* runs) are
+  # 0700/other-user-owned, so opendir fails on the sender ("Permission denied
+  # (13)" on .../benchmark_output/scenarios/<x>/data). They are regenerable INPUT
+  # data, not results — analysis reads scenario_state.json/stats, never this dir —
+  # so excluding them removes the noise with no analysis cost.
+  --exclude='**/scenarios/*/data'
 )
 [[ "${DRY_RUN:-0}" == 1 ]] && FLAGS+=(--dry-run)
 [[ "${DELETE:-0}"  == 1 ]] && FLAGS+=(--delete)
