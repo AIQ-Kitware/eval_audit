@@ -3886,3 +3886,48 @@ residual attributed to engine" — pending the HF-in-process confirmation.
 default secret excludes (third per-run secret after model_deployments.yaml /
 lease.env); rsync exit 23 correctly reported as ok-partial. The pull moved
 75G (audit-store) + 240G (audit) cleanly.
+
+## 2026-07-22 (night) — Overnight setup: HF-fp32 full-N probe (engine-gap test), simple runbook
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**Goal:** a simple, committable, low-risk overnight run that advances the open
+question from tonight's e2e result (is the +0.067/+0.082 residual the vLLM<->HF
+engine gap?). Chose the HF-fp32 full-N probe over two alternatives:
+- HF-in-process FULL metric run (the metric-level engine test): the docker node
+  DOES support a reserved GPU (`lease_reserve_gpus` -> `--gpus device=$CUDA_VISIBLE_DEVICES`),
+  but `hf_inprocess.py` has NO caller assembling the bundle — the routing switch
+  is unwired, so this is new untested assembly. Untested overnight wiring has
+  failed three nights running; NOT for unattended use. Deferred to daytime with
+  a smoke gate.
+- 32B fp32 vLLM e2e (complete the size ladder): proven path but predictable, and
+  does not address the engine question.
+
+**Chosen:** `70_hf_fp32_fullN_probe.sh <7b|13b>` + `71_overnight_hf_fp32.sh`
+(runs 7b then 13b serially). Thin wrappers over the PROVEN hf-probe path
+(run_deployment_match.sh DM_HF_FP32=1, already run at n=12). Pure
+transformers.generate at fp32 with decode=helm (do_sample=True, temp->1e-7 —
+matches the official's actual decode, NOT true-greedy), max_tokens from the
+run_spec (2048, not truncated), across all 541 ifeval instances, scored vs the
+official completions. SELF-CONTAINED: no infer-stack, no lease, no vLLM, no
+chat-template file, no litellm — so serving/contention/template failure modes
+cannot occur. Serial-single-GPU by design (the 13B contention death was a
+concurrent converge tearing down a leased endpoint; here there is no lease).
+
+**Interpretation set BEFORE the run:** high completion agreement (quasi ~1.0)
+across the full set => the official is faithfully HF-fp32 and the vLLM e2e
+residual IS the engine gap (paper: "reproducing on the original engine recovers
+the official; vLLM introduces the residual"). Low agreement => a deeper
+unrecovered factor even on the original engine. Nuance to separate later with a
+decode=greedy variant: our vLLM e2e differed from the official in BOTH engine
+(vLLM vs HF) AND decode (greedy vs sample-1e-7); decode=helm here matches the
+official on both, so a confirm attributes the residual to that pair jointly, and
+an HF decode=greedy run would split engine from decode.
+
+**Note:** hf-probe scores completion agreement, not ifeval_strict_accuracy
+directly — but identical completions imply the identical metric, so quasi~1.0 IS
+the answer. If a metric-level number is wanted, that needs the HF-in-process
+full run (the deferred daytime task).
+
+Scripts committed; run: `./71_overnight_hf_fp32.sh`. Push of main from a
+credentialed machine still outstanding (commits NFS-local).
