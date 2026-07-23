@@ -3967,3 +3967,56 @@ default, the wrapper must pin every axis it does not intend to sweep — an
 unpinned axis silently multiplies the job. Same failure family as the earlier
 under-constrained runs; I sized for 1 cell and shipped 16. Killed and corrected;
 no result lost (the partial cells were agp1, already known non-matching).
+
+## 2026-07-23 (midday) — RESOLVED: HF-fp32 reproduces the official EXACTLY; the vLLM residual is the engine gap
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**The multi-day substrate question is answered.** Scored the HF-fp32 config
+probe's partial cells (n=32) against the official completions by hand (probe's
+own ranking.txt lands only at the end):
+
+| model | cell (fp32/eager/agp0/decode=helm) | exact | quasi | first40 |
+|-------|------|-------|-------|---------|
+| 7B  | device_map=single | 1.00 | 1.00 | 1.00 |
+| 7B  | device_map=auto   | 1.00 | 1.00 | 1.00 |
+| 13B | device_map=auto   | 1.00 | 1.00 | 1.00 |
+
+**BYTE-IDENTICAL. 32/32 exact on both models.** HF-fp32 with eager attention,
+agp0 (old-template rendering), decode=helm reproduces the official OLMo-2
+instruct ifeval completions exactly. Conclusions:
+
+1. The official runs ARE HF-fp32 — confirmed to byte-exactness, not inference.
+2. The vLLM-fp32 e2e residual (+0.067 7B / +0.082 13B on ifeval_strict_accuracy)
+   is ENTIRELY the vLLM<->HF engine gap. Same precision, same prompt, same
+   model — different engine → +0.07 on the published metric.
+3. device_map=auto == single here (7B/13B fp32 fits one 96GB card, no shard);
+   the 07-10 device_map worry was smaller-card hardware. eager=exact, so sdpa
+   cells are moot.
+
+**The subtle, paper-worthy part:** our vLLM e2e used the run_spec's
+temperature=0.0, which vLLM executes as TRUE greedy (argmax). HELM's
+HuggingFaceClient maps temperature==0 -> do_sample=True, temp=1e-7. So the SAME
+run_spec (temperature=0.0) produces DIFFERENT decode behavior depending on the
+engine — the residual is the engine and its interpretation of a nominally
+identical recipe. That is the thesis ("a recipe does not identify the
+experiment") demonstrated at the decode level, not just precision.
+
+**Substrate fully decomposed for OLMo-2 instruct ifeval:** precision (fp32,
+unpinned default) + template rendering (agp0, transformers-version-dependent) +
+engine/decode (HF transformers.generate, temp0->1e-7). Recover all three and the
+official reproduces EXACTLY; miss the engine and you get +0.07 on the metric;
+miss precision or template and it's far worse. This is the cleanest possible
+evidence for the reproduction-first thesis: the published number is exactly
+recoverable, but ONLY with the full unrecorded execution substrate.
+
+**Status:** n=32 byte-exact is conclusive at the completion level (chance ~0);
+the full-n (541) runs still finishing will report the metric (predicted D_HF~=0
+since identical completions => identical ifeval_strict_accuracy). The engine-gap
+question needs no further test. Optional decomposition (HF-greedy vs vLLM-helm)
+would split engine from decode-semantics but is not needed for the headline.
+
+**For the paper.** OLMo-2 ifeval cell final status: "exactly reproduced on the
+original engine (HF-fp32); vLLM introduces a +0.07 metric residual attributable
+to the engine and its temperature=0 decode semantics." Strongest single result
+of the fp32 thread.

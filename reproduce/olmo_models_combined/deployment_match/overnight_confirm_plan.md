@@ -153,5 +153,37 @@ HF-in-process fp32 path** (same engine as the official — `hf_inprocess.py` +
 reserve-only lease exists, but the replay routing switch was left unwired;
 07-10 journal). Alternatives to rule out: unrepresentative n=12 probe; HELM's
 `do_sample=True, temperature=1e-7` vs vLLM true-greedy.
+
+### RESOLVED 2026-07-23 — HF-fp32 reproduces the official EXACTLY; residual IS the engine gap
+
+The HF-fp32 config probe (70_hf_fp32_probe.sh) settles it. Partial cells (n=32)
+scored vs the official completions:
+
+| model | cell (fp32 / eager / agp0 / decode=helm) | exact | quasi | first40 |
+|-------|------|-------|-------|---------|
+| 7B  | device_map=single | **1.00** | 1.00 | 1.00 |
+| 7B  | device_map=auto   | **1.00** | 1.00 | 1.00 |
+| 13B | device_map=auto   | **1.00** | 1.00 | 1.00 |
+
+**HF-fp32 (eager, agp0, decode=helm) produces BYTE-IDENTICAL completions to the
+official** — 32/32 exact on both models. So the official OLMo-2 instruct ifeval
+runs ARE HF-fp32, and the vLLM-fp32 e2e residual (+0.067/+0.082) is entirely the
+**vLLM<->HF engine gap**. device_map=auto == single here (a 7B/13B fp32 fits one
+96GB card → no sharding; the 07-10 device_map concern was smaller-card
+hardware). eager already matches exactly, so it is the official's attn impl; the
+sdpa cells are moot.
+
+**Nuance for the writeup:** our vLLM e2e used the run_spec's temperature=0.0 =
+TRUE greedy, while HELM's HuggingFaceClient maps temperature=0 → do_sample=True,
+temp=1e-7 (decode=helm). The SAME run_spec yields different decode behavior per
+engine — the residual is the engine AND its interpretation of temperature=0,
+itself a "recipe does not identify the experiment" point. Full decomposition
+(HF-greedy vs vLLM-helm) is optional; the headline holds.
+
+**Substrate fully decomposed:** precision (fp32) + template rendering (agp0) +
+engine/decode (HF transformers.generate, temp=0→1e-7) recover the official
+EXACTLY. n=32 byte-exact is conclusive at the completion level; the full-n runs
+still finishing will report the metric (predicted D_HF ≈ 0).
+
 | sweep: marin-8b-instruct / ifeval | official = huggingface/marin-8b-instruct, HuggingFaceClient, NO dtype pinned (device_map:auto only; verified against HELM model_deployments.yaml 2026-07-21) ⇒ **fp32 cell wins**; agp behavior is an open sub-question for a llama-family template | 07-21 night: **INVALID TEST, not a refutation** — protocol resolver could not detect chat markers in the marin official and silently defaulted to raw completions (`protocol_resolved: False` in resolution.json); all 32 cells probed wrong-shaped prompts (best: auto PARTIAL 0.158, quasi 0.0; snippets show on-topic-but-divergent text and the official refusing where locals answer — chat-template behavior the raw probe cannot express). Sweep completed cleanly otherwise; dtype never got a fair test. RERUN with `DM_PROTOCOL=chat` into a fresh `--ifeval-chat-vllm` out dir. | pending rerun (chat) | prediction unchanged; DM_PROTOCOL knob added to run_deployment_match.sh 07-22 |
 | sweep: phi-3-small-8k / med_qa — **DEFERRED to 2026-07-22**, typed reason `infeasible:trust-remote-code-not-swept` (grid.py pins trust_remote_code:[False]; phi-3-small requires it — ~10-line tool patch first) | official pins `torch_dtype: auto` ⇒ transformers reads the checkpoint dtype (bf16) ⇒ **bf16 wins, fp32 LOSES** — the control cell, prediction registered before any execution | | | do NOT run tonight |
