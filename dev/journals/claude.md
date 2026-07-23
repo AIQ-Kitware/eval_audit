@@ -4062,3 +4062,30 @@ the published number reproduces byte-exactly.
 4. GATING DECISIONS — the fp32 flagship strengthens the reproduction-first
    spine; time to resolve round-3 D1-D3 (PM 2023 scope, EEE boundary memo,
    Edward timeline) so the paper structure is locked before writing.
+
+## 2026-07-23 (attribution) — the vLLM residual is PURE ENGINE, not decode
+
+Ran the corrected greedy attribution probe (DM_HF_DECODE=greedy). Result:
+- HF-fp32-GREEDY reproduces the official EXACTLY too — all 4 forward-pass cells
+  MATCH 1.000 (n=32), same as HF-fp32-helm.
+- helm vs greedy completions: 0/32 differ (byte-identical). So HELM's
+  temperature=0 -> do_sample=True/temp=1e-7 mapping is equivalent to true greedy
+  for these instances — near-zero temp does not flip argmax. The decode-semantics
+  nuance I flagged is a non-issue for OLMo-2 ifeval.
+
+**Attribution nailed.** vLLM-fp32 used greedy (temp=0) and left +0.07/+0.082;
+HF-fp32-greedy matches the official exactly. Same model, same fp32, same prompt,
+same GREEDY decode — only the engine differs (vLLM vs HF). Therefore the residual
+is PURE ENGINE NUMERICS (vLLM's fp32 kernels differ from HF's), NOT precision,
+template, or decode. This is the strongest form of the claim: vLLM is a genuinely
+different measuring instrument from HF at fp32, and to faithfully reproduce an
+HF-client official you must run HF (or a numerically-matching engine) — the
+inference engine is part of the experiment.
+
+Final decomposition (OLMo-2 instruct ifeval, both 7B/13B):
+  bf16 + modern template          -> +0.10  (precision + template both wrong)
+  vLLM fp32 + agp0                -> +0.07  (precision + template fixed; ENGINE wrong)
+  HF fp32 + agp0 (helm OR greedy) -> EXACT   (engine fixed)
+
+The fp32/substrate thread is now fully closed AND attributed. No further runs
+needed for this result.
