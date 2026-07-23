@@ -136,7 +136,22 @@ predictions here first, then paste them.
 
 | Cell | Prediction (registered 2026-07-21 pre-launch) | Outcome | Verdict | Notes |
 |---|---|---|---|---|
-| olmo-2-7b ifeval fp32 e2e | D_fp32 → ~0 (from +0.098) | 07-21 night: DID NOT RUN — chat-template written to a host path the vLLM container cannot see (only cache dirs are mounted); serve never came up, zero artifacts. Fixed 07-22: template now lives on the hf-cache mount, catalog uses the native `chat_template` runtime key, stale extra_args scrubbed. RELAUNCH. | pending relaunch | prediction unchanged |
-| olmo-2-13b ifeval fp32 e2e | D_fp32 → ~0 (from +0.126) | 07-22: served fine ~54 min (endpoint + template + perms all OK), then the vLLM container went unreachable (500 connection error → 5 retries → 404 route gone) and the run failed. NOT a recipe bug — CONTENTION: the marin sweep (repeated acquire/converge cycles) + a qwen3-5-2b-judge shared one infer-stack; a concurrent converge tore down the leased 13B endpoint. RERUN SOLO (resumes from the 54-min vllm.sqlite cache). | pending solo rerun | 7B passed under the same recipe |
+| olmo-2-7b ifeval fp32 e2e | D_fp32 → ~0 (from +0.098) | **DONE (1082 inst, denom == official).** official 0.6929, local fp32+agp0 (vLLM) 0.7597, **D_fp32 = +0.067** → gap closed 32% (0.098→0.067). | **ANOMALOUS / partial** (not EXACT ≤0.01; not MATERIALLY-IMPROVED ≤0.049; not UNCHANGED ≥0.078) | prediction of full recovery REFUTED; fp32 helps but is not sufficient |
+| olmo-2-13b ifeval fp32 e2e | D_fp32 → ~0 (from +0.126) | **DONE (1082 inst, denom == official; completed via cache-resume after the 07-22 contention failure).** official 0.7298, local fp32+agp0 (vLLM) 0.8121, **D_fp32 = +0.082** → gap closed 35% (0.126→0.082). | **ANOMALOUS / partial** (not EXACT; not MI ≤0.063; not UNCHANGED ≥0.101) | same as 7B; consistent ~1/3 closure across both sizes |
+
+**Reading (registered prediction refuted, honestly).** fp32+agp0 is directionally
+right — it closes ~1/3 of the bf16 gap on BOTH models — but a systematic
++0.067/+0.082 residual remains, with the local scoring ABOVE official. So
+precision + template rendering are NECESSARY but NOT SUFFICIENT to recover the
+OLMo-2 instruct ifeval score. Leading hypothesis: the residual is the **engine
+gap** — the officials are HELM HuggingFaceClient (`transformers.generate()`) at
+fp32, our e2e local is **vLLM** at fp32; the 07-10 "residual puzzle" already
+showed same-fp32 forward passes diverge across engine / attention-impl / device.
+The consistent ~1/3 closure and same-direction (local higher) argue for a
+systematic execution difference, not noise. **Decisive next test: the
+HF-in-process fp32 path** (same engine as the official — `hf_inprocess.py` +
+reserve-only lease exists, but the replay routing switch was left unwired;
+07-10 journal). Alternatives to rule out: unrepresentative n=12 probe; HELM's
+`do_sample=True, temperature=1e-7` vs vLLM true-greedy.
 | sweep: marin-8b-instruct / ifeval | official = huggingface/marin-8b-instruct, HuggingFaceClient, NO dtype pinned (device_map:auto only; verified against HELM model_deployments.yaml 2026-07-21) ⇒ **fp32 cell wins**; agp behavior is an open sub-question for a llama-family template | 07-21 night: **INVALID TEST, not a refutation** — protocol resolver could not detect chat markers in the marin official and silently defaulted to raw completions (`protocol_resolved: False` in resolution.json); all 32 cells probed wrong-shaped prompts (best: auto PARTIAL 0.158, quasi 0.0; snippets show on-topic-but-divergent text and the official refusing where locals answer — chat-template behavior the raw probe cannot express). Sweep completed cleanly otherwise; dtype never got a fair test. RERUN with `DM_PROTOCOL=chat` into a fresh `--ifeval-chat-vllm` out dir. | pending rerun (chat) | prediction unchanged; DM_PROTOCOL knob added to run_deployment_match.sh 07-22 |
 | sweep: phi-3-small-8k / med_qa — **DEFERRED to 2026-07-22**, typed reason `infeasible:trust-remote-code-not-swept` (grid.py pins trust_remote_code:[False]; phi-3-small requires it — ~10-line tool patch first) | official pins `torch_dtype: auto` ⇒ transformers reads the checkpoint dtype (bf16) ⇒ **bf16 wins, fp32 LOSES** — the control cell, prediction registered before any execution | | | do NOT run tonight |

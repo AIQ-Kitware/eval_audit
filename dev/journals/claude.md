@@ -3827,3 +3827,62 @@ gap?) cannot be read here yet. That number is the whole point; requested.
 (`allenai/olmo-2-1124-7b-instruct`) — this is the known HELM quirk where the
 13B deployment's tokenizer_name points at the 7B (identical tokenizer across
 the OLMo-2 dense family); recorded in the 07-10 entry, expected.
+
+## 2026-07-22 (evening) — fp32 e2e RESULT: precision necessary but NOT sufficient (prediction refuted)
+
+**Model/harness:** claude-opus-4-8[1m] (Opus 4.8, 1M context) via Claude Code.
+
+**Both e2e runs completed and are readable** (pulled to yardrat via the new
+`pull-data-from-aiq-gpu.sh`; 7B fresh, 13B completed via cache-resume in the
+same helm_id after the 07-22 contention failure). Denominators verified equal:
+1082 per-instance rows for both official and local on each model, so the
+comparison is valid; ifeval has no judge/parse step, so no MNAR denominator
+trap.
+
+**The number the whole thread was driving at:**
+
+| model | official (HF fp32) | local fp32+agp0 (vLLM) | D_fp32 | prior bf16 gap | gap closed |
+|-------|------|------|------|------|------|
+| OLMo-2-7B  | 0.6929 | 0.7597 | **+0.067** | +0.098 | 32% |
+| OLMo-2-13B | 0.7298 | 0.8121 | **+0.082** | +0.126 | 35% |
+
+**The registered prediction (D_fp32 → ~0, full recovery) is REFUTED.** Against
+the frozen outcome classes both land in ANOMALOUS/partial: not EXACT (≤0.01),
+not MATERIALLY-IMPROVED (≤0.5·bf16), not UNCHANGED (≥0.8·bf16). Directional
+prediction (fp32 helps) confirmed; magnitude prediction (recovers the official)
+refuted. The local still scores ABOVE official by +0.07-0.08.
+
+**Interpretation (honest, and arguably a BETTER paper result than "fp32 fixes
+it"):** precision + old-template rendering are NECESSARY (bf16 was worse, agp1
+was far worse) but NOT SUFFICIENT for the OLMo-2 instruct ifeval score. A
+systematic residual remains. Leading hypothesis: the **engine gap** — officials
+are HELM HuggingFaceClient (`transformers.generate()`) at fp32; our e2e is
+vLLM at fp32. The 07-10 "residual puzzle" already documented that same-fp32
+forward passes diverge across engine/attention-impl/device-topology. Two tells
+that it's systematic not noise: the closure fraction is ~1/3 on BOTH sizes, and
+the residual is same-signed (local higher) on both — consistent with the local
+following instructions slightly better, e.g. vLLM true-greedy vs HELM's
+`do_sample=True, temperature=1e-7`.
+
+**Decisive next test: the HF-in-process fp32 path** — reproduce the official the
+SAME way it was produced (in-process transformers.generate at fp32, same engine),
+removing the vLLM↔HF variable. The mechanism exists (`hf_inprocess.py` +
+`acquire --reserve-gpus`), but the replay routing switch that would make a
+HuggingFaceClient official auto-route to it was "scoped but left unwired"
+(07-10 journal, chap. substrate). Wiring that switch is now the highest-value
+next step — it converts this partial result into a clean yes/no on whether fp32
+on the ORIGINAL engine fully recovers the official. Alternatives to rule out:
+n=12 probe unrepresentative (now moot — we have the full-run number); the
+sampling-mode difference.
+
+**Paper implication.** This strengthens, not weakens, the "recipe does not
+identify the experiment" thesis: even after recovering the two variables the
+probe flagged (precision, template), a THIRD (engine numerics) still moves the
+published metric. Substrate recovery is layered; a single fix is not enough.
+For the write-up, the OLMo-2 ifeval cell is "materially reduced, not recovered,
+residual attributed to engine" — pending the HF-in-process confirmation.
+
+**Script note.** `pull-data-from-aiq-gpu.sh` gained `credentials.conf` to the
+default secret excludes (third per-run secret after model_deployments.yaml /
+lease.env); rsync exit 23 correctly reported as ok-partial. The pull moved
+75G (audit-store) + 240G (audit) cleanly.

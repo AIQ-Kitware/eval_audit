@@ -90,6 +90,7 @@ FLAGS=(-avPRz --human-readable --no-owner --no-group --mkpath)
 # the authored bundles under crfm-helm-audit-store/local-bundles.
 [[ "${NO_DEFAULT_EXCLUDES:-0}" == 1 ]] || FLAGS+=(
   --exclude='prod_env/model_deployments.yaml'
+  --exclude='prod_env/credentials.conf'
   --exclude='lease.env'
 )
 [[ "${DRY_RUN:-0}" == 1 ]] && FLAGS+=(--dry-run)
