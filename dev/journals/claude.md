@@ -4032,3 +4032,33 @@ my 07-10 "device_map=auto sharding" concern for this hardware (nothing shards
 when the model fits one card) and makes the reproducing recipe unambiguous.
 13B still running; expected identical. Optional: a full-n (DM_N=541) confirm of
 one winning cell would upgrade "32/32 exact" to "541/541 exact" for the paper.
+
+## 2026-07-23 (13B ranking complete) — fp32/substrate thread CLOSED on both models
+
+13B HF-fp32 probe finished: all 4 cells ({eager,sdpa} x {auto,single}) MATCH
+1.000 exact (n=32), same as 7B. The fp32/substrate thread is complete for
+OLMo-2 instruct ifeval on both sizes. Final decomposition of the drift:
+  bf16 + modern template      -> +0.10 metric (original mystery)
+  vLLM fp32 + agp0            -> +0.07 (precision + template recovered)
+  HF   fp32 + agp0 + decode=helm -> EXACT (engine recovered)
+Each unrecorded substrate layer closes a defined slice; recover all three and
+the published number reproduces byte-exactly.
+
+### Recommended next steps (recorded for the resumption)
+
+1. CHEAP/HIGH-VALUE — attribution probe: `DM_HF_DECODE=greedy ./70_hf_fp32_probe.sh 7b`.
+   Splits the vLLM residual into ENGINE numerics vs DECODE semantics. We know
+   HF-fp32-helm(do_sample/1e-7)==official exactly and vLLM-fp32-greedy left +0.07.
+   If HF-fp32-GREEDY also ==official -> the residual is pure engine (vLLM kernels);
+   if HF-greedy DIFFERS -> decode semantics (temp=0 true-greedy vs 1e-7-sample)
+   is the driver. Sharpens the claim from "engine gap" to the precise cause.
+2. OPTIONAL RIGOR — full-n confirm: `DM_HF_DEVMAPS=single DM_N=541 ./70... 7b`
+   (and 13b) upgrades "32/32 exact" to "541/541 exact" for the paper.
+3. THE PAPER WORK (Edward-led, clock-limited) — the prospective forensic
+   protocol (thesis doc s0.4): the substrate-recovery METHOD is now proven
+   end-to-end on one cell; apply it to a FROZEN stratified sample across
+   families/benchmarks to make it a general result, not one deep case. Highest
+   strategic value; needs Edward's context while he is here.
+4. GATING DECISIONS — the fp32 flagship strengthens the reproduction-first
+   spine; time to resolve round-3 D1-D3 (PM 2023 scope, EEE boundary memo,
+   Edward timeline) so the paper structure is locked before writing.
