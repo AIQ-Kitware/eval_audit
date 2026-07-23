@@ -4020,3 +4020,15 @@ would split engine from decode-semantics but is not needed for the headline.
 original engine (HF-fp32); vLLM introduces a +0.07 metric residual attributable
 to the engine and its temperature=0 decode semantics." Strongest single result
 of the fp32 thread.
+
+## 2026-07-23 (7B ranking complete) — all 4 HF forward-pass configs match exactly
+
+7B HF-fp32 probe finished (ranking.txt). ALL FOUR cells — {eager,sdpa} x
+{auto,single} — are MATCH at composite 1.000 / quasi 1.00 / exact 1.00 /
+first-token 1.00 (n=32). So attn impl and device_map are NON-FACTORS for
+OLMo-2-7B fp32 on 96GB cards: only engine (HF) + fp32 + agp0 + decode=helm
+determine the output, and all four give byte-exact reproduction. This retires
+my 07-10 "device_map=auto sharding" concern for this hardware (nothing shards
+when the model fits one card) and makes the reproducing recipe unambiguous.
+13B still running; expected identical. Optional: a full-n (DM_N=541) confirm of
+one winning cell would upgrade "32/32 exact" to "541/541 exact" for the paper.
