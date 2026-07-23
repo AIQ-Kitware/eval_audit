@@ -32,6 +32,9 @@
 #   DRY_RUN       rsync --dry-run preview, no writes (default 0)
 #   DELETE        rsync --delete: exact mirror, removing local-only files under
 #                 each synced path (default 0 — OFF; opt-in, destructive)
+#   NO_DEFAULT_EXCLUDES  keep the per-run secret files (prod_env/
+#                 model_deployments.yaml, lease.env) that are excluded by
+#                 default; default 0 (they are excluded — see FLAGS below)
 #   RSYNC_EXTRA   extra rsync args, word-split (e.g. RSYNC_EXTRA="--exclude=*.sqlite")
 set -euo pipefail
 
@@ -77,6 +80,18 @@ REMOTE="$(aiq_remote)"
 # --no-group avoids a wall of "not super-user" chown warnings (perms/times are
 # still preserved). --mkpath creates the destination base if absent.
 FLAGS=(-avPRz --human-readable --no-owner --no-group --mkpath)
+# Default excludes: per-run secret-bearing config. The materialized
+# prod_env/model_deployments.yaml carries an embedded api_key and lease.env the
+# lease master key, so both are 0600 and owned by whoever ran that experiment —
+# the ssh user cannot read another user's copies, which is the "send_files
+# failed to open ... Permission denied (13)" noise. They are run-time config,
+# not analysis inputs, so skipping them is both quieter and better hygiene (no
+# api keys mirrored). NB: this excludes only the per-run prod_env copies, not
+# the authored bundles under crfm-helm-audit-store/local-bundles.
+[[ "${NO_DEFAULT_EXCLUDES:-0}" == 1 ]] || FLAGS+=(
+  --exclude='prod_env/model_deployments.yaml'
+  --exclude='lease.env'
+)
 [[ "${DRY_RUN:-0}" == 1 ]] && FLAGS+=(--dry-run)
 [[ "${DELETE:-0}"  == 1 ]] && FLAGS+=(--delete)
 [[ -n "${RSYNC_EXTRA:-}" ]] && FLAGS+=(${RSYNC_EXTRA})
@@ -102,13 +117,16 @@ for sub in "${TARGETS[@]}"; do
     continue
   fi
   echo "  + ${REMOTE}:${DATA_ROOT}/./${sub}  ->  ${DATA_ROOT}/${sub}"
-  if rsync "${FLAGS[@]}" -e "$(aiq_ssh_cmd)" "${REMOTE}:${DATA_ROOT}/./${sub}" "${DATA_ROOT}/"; then
-    echo "    ok: ${sub}"
-  else
-    rc=$?
-    echo "  ! FAILED ${sub} (rsync exit ${rc})" >&2
-    FAILED+=("$sub (rsync ${rc})")
-  fi
+  rc=0
+  rsync "${FLAGS[@]}" -e "$(aiq_ssh_cmd)" "${REMOTE}:${DATA_ROOT}/./${sub}" "${DATA_ROOT}/" || rc=$?
+  case "$rc" in
+    0)     echo "    ok: ${sub}" ;;
+    # 23 = partial (some files unreadable/skipped), 24 = source files vanished
+    # mid-run. Both mean "everything transferable came through" — expected when
+    # other users' 0600 run secrets are present; not a failure.
+    23|24) echo "    ok (partial, rsync ${rc}): some files skipped — unreadable or vanished on the sender (e.g. other users' run secrets)" ;;
+    *)     echo "  ! FAILED ${sub} (rsync exit ${rc})" >&2; FAILED+=("$sub (rsync ${rc})") ;;
+  esac
   echo
 done
 
