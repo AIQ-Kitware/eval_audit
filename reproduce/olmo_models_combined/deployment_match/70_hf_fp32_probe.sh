@@ -25,6 +25,7 @@
 #   ./70_hf_fp32_probe.sh 7b [GPU]          # 4-cell sweep, n=32 (~20-40 min)
 #   ./70_hf_fp32_probe.sh 13b 1
 #   DM_HF_DEVMAPS=single DM_N=541 ./70_hf_fp32_probe.sh 7b   # full-n confirm of one config
+# (NB: DM_HF_AGP/DM_HF_AST take true/false/both — not 0/1.)
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/../_lib.sh"
@@ -42,8 +43,12 @@ export DM_OUT="$STORE_ROOT/deployment-match/olmo-2-1124-${SIZE}-instruct--ifeval
 export DM_HF_FP32=1
 export DM_HF_DTYPES=float32
 export DM_HF_DECODE=helm                    # match the official's decode (NOT true-greedy)
-export DM_HF_AGP="${DM_HF_AGP:-0}"          # PIN agp0 — agp1 is known NOT to match OLMo-2
-export DM_HF_AST="${DM_HF_AST:-1}"          # PIN ast1 — a non-factor for OLMo-2
+# The hf-probe CLI takes true/false/both (the CELL LABELS are agp0/ast1, but the
+# arg values are false/true). agp0 = add_generation_prompt=false (the effective
+# old-template behavior that matches OLMo-2; agp1/true is known NOT to match).
+# ast1 = add_special_tokens=true (a non-factor for OLMo-2).
+export DM_HF_AGP="${DM_HF_AGP:-false}"
+export DM_HF_AST="${DM_HF_AST:-true}"
 # DM_HF_ATTN / DM_HF_DEVMAPS left to the tool's sweep ({eager,sdpa}x{auto,single})
 # unless the caller narrows them (e.g. a full-n confirm of the winning cell).
 export DM_N="${DM_N:-32}"                    # config-finding sample, not the full set
