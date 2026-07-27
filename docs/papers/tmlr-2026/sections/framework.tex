@@ -138,12 +138,26 @@ substrate, and (6) is a first-class result, not a gap to be closed.
 \subsection{Per-parameter identifiability}
 \label{sec:identifiability}
 
-Identifiability is not a binary property of an entire run: each latent parameter
-of $(D,I)$ has its own status, and the paper's per-case analysis assigns one to
-each (Table~\ref{tab:identifiability}). This refinement is what makes both the
+Identifiability in the sense fixed above --- equivalent results at tolerance
+$\epsilon$ across all materially compatible configurations --- is not a binary
+property of an entire run: each latent parameter of $(D,I)$ has its own status,
+and the paper's per-case analysis assigns one to each
+(Table~\ref{tab:identifiability}). This refinement is what makes both the
 positive attributions and the non-identifiability result precise: we never claim
 to identify a whole historical deployment, only specific coordinates, each with
 its own evidentiary basis.
+
+A coordinate can fail to be recoverable in two ways, and the difference decides
+what can be done about it. It may be \emph{structurally} unrecoverable, in that
+no record of this form could pin it down, or merely \emph{practically}
+unrecoverable, in that the particular record which happens to survive is
+insufficient \citep{raue2009identifiability}. Our classic-model result
+(\S\ref{sec:classic}) is the second kind, and that is what makes the provenance
+recommendation of \S\ref{sec:provenance} actionable: a practically
+non-identifiable parameter is one a richer record would have recovered, whereas
+a structurally non-identifiable one would leave a recording standard nothing to
+fix. We therefore state that result as non-identifiability relative to named
+evidence rather than as a claim of irreproducibility.
 
 \begin{table}[t]
 \centering\small
