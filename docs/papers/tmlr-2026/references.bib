@@ -120,13 +120,10 @@ series = {ICCSIE '24}
 
 % --- reproducibility terminology, variance, identifiability ---
 @misc{acm2020badging,
-  title  = {Artifact Review and Badging --- Version 1.1},
+  title  = {Artifact Review and Badging Version 1.1},
   author = {{Association for Computing Machinery}},
   year   = {2020},
   howpublished = {\url{https://www.acm.org/publications/policies/artifact-review-and-badging-current}},
-  note   = {Version 1.1 effective 15 May 2020, which interchanged the
-            definitions of ``Results Reproduced'' and ``Results Replicated''
-            to adopt the NISO standard}
 }
 
 @inproceedings{gundersen2018state,
@@ -139,37 +136,48 @@ series = {ICCSIE '24}
   doi       = {10.1609/aaai.v32i1.11503}
 }
 
-@article{goodman2016reproducibility,
-  title   = {What Does Research Reproducibility Mean?},
-  author  = {Goodman, Steven N. and Fanelli, Daniele and Ioannidis, John P. A.},
-  journal = {Science Translational Medicine},
-  volume  = {8},
-  number  = {341},
-  pages   = {341ps12},
-  year    = {2016},
-  doi     = {10.1126/scitranslmed.aaf5027}
+@article{goodman2016does,
+  title={What does research reproducibility mean?},
+  author={Goodman, Steven N and Fanelli, Daniele and Ioannidis, John PA},
+  journal={Science translational medicine},
+  volume={8},
+  number={341},
+  pages={341ps12--341ps12},
+  year={2016},
+  publisher={American Association for the Advancement of Science}
 }
 
 @article{pineau2021checklist,
-  title   = {Improving Reproducibility in Machine Learning Research
-             (A Report from the {NeurIPS} 2019 Reproducibility Program)},
-  author  = {Pineau, Joelle and Vincent-Lamarre, Philippe and Sinha, Koustuv and
-             Larivi{\`e}re, Vincent and Beygelzimer, Alina and
-             d'Alch{\'e}-Buc, Florence and Fox, Emily and Larochelle, Hugo},
-  journal = {Journal of Machine Learning Research (JMLR)},
+  author  = {Joelle Pineau and Philippe Vincent-Lamarre and Koustuv Sinha and Vincent Lariviere and Alina Beygelzimer and Florence d'Alche-Buc and Emily Fox and Hugo Larochelle},
+  title   = {Improving Reproducibility in Machine Learning Research(A Report from the NeurIPS 2019 Reproducibility Program)},
+  journal = {Journal of Machine Learning Research},
+  year    = {2021},
   volume  = {22},
   number  = {164},
   pages   = {1--20},
-  year    = {2021}
+  url     = {http://jmlr.org/papers/v22/20-303.html}
 }
 
 @inproceedings{dodge2019show,
-  title     = {Show Your Work: Improved Reporting of Experimental Results},
-  author    = {Dodge, Jesse and Gururangan, Suchin and Card, Dallas and
-               Schwartz, Roy and Smith, Noah A.},
-  booktitle = {EMNLP-IJCNLP},
-  pages     = {2185--2194},
-  year      = {2019}
+    title = "Show Your Work: Improved Reporting of Experimental Results",
+    author = "Dodge, Jesse  and
+      Gururangan, Suchin  and
+      Card, Dallas  and
+      Schwartz, Roy  and
+      Smith, Noah A.",
+    editor = "Inui, Kentaro  and
+      Jiang, Jing  and
+      Ng, Vincent  and
+      Wan, Xiaojun",
+    booktitle = "Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP)",
+    month = nov,
+    year = "2019",
+    address = "Hong Kong, China",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/D19-1224/",
+    doi = "10.18653/v1/D19-1224",
+    pages = "2185--2194",
+    abstract = "Research in natural language processing proceeds, in part, by demonstrating that new models achieve superior performance (e.g., accuracy) on held-out test data, compared to previous results. In this paper, we demonstrate that test-set performance scores alone are insufficient for drawing accurate conclusions about which model performs best. We argue for reporting additional details, especially performance on validation data obtained during model development. We present a novel technique for doing so: expected validation performance of the best-found model as a function of computation budget (i.e., the number of hyperparameter search trials or the overall training time). Using our approach, we find multiple recent model comparisons where authors would have reached a different conclusion if they had used more (or less) computation. Our approach also allows us to estimate the amount of computation required to obtain a given accuracy; applying it to several recently published results yields massive variation across papers, from hours to weeks. We conclude with a set of best practices for reporting experimental results which allow for robust future comparisons, and provide code to allow researchers to use our technique."
 }
 
 @inproceedings{bouthillier2019unreproducible,
@@ -195,6 +203,9 @@ series = {ICCSIE '24}
   note      = {arXiv:2103.03098}
 }
 
+% NOTE: no longer cited -- the identifiability block now anchors on the
+% tolerance-epsilon definition in Sec. 3.1 rather than on the control-theory
+% framing. Kept in case the framing is reinstated.
 @book{ljung1999system,
   title     = {System Identification: Theory for the User},
   author    = {Ljung, Lennart},
