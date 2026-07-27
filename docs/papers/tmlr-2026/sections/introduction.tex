@@ -1,102 +1,31 @@
 \section{Introduction}
 \label{sec:intro}
 
-Large-scale benchmark suites such as \helm \citep{liang2023helm} have become the
-shared substrate on which the community compares language models. A central
-promise of these suites is transparency: for many (scenario, model) pairs the
-public corpus ships the exact prompts sent to the model, the completions it
-returned, and the metrics computed from them. This apparent completeness invites
-a natural reproducibility question --- \emph{re-run the evaluation locally and
-check that the numbers match} --- and a natural expectation that open-weight
-models, whose weights anyone can download, should reproduce cleanly.
+Large language model (LLM) benchmarks serve as important shared infrastructure for machine learning research and evaluation. Their results are used to compare individual models, as evidence in broader studies of model capabilities, and as data for research on how evaluation itself can be made more efficient and reliable \citep{bowyer2026efficientbenchmarkingjustfeature, helm2026queryefficientmodelevaluationusing}. Among the most influential efforts in this space is the Holistic Evaluation of Language Models (HELM) \citep{liang2023holistic}. By standardizing models, scenarios, adaptation procedures, metrics, and releasing detailed evaluation artifacts, HELM pioneered a common framework for transparent language-model evaluation. It supported a growing collection of public leaderboards and evaluation suites, making HELM both an evaluation system and a longitudinal record of model performance. As the open-source framework entered maintenance mode in June 2026, the question of what is required to reproduce the experiments preserved in that record and becomes increasingly important. Although exact reproduction of evaluations for older models are of limited practical priority, understanding the context in which historical benchmarks were conducted is essential for making fair comparisons with modern systems; more broadly, reproducibility remains a fundamental challenge for reliable progress in machine learning.
 
-Our starting point was exactly this program: reproduce a large slice of public
-\helm on local open-weight hardware. It did not survive contact with the data,
-and \emph{the way it failed is the contribution of this paper.} Two facts
-dominate. First, a large fraction of the open-weight corpus was originally served
-not by the harness itself but through a hosted inference provider (frequently
-Together AI), whose software and hardware stack the public record does not
-describe. Second, and more fundamentally, the artifact that \emph{does} survive
---- the resolved \file{run\_spec.json} --- captures \emph{what} to generate
-(scenario, prompts, decoding parameters, metrics) and the \emph{name} of the
-model and its deployment, but almost nothing about the \emph{execution substrate}:
-the precision the weights were loaded at, the exact checkpoint revision, the
-attention kernel, the tokenizer and chat-template versions, and the software-stack
-versions. A benchmark recipe, in other words, is not a complete experimental
-record.
+HELM offers favorable conditions for reproduction. Public releases include resolved run specifications, prompts, model completions, and per-instance metrics, providing specific evaluation process details not captured by aggregate scores. Additionally, the evaluation harness code remains free and publicly available. For an open-weight model, this suggests a straightforward experiment: reconstruct the recorded experiment, run the harness and model locally, and compare the new outputs and scores with the historical result.
 
-Once this is taken seriously, ``did it reproduce?'' fractures into three distinct
-questions that the literature often conflates: (i) \emph{can the evaluation be run
-at all?} (gated models and datasets, revoked download endpoints, packaging
-incompatibilities, unavailable judges --- these are eligibility and environment
-filters, not reproduction outcomes); (ii) \emph{can a faithful local execution be
-reconstructed} when the key execution parameters were never written down and the
-original may have been served by an external provider; and (iii) when local and
-public numbers differ, \emph{to what is the difference attributable} --- a genuine
-recipe disagreement, a controllable execution-substrate parameter, an
-artifact-processing effect, or an irreducibly lost provenance?
+However, while the recorded model, scenario, prompt construction, and metric describe much of the intended evaluation procedure, model outputs can depend on the exact checkpoint and tokenizer revision, chat-template semantics, serving backend, software dependencies, numerical precision \citep{mekala2025doesquantizationaffectmodels, marchisio2024doesquantizationaffectmultilingual, shi2025systematiccharacterizationllmquantization, shen2024exploring}, batching behavior \citep{yuan2026understanding}, hardware and runtime configuration, and other implementation choices. Many of these factors are difficult to recover retrospectively because they are deployment properties rather than conventional benchmark parameters, and they have not always been recorded as part of the experimental artifact.
 
-\paragraph{Thesis.} We therefore reframe benchmark reproduction as a layered
-\emph{system-identification} problem. The measured score is a function
-$Y = F(R, D, I, A, U)$ of the recorded recipe $R$, the deployment $D$, the
-execution instrument $I$, the artifact-interpretation history $A$, and residual
-stochastic/numerical influences $U$ (\S\ref{sec:model}). The public record
-exposes only a projection of these variables. Controlled reconstruction can
-\emph{attribute} an observed disagreement to a specific layer, and can sometimes
-\emph{close} it by supplying the missing parameter; but when provenance has been
-lost or transformed, the original measurement can be \emph{non-identifiable from
-the surviving evidence examined}. This is a more defensible and more scientifically
-interesting claim than a blanket ``open-weight \helm is (ir)reproducible.''
+This reproducibility challenge raises two questions that motivate this work. First, how much of a historical benchmark corpus can meaningfully be attempted to be reproduced using the artifacts, open-weight models, and open-source infrastructure that remain available today? Some evaluations cannot be rerun at all because the required model, dataset, judge, software component, or historical implementation is inaccessible. These are failures of reproduction eligibility or recoverability, distinct from disagreement between two successfully executed runs. Second, among evaluations for which reproduction can be attempted, how faithfully can the exact historical experiment be reconstructed, how closely can its results be reproduced, and how readily can any remaining disagreement be attributed to a specific cause?
 
-\paragraph{Contributions.} Concretely, this paper contributes:
+We study these questions through an effort to reproduce historical HELM evaluations, identifying sources of disagreement and taking specific note of controllable factors that are underspecified. We begin from the strongest surviving description of the historical evaluation, including exact resolved HELM RunSpecs where available, and progressively examine the additional conditions required to instantiate that recipe. When a local run disagrees with the public results, we ask whether the discrepancy can be explained by differences in the recorded recipe, model deployment, execution environment, or interpretation of the resulting artifacts. When the required historical information no longer survives, we distinguish a best-effort reproduction from recovery of the original experiment.
+
+This perspective leads to a fundamental idea: a benchmark recipe does not currently map to a unique, concrete experiment. HELM made an important advance by demonstrating that meaningful model comparison requires substantially more than a model name and a dataset; evaluation scenarios, adaptation methods, prompts, decoding parameters, and metrics must be standardized and exposed. Our results extend this transparency principle by showing that longitudinal reproduction can require an additional layer of execution provenance: the concrete software, model, tokenizer, serving, numerical, and data state that instantiated the recorded recipe. A historical benchmark result is therefore better understood as the product of both an evaluation recipe and the execution context.
+
+We make the following contributions:
 \begin{enumerate}[nosep,leftmargin=1.4em]
-  \item \textbf{A measurement model and a disagreement taxonomy}
-        (\S\ref{sec:model}). We factor a benchmark result into recipe,
-        deployment, execution-instrument, artifact-interpretation, and residual
-        layers; classify observed disagreements into six causes; and separate
-        that ``why'' taxonomy from three orthogonal reproduction \emph{targets}
-        --- artifact reconstruction, procedural reproduction, and claim-level
-        robustness --- clarifying what ``reproduction'' should even mean.
-  \item \textbf{\textsc{EvalAudit}, a reproducibility-auditing system}
-        (\S\ref{sec:system}): exact \file{run\_spec.json} replay (never recipe
-        reconstruction), an execution-substrate reconstruction and search tool,
-        version-pinned ``era'' scoring containers that freeze the measurement
-        instrument, and a framework-free layered comparison core.
-  \item \textbf{Attribution case studies on modern open-weight models}
-        (\S\ref{sec:olmo}). On OLMo-family models we attribute concrete
-        disagreements to a tokenizer special-token append, to a chat-template
-        \code{add\_generation\_prompt} flag whose behavior depends on the
-        \code{transformers} version, and to load precision --- while being
-        explicit that the precision result is at present a configuration
-        \emph{discovery} awaiting ordinary-path confirmation, and that one dense
-        OLMo-2 divergence remains unresolved.
-  \item \textbf{A recoverable-vs-non-identifiable contrast}
-        (\S\ref{sec:redpajama}--\ref{sec:classic}). RedPajama-3B demonstrates
-        end-to-end execution under declared historical proxy instruments, whereas
-        the original-paper classic models (GPT-J, GPT-NeoX, OPT) carry a metric
-        class path that resolves in \emph{no} released \helm version and
-        triangulates to unreleased pre-v0.1.0 code, making the producing
-        instrument non-identifiable from surviving evidence.
-  \item \textbf{A minimal provenance standard} (\S\ref{sec:provenance}). We show
-        that three recorded fields --- \code{model\_revision},
-        \code{torch\_dtype}, and \code{transformers\_version} --- transitively
-        close most of the identifiability gap, and give a backward-compatible way
-        to record them (outside the run-spec identity string, so official$
-        \leftrightarrow$local pairing is preserved), plus an artifact-release
-        checklist.
+\item \textbf{A broader framework for benchmark reproducibility.} We distinguish artifact reconstruction, procedural reproduction, and claim-level robustness as separate reproduction targets, and argue that future evaluation systems should preserve a versioned execution manifest to identify the exact experiment that produced a benchmark result.
+
+\item \textbf{Tools for faithful benchmark reconstruction.} We introduce eval-audit and infer-stack, a suite of tools to serve models locally, replay surviving resolved evaluation specifications and compare historical and local executions at multiple layers, allowing reproduction failures to be localized to differences in prompts and adaptation, model deployment, tokenizer and chat-template behavior, numerical configuration, serving infrastructure, or artifact interpretation.
+
+\item \textbf{Studies of local reproduction feasibility for historical HELM evaluations.} We distinguish evaluations that remain operationally reproducible from those blocked by unavailable models, judges, artifacts, or benchmarks, separating the ability to attempt a reproduction from the outcome of the reproduction itself.
+
+\item \textbf{Case studies on how closely locally reproducible evaluations recover historical results.} For specific models and benchmark pairs in HELM that can be rerun, we utilize agreement with the released HELM artifacts and investigate whether observed discrepancies can be attributed to recoverable execution parameters or remain underdetermined from the surviving evidence.
+
+\item \textbf{New Qwen 3.5 HELM Results.} Using our infrastructure, we contribute new evaluations of Qwen 3.5 models on core HELM benchmarks.
+
 \end{enumerate}
 
-\paragraph{Scope and honesty about evidence.} This paper is deliberately explicit
-about the maturity of each empirical claim. Several results rest on
-configuration-discovery probes rather than completed end-to-end reproductions;
-we mark these throughout and describe the confirmation experiment that would
-promote them (\S\ref{sec:olmo-confirm}). The system, the conceptual framework,
-and the recoverable-vs-non-identifiable contrast stand independently of whether
-any single confirmation succeeds.
 
-This work builds directly on \eee \citep{eee2026}, a normalized artifact
-representation that \emph{detects} reproducibility discrepancies but, by its
-authors' own statement, cannot separate checkpoint, quantization, precision,
-tokenizer, and generation-kernel effects. Our positioning is complementary and
-one sentence long: \emph{\eee detects reproducibility gaps; this work studies
-their attribution, possible closure, and identifiability.}
+HELM's commitment to transparency leaves enough of the historical experiment visible to investigate what is missing to have truly reproducible runs. The resulting gap is consequential beyond HELM: as benchmark results are reused to compare generations of models, support scientific claims, and develop new evaluation methodologies, it becomes ever important to understand the context in which older models were run. Knowing the recipe that describes an evaluation may be insufficient to reproduce the evaluation itself. As such, reproducible benchmarking ultimately requires preserving not only what evaluation was intended, but enough provenance to reconstruct the experiment that actually ran.

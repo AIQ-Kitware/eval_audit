@@ -1,119 +1,100 @@
-% ---------------------------------------------------------------------------
-% references.bib for the TMLR draft. Entries marked "% VERIFY" have details
-% (venue/year) that should be checked against the source before camera-ready.
-% ---------------------------------------------------------------------------
-
-@article{liang2023helm,
-  title   = {Holistic Evaluation of Language Models},
-  author  = {Liang, Percy and Bommasani, Rishi and Lee, Tony and others},
-  journal = {Transactions on Machine Learning Research (TMLR)},
-  year    = {2023},
-  note    = {arXiv:2211.09110}
+@article{
+liang2023holistic,
+title={Holistic Evaluation of Language Models},
+author={Percy Liang and Rishi Bommasani and Tony Lee and Dimitris Tsipras and Dilara Soylu and Michihiro Yasunaga and Yian Zhang and Deepak Narayanan and Yuhuai Wu and Ananya Kumar and Benjamin Newman and Binhang Yuan and Bobby Yan and Ce Zhang and Christian Alexander Cosgrove and Christopher D Manning and Christopher Re and Diana Acosta-Navas and Drew Arad Hudson and Eric Zelikman and Esin Durmus and Faisal Ladhak and Frieda Rong and Hongyu Ren and Huaxiu Yao and Jue WANG and Keshav Santhanam and Laurel Orr and Lucia Zheng and Mert Yuksekgonul and Mirac Suzgun and Nathan Kim and Neel Guha and Niladri S. Chatterji and Omar Khattab and Peter Henderson and Qian Huang and Ryan Andrew Chi and Sang Michael Xie and Shibani Santurkar and Surya Ganguli and Tatsunori Hashimoto and Thomas Icard and Tianyi Zhang and Vishrav Chaudhary and William Wang and Xuechen Li and Yifan Mai and Yuhui Zhang and Yuta Koreeda},
+journal={Transactions on Machine Learning Research},
+issn={2835-8856},
+year={2023},
+url={https://openreview.net/forum?id=iO4LZibEqW},
+note={Featured Certification, Expert Certification}
+}
+@misc{bowyer2026efficientbenchmarkingjustfeature,
+      title={Efficient Benchmarking Is Just Feature Selection and Multiple Regression}, 
+      author={Sam Bowyer and Acyr Locatelli and Kris Cao},
+      year={2026},
+      eprint={2605.25773},
+      archivePrefix={arXiv},
+      primaryClass={stat.ML},
+      url={https://arxiv.org/abs/2605.25773}, 
+}
+@misc{helm2026queryefficientmodelevaluationusing,
+      title={Query-efficient model evaluation using cached responses}, 
+      author={Hayden Helm and Ben Johnson and Carey Priebe},
+      year={2026},
+      eprint={2605.07096},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2605.07096}, 
+}
+@misc{mekala2025doesquantizationaffectmodels,
+      title={Does quantization affect models' performance on long-context tasks?}, 
+      author={Anmol Mekala and Anirudh Atmakuru and Yixiao Song and Marzena Karpinska and Mohit Iyyer},
+      year={2025},
+      eprint={2505.20276},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2505.20276}, 
+}
+@misc{marchisio2024doesquantizationaffectmultilingual,
+      title={How Does Quantization Affect Multilingual LLMs?}, 
+      author={Kelly Marchisio and Saurabh Dash and Hongyu Chen and Dennis Aumiller and Ahmet Üstün and Sara Hooker and Sebastian Ruder},
+      year={2024},
+      eprint={2407.03211},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2407.03211}, 
+}
+@misc{shi2025systematiccharacterizationllmquantization,
+      title={Systematic Characterization of LLM Quantization: A Performance, Energy, and Quality Perspective}, 
+      author={Tianyao Shi and Yi Ding},
+      year={2025},
+      eprint={2508.16712},
+      archivePrefix={arXiv},
+      primaryClass={cs.PF},
+      url={https://arxiv.org/abs/2508.16712}, 
+}
+@article{yuan2026understanding,
+  title={Understanding and mitigating numerical sources of nondeterminism in llm inference},
+  author={Yuan, Jiayi and Li, Hao and Ding, Xinheng and Xie, Wenya and Li, Yu-Jhe and Zhao, Wentian and Wan, Kun and Shi, Jing and Hu, Xia and Liu, Zirui},
+  journal={Advances in Neural Information Processing Systems},
+  volume={38},
+  pages={169819--169851},
+  year={2026}
+}
+@inproceedings{shen2024exploring,
+author = {Shen, Ao and Lai, Zhiquan and Li, Dongsheng},
+title = {Exploring Quantization Techniques for Large-Scale Language Models: Methods, Challenges and Future Directions},
+year = {2024},
+isbn = {9798400718137},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3689236.3695383},
+doi = {10.1145/3689236.3695383},
+abstract = {Breakthroughs in natural language processing (NLP) by large-scale language models (LLMs) have led to superior performance in multilingual tasks such as translation, summarization, and Q&A. However, the size and complexity of these models raise challenges in terms of computational requirements, memory usage, and energy consumption. Quantization strategies, as a type of model compression technique, have gained attention for their advantages in reducing model size and accelerating inference speed. In this paper, we review the rapid development of quantization techniques for LLMs, and systematically explore methods such as post-training quantization (PTQ), quantization-aware fine-tuning (QAF), and quantization-aware training (QAT), which provide a comprehensive solution to the resource-intensive problem of LLMs from training to post-deployment. We also analyze state-of-the-art benchmarks and datasets to evaluate the effectiveness of quantitative methods in terms of performance retention and computational efficiency. The purpose of this review is to provide researchers with a snapshot of the latest progress in LLM quantization techniques, helping them to quickly grasp the dynamics of the field and understand the key techniques and challenges, so that they can more efficiently devote themselves to this evolving research area.},
+booktitle = {Proceedings of the 2024 9th International Conference on Cyber Security and Information Engineering},
+pages = {783–790},
+numpages = {8},
+keywords = {Fine-tuning, Large language model, Post-training quantization, Quantization, Training},
+location = {
+},
+series = {ICCSIE '24}
 }
 
-@techreport{eee2026,
-  title       = {Every Eval Ever: A Normalized Representation for Detecting
-                 Benchmark Reproducibility Discrepancies},
-  author      = {Crall, Jon and {Kitware EvalAudit contributors}},
-  institution = {Kitware, Inc.},
-  year        = {2026},
-  note        = {Internal technical report / NeurIPS 2026 submission (in prep). % VERIFY}
-}
+% ---------------------------------------------------------------------------
+% Entries required by sections/related_work.tex.
+% "% VERIFY" marks details recalled rather than checked against the source.
+% NOTE: the HELM entry is keyed liang2023holistic (full OpenReview record at
+% the top of this file); the older abbreviated liang2023helm entry was folded
+% into it, so do not re-add one.
+% ---------------------------------------------------------------------------
 
+% --- HELM and other evaluation suites ---
 @misc{eval-harness,
   title  = {A Framework for Few-Shot Language Model Evaluation},
   author = {Gao, Leo and Tow, Jonathan and Biderman, Stella and others},
   year   = {2023},
   howpublished = {EleutherAI lm-evaluation-harness, Zenodo},
   note   = {% VERIFY version/DOI}
-}
-
-@article{pineau2021checklist,
-  title   = {Improving Reproducibility in Machine Learning Research
-             (A Report from the {NeurIPS} 2019 Reproducibility Program)},
-  author  = {Pineau, Joelle and Vincent-Lamarre, Philippe and Sinha, Koustuv and others},
-  journal = {Journal of Machine Learning Research (JMLR)},
-  year    = {2021}
-}
-
-@inproceedings{dodge2019show,
-  title     = {Show Your Work: Improved Reporting of Experimental Results},
-  author    = {Dodge, Jesse and Gururangan, Suchin and Card, Dallas and
-               Schwartz, Roy and Smith, Noah A.},
-  booktitle = {EMNLP},
-  year      = {2019}
-}
-
-@inproceedings{sclar2024quantifying,
-  title     = {Quantifying Language Models' Sensitivity to Spurious Features
-               in Prompt Design},
-  author    = {Sclar, Melanie and Choi, Yejin and Tsvetkov, Yulia and Suhr, Alane},
-  booktitle = {International Conference on Learning Representations (ICLR)},
-  year      = {2024}
-}
-
-@article{mizrahi2024state,
-  title   = {State of What Art? A Call for Multi-Prompt {LLM} Evaluation},
-  author  = {Mizrahi, Moran and Kaplan, Guy and Malkin, Dan and others},
-  journal = {Transactions of the Association for Computational Linguistics (TACL)},
-  year    = {2024}
-}
-
-@inproceedings{wolf2020transformers,
-  title     = {Transformers: State-of-the-Art Natural Language Processing},
-  author    = {Wolf, Thomas and Debut, Lysandre and Sanh, Victor and others},
-  booktitle = {EMNLP: System Demonstrations},
-  year      = {2020}
-}
-
-@inproceedings{kwon2023vllm,
-  title     = {Efficient Memory Management for Large Language Model Serving
-               with {PagedAttention}},
-  author    = {Kwon, Woosuk and Li, Zhuohan and Zhuang, Siyuan and others},
-  booktitle = {ACM SOSP},
-  year      = {2023}
-}
-
-@inproceedings{biderman2023pythia,
-  title     = {Pythia: A Suite for Analyzing Large Language Models Across
-               Training and Scaling},
-  author    = {Biderman, Stella and Schoelkopf, Hailey and Anthony, Quentin and others},
-  booktitle = {ICML},
-  year      = {2023}
-}
-
-@inproceedings{mitchell2019modelcards,
-  title     = {Model Cards for Model Reporting},
-  author    = {Mitchell, Margaret and Wu, Simone and Zaldivar, Andrew and others},
-  booktitle = {ACM FAT*},
-  year      = {2019}
-}
-
-@article{gebru2021datasheets,
-  title   = {Datasheets for Datasets},
-  author  = {Gebru, Timnit and Morgenstern, Jamie and Vecchione, Briana and others},
-  journal = {Communications of the ACM},
-  year    = {2021}
-}
-
-@misc{bowyer2026efficient,
-  title  = {Efficient Benchmarking Is Just Feature Selection and Multiple Regression},
-  author = {Bowyer, Sam and Locatelli, Davide and Cao, Yiming},
-  year   = {2026},
-  note   = {% VERIFY -- preprint reviewed in the internship literature survey}
-}
-
-% ---------------------------------------------------------------------------
-% Related-work additions. Entries without "% VERIFY" were checked against the
-% source (arXiv id / ACL Anthology / proceedings page); the rest still need it.
-% ---------------------------------------------------------------------------
-
-% --- evaluation suites and harness practice ---
-@misc{biderman2024lessons,
-  title  = {Lessons from the Trenches on Reproducible Evaluation of Language Models},
-  author = {Biderman, Stella and Schoelkopf, Hailey and Sutawika, Lintang and others},
-  year   = {2024},
-  note   = {arXiv:2405.14782}
 }
 
 @article{srivastava2023bigbench,
@@ -123,6 +104,15 @@
   journal = {Transactions on Machine Learning Research (TMLR)},
   year    = {2023},
   note    = {arXiv:2206.04615 % VERIFY}
+}
+
+@inproceedings{chiang2024arena,
+  title     = {Chatbot Arena: An Open Platform for Evaluating {LLM}s by Human Preference},
+  author    = {Chiang, Wei-Lin and Zheng, Lianmin and Sheng, Ying and
+               Angelopoulos, Anastasios N. and Li, Tianle and Li, Dacheng and others},
+  booktitle = {ICML},
+  year      = {2024},
+  note      = {arXiv:2403.04132 % VERIFY}
 }
 
 % --- reproducibility terminology, variance, identifiability ---
@@ -140,6 +130,22 @@
   booktitle = {AAAI},
   year      = {2018},
   note      = {% VERIFY pages}
+}
+
+@article{pineau2021checklist,
+  title   = {Improving Reproducibility in Machine Learning Research
+             (A Report from the {NeurIPS} 2019 Reproducibility Program)},
+  author  = {Pineau, Joelle and Vincent-Lamarre, Philippe and Sinha, Koustuv and others},
+  journal = {Journal of Machine Learning Research (JMLR)},
+  year    = {2021}
+}
+
+@inproceedings{dodge2019show,
+  title     = {Show Your Work: Improved Reporting of Experimental Results},
+  author    = {Dodge, Jesse and Gururangan, Suchin and Card, Dallas and
+               Schwartz, Roy and Smith, Noah A.},
+  booktitle = {EMNLP},
+  year      = {2019}
 }
 
 @inproceedings{bouthillier2019unreproducible,
@@ -186,6 +192,21 @@
 }
 
 % --- harness and scorer sensitivity ---
+@inproceedings{sclar2024quantifying,
+  title     = {Quantifying Language Models' Sensitivity to Spurious Features
+               in Prompt Design},
+  author    = {Sclar, Melanie and Choi, Yejin and Tsvetkov, Yulia and Suhr, Alane},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2024}
+}
+
+@article{mizrahi2024state,
+  title   = {State of What Art? A Call for Multi-Prompt {LLM} Evaluation},
+  author  = {Mizrahi, Moran and Kaplan, Guy and Malkin, Dan and others},
+  journal = {Transactions of the Association for Computational Linguistics (TACL)},
+  year    = {2024}
+}
+
 @inproceedings{alzahrani2024targets,
   title     = {When Benchmarks are Targets: Revealing the Sensitivity of
                Large Language Model Leaderboards},
@@ -207,6 +228,13 @@
   note   = {% VERIFY author list}
 }
 
+@misc{biderman2024lessons,
+  title  = {Lessons from the Trenches on Reproducible Evaluation of Language Models},
+  author = {Biderman, Stella and Schoelkopf, Hailey and Sutawika, Lintang and others},
+  year   = {2024},
+  note   = {arXiv:2405.14782}
+}
+
 @inproceedings{post2018clarity,
   title     = {A Call for Clarity in Reporting {BLEU} Scores},
   author    = {Post, Matt},
@@ -217,6 +245,21 @@
 }
 
 % --- serving stacks, kernels, numerics ---
+@inproceedings{wolf2020transformers,
+  title     = {Transformers: State-of-the-Art Natural Language Processing},
+  author    = {Wolf, Thomas and Debut, Lysandre and Sanh, Victor and others},
+  booktitle = {EMNLP: System Demonstrations},
+  year      = {2020}
+}
+
+@inproceedings{kwon2023vllm,
+  title     = {Efficient Memory Management for Large Language Model Serving
+               with {PagedAttention}},
+  author    = {Kwon, Woosuk and Li, Zhuohan and Zhuang, Siyuan and others},
+  booktitle = {ACM SOSP},
+  year      = {2023}
+}
+
 @inproceedings{dao2022flashattention,
   title     = {{FlashAttention}: Fast and Memory-Efficient Exact Attention
                with {IO}-Awareness},
@@ -251,7 +294,25 @@
   note   = {arXiv:2408.04667 % VERIFY author list}
 }
 
-% --- benchmark validity, judges, provenance ---
+% --- the EEE line ---
+@techreport{eee2026,
+  title       = {Every Eval Ever: A Normalized Representation for Detecting
+                 Benchmark Reproducibility Discrepancies},
+  author      = {Crall, Jon and {Kitware EvalAudit contributors}},
+  institution = {Kitware, Inc.},
+  year        = {2026},
+  note        = {Internal technical report / NeurIPS 2026 submission (in prep). % VERIFY}
+}
+
+@inproceedings{biderman2023pythia,
+  title     = {Pythia: A Suite for Analyzing Large Language Models Across
+               Training and Scaling},
+  author    = {Biderman, Stella and Schoelkopf, Hailey and Anthony, Quentin and others},
+  booktitle = {ICML},
+  year      = {2023}
+}
+
+% --- benchmark validity and judges ---
 @misc{pitfalls2025open,
   title  = {Pitfalls of Evaluating Language Models with Open Benchmarks},
   author = {{Author list to be filled}},
@@ -266,6 +327,21 @@
   booktitle = {NeurIPS Datasets and Benchmarks Track},
   year      = {2023},
   note      = {arXiv:2306.05685 % VERIFY}
+}
+
+% --- provenance and artifact preservation ---
+@inproceedings{mitchell2019modelcards,
+  title     = {Model Cards for Model Reporting},
+  author    = {Mitchell, Margaret and Wu, Simone and Zaldivar, Andrew and others},
+  booktitle = {ACM FAT*},
+  year      = {2019}
+}
+
+@article{gebru2021datasheets,
+  title   = {Datasheets for Datasets},
+  author  = {Gebru, Timnit and Morgenstern, Jamie and Vecchione, Briana and others},
+  journal = {Communications of the ACM},
+  year    = {2021}
 }
 
 @inproceedings{reuel2024betterbench,
@@ -289,7 +365,7 @@
   note    = {% VERIFY volume/pages}
 }
 
-% --- models under study (add \citep at first mention) ---
+% --- models, datasets, and scenarios under study (cited from sections/cases.tex) ---
 @inproceedings{groeneveld2024olmo,
   title     = {{OLMo}: Accelerating the Science of Language Models},
   author    = {Groeneveld, Dirk and Beltagy, Iz and Walsh, Pete and others},
