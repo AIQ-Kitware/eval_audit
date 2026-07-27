@@ -29,49 +29,39 @@ is responsible. We say a run is \emph{identifiable at tolerance $\epsilon$} when
 all materially compatible configurations produce equivalent results under a
 declared output-, metric-, or conclusion-level criterion.
 
-\subsection{Two gates, then six causes}
-\label{sec:taxonomy}
+\paragraph{The taxonomy this model implies.} Equation~\ref{eq:model} does not
+merely describe a score; it dictates how reproduction attempts can be
+classified, and that taxonomy organizes the rest of the paper. Whether a run can
+be executed at all is a precondition rather than an outcome, and forms an
+upstream gate (\S\ref{sec:gate}). Past that gate, an attempt is characterized
+along two orthogonal axes: which coordinates of the model it puts under test
+(\S\ref{sec:targets}), and, when its result disagrees with the record, which
+coordinate is responsible (\S\ref{sec:taxonomy}). Each axis is read off the
+model rather than proposed independently of it --- the first partitions the
+coordinates into those a given attempt exercises and those it holds fixed, the
+second assigns a disagreement to one coordinate, a residual, or an
+underdetermined case. Neither axis refines the other, and collapsing them is
+what produces the familiar but uninformative verdict that a benchmark ``did not
+reproduce.''
 
-\paragraph{Eligibility gate (upstream).} Before any disagreement is measured, a
-run must be executable. Gated models or datasets, revoked download access,
-missing credentials, unsupported packaging, unavailable judges, and infeasible
-resource requirements are \emph{eligibility/environment filters}. They answer
-``can we run this?'', not ``did it reproduce?'', and must never be folded into a
-negative reproduction result. Making this gate explicit --- every excluded run
-carries a typed exclusion reason --- is what allows a defensible
-``$X$ of $Y$ runnable runs'' denominator.
+\subsection{The eligibility gate}
+\label{sec:gate}
 
-\paragraph{Disagreement causes (for runs that execute).} For a run that executes
-and can be compared, we classify an observed disagreement into one of six causes:
-\begin{enumerate}[nosep,leftmargin=1.6em]
-  \item \textbf{Recipe mismatch} --- $R$ differs (prompt construction, examples,
-        decoding, scorer).
-  \item \textbf{Deployment mismatch} --- $D$'s client/endpoint/engine identity
-        differs (hosted API vs.\ local; in-process \code{transformers} vs.\ vLLM).
-  \item \textbf{Execution-instrument mismatch} --- $I$ differs (precision,
-        tokenizer/template version, attention kernel, device placement,
-        software-stack versions).
-  \item \textbf{Artifact-interpretation/migration mismatch} --- $A$ differs
-        (row reordering, schema migration, carried-forward outputs).
-  \item \textbf{Residual disagreement under controlled equivalence} --- all
-        controllable layers are matched and a gap remains. This is the only
-        category analogous to conventional repeatability failure.
-  \item \textbf{Historically non-identifiable reproduction} --- surviving
-        evidence does not uniquely specify what execution should count as
-        faithful. Qualitatively different from (5): not ``it failed to repeat''
-        but ``the target is underdetermined.''
-\end{enumerate}
-We deliberately avoid the phrase ``true reproducibility failure'' whenever
-execution provenance is incomplete; categories (1)--(4) are usually recoverable
-by controlling the substrate, and (6) is a first-class result, not a gap to be
-closed.
+Before any disagreement is measured, a run must be executable. Gated models or
+datasets, revoked download access, missing credentials, unsupported packaging,
+unavailable judges, and infeasible resource requirements are
+\emph{eligibility/environment filters}. They answer ``can we run this?'', not
+``did it reproduce?'', and must never be folded into a negative reproduction
+result. Making this gate explicit --- every excluded run carries a typed
+exclusion reason --- is what allows a defensible ``$X$ of $Y$ runnable runs''
+denominator.
 
-\subsection{Three orthogonal reproduction targets}
+\subsection{Axis 1: what is under test}
 \label{sec:targets}
 
-The six causes answer \emph{why} two executions disagree. A separate,
-\emph{orthogonal} axis answers \emph{what} is being reproduced, and the two must
-not be collapsed:
+A reproduction attempt must first declare what it is attempting to reproduce.
+Three choices are available, each exercising a different subset of the
+coordinates of Equation~\ref{eq:model}, and they are not interchangeable:
 \begin{enumerate}[nosep,leftmargin=1.6em]
   \item \textbf{Artifact reconstruction}: recompute the published aggregates from
         the released prompts, completions, and metric records \emph{without}
@@ -88,6 +78,36 @@ reported; a rerun assesses the \emph{stability and identifiability} of the
 procedure that produced them, and does not overwrite the record. This distinction
 is what licenses us to report a differing rerun as evidence about $I$ rather than
 as a correction of the official number.
+
+\subsection{Axis 2: why two executions disagree}
+\label{sec:taxonomy}
+
+Once the target is fixed and the attempt executes, an observed disagreement
+admits one of six causes --- one per coordinate of Equation~\ref{eq:model}, plus
+a residual and an underdetermined case:
+\begin{enumerate}[nosep,leftmargin=1.6em]
+  \item \textbf{Recipe mismatch} --- $R$ differs (prompt construction, examples,
+        decoding, scorer).
+  \item \textbf{Deployment mismatch} --- $D$'s client/endpoint/engine identity
+        differs (hosted API vs.\ local; in-process \code{transformers} vs.\ vLLM).
+  \item \textbf{Execution-instrument mismatch} --- $I$ differs (precision,
+        tokenizer/template version, attention kernel, device placement,
+        software-stack versions).
+  \item \textbf{Artifact-interpretation/migration mismatch} --- $A$ differs
+        (row reordering, schema migration, carried-forward outputs).
+  \item \textbf{Residual disagreement under controlled equivalence} --- all
+        controllable layers are matched and a gap remains. This is the only
+        category analogous to conventional repeatability failure.
+  \item \textbf{Historically non-identifiable reproduction} --- surviving
+        evidence does not uniquely specify what execution should count as
+        faithful. Qualitatively different from (5): not ``it failed to repeat''
+        but ``what would count as a faithful execution is underdetermined.''
+\end{enumerate}
+The two axes are independent: any target can fail for any cause, and it is their
+combination, not either alone, that describes an outcome. We deliberately avoid
+the phrase ``true reproducibility failure'' whenever execution provenance is
+incomplete; categories (1)--(4) are usually recoverable by controlling the
+substrate, and (6) is a first-class result, not a gap to be closed.
 
 \subsection{Per-parameter identifiability}
 \label{sec:identifiability}
