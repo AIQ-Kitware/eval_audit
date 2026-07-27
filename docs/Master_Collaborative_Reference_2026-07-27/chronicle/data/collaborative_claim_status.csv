@@ -1,0 +1,10 @@
+claim,status,evidence,required_language_or_action
+EEE and follow-on are distinct,established,EEE source predates internship; TMLR skeleton existed May 14,Use detect -> attribute/close/identify positioning
+Float32 OLMo finding,preliminary,12-instance IFEval deployment-match probe; conditional loader inference,Do not call end-to-end reproduction
+Historical OLMo dtype,conditional-most-likely,HuggingFaceClient + no torch_dtype + bounded Transformers 4.x default,Exact package environment absent
+Dense OLMo-2 HF divergence,unresolved-result,Prompt tokens match; current HF differs while vLLM fp32 best matches sample,Study engine/package/kernel/decode axes
+RedPajama both-era execution,local-only,July 14 journal references intact runs/report refresh; slide says E2E works,/data reports excluded; archive and hash
+Classic origin instrument,non-identifiable,Migrated class paths resolve in no released HELM; source interval inferred,Use later eras as declared proxies
+Qwen complete grid,unresolved,Workflow implemented; final fresh exact-path artifacts not packaged,Use only after regeneration
+Position/systems paper readiness,ready,"Conceptual framework, system, forensic cases, provenance standard",Scope claims carefully
+Broad empirical paper readiness,not-ready,"Needs denominator, fresh stores, confirm, held-out, ablations, repeatability",Post-internship or focused remaining sprint

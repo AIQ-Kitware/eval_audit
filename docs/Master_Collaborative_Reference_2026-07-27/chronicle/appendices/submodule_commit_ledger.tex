@@ -1,0 +1,55 @@
+\chapter{Submodule contribution ledger}\label{app:submodule-ledger}
+\small
+This appendix records Edward-authored commits in the included submodule histories during the internship window. Merge commits can have zero numstat even when they integrated substantial branch work.
+\section*{\path{aiq-magnet} (3 commits)}
+\begin{longtable}{@{}p{0.09\textwidth}p{0.10\textwidth}p{0.57\textwidth}r r@{}}
+\toprule Date & Hash & Subject & + & - \\ \midrule\endhead
+2026-05-29 & \texttt{762ca6b5} & Make run matching more robust & 129 & 13 \\
+2026-06-25 & \texttt{4b10e1ba} & helm: add materialize\_helm\_run\_from\_spec (faithful run\_spec.json replay) & 931 & 0 \\
+2026-06-25 & \texttt{50489f0a} & from-spec: optional --model-deployment rewrite (record the local endpoint) & 208 & 25 \\
+\bottomrule\end{longtable}
+\section*{\path{cmd_queue} (1 commits)}
+\begin{longtable}{@{}p{0.09\textwidth}p{0.10\textwidth}p{0.57\textwidth}r r@{}}
+\toprule Date & Hash & Subject & + & - \\ \midrule\endhead
+2026-06-23 & \texttt{0cb1ac21} & Add first-class job setup/teardown lifecycle & 107 & 4 \\
+\bottomrule\end{longtable}
+\section*{\path{infer_stack} (30 commits)}
+\begin{longtable}{@{}p{0.09\textwidth}p{0.10\textwidth}p{0.57\textwidth}r r@{}}
+\toprule Date & Hash & Subject & + & - \\ \midrule\endhead
+2026-05-20 & \texttt{328cd1c4} & Add plan for lora implementation & 151 & 0 \\
+2026-05-20 & \texttt{6af064a0} & Merge pull request \#2 from AIQ-Kitware/lora\_branch & 151 & 0 \\
+2026-05-27 & \texttt{538e4c5c} & Expose ports in the .env file & 32 & 5 \\
+2026-06-23 & \texttt{8150e331} & Fix TUI resize bug and collapse serve and acquire + other stuff & 209 & 175 \\
+2026-06-23 & \texttt{79902140} & Add admission queue to acquire (wait\_for\_placement / --queue) & 223 & 3 \\
+2026-06-23 & \texttt{55c39a78} & Add `infer-stack gc` to reclaim leaked leases and free GPUs & 145 & 1 \\
+2026-06-23 & \texttt{156f6bb7} & Render LiteLLM with a static superset route table (no-blip gateway) & 230 & 24 \\
+2026-06-23 & \texttt{af4d1d6e} & Merge feature/litellm-no-blip into the leasing pipeline lifecycle & 230 & 24 \\
+2026-06-23 & \texttt{bfb7dbe7} & Merge feature/leasing-and-no-blip into dev/leasing-controller & 597 & 27 \\
+2026-06-23 & \texttt{cfddfac0} & Merge dev/leasing-controller: pipeline leasing lifecycle + no-blip gateway & 22700 & 12364 \\
+2026-06-24 & \texttt{4381731e} & leasing: tolerate configs without a 'catalog' field in \_load\_catalog & 6 & 2 \\
+2026-06-24 & \texttt{995f45e1} & Merge dev/lease-polish: leasing/e2e polish + compose-backend catalog fallback & 524 & 34 \\
+2026-06-25 & \texttt{0cde11d5} & Merge dev/lease-polish: protocol-aware generation-gated readiness + --catalog routing for release/gc/evict & 226 & 49 \\
+2026-06-25 & \texttt{933c3f2c} & gitignore: ignore setuptools build/ output dir & 1 & 0 \\
+2026-06-29 & \texttt{045536cb} & Merge dev/lease-polish: host-port churn fix, reconcile locking, dynamic routing & 2708 & 162 \\
+2026-06-30 & \texttt{e2f51fdb} & Merge remote-tracking branch 'origin/dev/lease-polish' into infer-stack-cli-api-migration & 375 & 71 \\
+2026-06-30 & \texttt{104d4254} & leasing: release lease when a not-ready acquire times out & 178 & 10 \\
+2026-06-30 & \texttt{beb1cc66} & fix(leasing): refuse to mutate without a real cross-process lock; group-write new lock files & 300 & 16 \\
+2026-06-30 & \texttt{7fa342dd} & fix(tui): preserve scroll offset when a table rebuilds on poll & 88 & 5 \\
+2026-07-01 & \texttt{caa67503} & fix(tui): require a double-click to acquire an endpoint & 180 & 16 \\
+2026-07-07 & \texttt{6c586568} & feat(leasing): attention\_backend endpoint option (VLLM\_ATTENTION\_BACKEND) & 101 & 2 \\
+2026-07-07 & \texttt{d685573c} & feat(tui): API tab respects endpoint completions vs chat protocol & 122 & 16 \\
+2026-07-07 & \texttt{7f5fafed} & fix(tui): handle string-form reclaim spec in endpoint edit screen & 5 & 1 \\
+2026-07-08 & \texttt{e5fba7b5} & feat(leasing): reserve-only GPU lease (acquire --reserve-gpus N) & 339 & 14 \\
+2026-07-08 & \texttt{1109b0f0} & test(leasing): e2e probe for the reserved-GPU index-frame assumption & 150 & 0 \\
+2026-07-08 & \texttt{c119a62e} & docs(changelog): note the reserve-only GPU lease (--reserve-gpus) & 17 & 0 \\
+2026-07-13 & \texttt{2d832b61} & feat(leasing): append-only LiteLLM route registry (static-superset) & 783 & 37 \\
+2026-07-13 & \texttt{869080bc} & feat(cli): `infer-stack routes` group + route-registry docs & 522 & 18 \\
+2026-07-13 & \texttt{c005a887} & fix(tui): surface HTTP error bodies in the API tab & 63 & 2 \\
+2026-07-13 & \texttt{22d94317} & Merge feat/litellm-route-registry into infer-stack-cli-api-migration & 1368 & 57 \\
+\bottomrule\end{longtable}
+\section*{\path{kwdagger} (1 commits)}
+\begin{longtable}{@{}p{0.09\textwidth}p{0.10\textwidth}p{0.57\textwidth}r r@{}}
+\toprule Date & Hash & Subject & + & - \\ \midrule\endhead
+2026-06-23 & \texttt{ce246bae} & Add ProcessNode setup/teardown resource lifecycle & 150 & 0 \\
+\bottomrule\end{longtable}
+\normalsize

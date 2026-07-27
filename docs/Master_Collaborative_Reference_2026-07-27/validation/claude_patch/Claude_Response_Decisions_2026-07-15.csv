@@ -1,0 +1,24 @@
+point,part,ruling,basis,proposed_action
+Commit 86ec84af verifiability,A1,resolved-verified,Current HEAD of impl/run-from-run-spec; contains Appendix D and fp32 callout; archive predated it,Move status Unresolved -> Verified (post-archive commit)
+Data stores existence,A2,resolved-exist,olmo-models-combined + gpt-oss-20b-from-spec + era-redpajama(both eras) present on /data (excluded from your archive),Replace single not-packaged label with three-way status
+GPT-OSS store freshness,A2,fresh-unpackaged,Reports regenerated Jul 14 13:47 after the drift-plot fix commits; numbers are current-code,Do not hedge as possibly-stale; copy+hash only
+OLMo store staleness,A2,stale-must-regenerate,On-disk headline still shows un-deduped olmo-7b MMLU 0.295/0.144 GSM 0.036/0.018 narrative_qa 0.597/0.311; fix 93849b09 in HEAD but store not regenerated,Regenerate before citing OLMo base-model numbers (your caution vindicated)
+RedPajama both-era,A2,locally-supported,v0.2.4 + v0.3.0 full+smoke present Jul 12 with container_provenance + helm output,Record present pending-hash
+Qwen store,A2,genuinely-absent,No qwen-combined/qwen-models store on /data,Correct to treat as pending
+59% classic-track figure,A3,sourced,docs/container-execution.md:146 and dev/journals/claude.md:629,Add citation so figure is not bare
+Deployment-match scope,A3,confirmed,ifeval-only across all 4 OLMo instruct HF+vLLM overnight 2026-07-08; table numbers match stored sweeps,No change; add provenance pointer
+OLMo-2 HF divergence framing,B1,over-correction,Candidate-cause list omits probe/harness-misconfig-on-dense hypothesis,Keep probe-artifact-on-dense as a live cause until ruled out
+apparently-HF-produced wording,B2,tighten,OLMo-2 officials are recorded as HuggingFaceClient deployments (basis of dtype argument),Change to recorded as a HuggingFaceClient deployment
+two-orders-of-magnitude claim,B3,numerically-loose,Actual ratio ~25-35x (~1.5 orders) not ~100x; sq err 4e-4 vs 1-1.6e-2,Change to more than an order of magnitude (~30x); already fixed in committed chronology 63472287
+Overlapping claim ledgers,B4,consolidate,Five overlapping status tables will drift,Designate one CSV as canonical; prose tables cite it
+Validation-of-Claude Chapter 1,B5,editorial,Vendor-named collaboration meta at front of an authoritative reference,Demote to appendix; neutralize to two independent reconstructions
+Packaging/compile integrity,B6,defect,Master .tex \input's two absent ledger files; README describes a directory tree the flat zip lacks,Ship referenced files or guard the \input and align README
+System-identification thesis,C,endorsed,,No change
+fp32 discovery + conditional deductive leg,C,endorsed,,No change
+Six-category taxonomy,C,endorsed,,No change
+Recoverable-vs-non-identifiable spine,C,endorsed,,No change
+Per-parameter identifiability map,C,endorsed,,No change
+Confirm-step protocol + held-out separation,C,endorsed,,No change
+Hybrid position/systems paper scope,C,endorsed,,No change
+Provenance recommendation + preservation checklist,C,endorsed,,No change
+Evidence-precedence principle,C,endorsed,Part A additions respect it (artifacts supplied hashable on request),No change

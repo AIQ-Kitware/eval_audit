@@ -1,0 +1,1140 @@
+\documentclass[11pt,oneside]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[letterpaper,margin=0.82in,headheight=14pt]{geometry}
+\usepackage{microtype}
+\usepackage{setspace}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{listings}
+\usepackage{url}
+\usepackage{seqsplit}
+\usepackage{xspace}
+\usepackage[hidelinks,bookmarksopen=true,bookmarksnumbered=true]{hyperref}
+\usepackage{cleveref}
+
+\definecolor{kitblue}{RGB}{28,74,110}
+\definecolor{kitgray}{RGB}{90,96,102}
+\definecolor{lightgray}{RGB}{245,246,247}
+\definecolor{established}{RGB}{27,105,65}
+\definecolor{implemented}{RGB}{25,75,135}
+\definecolor{preliminary}{RGB}{148,91,0}
+\definecolor{unresolved}{RGB}{140,40,40}
+
+\hypersetup{
+  pdftitle={Reproducing HELM in Practice: An Internship Technical Chronicle},
+  pdfauthor={Edward Wang},
+  pdfsubject={HELM benchmark reproduction, execution provenance, identifiability, audit tooling, and paper strategy},
+  pdfkeywords={HELM, reproducibility, benchmark auditing, vLLM, Hugging Face, OLMo, Kitware}
+}
+
+\setstretch{1.04}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlist[itemize]{leftmargin=1.4em,itemsep=2pt,topsep=3pt}
+\setlist[enumerate]{leftmargin=1.6em,itemsep=2pt,topsep=3pt}
+\renewcommand{\arraystretch}{1.14}
+\setlength{\emergencystretch}{3em}
+\Urlmuskip=0mu plus 1mu
+
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries\color{kitblue}}
+  {\filleft\Large\color{kitgray}\chaptertitlename\ \thechapter}
+  {0.5ex}
+  {\titlerule\vspace{1.1ex}\filright}
+\titleformat{\section}{\Large\bfseries\color{kitblue}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\large\bfseries\color{kitgray}}{\thesubsection}{0.7em}{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Reproducing HELM in Practice}
+\fancyhead[R]{\small Edward Wang --- Kitware Internship 2026}
+\fancyfoot[C]{\thepage}
+
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\hash}[1]{{\ttfamily\footnotesize\seqsplit{#1}}}
+\newcommand{\statusEstablished}{\textcolor{established}{\textbf{Established}}\xspace}
+\newcommand{\statusImplemented}{\textcolor{implemented}{\textbf{Implemented / structurally validated}}\xspace}
+\newcommand{\statusPreliminary}{\textcolor{preliminary}{\textbf{Preliminary}}\xspace}
+\newcommand{\statusUnresolved}{\textcolor{unresolved}{\textbf{Unresolved}}\xspace}
+\newcommand{\evmark}[1]{\allowbreak\textsuperscript{\scriptsize\textnormal{[#1]}}}
+\newcommand{\slideref}[2]{\evmark{S:#1/#2}}
+\newcommand{\docref}[1]{\evmark{D:#1}}
+\newcommand{\gitref}[1]{\evmark{G:#1}}
+\newcommand{\journalref}[1]{\evmark{J:#1}}
+\newcommand{\evidencebox}[2]{%
+  \begin{center}\fcolorbox{kitgray}{lightgray}{\begin{minipage}{0.93\textwidth}
+  \textbf{#1}\quad #2
+  \end{minipage}}\end{center}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\begin{document}
+\pagenumbering{gobble}
+
+\begin{titlepage}
+\centering
+\vspace*{0.8in}
+{\Huge\bfseries\color{kitblue} Reproducing HELM in Practice\par}
+\vspace{0.25in}
+{\LARGE An Internship Technical Chronicle and Evidence Record\par}
+\vspace{0.15in}
+{\Large May 15--July 14, 2026\par}
+\vspace{0.65in}
+{\Large\bfseries Edward Wang\par}
+{\large \href{mailto:edward.wang@kitware.com}{edward.wang@kitware.com}\par}
+\vspace{0.1in}
+{\large Kitware Internship\par}
+\vfill
+\begin{minipage}{0.82\textwidth}
+\small
+\textbf{Evidence cutoff.} This report reconstructs work from the supplied repository snapshot at commit
+\hash{b8b858697e7c2491af163c8f5d757fe6ae6f3c1a} and seven status-update slide decks through July 14, 2026.
+It is intended as an authoritative internal source for later academic writing, but it deliberately marks where evidence is complete, where only implementation or preflight validation exists, and where GPU-scale experiments remained pending at the cutoff. A July 15 interpretive revision adds the pre-existing EEE/TMLR paper lineage, downgrades the OLMo float32 result to probe-level evidence pending ordinary-HELM confirmation, and records the recommended short-horizon paper scope.
+\end{minipage}
+\par\vspace{0.35in}
+{\small Original compilation: July 14, 2026. Revised: July 15, 2026.\par}
+\end{titlepage}
+
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+
+\chapter*{Executive summary}
+\addcontentsline{toc}{chapter}{Executive summary}
+
+Edward Wang began the internship on May 15, 2026 with an apparently straightforward objective: reproduce a large, open subset of Stanford CRFM's HELM benchmark corpus at scale. The work quickly demonstrated that benchmark reproduction is not merely a matter of re-running a benchmark recipe. It is a problem of reconstructing a partially observed measurement process.
+
+The public HELM artifacts generally record a benchmark recipe and a logical model/deployment name. They often do not record the exact model revision, load precision, package versions, attention kernel, hardware topology, chat-template revision, tokenizer behavior, generation defaults, or the operational details of an external provider deployment. As a result, a local run can faithfully replay the visible recipe and still disagree because it is executing a different numerical or textual instrument. Conversely, a disagreement does not by itself establish that the published benchmark is irreproducible: the local reconstruction may still be missing an unrecorded detail.
+
+During the internship, the project therefore changed from ``run a large grid'' into a layered reproducibility audit program:
+
+\begin{enumerate}
+  \item construct a dependable end-to-end audit loop spanning model serving, exact HELM execution, artifact aggregation, indexing, comparison, and reporting;
+  \item inventory the public corpus and define a tractable, open-model/open-metric scope;
+  \item replay public \code{run_spec.json} artifacts rather than regenerating recipes from underspecified run-entry strings;
+  \item isolate execution environments with mandatory containers and, for old suites, era-pinned HELM images;
+  \item build deployment-match sweeps to search unrecorded parameters rather than guessing one local deployment;
+  \item distinguish recipe drift, deployment drift, measurement-instrument drift, data/access failures, and reporting limitations;
+  \item improve aggregate diagnostics so failed coverage and score disagreement can be interpreted without collapsing all causes into one number.
+\end{enumerate}
+
+The clearest modern case study was OLMo. Early local runs exposed several independent sources of disagreement: an OLMo-7B tokenizer path appended an unwanted \code{<|endoftext|>} token; BBQ public and local prompts differed because an output-format instruction was omitted; IFEval changed with chat-template behavior and \code{add_generation_prompt}; and the public OLMo instruct deployments did not pin \code{torch_dtype}. A 12-instance IFEval deployment-match probe found its highest-agreement OLMoE candidate under Hugging Face float32 and its highest-agreement dense OLMo-2 candidates under vLLM float32. This is strong diagnostic evidence that precision and serving path matter, but it is not yet an ordinary end-to-end HELM reproduction: the probe may use request-time behavior such as \code{add_special_tokens=False} that must be implemented natively in the HELM client/tokenizer path before the candidate can be confirmed. The unresolved Hugging Face OLMo-2 divergence should therefore be treated as a scientifically relevant stack-sensitivity result, not dismissed as a broken probe.
+
+The historical replay work reached an even stronger negative result. For original-paper classic models such as GPT-J 6B, GPT-NeoX 20B, and OPT-66B, public artifacts had been carried forward across suite snapshots, and stored class paths were a migrated hybrid that resolved in no released HELM version. Repository archaeology found that the surviving class-path shapes are consistent only with an unreleased pre-v0.1.0 source interval between July 31 and August 26, 2022, under the documented migration interpretation; this is a source-compatibility inference, not a directly observed execution date. The internship therefore implemented a declared best-effort era shim and later-era proxy instruments rather than falsely claiming exact origin reconstruction.
+
+At the July 14 cutoff, the repository contained 452 commits authored by Edward in the main repository over 26 active days, plus 35 Edward-authored commits in the included \code{aiq-magnet}, \code{infer_stack}, \code{cmd_queue}, and \code{kwdagger} histories. The main-repository numstat totals were 93,864 insertions and 48,784 deletions; these are change-volume indicators, not net authored lines, because the work included large refactors, generated material, fixtures, and moves. The resulting system supported exact-path bundle freezing, containerized replay, GPU lease lifecycle management, deployment-match sweeps, era-pinned execution, and richer score-drift/coverage reporting. Several large OLMo, Qwen, GPT-OSS, and classic-model runbooks were wired and CPU/preflight validated, but their exact execution state must be reconciled against fresh run stores: the committed runbooks still described complete GPU acceptance as pending, while later slides and live-store review suggested partial or stale results existed. No publication number should be retained without regeneration through the current reporting pipeline.
+
+\evidencebox{Central conclusion}{The internship produced evidence that benchmark reproducibility should be analyzed as a four-layer problem: \emph{recipe}, \emph{deployment}, \emph{measurement instrument}, and \emph{artifact/report interpretation}. A public recipe is necessary evidence, but not sufficient provenance.}
+
+\chapter*{How to read this record}
+\addcontentsline{toc}{chapter}{How to read this record}
+
+This document is organized as a sequence of technical reports that can also stand alone as blog posts. Each report explains the problem encountered, the implementation response, the empirical evidence, and the limitations that remained at that date. The chronology is followed by synthesis chapters designed to support an academic paper.
+
+Four status labels are used throughout:
+
+\begin{longtable}{@{}P{0.20\textwidth}P{0.72\textwidth}@{}}
+\toprule
+Label & Meaning \\
+\midrule
+\statusEstablished & Supported by executed comparisons, inspected public artifacts, or multiple mutually consistent evidence sources. \\
+\statusImplemented & Code, tests, manifests, preflights, or CPU-side validation exist, but the complete target GPU experiment had not necessarily executed. \\
+\statusPreliminary & A limited-sample result or exploratory experiment that should not be elevated to a final paper claim without replication. \\
+\statusUnresolved & Evidence identifies a live ambiguity, missing provenance field, environmental blocker, or experiment that had not completed. \\
+\bottomrule
+\end{longtable}
+
+Evidence markers point into the source inventory in \cref{app:source-inventory}. Slide markers use deck IDs such as \code{S:0602/10}; document markers use stable repository paths or short IDs; Git markers identify commits or commit ranges; journal markers identify dated entries. The report does not treat the pre-internship research journal as Edward-authored internship work. It is used only as inherited project context.
+
+\clearpage
+\pagenumbering{arabic}
+
+\chapter{Evidence, attribution, and reconstruction method}
+
+\section{Source corpus}
+
+The reconstruction used four evidence classes:
+
+\begin{enumerate}
+  \item Seven weekly PowerPoint decks dated June 2, June 9, June 16, June 23, June 30, July 8, and July 14. These provide the clearest contemporaneous narrative and numerical snapshots.
+  \item The full Git history included in the supplied \code{eval_audit} snapshot, including main-repository and submodule commits authored as \code{Edward Wang <edward.wang@kitware.com>}.
+  \item Developer journals, plans, runbooks, tests, and research notes. These provide implementation rationale, experiment details, and explicit statements of what was or was not run.
+  \item Repository code and generated configurations, used to verify that described interfaces, manifests, clients, report fallbacks, and era machinery existed at the cutoff.
+\end{enumerate}
+
+The repository archive SHA-256 is \hash{625af81fde8d0fbb2e8f8eba0ff423e5f3a317a019e93cfa9211540102223923}; the slide archive SHA-256 is \hash{4ac2f99ef80abeac306b13a938a178c1fa898bd1c2c7482692074cd1933b3509}. Individual deck hashes are recorded in \cref{app:source-inventory}.
+
+\section{Attribution rules}
+
+The project repository predates the internship. Accordingly, this report applies conservative attribution rules:
+
+\begin{itemize}
+  \item Work is attributed directly to Edward when it is described in the internship slides or appears in commits authored with Edward's Kitware identity.
+  \item Developer-journal text is treated as an implementation record, not automatically as authorship evidence. A journal-described change is counted as internship work only when it aligns with Edward-authored commits or his slides.
+  \item Documentation created before May 15 is inherited context. In particular, the pre-internship research journal
+at \path{docs/helm-reproduction-research-journal.md} begins in March 2026 and is not presented as Edward's internship output.
+  \item Merge commits and large numstat values are not interpreted as line-by-line sole authorship. They show integration and project change volume.
+  \item A runbook being present does not imply its full experiment completed. Status sections, journals, and slides are used to distinguish wired/preflight-validated workflows from executed GPU grids.
+\end{itemize}
+
+
+\section{Relationship to the inherited EEE paper and the TMLR draft}
+
+A post-chronology repository review established that the project contains two distinct paper lines. The NeurIPS \emph{Every Eval Ever} (EEE) Case Study~3 evaluates Pythia-6.9B, Vicuna-7B-v1.3, and Falcon-7B across fourteen HELM benchmarks and uses normalized artifacts to detect non-comparability and residual disagreement. Its appendix explicitly states that the available evidence cannot separate checkpoint, quantization, precision, tokenizer, or generation-kernel effects.\docref{eee-case}\docref{eee-appendix}
+
+A separate TMLR skeleton, created before the internship on May 14, 2026, proposes a broader study of open-weight HELM reproducibility but contains only section placeholders.\docref{tmlr-skeleton} The scientifically clean relationship is therefore:
+
+\begin{quote}
+EEE detects reproducibility gaps; the internship follow-on studies their attribution, possible closure, and identifiability.
+\end{quote}
+
+The EEE three-model slim study is inherited context and should not be re-presented as a new internship result. The internship's distinct contributions are exact-spec replay, execution-substrate reconstruction, deployment-match diagnostics, era-pinned instruments, failure classification, and the design of EvalAudit as an auditable evaluation system. Final authorship, venue, and ownership of the TMLR draft remain research-team decisions rather than conclusions inferred from repository history.
+
+\section{Chronological uncertainty}
+
+No dated artifact in the supplied snapshot describes May 15--19 beyond the user-provided start date. The earliest Edward-authored Git evidence is a May 20 \code{infer_stack} LoRA plan. The first weekly deck, dated June 2 and labeled as a June 1 status update, retrospectively documents the first two weeks. Consequently, the opening chronology is accurate at phase level but not day-by-day granularity.
+
+\section{Evidence precedence and important corrections}
+
+When sources conflict, this report gives precedence to later, more granular records that include experiment tables, code-backed diagnoses, and explicit status statements. Two corrections are especially important.
+
+First, the July 14 slide's shorthand that ``fp16 + previous prompt toggle'' produced high OLMo IFEval matches is superseded by the July 10 journal and deployment-provenance records, which identify float32 candidate cells as the highest-agreement cells in the inspected 12-instance sweep.\slideref{0714}{6}\journalref{2026-07-10-fp32}\docref{unrecorded-deployment}\docref{deployment-match}
+
+Second, those cells are deployment-match probes, not completed HELM reproductions. The confirmation implementation explicitly requires a complete local from-spec HELM run followed by the normal pair-report pipeline. It also warns that a winner using request-time \code{add_special_tokens=False} cannot be reproduced by an ordinary HELM request unless that behavior is landed through a tokenizer override or client change.\docref{confirm-path} Consequently, this revision marks the float32 result as \statusPreliminary and treats ordinary-path confirmation as the first blocking experiment for a technical paper.
+
+\chapter{Technical Report I: Building a trustworthy end-to-end audit loop}
+\label{ch:e2e}
+
+\section{Period and objective}
+
+\textbf{Period:} May 15--June 4, 2026.
+
+The initial engineering objective was to make a small reproduction traverse the entire audit stack reliably before attempting a large public-corpus grid. The first status deck described a six-stage workflow:
+
+\begin{enumerate}
+  \item start a vLLM server with a target model;
+  \item write a benchmark bundle;
+  \item execute HELM runs against the server;
+  \item aggregate run artifacts;
+  \item index run artifacts;
+  \item build a comparative analysis.
+\end{enumerate}
+
+The path crossed \code{infer_stack}, vLLM, LiteLLM, Docker Compose, \code{eval_audit}, \code{aiq-magnet}, \code{kwdagger}, and \code{cmd_queue}.\slideref{0602}{4} This made the first task less about benchmark science than about constructing a verifiable integration test across multiple repositories and process boundaries.
+
+\section{The phi-2/MMLU philosophy test matrix}
+
+The first end-to-end example used \code{microsoft/phi-2} on MMLU philosophy with three conditions:\slideref{0602}{5}
+
+\begin{longtable}{@{}P{0.25\textwidth}P{0.25\textwidth}P{0.38\textwidth}@{}}
+\toprule
+Condition & Deployment & Intended interpretation \\
+\midrule
+Hugging Face baseline & Local Hugging Face, temperature 0 & A local reference using HELM's Hugging Face path. \\
+vLLM comparable & Local vLLM, temperature 0 & A deployment change with nominally comparable sampling. \\
+vLLM intentionally incomparable & Local vLLM, temperature 1 & A negative control that should be classified as recipe-incomparable rather than silently compared. \\
+\bottomrule
+\end{longtable}
+
+This matrix established an important design principle: the audit system should not merely report numerical disagreement; it should explain whether the two artifacts were eligible for comparison in the first place.
+
+\section{Three early metadata failures}
+
+The first end-to-end pass exposed three concrete failures in the assumed metadata contract.\slideref{0602}{10}
+
+\subsection{Hard-coded serving ports}
+
+\code{infer_stack} used ports internally but did not expose the selected ports in a form that HELM could consume. Edward's May 27 submodule commit exposed ports through the shared \code{.env} source of truth.\gitref{infer-stack:538e4c5c} This was a small change with broad architectural significance: the model server, gateway, and benchmark runner needed a shared, queryable endpoint contract rather than duplicated configuration.
+
+\subsection{Semantically irrelevant \code{groups=} tokens blocked matching}
+
+Public HELM run names could contain a \code{groups=} token that did not affect execution but caused a locally generated equivalent name to fail lookup. The matching logic was changed to ignore the token for equivalence while warning that normalization occurred. This work appears in Edward's May 29 \code{aiq-magnet} commit ``Make run matching more robust'' and the June 3 main-repository adapter/matching commit.\gitref{aiq-magnet:762ca6b5}\gitref{ca46b11e}
+
+\subsection{Temperature disappeared from the public directory name}
+
+HELM could omit \code{temperature} from a directory/run name even though it remained in \code{run_spec.json}. A directory-name-only matcher could therefore pair an intentionally temperature-1 local run with a temperature-0 public artifact. The fix was to inspect the public \code{run_spec.json} before asserting comparability. This was the first direct demonstration that the filesystem key is an index, not an authoritative recipe description.
+
+\section{Deliverables}
+
+By June 4, the main repository had an adapter configuration, improved matching logic, and explicit end-to-end tests.\gitref{ca46b11e}\gitref{ed9e40ed} The immediate output was not a large benchmark result; it was a regression harness for the entire audit path.
+
+\textbf{Status:} \statusEstablished. The tests and matching fixes are directly documented in slides and commits.
+
+\section{Parallel literature review}
+
+The opening weeks also explored research directions beyond direct reproduction. The June 2 deck reviewed:
+
+\begin{itemize}
+  \item representations of LoRA updates and the non-identifiability induced by the \(GL\) group action;
+  \item W2T, which canonicalizes LoRA weights using SVD and embeds them for attribute prediction, performance prediction, and adapter retrieval;
+  \item efficient benchmarking as feature selection followed by regression;
+  \item potential adaptive benchmarking, Bayesian regression, Gaussian processes, IRT, early stopping, and hybrid feature/model-centric methods.
+\end{itemize}
+
+\slideref{0602}{13}\slideref{0602}{14}\slideref{0602}{16}\slideref{0602}{17}\slideref{0602}{18}
+
+A May 20 \code{infer_stack} LoRA implementation plan and merge are the earliest Edward-authored Git records in the supplied histories.\gitref{infer-stack:328cd1c4}\gitref{infer-stack:6af064a0} This literature thread later became the efficient-benchmarking experiment stream described in \cref{ch:scope}.
+
+\chapter{Technical Report II: Scoping the public corpus and testing efficient benchmarking}
+\label{ch:scope}
+
+\section{Period and motivation}
+
+\textbf{Period:} June 5--16, 2026.
+
+Once a small audit path existed, the next question was how much of public HELM was actually reproducible under open-access constraints. Edward wrote a crawler that walked HELM run directories and extracted model access, parameter counts, scenario metadata, closed-judge requirements, and filtering reasons into a structured inventory.\slideref{0609}{4}
+
+\section{Public-corpus inventory}
+
+The June 9 snapshot reported:\slideref{0609}{5}\slideref{0609}{6}\slideref{0609}{7}
+
+\begin{longtable}{@{}P{0.46\textwidth}r@{}}
+\toprule
+Quantity & Count \\
+\midrule
+Total discovered runs & 34,512 \\
+Structurally incomplete runs & 14 \\
+Eligible-model but out-of-scope records & 5 \\
+Selected runs after then-current filtering & 1,109 \\
+Runs using open-access models & 12,823 \\
+Runs using limited-access models & 18,273 \\
+Runs using closed models & 508 \\
+Runs with no classified access value & 2,894 \\
+Runs with parameter-count metadata & 13,979 \\
+Runs requiring a closed judge & 484 \\
+Runs filtered solely because of a closed judge & 25 \\
+\bottomrule
+\end{longtable}
+
+The full model--scenario cross-product was 366 models by 215 scenarios, or 78,690 theoretical cells, but only 6,844 cells were populated. The filtered open scope was 33 models by 61 scenarios, or 2,013 theoretical cells, with 198 populated cells.\slideref{0609}{8} This sparsity was not necessarily a defect because many model/scenario pairs were not meaningful, but it invalidated the idea that public HELM was a dense benchmark matrix that could simply be re-executed.
+
+\section{Implications for experimental design}
+
+The corpus audit introduced three distinctions that became central later:
+
+\begin{enumerate}
+  \item \textbf{Discoverable versus structurally usable.} A directory can exist without the artifacts needed for replay or comparison.
+  \item \textbf{Open model versus open evaluation.} An open-weight model can still be paired with a closed or credentialed judge, gated data, or unavailable external service.
+  \item \textbf{Logical grid versus observed corpus.} The public corpus is a sparse historical record, not a balanced factorial design.
+\end{enumerate}
+
+These distinctions led to explicit filter inventories and later report-level accounting of unpaired official rows. A filtered row should be labeled as an access/recipe limitation, not counted as a reproduction failure.
+
+\section{Repository normalization and comparison-core work}
+
+June 11--12 contained the highest-concentration refactor in the early internship. Edward authored 47 main-repository commits over those two days. The work reorganized report generation, indexing, diff primitives, metric handling, filtering analysis, instance statistics, and EEE-only synthesis; then introduced a unified \code{NormalizedDiff} comparison core, recipe facts, judge-dependence taxonomy, instance-source policy, curated judge registry, and declared judge substitutions.\gitref{609e02bb--ac3445ee}
+
+This was not merely code cleanup. It created the conceptual substrate needed for a reproduction program in which comparisons might come from HELM artifacts, Every Eval Ever outputs, aggregate metrics, per-instance records, or declared substitute judges. The refactor made provenance and comparison policy explicit instead of leaving them implicit in renderer-specific code.
+
+\textbf{Status:} \statusImplemented. The code and tests existed; the significance for later reporting is established by subsequent use.
+
+\section{Efficient-benchmarking experiments}
+
+In parallel, Edward reproduced tutorial experiments from the feature-selection/multiple-regression framing and added a DKPS baseline. The June 9 tutorial used ARC-Challenge with 20--60 reference models, 5--15 percent coresets, and methods including mRMR, kernel mRMR, GP/IRT variants, Lasso, random-search-and-learn, random sampling, and anchor-point methods.\slideref{0609}{11}
+
+By June 16 the experiment set included LegalBench, MATH, MedQA, and WMT14, with 20, 30, 40, or 50 reference models and 5, 10, or 15 percent coresets.\slideref{0616}{7} Preliminary observations were:\slideref{0616}{12}
+
+\begin{itemize}
+  \item at roughly 20 reference models and 50 queries, methods from the feature-selection paper appeared to outperform the then-current DKPS baseline;
+  \item DKPS performance improved as the number of source models increased, whereas the comparison methods did not show the same monotone pattern;
+  \item mRMR was extremely slow on continuous-score benchmarks such as WMT14.
+\end{itemize}
+
+The June 23 deck recorded methodological limitations: only three replicates per method/coreset/model-count cell, MedQA one-hot representations could exceed five dimensions because models did not always answer with a valid choice, and one-hot responses exposed less information than text embeddings.\slideref{0623}{6} Proposed follow-ups included more replicates, non-multiple-choice tasks, adaptive selection, ensembles, and criteria that maximize model distinguishability.
+
+\textbf{Status:} \statusPreliminary. The experiments reproduced plots and yielded hypotheses, but the replicate count and representation issues were explicitly insufficient for a paper-level conclusion.
+
+\section{Selection of the OLMo case study}
+
+The first large reproduction target was a six-model OLMo family spanning instruction-tuned and base models. The planned scenario scope was:\slideref{0616}{4}
+
+\begin{longtable}{@{}P{0.38\textwidth}P{0.54\textwidth}@{}}
+\toprule
+Model & Public scenarios targeted \\
+\midrule
+OLMoE-1B-7B-0125-Instruct & BBQ, GPQA, IFEval, MMLU-Pro \\
+OLMo-2-1124-7B-Instruct & BBQ, GPQA, IFEval, MMLU-Pro \\
+OLMo-2-1124-13B-Instruct & BBQ, GPQA, IFEval, MMLU-Pro \\
+OLMo-2-0325-32B-Instruct & BBQ, GPQA, IFEval, MMLU-Pro \\
+OLMo-7B & MMLU (62 subjects), MATH (7), LegalBench (5), WMT14 (5), NaturalQA (2), Commonsense, GSM, MedQA, NarrativeQA \\
+OLMo-1.7-7B & MMLU (57 subjects) \\
+\bottomrule
+\end{longtable}
+
+By June 16, scripts and smoke tests existed, a shared-GPU configuration issue had been fixed, external tokenizer code for OLMo-7B had been handled, and the ``full'' grid had begun. The next planned step was Docker-based materialization.\slideref{0616}{5}
+
+\chapter{Technical Report III: OLMo reveals that the visible recipe is not the deployment}
+\label{ch:olmo-first}
+
+\section{Period and first symptoms}
+
+\textbf{Period:} June 16--23, 2026.
+
+The first OLMo runs immediately showed why a large grid could not be interpreted without deployment diagnostics. A comparison for OLMo-7B/MMLU showed a public request using \code{together/olmo-7b} and a local request using \code{vllm/allenai-olmo-7b}; the public completion began with the answer token while the local completion began with prose.\slideref{0623}{9} At this stage the mismatch could have been caused by model weights, tokenizer behavior, prompt formatting, engine behavior, or provider-specific deployment details. The artifact alone did not identify which.
+
+\section{BBQ prompt mismatch: a recipe-reconstruction failure}
+
+A separate BBQ case had a more direct cause. The public run entry included \path{output_format_instructions=mcqa} and produced a prompt beginning ``Answer with only a single letter.'' The local reconstruction omitted that field and produced a different prompt.\slideref{0623}{10}
+
+This was decisive evidence against reconstructing a benchmark solely from an abbreviated run name. Even when the logical benchmark/model pair matched, omitted adapter fields changed the measured task. The appropriate remedy was to replay the complete serialized \code{run_spec.json}, not continue adding ad hoc name normalizations.
+
+\section{Operational refactors initiated by the failures}
+
+The June 23 status listed three concurrent responses:\slideref{0623}{11}
+
+\begin{itemize}
+  \item Docker execution worked on the small end-to-end example;
+  \item a new \code{infer_stack} CLI and leasing model had been implemented and was being integrated into the end-to-end path;
+  \item the system was being redesigned from ``run entry to generated spec'' toward ``public run spec to replay.''
+\end{itemize}
+
+June 23 also produced the cross-repository resource-lifecycle changes needed for reliable batch execution. Edward added first-class setup/teardown semantics to \code{cmd_queue} and \code{kwdagger}, and integrated admission queues, lease garbage collection, no-blip LiteLLM route tables, and leasing lifecycle work in \code{infer_stack}.\gitref{cmd-queue:0cb1ac21}\gitref{kwdagger:ce246bae}\gitref{infer-stack:8150e331--cfddfac0}
+
+The rationale was practical: a benchmark job must acquire the right GPU/model endpoint, wait until it can actually generate, run in an isolated container, and release resources even on failure. Without that bracket, a large grid can deadlock, leak GPUs, or route requests to a stale endpoint.
+
+\section{Why the first full-grid strategy stalled}
+
+The early OLMo run demonstrated three categories of blockers:
+
+\begin{enumerate}
+  \item \textbf{Recipe mismatch}, such as missing BBQ output-format instructions.
+  \item \textbf{Deployment mismatch}, such as different serving clients, tokenization, or provider behavior.
+  \item \textbf{Execution-system fragility}, such as shared GPU configuration, endpoint lifecycle, and non-isolated package state.
+\end{enumerate}
+
+At this point, running more cells would have produced more disagreements but not more knowledge. The program therefore shifted to making each cell diagnosable and replayable.
+
+\chapter{Technical Report IV: Exact run-spec replay, mandatory containers, and GPU lifecycle}
+\label{ch:replay}
+
+\section{Period and design pivot}
+
+\textbf{Period:} June 23--July 2, 2026.
+
+The central architectural pivot was to treat the public \code{run_spec.json} as a frozen input artifact. Instead of locating a public run and then rebuilding a nominally equivalent command from a run-entry string, the new path deserialized the public \code{RunSpec}, rewrote only explicitly declared local fields such as \code{model_deployment} or \code{max_eval_instances}, and executed the result.
+
+On June 25, Edward added \code{materialize_helm_run_from_spec} to \code{aiq-magnet} and an optional model-deployment rewrite that recorded the local endpoint.\gitref{aiq-magnet:4b10e1ba}\gitref{aiq-magnet:50489f0a} The main repository then wired exact-path replay into bundle export, materialization, Docker nodes, and end-to-end workflows.\gitref{6234ed39--4cce3c90}
+
+\section{Freeze and execute were separated}
+
+The workflow was deliberately split into two stages:
+
+\begin{enumerate}
+  \item \textbf{Resolve and freeze.} Search the public corpus, require a unique exact source, copy/freeze the referenced \code{run_spec.json}, and write a manifest with content-addressed or exact relative paths.
+  \item \textbf{Materialize and execute.} Run the frozen spec later, potentially on a different GPU host, with only declared deployment or scale overrides.
+\end{enumerate}
+
+This separation had several advantages:
+
+\begin{itemize}
+  \item ambiguity and missing public artifacts failed before GPU allocation;
+  \item the source recipe could be archived and reviewed independently;
+  \item a large fan-out did not repeatedly scan the public corpus;
+  \item changes to public mirrors or matching code could not silently alter an already frozen experiment;
+  \item the local deployment rewrite was explicit evidence that \code{same_deployment=no}, not an attempt to disguise a local endpoint as the original provider.
+\end{itemize}
+
+\section{Mandatory containerization}
+
+By June 30, all HELM runs in the reproduction path were required to execute inside a Docker image.\slideref{0630}{3} This decision followed repeated environment-dependent failures:
+
+\begin{itemize}
+  \item GPQA required gated Hugging Face access, but the token was not reaching the container;
+  \item IFEval required \code{langdetect}, which was absent from the minimal image;
+  \item WMT14 failed under an incompatible Hugging Face Hub version.\slideref{0630}{4}
+\end{itemize}
+
+The planned remedies were to install \code{crfm-helm[all]}, pin \code{huggingface_hub==0.36.2}, mount the Hugging Face token from disk instead of exposing it as plaintext, and keep resolution/freeze separate from execution.\slideref{0630}{7}
+
+These failures are methodologically important. They are not model reproducibility failures. They are environment/access failures that should be surfaced as such in the final report.
+
+\section{Leasing and no-blip routing}
+
+The leasing system evolved in parallel:
+
+\begin{itemize}
+  \item queued acquisition and garbage collection prevented competing runs from racing for GPUs;
+  \item generation-gated readiness distinguished ``process is up'' from ``model can answer'';
+  \item cross-process locking protected shared lease state;
+  \item timeout handling released failed acquisitions;
+  \item a static-superset/append-only LiteLLM route table reduced gateway restarts and route loss;
+  \item reserve-only leases made it possible to run direct Hugging Face probes while still arbitrating GPU ownership.
+\end{itemize}
+
+Representative commits include \code{104d4254}, \code{beb1cc66}, \code{6c586568}, \code{e5fba7b5}, and the July 13 route-registry series \code{2d832b61}--\code{22d94317}.\gitref{infer-stack:104d4254}\gitref{infer-stack:beb1cc66}\gitref{infer-stack:6c586568}\gitref{infer-stack:e5fba7b5}\gitref{infer-stack:2d832b61--22d94317}
+
+\section{What exact replay did and did not solve}
+
+Exact replay solved visible recipe drift: prompts, adapter fields, metric specs, stop sequences, temperature, and other serialized recipe fields no longer depended on a lossy run-entry reconstruction. It did not solve deployment provenance. The serialized spec still named a provider deployment without recording how that deployment loaded or served the model.
+
+\evidencebox{Key distinction}{A frozen \code{run_spec.json} makes the benchmark recipe auditable. It does not make the original model deployment reconstructible.}
+
+\chapter{Technical Report V: Turning hidden deployment provenance into a search problem}
+\label{ch:deployment}
+
+\section{Period and diagnostic strategy}
+
+\textbf{Period:} July 2--10, 2026.
+
+After exact replay was in place, remaining OLMo disagreements were increasingly attributable to deployment details. The project created a deployment-match tool that swept candidate implementations and compared their per-instance outputs against the same public oracle. The objective was not to find any configuration with a similar aggregate score; it was to find a configuration that reproduced tokens or text at high rates while holding the visible recipe fixed.
+
+\section{OLMo-7B special-token failure}
+
+The OLMo-7B local tokenizer appended \code{<|endoftext|>} to the prompt, while the TogetherAI deployment used by the public run did not. HELM did not record this behavior.\slideref{0708}{3} Edward corrected the tokenizer mapping so the OLMo-7B reproduction used the OLMo 1.7 tokenizer behavior and stopped introducing the spurious terminal token.\gitref{74ba33de}
+
+This case is unusually clean: the nominal model identity was the same, but the effective token sequence entering the model differed. It demonstrates why model name and raw prompt text are insufficient provenance; the post-template, post-tokenization input is the true measured stimulus.
+
+\section{Benchmark buckets and controlled axes}
+
+The July 8 deck grouped the OLMo scenarios by chain-of-thought and temperature behavior. BBQ, Commonsense, GSM, IFEval, LegalBench, MedQA, MMLU, and several other tasks were temperature-zero/no-CoT cases; GPQA and MMLU-Pro involved CoT or nonzero temperature behavior.\slideref{0708}{5} This grouping mattered because exact token matching is more plausible and more interpretable for greedy tasks, while sampled/CoT tasks require different agreement criteria and stronger seed/decode provenance.
+
+\section{IFEval and chat-template drift}
+
+For OLMoE IFEval, public and local prompts were logically the same and answers were often semantically similar, but text was not identical. The sweep found that \code{add_generation_prompt=False} was necessary. Historic HELM used an older Transformers version in which this option was absent, making chat-template/version drift a plausible cause. The best then-current deployment matched the first token on 11 of 12 inspected instances, but only 2 of 12 met the stricter quasi-match criterion.\slideref{0708}{6}
+
+\textbf{Status at July 8:} \statusPreliminary. This narrowed the cause but did not yet establish full reproduction.
+
+\section{The provenance taxonomy}
+
+The repository note \path{docs/helm-unrecorded-deployment-params.md} formalized the missing substrate.\docref{unrecorded-deployment} The principal unrecorded variables were:
+
+\begin{longtable}{@{}P{0.21\textwidth}P{0.34\textwidth}P{0.35\textwidth}@{}}
+\toprule
+Tier & Variables & Why they matter \\
+\midrule
+Weights/graph & model revision, dtype, quantization, Transformers/PyTorch/tokenizers/engine versions & Can change weights, default precision, graph, templates, or generation behavior. \\
+Numerics & attention implementation, TF32/reduction flags, GPU hardware, device map, tensor parallelism, batch composition & Can change logits and greedy argmax even at nominal temperature zero. \\
+Prompt/scored text & tokenizer revision, chat template, \code{add_generation_prompt}, BOS/special-token policy, generation config, stop/detokenization semantics, truncation & Can change the actual tokenized stimulus or the text passed to the metric. \\
+Sampling & RNG seed, sampling implementation, cache dtype & Dominant for temperature-positive and stochastic tasks. \\
+\bottomrule
+\end{longtable}
+
+The note counted 148 Hugging Face client deployments in HELM's deployment file, of which only 19 pinned \code{torch_dtype} and 7 pinned a model revision.\docref{unrecorded-deployment} The implication is not that all remaining runs are wrong, but that many are not uniquely reconstructible from the public artifact.
+
+\section{Preliminary OLMo deployment-match precision result}
+
+The July 10 overnight analysis produced the internship's strongest controlled \emph{deployment-matching} result. Public OLMo instruct runs used Hugging Face client deployments without an explicit \code{torch_dtype}; under the relevant pre-v5 Transformers behavior, float32 is a historically plausible default. The experiment searched candidate execution configurations against 12 sampled IFEval public completions.\journalref{2026-07-10-fp32}\docref{deployment-match}
+
+The recorded probe results were:
+
+\begin{longtable}{@{}P{0.28\textwidth}P{0.30\textwidth}P{0.30\textwidth}@{}}
+\toprule
+Model & Best Hugging Face probe & Best vLLM probe \\
+\midrule
+OLMoE-1B-7B & fp32: match score 0.971; quasi-match 1.0 & fp16: partial 0.494 \\
+OLMo-2-7B & fp32: partial 0.175 in the then-current HF probe & fp32: match 0.915 \\
+OLMo-2-13B & fp32: partial 0.324 in the then-current HF probe & fp32: match 0.904 \\
+OLMo-2-32B & fp16: partial 0.234 & fp32 with tensor parallelism 2: match 0.961 \\
+\bottomrule
+\end{longtable}
+
+The interpretation was model/engine specific:
+
+\begin{itemize}
+  \item OLMoE's mixture-of-experts path could not be served in the tested vLLM float32 configuration because the fused Triton kernel exceeded shared-memory constraints; the highest-agreement tested OLMoE candidate was Hugging Face float32.
+  \item Dense OLMo-2 models could be served in vLLM float32, and those candidate cells closely matched the sampled public outputs.
+  \item The poor OLMo-2 Hugging Face result remains an unresolved systematic divergence. Prompt mismatch was rejected for an inspected case, but the exact cause among revision, attention implementation, device placement, generation defaults, decode path, software stack, and low-level numerics was not isolated.
+\end{itemize}
+
+\textbf{Status:} \statusPreliminary. These are oracle-scored probe results on 12 IFEval instances. They identify promising reconstruction hypotheses but do not prove the historical TogetherAI deployment configuration, do not constitute reproduced HELM benchmark scores, and may be affected by candidate selection on the same sample. Authoritative confirmation requires landing all winning behavior in the ordinary HELM path, running complete from-spec artifacts, and evaluating held-out instances or benchmarks.\docref{confirm-path}
+
+\section{Diagnosing the OLMo-2 Hugging Face probe}
+
+A follow-up compared the exact prompt and first generated token. The raw and templated prompt hypotheses were rejected for the inspected case. The official and vLLM-fp32 output agreed character-for-character at the start, while the Hugging Face fp32 probe diverged from token zero.\journalref{2026-07-10-forward-pass}
+
+The remaining discriminating axes were:
+
+\begin{itemize}
+  \item attention implementation (eager, SDPA, Flash Attention);
+  \item device placement and reduction order, especially \code{device_map=auto};
+  \item decode path, including HELM's near-greedy \code{do_sample=True, temperature=1e-7} versus a direct greedy path;
+  \item low-level matmul and hardware settings not present in the artifact.
+\end{itemize}
+
+This diagnosis is a useful methodological caution. ``Hugging Face'' and ``vLLM'' are not single deterministic instruments. Each label denotes a family of numerical paths whose differences can surface when top logits are close.
+
+\section{A better result object: the deployment match surface}
+
+The deployment-match work suggests that reproducibility should be reported as a surface rather than a binary:
+
+\[
+M(r, d, i) = \operatorname{agreement}(\text{official artifact } r,\; \text{deployment candidate } d,\; \text{instrument } i).
+\]
+
+Here \(r\) fixes the visible recipe, \(d\) includes weights/tokenizer/template/precision/serving parameters, and \(i\) includes package, hardware, and metric implementation. A high-agreement cell provides evidence for a plausible reconstruction; a low-agreement cell only falsifies that candidate, not necessarily reproducibility in general.
+
+\chapter{Technical Report VI: Replaying historical HELM requires instrument archaeology}
+\label{ch:eras}
+
+\section{Period and problem}
+
+\textbf{Period:} July 10--13, 2026.
+
+Modern exact replay still used modern HELM. For old public suites, that would conflate deployment drift with changes in scenario code, tokenization, metric classes, and serialization. The project therefore introduced era-pinned images and an era shim for pre-v0.5 public artifacts.
+
+\section{Suite version is not execution version}
+
+A public path such as \code{classic/.../v0.2.4/} or \code{v0.3.0/} is a corpus/suite snapshot identifier, not proof that the run was executed by HELM release v0.2.4 or v0.3.0. The same \code{run_spec.json} and predictions can appear in both suites because old runs were carried forward when the public snapshot expanded.\docref{gotchas-G10}
+
+For the three classic original-paper models, the repository verified that shared official artifacts were byte-identical across the v0.2.4 and v0.3.0 snapshots. The two local era replays would therefore test two later instruments against one carried-forward target, not reproduce two independent official measurements.\docref{classic-runbook}
+
+\section{Era-pinned architecture}
+
+The implemented system comprised:
+
+\begin{itemize}
+  \item \path{docker/eras.yaml}, mapping supported public-suite eras to pinned HELM commits;
+  \item era Dockerfiles with old HELM dependencies and a modern external model service;
+  \item an \code{openai_compat_client} compatible with old HELM client interfaces;
+  \item an era replay shim that deserialized the old schema, registered a local deployment under the expected name, preflighted referenced classes, and drove the era's benchmarking entry point;
+  \item manifest-level \code{era} provenance and image-label guards so a v0.2.4 manifest could not silently run in a v0.3.0 or modern image;
+  \item a validation ladder ranging from image probes and instrument-fidelity checks to smoke/full replay.
+\end{itemize}
+
+The build process exposed real historical dependency constraints, including PyArrow, fsspec, NLTK/punkt, and old HELM API differences. These are part of the measurement instrument, not incidental packaging details.
+
+\textbf{Status:} \statusImplemented. Host-side tests, source/API checks, manifest export, and preflight validation existed; the journals explicitly recorded that full era-image GPU execution remained a host requirement at intermediate stages.
+
+\section{The classic class-path paradox}
+
+Original-paper GPT-J 6B, GPT-NeoX 20B, and OPT-66B public \code{run_spec.json} files referenced classes such as \code{helm.benchmark.basic_metrics.BasicMetric}. Repository history showed that this import path existed in no HELM commit.\docref{gotchas-G13}
+
+The stored path combined:
+
+\begin{itemize}
+  \item the later \code{helm.} package prefix introduced when modules moved under \code{src/helm}; and
+  \item the earlier flat \code{benchmark.basic_metrics} layout that had already been moved into a metrics subpackage before the prefix migration.
+\end{itemize}
+
+The best explanation was a bulk migration of archived strings that prefixed old class paths without reproducing the full module relocation. The artifact was therefore a migrated hybrid, not a faithful serialization of the producing code.
+
+\section{Triangulating the actual origin window}
+
+The class-path lineage constrained the original execution window:
+
+\begin{itemize}
+  \item scenario paths required the July 31, 2022 scenario reorganization;
+  \item flat metric paths required a date before the August 26, 2022 metric refactor;
+  \item HELM v0.1.0 was not tagged until November 17, 2022.
+\end{itemize}
+
+Thus, under the documented metadata-migration interpretation, the surviving class-path combination is consistent only with unreleased pre-v0.1.0 source between July 31 and August 26, 2022.\docref{classic-runbook}\docref{gotchas-G13} There is no tagged origin-era image to reconstruct, and the archived class strings themselves do not resolve in any exact checkout.
+
+\section{Declared workaround, not false exactness}
+
+The era shim added declared class-path canonicalization so later era instruments could interpret the migrated artifact.\gitref{c3e68bed} This is a best-effort compatibility transformation. It must be disclosed in any paper because it changes the interpretation from ``exact origin replay'' to ``later-era replay of an archived recipe after explicit canonicalization.''
+
+The July 14 deck summarized the same conclusion: redpajama-incite-base could exercise v0.2.4/v0.3.0 era paths, while original-paper model specs predated the first tag and referenced module paths that never existed.\slideref{0714}{9}
+
+\evidencebox{Historical reproduction limit}{For some benchmark artifacts, the obstacle is not merely missing package pins. The serialized provenance has been transformed after execution, so the producing instrument cannot be recovered exactly from the public record.}
+
+\chapter{Technical Report VII: Scaling the audit program to OLMo, GPT-OSS, Qwen, and classic models}
+\label{ch:scaleout}
+
+\section{Period and combined runbooks}
+
+\textbf{Period:} July 11--14, 2026.
+
+The final phase translated the infrastructure into model-family runbooks. These runbooks shared a pattern: exact-path freeze, mandatory HELM container, local serving through \code{infer_stack}, per-run leases, official-index pairing, virtual-experiment composition, and aggregate reporting.
+
+\section{OLMo combined runbook}
+
+The OLMo combined runbook unified the instruction-tuned models and base-model scopes into one virtual experiment with multiple endpoints. It included exporter/freeze/fan-out wiring and a discovery preflight that required one-to-one public sources. The runbook's own status stated that complete GPU end-to-end execution remained the final verification.\docref{olmo-combined}
+
+This status matters because the deployment-match sample produced strong findings, but it should not be conflated with completion of every planned OLMo benchmark/model cell.
+
+\section{GPT-OSS-20B}
+
+The GPT-OSS runbook selected four public, metric-scored rows without a closed GPT-4o judge: BBQ, IFEval, MMLU-Pro, and GPQA. Seven safety/evaluation rows were excluded because their official primary metrics depended on closed judges.\docref{gptoss-runbook}
+
+A model-specific failure exposed another provider-compatibility gap. The local OpenAI-compatible chat endpoint could return \code{message.content=null} when the model exhausted its generation budget in reasoning without a final-channel answer. The Together-based official artifact represented the same outcome as the empty string. Unpatched HELM crashed on \code{None.strip()}. Edward added a null-safe chat client at HELM's configured client-class seam, normalizing \code{null} to the faithful empty-string representation without editing HELM's source.\gitref{3d904b92}
+
+The runbook documented 59 empty-string outcomes among 541 official IFEval instances and stated that GPU end-to-end execution remained to be completed.\docref{gptoss-runbook}
+
+\textbf{Status:} The null-content diagnosis and compatibility fix are \statusEstablished; the full GPT-OSS reproduction grid was \statusImplemented at the cutoff.
+
+\section{Qwen family}
+
+The Qwen combined runbook assembled eight models and approximately 775 exact-path run entries, with catalog, preset, freeze, and fan-out support. Its status explicitly required verification of the Hugging Face weight IDs and a first complete GPU run.\docref{qwen-combined}
+
+The final main-repository commit at the snapshot, \code{b8b85869}, adjusted Qwen instruct-turbo endpoints to serve an 8,192-token window for from-spec IFEval/MMLU-Pro.\gitref{b8b85869} This is representative of the continued interaction between public recipe budgets and local serving constraints.
+
+\section{Classic Together models}
+
+The classic combined runbook generated roughly 1,356 from-spec entries for GPT-J 6B, GPT-NeoX 20B, and OPT-66B across the supported later-era proxies.\docref{classic-runbook} Because these models required multi-GPU serving and because their origin instrument was unrecoverable, the runbook was explicitly a best-effort historical audit, not an exact reproduction claim.
+
+\section{Reporting improvements}
+
+The July 14 work improved interpretation of partial and heterogeneous grids:
+
+\begin{itemize}
+  \item instance-level fallback for score-drift plots when CoT benchmarks lacked aggregate statistics;
+  \item headline-metric resolution over metric families and main splits;
+  \item aligned model/benchmark axes between coverage and drift matrices;
+  \item match counts and agreement proportions in coverage cells;
+  \item stale-local-attempt deduplication;
+  \item square cells and clearer legends/thresholds for small matrices.
+\end{itemize}
+
+These changes correspond to commits \code{8d0d2c4b}, \code{c041abb0}, \code{ca885180}, \code{d4bf29d7}, \code{7a9f1d5f}, \code{93849b09}, and \code{a36b787c}.\gitref{8d0d2c4b--a36b787c}
+
+The score fallback addressed GPQA, IFEval, and MMLU-Pro cases where only instance-level 0/1 statistics were available; averaging those values yielded an accuracy-like aggregate for visualization.\slideref{0714}{5} The reporting layer thereby stopped treating ``missing aggregate file'' as ``no scientific result.''
+
+\chapter{Integrated chronology}
+\label{ch:chronology}
+
+\begin{longtable}{@{}P{0.12\textwidth}P{0.27\textwidth}P{0.51\textwidth}@{}}
+\toprule
+Date & Workstream & Evidence-backed milestone \\
+\midrule
+\endhead
+May 15 & Internship start & Start date supplied by Edward; no day-level repository artifact for May 15--19. \\
+May 20 & LoRA / serving research & Added a LoRA implementation plan and merged the branch into \code{infer_stack}.\gitref{infer-stack:328cd1c4}\gitref{infer-stack:6af064a0} \\
+May 27 & End-to-end plumbing & Exposed dynamically selected service ports through \code{.env}.\gitref{infer-stack:538e4c5c} \\
+May 29 & Public-run matching & Made \code{aiq-magnet} matching robust to naming omissions by checking \code{run_spec.json}.\gitref{aiq-magnet:762ca6b5} \\
+June 1--4 & E2E audit test & Demonstrated HF/vLLM comparable and intentionally incomparable phi-2/MMLU runs; fixed matching and added end-to-end tests.\slideref{0602}{4}\slideref{0602}{5}\gitref{ca46b11e}\gitref{ed9e40ed} \\
+June 5--9 & Corpus scoping & Crawled 34,512 public runs; quantified access, structural completeness, grid sparsity, and closed-judge scope.\slideref{0609}{4}\slideref{0609}{5}\slideref{0609}{8}\slideref{0609}{9} \\
+June 9--16 & Efficient benchmarking & Reproduced tutorial plots, added DKPS, expanded to four datasets, and identified limited-replicate/representation bottlenecks.\slideref{0616}{7}\slideref{0616}{12} \\
+June 11--12 & Comparison architecture & Large refactor; introduced normalized comparison, metric/judge taxonomy, recipe facts, source policies, and judge substitutions.\gitref{609e02bb--ac3445ee} \\
+June 12--16 & OLMo setup & Added smoke/full OLMo grids, tokenizer plugins, dependencies, GPU-host config, and chat-template headroom.\gitref{bcb0e16f--bef5ccc0}\slideref{0616}{4}\slideref{0616}{5} \\
+June 16--23 & First OLMo diagnoses & Found possible deployment mismatch and a concrete BBQ prompt mismatch; began Docker/CLI/run-spec redesign.\slideref{0623}{9}\slideref{0623}{10}\slideref{0623}{11} \\
+June 23--25 & Resource lifecycle & Added job setup/teardown, lease queue/GC, static routes, readiness, and exact \code{run_spec.json} materialization.\gitref{cmd-queue:0cb1ac21}\gitref{kwdagger:ce246bae}\gitref{aiq-magnet:4b10e1ba} \\
+June 25--30 & Exact replay integration & Added from-spec Docker nodes, exact relative-path freezing, local deployment rewrite, and combined OLMo execution wiring.\gitref{6234ed39--a93bfeea} \\
+June 30 & Environment failures & GPQA auth, IFEval dependencies, and WMT14 Hub-version drift exposed missing container provenance.\slideref{0630}{4}\slideref{0630}{7} \\
+July 1--3 & Reproducible execution & Pinned full HELM dependencies, mounted tokens from disk, added content-addressed/frozen sources, and fixed OLMo special-token handling.\gitref{b2b2518f--74ba33de} \\
+July 3--6 & Audit hardening & Codebase audit, determinism/honesty/secrets fixes, simplification, normalized-diff migration, and self-contained runbook cleanup.\gitref{62955b70--ed5186c7} \\
+July 7--8 & Deployment sweeps & Added attention backend, chat-template axes, reserve-only GPU leases, deployment-match probes, and aggregate heatmaps.\gitref{infer-stack:6c586568}\gitref{infer-stack:e5fba7b5}\slideref{0708}{6} \\
+July 10 & OLMo precision probe & On 12 sampled IFEval instances, the highest-agreement tested OLMo candidates used float32, with engine-specific winners; ordinary-HELM confirmation remained required.\journalref{2026-07-10-fp32} \\
+July 10--12 & Era replay & Implemented era registry/images/shim, validation ladder, era tests, dependency remediation, and redpajama 3B local-friendly target.\gitref{6d31bf9a--3046c8e} \\
+July 11--13 & Family runbooks & Built/extended GPT-OSS, Qwen, OLMo combined, and classic-model exact-path workflows; fixed LiteLLM route survival and GPT-OSS null content.\gitref{c157e06c--c9f0efac} \\
+July 13 & Historical archaeology & Corrected classic origin to unreleased pre-v0.1.0 and documented migrated \code{class_name} paths; added canonicalization.\gitref{27e4ee40}\gitref{c3e68bed} \\
+July 14 & Reporting + final integrations & Added score fallback, coverage annotations, axis alignment, deduplication, rsync helpers, route acceptance test, and Qwen context-window fix.\gitref{8d0d2c4b--b8b85869}\slideref{0714}{10} \\
+\bottomrule
+\end{longtable}
+
+\chapter{What was learned about benchmark reproducibility}
+\label{ch:synthesis}
+
+\section{A four-layer model}
+
+The internship evidence supports a layered model of benchmark reproduction:
+
+\begin{enumerate}
+  \item \textbf{Recipe layer.} Scenario, adapter, prompt construction, sampling fields, stop sequences, metrics, and selected instances. HELM's \code{run_spec.json} is the primary artifact.
+  \item \textbf{Deployment layer.} Weight revision, tokenizer/template revision, precision, quantization, serving engine, tensor parallelism, generation defaults, and endpoint protocol.
+  \item \textbf{Measurement-instrument layer.} HELM source revision, package versions, data snapshots, metric implementation, hardware/kernel stack, credentials, and external judges.
+  \item \textbf{Artifact/report layer.} Serialization, run-directory naming, carried-forward public artifacts, instance/aggregate availability, comparison normalization, and visualization policy.
+\end{enumerate}
+
+A reproduction can fail at any layer, and evidence from one layer should not be used to diagnose another. For example, a missing GPQA token is an instrument/access failure; a BBQ output-format omission is recipe drift; OLMo dtype is deployment drift; and missing aggregate statistics are a report-layer limitation.
+
+\section{Recipe equivalence is stronger than name equivalence}
+
+The early \code{groups=} and temperature cases showed that string equality is both too strict and too weak. It is too strict when an irrelevant naming token differs, and too weak when a hidden field such as temperature is omitted from the name. Exact \code{run_spec.json} replay is therefore a better baseline than run-name regeneration.
+
+\section{Exact recipe replay is necessary but insufficient}
+
+After exact replay, OLMo still disagreed because the original deployment's precision, tokenization, and template behavior were not fully serialized. This is the central empirical result of the internship. The public artifact determined what HELM asked for but not exactly how the provider computed the answer.
+
+\section{Temperature zero does not imply cross-stack determinism}
+
+Different attention kernels, reduction orders, device maps, precision modes, and decode paths can change logits enough to flip the top token. Greedy generation removes sampling randomness but does not make numerical implementations equivalent.
+
+\section{Historical artifacts may have post-hoc provenance drift}
+
+The classic \code{class_name} case goes beyond missing information. It shows that archived metadata can be transformed after execution. A later migration created strings that did not correspond to the producing code or any real checkout. Historical reproducibility therefore requires both source archaeology and skepticism about the immutability of metadata.
+
+\section{Closed and gated dependencies must be reported separately}
+
+The corpus inventory and GPT-OSS scope showed that ``open model'' does not imply ``open benchmark.'' Closed judges, gated data, external services, and missing historical datasets must be counted as scope limitations, not silently discarded or scored as model disagreements.
+
+\section{The right null result}
+
+A failed local match supports the narrow statement:
+
+\begin{quote}
+Under the tested local recipe, deployment candidate, and measurement instrument, the public output was not reproduced.
+\end{quote}
+
+It does not automatically support:
+
+\begin{quote}
+The public benchmark is irreproducible.
+\end{quote}
+
+The stronger claim requires either exhaustive control of all material parameters or evidence that the missing parameters cannot be recovered and materially affect outcomes. The OLMo and classic cases provide examples of both partial recovery and genuine non-identifiability.
+
+\chapter{Recommended publication strategy, claims, and short-horizon scope}
+\label{ch:paper}
+
+\section{Current publication readiness}
+
+The evidence is already sufficient for a substantial position/experience paper. It is not yet sufficient for a broad empirical claim that most HELM results become reproducible once hidden deployment parameters are controlled. The most defensible immediate manuscript is a systems-and-measurement paper with a clear position, one deep modern case, and one historical forensic case.
+
+\evidencebox{Recommended identity}{A benchmark recipe is not a complete experimental record. EvalAudit reconstructs and preserves the execution substrate needed to diagnose apparent benchmark disagreement, while explicitly representing cases in which the historical instrument is no longer identifiable.}
+
+\section{Relationship between the two papers}
+
+The inherited EEE case study provides normalized representations and demonstrates that discrepancies can be detected, but it stops at the point where serving-stack confounds cannot be separated. The follow-on paper should not repeat the Pythia/Vicuna/Falcon study. Its one-sentence positioning should be:
+
+\begin{quote}
+EEE detects reproducibility gaps; this paper studies their attribution, possible closure, and identifiability.
+\end{quote}
+
+\section{Recommended thesis}
+
+\begin{quote}
+Public LLM benchmark artifacts often identify the evaluation recipe but not the complete execution instrument. Exact run-spec replay and controlled reconstruction of model, tokenizer, precision, engine, and harness provenance can attribute---and sometimes close---apparent reproducibility gaps. When that provenance has been lost or post-hoc transformed, the original measurement may remain non-identifiable.
+\end{quote}
+
+For a forward-looking systems framing, add the application claim:
+
+\begin{quote}
+Auditable execution is necessary to determine whether measured improvements in current small open models exceed variation introduced by the evaluation substrate itself.
+\end{quote}
+
+This second claim should be presented as motivation or a narrow demonstration unless a complete current-model study is executed.
+
+\section{Claims supported now}
+
+\begin{enumerate}
+  \item \textbf{A benchmark recipe is not a complete experimental record.} HELM artifacts omit deployment and environment variables that can materially affect generated outputs.
+  \item \textbf{Exact public \code{run_spec.json} replay improves recipe fidelity.} It prevents documented reconstruction errors such as the BBQ output-format omission.
+  \item \textbf{Prompt construction, tokenizer behavior, chat templates, precision, and serving paths are plausible material causes of disagreement.} The OLMo investigations provide concrete examples, with the dtype/engine conclusion currently limited to a 12-instance probe.
+  \item \textbf{Some historical measurements are non-identifiable from surviving artifacts.} Carried-forward artifacts and migrated class paths can prevent unique recovery of the producing instrument.
+  \item \textbf{Reproduction reports require layered outcomes and coverage accounting.} Access failures, recipe mismatch, deployment mismatch, instrument mismatch, artifact reinterpretation, residual controlled disagreement, and non-identifiability should not be collapsed into one success rate.
+  \item \textbf{EvalAudit provides reusable infrastructure for controlled replay and differential diagnosis.} Its technical value lies in exact-spec freezing, execution capsules, environment isolation, deployment comparison, era replay, and layered reporting.
+\end{enumerate}
+
+\section{Claims not supported yet}
+
+The current evidence does \emph{not} yet support:
+
+\begin{itemize}
+  \item that public HELM results are generally or ``almost always'' reproducible once deployment details are controlled;
+  \item that float32 was definitively the historical TogetherAI configuration, or that dtype is the dominant hidden variable across model families;
+  \item that the OLMo deployment-match winners reproduce complete HELM benchmark scores;
+  \item a population-level HELM reproducibility rate without a frozen denominator and regenerated stores;
+  \item complete Qwen, GPT-OSS, or classic-model empirical conclusions;
+  \item a broad claim about Qwen 2.5 versus Qwen 3.x/3.5 progress or Fable fine-tuning gains.
+\end{itemize}
+
+\section{Best scope with approximately three weeks remaining}
+
+The recommended target is a \emph{technical position/experience paper} that is publishable without a large new grid but is strengthened by one end-to-end modern result:
+
+\begin{enumerate}
+  \item \textbf{Formal failure model:} recipe, deployment, execution instrument, artifact interpretation, and residual numerical/stochastic effects.
+  \item \textbf{EvalAudit system:} evaluation capsules, exact-spec replay, layered differential comparison, controlled counterfactual replay, and structured outcome classification.
+  \item \textbf{Modern recoverable-provenance case:} one dense OLMo model and one OLMoE model on one short deterministic benchmark and IFEval.
+  \item \textbf{Historical non-identifiability case:} classic HELM artifact carry-forward, impossible class paths, inferred compatible source interval, and declared proxy instruments.
+  \item \textbf{Optional current-model demonstration:} one matched Qwen generation pair on two or three discriminative non-agentic benchmarks, used only to test whether the model-generation delta exceeds plausible evaluation-substrate variation.
+\end{enumerate}
+
+A full Qwen generational leaderboard and Fable-distillation study should not be manuscript dependencies during this internship. They are higher-value follow-on applications once checkpoints, data provenance, contamination controls, and broader GPU runs are available.
+
+\section{Blocking experiment for a stronger technical paper}
+
+The highest-priority experiment is the ordinary-path OLMo confirmation:
+
+\begin{enumerate}
+  \item choose candidate configurations on a clearly labeled discovery subset;
+  \item implement any probe-only behavior, especially \code{add_special_tokens=False}, through the real tokenizer/client path;
+  \item execute the exact public \code{run_spec.json} through normal HELM;
+  \item produce complete HELM artifacts and compare them through the standard pair-report pipeline;
+  \item evaluate on held-out instances and, ideally, held-out benchmarks;
+  \item record all candidate configurations rather than only the winner.
+\end{enumerate}
+
+If this succeeds, the paper can claim that controlled reconstruction closed a concrete benchmark-level gap. If it fails, the failed translation from probe to real path is itself valuable evidence that endpoint matching does not imply reproducible benchmark execution.
+
+\section{Minimum bounded experiment package}
+
+\begin{longtable}{@{}P{0.25\textwidth}P{0.15\textwidth}P{0.16\textwidth}P{0.34\textwidth}@{}}
+\toprule
+Study & Models & Benchmarks & Conditions / purpose \\
+\midrule
+OLMo end-to-end & 2 & 2 & Naive reconstruction, exact recipe, reconstructed deployment; ordinary HELM artifacts. \\
+OLMo ablation & 1--2 & 1--2 & Small staged design over dtype, template/generation-prompt behavior, and special-token handling. \\
+Repeatability & 1 & 1 & Three same-machine repeats; cross-machine only if readily available. \\
+Historical case & 1 & 1--2 & Source/artifact analysis; optionally compare two later era proxy instruments. \\
+Qwen demonstration & 2 & 2--3 & One pinned audit-grade configuration and one plausible alternative; compare model delta with substrate delta. \\
+\bottomrule
+\end{longtable}
+
+\section{Small-model framing and the ``why care'' argument}
+
+Historical benchmark scores are not the endpoint. They are forensic evidence used to derive requirements for trustworthy current evaluation. The forward-looking motivation is that small local models are scientifically and practically important: progress claims should be affordable to verify, robust to deployment choices, and interpretable under local resource constraints.
+
+The paper can motivate a later Qwen/Fable study with the question:
+
+\begin{quote}
+Is the model better, or is the evaluation different?
+\end{quote}
+
+For a model pair, compare the measured generational or fine-tuning effect
+\[
+\Delta_{\mathrm{model}} = Y_{\mathrm{new}} - Y_{\mathrm{old}}
+\]
+with variation over plausible execution substrates
+\[
+\Delta_{\mathrm{substrate}} = \max_c Y_{m,c} - \min_c Y_{m,c}.
+\]
+A robust progress claim should exceed or remain stable across the measured substrate variation. This is a compelling future application of EvalAudit, but it should be a bounded demonstration rather than a second independent paper glued onto the HELM chronology.
+
+\section{Recommended manuscript structure}
+
+\begin{enumerate}
+  \item \textbf{Introduction:} credible measurement of model progress requires preserving the execution substrate.
+  \item \textbf{Relationship to EEE:} detection versus attribution, closure, and identifiability.
+  \item \textbf{Layered model and terminology:} exact replay, equivalent replay, robust conclusion, and non-identifiable reproduction.
+  \item \textbf{Forensic HELM experience:} recurring failure modes and requirements elicitation.
+  \item \textbf{EvalAudit design:} capsules, replay, comparison, controlled variation, and reporting.
+  \item \textbf{Modern case study: OLMo:} recipe correction, token/template effects, probe findings, and ordinary-path confirmation status.
+  \item \textbf{Historical case study:} carried-forward artifacts and proxy instruments.
+  \item \textbf{Optional current-model application:} narrow Qwen comparison and capability/cost reporting.
+  \item \textbf{Provenance recommendations:} fields required for exact replay, equivalent replay, and robust conclusions.
+  \item \textbf{Limitations:} hosted deployment opacity, configuration non-uniqueness, hardware, incomplete grids, and inferred historical dates.
+\end{enumerate}
+
+\section{Three-week priority order}
+
+\begin{enumerate}
+  \item Freeze the thesis, model/benchmark roster, run denominator, and experiment-status table; reconcile stale versus fresh stores.
+  \item Complete the ordinary-path OLMo confirmation and regenerate all cited results with current code.
+  \item Run a bounded OLMo ablation and same-machine repeatability baseline.
+  \item Regenerate the historical artifact-hash and source-compatibility evidence; run a proxy-era comparison only if operational quickly.
+  \item Package immutable evidence: public specs, outputs, tokens, manifests, model/tokenizer SHAs, package locks, container digests, and hardware facts.
+  \item Add one narrow Qwen demonstration only after the primary evidence is complete.
+  \item Treat Fable evaluation and broad Qwen grids as post-internship extensions unless all provenance and checkpoints are already ready.
+\end{enumerate}
+
+\evidencebox{Decision rule}{Preserve a correct and auditable paper before increasing model count. If the ordinary-path OLMo confirmation is not complete after the first major experiment block, stop expansion and submit the work as a position/experience paper whose central evidence is the failed reconstruction and the historical non-identifiability case.}
+
+\chapter{Contribution summary at the evidence cutoff}
+
+\section{Quantitative Git record}
+
+The supplied histories contain:
+
+\begin{longtable}{@{}P{0.37\textwidth}P{0.16\textwidth}P{0.18\textwidth}P{0.18\textwidth}@{}}
+\toprule
+Repository scope & Edward-authored commits & Insertions & Deletions \\
+\midrule
+Main \code{eval_audit} repository (June 3--July 14) & 452 & 93,864 & 48,784 \\
+\code{infer_stack} submodule (May 20--July 13) & 30 & included in submodule total & included in submodule total \\
+\code{aiq-magnet} submodule (May 29--June 25) & 3 & included in submodule total & included in submodule total \\
+\code{cmd_queue} submodule (June 23) & 1 & included in submodule total & included in submodule total \\
+\code{kwdagger} submodule (June 23) & 1 & included in submodule total & included in submodule total \\
+All listed submodules & 35 & 34,249 & 13,177 \\
+\bottomrule
+\end{longtable}
+
+The main-repository activity covered 26 distinct calendar days. Numstat totals include large-scale package splits, generated fixtures/configurations, branch merges, deleted stale content, and lock/dependency changes. They should be used to understand the breadth of change, not as a productivity metric or a claim of net original lines.
+
+\section{Qualitative deliverables}
+
+The internship produced or substantially advanced:
+
+\begin{itemize}
+  \item an end-to-end reproducibility audit harness;
+  \item a public HELM scope/access/coverage inventory;
+  \item a normalized comparison and judge-provenance architecture;
+  \item exact \code{run_spec.json} replay and exact-path bundle freezing;
+  \item mandatory containerized HELM execution and mounted-secret handling;
+  \item GPU lease, readiness, lifecycle, and stable-route infrastructure;
+  \item OLMo model-family runbooks and deployment-match sweeps;
+  \item a taxonomy/documentation of unrecorded deployment parameters;
+  \item era-pinned replay machinery and historical source archaeology;
+  \item GPT-OSS, Qwen, and classic-model family runbooks;
+  \item null-safe GPT-OSS chat compatibility;
+  \item aggregate score-drift and coverage reporting improvements;
+  \item exploratory efficient-benchmarking/DKPS experiments.
+\end{itemize}
+
+\section{Final status on July 14}
+
+The July 14 deck's next steps were to finish GPT-OSS, execute Qwen 2/Qwen 3 work, perform best-effort original-paper model reproductions, and collect findings into an Overleaf/paper draft.\slideref{0714}{10} The repository at the same cutoff shows that much of the execution machinery and documentation had already been built, while the largest GPU grids remained explicitly pending.
+
+\appendix
+
+\chapter{Source inventory and evidence map}
+\label{app:source-inventory}
+
+\section{Archive and repository identity}
+
+\begin{longtable}{@{}P{0.27\textwidth}P{0.64\textwidth}@{}}
+\toprule
+Source & Identity \\
+\midrule
+Repository archive & \path{eval_audit-source-2026-07-14T144915-5-b8b858697e7c.tar.gz}; SHA-256 \hash{625af81fde8d0fbb2e8f8eba0ff423e5f3a317a019e93cfa9211540102223923} \\
+Repository HEAD & \hash{b8b858697e7c2491af163c8f5d757fe6ae6f3c1a} \\
+Slide archive & \path{internship-powerpoints.zip}; SHA-256 \hash{4ac2f99ef80abeac306b13a938a178c1fa898bd1c2c7482692074cd1933b3509} \\
+\bottomrule
+\end{longtable}
+
+\section{Slide deck IDs}
+
+\begin{longtable}{@{}P{0.11\textwidth}P{0.35\textwidth}P{0.43\textwidth}@{}}
+\toprule
+ID & File & SHA-256 \\
+\midrule
+0602 & \path{Intern Update 06-02-2026.pptx} & \hash{0f6d473ba6f5dcb5de7428dfe20485c7dd0477c5bb7e66d48a710a85f5ebe5ed} \\
+0609 & \path{Intern Update 06-09-2026.pptx} & \hash{c67321b278359ebdf1f7fcc2f0efd9a7746362bfc4f394634c30e2164bcd1194} \\
+0616 & \path{06-16-2026.pptx} & \hash{02fef71649824e899be99882a8f7b79599d3ee35c1f474ae8b8f650e29474240} \\
+0623 & \path{06-23-2026.pptx} & \hash{d6a132ebf96b98e85d8e1d1c6854b12f200e4822b3d9017c1ea61119a03071ee} \\
+0630 & \path{06-30-2026.pptx} & \hash{7ef1025fe2d0b9582eac92254cee4bb89b7018dc9a1f97ad9596d3c179d04b28} \\
+0708 & \path{07-08-2026.pptx} & \hash{554cdc308f1e136d4e6f21f5dd203a6104d2317baf529790c067f51ccb941e16} \\
+0714 & \path{07-14-2026.pptx} & \hash{bb5ed3f54870735975f70ed56d78a09b3264d96dd8818918127f7e86a2124f02} \\
+\bottomrule
+\end{longtable}
+
+\section{Document IDs used in markers}
+
+\begin{longtable}{@{}P{0.24\textwidth}P{0.67\textwidth}@{}}
+\toprule
+ID & Repository path / role \\
+\midrule
+eee-case & \path{docs/papers/neurips-2026/case_study_3.tex}; inherited EEE Case Study~3 and three-model/fourteen-benchmark scope. \\
+eee-appendix & \path{docs/papers/neurips-2026/case_study_3_appendix.tex}; explicit residual-confound/open-question statement. \\
+tmlr-skeleton & \path{docs/papers/tmlr-2026/main.tex}; pre-internship follow-on paper skeleton with TODO sections. \\
+confirm-path & \path{dev/tools/deployment_match/confirm.py}; distinction between probe ranking and authoritative ordinary-HELM confirmation, including the request-only special-token warning. \\
+unrecorded-deployment & \path{docs/helm-unrecorded-deployment-params.md}; provenance-gap taxonomy and deployment statistics. \\
+deployment-match & \path{docs/vllm-vs-huggingface-deployment-match.md}; OLMo deployment-match results and engine comparison. \\
+gotchas-G10 & \path{docs/helm-gotchas.md}, G10; suite version versus HELM release/execution era. \\
+gotchas-G13 & \path{docs/helm-gotchas.md}, G13; migrated classic class paths and origin-window archaeology. \\
+olmo-combined & \path{reproduce/olmo_models_combined/README.md}; combined OLMo runbook and status. \\
+qwen-combined & \path{reproduce/qwen_models_combined/README.md}; Qwen runbook, eight-model scope, weight-ID caveat, and pending GPU verification. \\
+gptoss-runbook & \path{reproduce/gpt_oss_20b_from_spec/README.md}; four-row scope, closed-judge exclusions, null-content behavior, and status. \\
+classic-runbook & \path{reproduce/classic_together_combined/README.md}; classic era replay, carried-forward artifacts, and origin-window constraints. \\
+\bottomrule
+\end{longtable}
+
+\section{Journal markers}
+
+\begin{longtable}{@{}P{0.28\textwidth}P{0.63\textwidth}@{}}
+\toprule
+ID & Source \\
+\midrule
+2026-07-10-fp32 & \path{dev/journals/claude.md}, July 10, 09:03 entry; central OLMo float32 table and interpretation. \\
+2026-07-10-forward-pass & \path{dev/journals/claude.md}, July 10, 09:39 entry; prompt hypothesis rejection and forward-pass/decode-path diagnosis. \\
+\bottomrule
+\end{longtable}
+
+\section{Machine-readable ledgers}
+
+The source package accompanying this PDF includes:
+
+\begin{itemize}
+  \item \path{data/main_repo_commits.csv}: every Edward-authored main-repository commit in the cutoff history;
+  \item \path{data/submodule_commits.csv}: every Edward-authored commit in the four relevant submodule histories;
+  \item \path{data/slide_text_index.csv}: extracted text and notes indexed by deck and slide.
+\end{itemize}
+
+\chapter{Claim/evidence/status matrix}
+\label{app:claim-matrix}
+
+\begin{longtable}{@{}P{0.31\textwidth}P{0.18\textwidth}P{0.41\textwidth}@{}}
+\toprule
+Claim & Status & Principal evidence / qualification \\
+\midrule
+Name-only matching can misclassify comparable and incomparable runs. & \statusEstablished & June 2 deck; May 29/June 3 matching commits; \code{groups=} and omitted-temperature cases. \\
+The public corpus is sparse and access-constrained. & \statusEstablished & June 9 crawler statistics and grid counts. \\
+Feature-selection methods outperform DKPS in general. & \statusPreliminary & Limited 20-model/~50-query observations; only three replicates and representation issues. \\
+Exact public \code{run_spec.json} replay prevents the observed BBQ prompt drift. & \statusEstablished & June 23 prompt comparison plus June 25 exact-replay implementation. \\
+All HELM execution paths were containerized in the reproduction workflow. & \statusImplemented & June 30 deck, runbooks, Docker nodes, and tests; model-family full runs not all complete. \\
+OLMo-7B local gibberish was caused by an appended \code{<|endoftext|>} token. & \statusEstablished & July 8 deck and tokenizer-fix commit. \\
+IFEval outcomes are sensitive to chat-template / \code{add_generation_prompt} behavior. & \statusEstablished & July 8 sweep and subsequent deployment-match tooling. \\
+Float32 candidate cells best matched the examined unpinned OLMo instruct outputs in the 12-instance IFEval probe. & \statusPreliminary & July 10 journal and deployment-provenance docs; historical configuration and full HELM confirmation remain unproven. \\
+Hugging Face-fp32 and vLLM-fp32 were the highest-agreement tested candidates for OLMoE and dense OLMo-2, respectively. & \statusPreliminary & Oracle-scored 12-instance deployment-match table; ordinary HELM confirmation and held-out evaluation are required. \\
+The poor OLMo-2 HF-probe result was caused by a specific single numerical knob. & \statusUnresolved & Prompt mismatch was rejected; attention/device/decode axes remained under investigation. \\
+Public classic v0.2.4/v0.3.0 artifacts were carried forward rather than independently rerun. & \statusEstablished & Byte-identical artifacts and runbook/gotcha documentation. \\
+The surviving classic class-path shapes are consistent only with an unreleased July 31--August 26, 2022 source interval under the migration interpretation. & \statusEstablished & Source-history triangulation; inferred compatible interval, not a directly observed execution date. \\
+Exact origin reproduction of GPT-J/GPT-NeoX/OPT is possible with the later era shim. & \statusUnresolved & The shim is an explicit proxy/canonicalization, not the original instrument. \\
+The OLMo combined, Qwen, GPT-OSS, and classic full grids all completed by July 14. & \statusUnresolved & Runbooks explicitly say complete GPU end-to-end verification remained. \\
+GPT-OSS \code{content=null} should be normalized to an empty string for faithful Together compatibility. & \statusEstablished & Public artifact inspection, crash diagnosis, and null-safe client implementation. \\
+\bottomrule
+\end{longtable}
+
+\chapter{Open questions and preservation checklist}
+
+\section{Scientific open questions}
+
+\begin{enumerate}
+  \item Can the highest-agreement OLMo probe configurations be implemented through the ordinary HELM path and reproduce complete from-spec artifacts on held-out instances or benchmarks?
+  \item Which exact forward-pass/decode-path combination makes a direct Hugging Face OLMo-2 probe match the vLLM-fp32 and official outputs?
+  \item How stable are the OLMo deployment-match conclusions across a random or stratified sample larger than 12 instances and across benchmarks beyond IFEval?
+  \item How frequently do unpinned model revisions, tokenizer revisions, or package defaults change public HELM outputs across the broader corpus?
+  \item Can historical public artifacts be clustered by producing instrument using class-path, schema, dependency, and timestamp fingerprints?
+  \item What agreement metric best separates semantically equivalent free-form outputs from numerically induced divergence without hiding task-relevant differences?
+  \item How should a benchmark publisher version and disclose post-hoc metadata migrations so archived artifacts remain forensically interpretable?
+\end{enumerate}
+
+\section{Experiment preservation checklist}
+
+A publication-grade reproduction bundle should preserve:
+
+\begin{itemize}
+  \item source repository commit and dirty-state record;
+  \item immutable container digest, not only a mutable tag;
+  \item complete Python/package lock, CUDA/driver, GPU model, and kernel/attention settings;
+  \item model and tokenizer repository commit SHAs;
+  \item effective dtype, quantization, tensor parallelism, device map, and batch settings;
+  \item raw prompt, templated prompt, token IDs, generation configuration, and decoded completion;
+  \item frozen public \code{run_spec.json} and source artifact hash;
+  \item data snapshot/revision and credential/access status;
+  \item judge model identity, deployment, prompt, and version;
+  \item any compatibility rewrite or canonicalization, including rationale and before/after hashes;
+  \item per-instance outputs and aggregate/report-generation version.
+\end{itemize}
+
+
+\chapter{Revision note: July 15, 2026}
+
+This revision incorporates a cross-document review performed after the original chronology was compiled. It does not alter the historical sequence through July 14. It changes the interpretation and publication guidance in four ways:
+
+\begin{enumerate}
+  \item it distinguishes the inherited NeurIPS EEE discrepancy-detection study from the separate unwritten TMLR follow-on;
+  \item it reclassifies the OLMo float32/engine result as a 12-instance deployment-match probe pending ordinary-HELM confirmation;
+  \item it treats the unresolved Hugging Face OLMo-2 divergence as scientific evidence about execution-stack sensitivity rather than a mere probe defect;
+  \item it recommends a three-week hybrid paper scope: a formal position and EvalAudit system contribution, one end-to-end OLMo case if feasible, one historical non-identifiability case, and only a narrow current-Qwen demonstration after the core evidence is secured.
+\end{enumerate}
+
+The revised paper recommendation deliberately separates what is publishable now from what requires a later empirical program. A position/experience paper is already supportable. A broad technical paper claiming generally small residual gaps requires a frozen denominator, fresh stores, ordinary-path confirmation, held-out evaluation, controlled ablations, repeatability baselines, and a reproducibility artifact.
+
+\input{appendices/main_commit_ledger.tex}
+\input{appendices/submodule_commit_ledger.tex}
+
+\chapter{Literature mentioned in the internship slides}
+
+The following entries are transcribed from the June 2 and June 9 slide decks and were not independently bibliographically verified in this reconstruction.
+
+\begin{thebibliography}{9}
+\bibitem{chen2025}
+N. Chen, H. Helm, Y. Park, C. Priebe, and S. Villar.
+``Extracting information from fine-tuned weights.''
+In \emph{Non-Euclidean Foundation Models: Advancing AI Beyond Euclidean Frameworks}, 2025.
+
+\bibitem{han2026}
+X. Han et al.
+``W2T: LoRA Weights Already Know What They Can Do.''
+\emph{arXiv}, 2026.
+
+\bibitem{bowyer2026}
+S. Bowyer, A. Locatelli, and K. Cao.
+``Efficient Benchmarking Is Just Feature Selection and Multiple Regression.''
+\emph{arXiv}, 2026.
+\end{thebibliography}
+
+\end{document}

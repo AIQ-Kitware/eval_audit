@@ -1,0 +1,36 @@
+submodule,date,hash,subject,insertions,deletions,files_changed
+aiq-magnet,2026-05-29T13:23:43-04:00,762ca6b5ca5c12b2afcc7297bc60b1267e5c93af,Make run matching more robust,129,13,1
+aiq-magnet,2026-06-25T10:59:17-04:00,4b10e1ba83c98561709ba5a71e0987ab21e2dc18,helm: add materialize_helm_run_from_spec (faithful run_spec.json replay),931,0,2
+aiq-magnet,2026-06-25T15:23:57-04:00,50489f0a0732becb33f5b6f758556491a57efb16,from-spec: optional --model-deployment rewrite (record the local endpoint),208,25,2
+cmd_queue,2026-06-23T14:57:08-04:00,0cb1ac21ca41474eeb3a6810566e5794fc1d2e13,Add first-class job setup/teardown lifecycle,107,4,3
+infer_stack,2026-05-20T14:48:14-04:00,328cd1c4e4bd061d5314bac8f31466d718f495e1,Add plan for lora implementation,151,0,1
+infer_stack,2026-05-20T14:49:40-04:00,6af064a0cc1c194fa9b6f3a308567dee596f73fc,Merge pull request #2 from AIQ-Kitware/lora_branch,151,0,1
+infer_stack,2026-05-27T13:13:33-04:00,538e4c5c1b55bbfd945b811795fe597d309da610,Expose ports in the .env file,32,5,2
+infer_stack,2026-06-23T13:33:09-04:00,8150e331f4b58a62fa69e4ffc03709187a189521,Fix TUI resize bug and collapse serve and acquire + other stuff,209,175,17
+infer_stack,2026-06-23T15:07:40-04:00,79902140bbc92fa852ee37149d4179a4a58e8c90,Add admission queue to acquire (wait_for_placement / --queue),223,3,4
+infer_stack,2026-06-23T15:14:21-04:00,55c39a788ff7e8c654c3e507961bf869b3068245,Add `infer-stack gc` to reclaim leaked leases and free GPUs,145,1,5
+infer_stack,2026-06-23T15:33:01-04:00,156f6bb7f540840b34c28aab7b801c35265daa6e,Render LiteLLM with a static superset route table (no-blip gateway),230,24,4
+infer_stack,2026-06-23T16:39:42-04:00,af4d1d6e3df9a45a95a5c24eee7a19bbc26e2c10,Merge feature/litellm-no-blip into the leasing pipeline lifecycle,230,24,4
+infer_stack,2026-06-23T16:42:09-04:00,bfb7dbe7fe4ef7a64bb513fb57b324acdd9148ec,Merge feature/leasing-and-no-blip into dev/leasing-controller,597,27,7
+infer_stack,2026-06-23T16:43:41-04:00,cfddfac022a816480c5328ecc89e6ef537fa68e9,Merge dev/leasing-controller: pipeline leasing lifecycle + no-blip gateway,22700,12364,102
+infer_stack,2026-06-24T15:58:40-04:00,4381731e792fe63e19db2b8605dc932770171bfe,leasing: tolerate configs without a 'catalog' field in _load_catalog,6,2,1
+infer_stack,2026-06-24T16:06:14-04:00,995f45e17aefac278a837c1c76ecec949cd28b4c,Merge dev/lease-polish: leasing/e2e polish + compose-backend catalog fallback,524,34,11
+infer_stack,2026-06-25T08:42:59-04:00,0cde11d5d5a6fb4b18f09b4025423883b3bb1e5d,Merge dev/lease-polish: protocol-aware generation-gated readiness + --catalog routing for release/gc/evict,226,49,7
+infer_stack,2026-06-25T11:12:15-04:00,933c3f2c30d804e8907ba9a6f96c39821c826ca6,gitignore: ignore setuptools build/ output dir,1,0,1
+infer_stack,2026-06-29T09:51:12-04:00,045536cbbc0d40a8654494aabddc5b7bafdb3cea,"Merge dev/lease-polish: host-port churn fix, reconcile locking, dynamic routing",2708,162,19
+infer_stack,2026-06-30T10:40:14-04:00,e2f51fdb88d3551c37232c8c8d0a5275d9ce1bbc,Merge remote-tracking branch 'origin/dev/lease-polish' into infer-stack-cli-api-migration,375,71,3
+infer_stack,2026-06-30T11:01:32-04:00,104d4254fe34bdfee99a77cbf72e77579a27f4ec,leasing: release lease when a not-ready acquire times out,178,10,7
+infer_stack,2026-06-30T13:50:52-04:00,beb1cc66de0bcc5d9279e4f0571114bf3c06098f,fix(leasing): refuse to mutate without a real cross-process lock; group-write new lock files,300,16,6
+infer_stack,2026-06-30T16:13:24-04:00,7fa342dda22fad0a98a3f243b72b1a2c25819b5c,fix(tui): preserve scroll offset when a table rebuilds on poll,88,5,2
+infer_stack,2026-07-01T15:17:12-04:00,caa67503550587cbe3924cb94a5a7f2935a49f92,fix(tui): require a double-click to acquire an endpoint,180,16,2
+infer_stack,2026-07-07T11:55:28-04:00,6c5865686fbf2278b671a75eb17c6a7fc6928092,feat(leasing): attention_backend endpoint option (VLLM_ATTENTION_BACKEND),101,2,7
+infer_stack,2026-07-07T12:00:06-04:00,d685573c0b686bcdd268391ccc3ac8b6436db557,feat(tui): API tab respects endpoint completions vs chat protocol,122,16,2
+infer_stack,2026-07-07T16:09:26-04:00,7f5fafed4df3ee6b5bafaeef1ee07f0c13240901,fix(tui): handle string-form reclaim spec in endpoint edit screen,5,1,1
+infer_stack,2026-07-08T14:59:56-04:00,e5fba7b56796b5724d261f6387cd4dc87aa0b1fe,feat(leasing): reserve-only GPU lease (acquire --reserve-gpus N),339,14,7
+infer_stack,2026-07-08T15:26:25-04:00,1109b0f0e18bf2198c897aeeb080ca94578ff4f3,test(leasing): e2e probe for the reserved-GPU index-frame assumption,150,0,1
+infer_stack,2026-07-08T16:03:58-04:00,c119a62ed91820503898c03f994ccc7d3944671c,docs(changelog): note the reserve-only GPU lease (--reserve-gpus),17,0,1
+infer_stack,2026-07-13T12:33:35-04:00,2d832b610e45e6328898502d246f17decc27b6b9,feat(leasing): append-only LiteLLM route registry (static-superset),783,37,2
+infer_stack,2026-07-13T12:43:02-04:00,869080bca4a1132db048b684e8929f2abc1cd4be,feat(cli): `infer-stack routes` group + route-registry docs,522,18,6
+infer_stack,2026-07-13T12:50:05-04:00,c005a8875ec90969d599d540e16761ec46246c86,fix(tui): surface HTTP error bodies in the API tab,63,2,2
+infer_stack,2026-07-13T13:10:55-04:00,22d94317f90960f0b66434a1bb3d9d1bcd7d7b14,Merge feat/litellm-route-registry into infer-stack-cli-api-migration,1368,57,8
+kwdagger,2026-06-23T14:57:21-04:00,ce246bae023e3cfa29979ccc79c4a139cb50471f,Add ProcessNode setup/teardown resource lifecycle,150,0,3

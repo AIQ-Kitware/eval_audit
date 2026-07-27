@@ -1,0 +1,439 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[letterpaper,margin=0.82in]{geometry}
+\usepackage{microtype}
+\usepackage{setspace}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{url}
+\usepackage[hidelinks,bookmarksopen=true]{hyperref}
+
+\definecolor{kitblue}{RGB}{28,74,110}
+\definecolor{kitgray}{RGB}{90,96,102}
+\definecolor{lightgray}{RGB}{245,246,247}
+\definecolor{green}{RGB}{27,105,65}
+\definecolor{orange}{RGB}{148,91,0}
+\definecolor{red}{RGB}{140,40,40}
+
+\hypersetup{
+  pdftitle={EvalAudit Paper Strategy and Execution Plan},
+  pdfauthor={Edward Wang},
+  pdfsubject={HELM reproducibility, EvalAudit, technical paper strategy, and small-model evaluation},
+  pdfkeywords={EvalAudit, HELM, reproducibility, execution provenance, Qwen, small models}
+}
+
+\setstretch{1.04}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlist[itemize]{leftmargin=1.4em,itemsep=2pt,topsep=3pt}
+\setlist[enumerate]{leftmargin=1.6em,itemsep=2pt,topsep=3pt}
+\renewcommand{\arraystretch}{1.15}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\ready}{\textcolor{green}{\textbf{Ready}}}
+\newcommand{\partstat}{\textcolor{orange}{\textbf{Partial}}}
+\newcommand{\blocked}{\textcolor{red}{\textbf{Blocked}}}
+\newcommand{\callout}[2]{%
+  \begin{center}\fcolorbox{kitgray}{lightgray}{\begin{minipage}{0.93\textwidth}
+  \textbf{#1}\quad #2
+  \end{minipage}}\end{center}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small EvalAudit paper strategy}
+\fancyhead[R]{\small Revised July 15, 2026}
+\fancyfoot[C]{\thepage}
+\titleformat{\section}{\Large\bfseries\color{kitblue}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\large\bfseries\color{kitgray}}{\thesubsection}{0.7em}{}
+
+\begin{document}
+\pagenumbering{gobble}
+
+\begin{titlepage}
+\centering
+\vspace*{0.85in}
+{\Huge\bfseries\color{kitblue} EvalAudit Paper Strategy\par}
+\vspace{0.18in}
+{\LARGE Framing, Scope, Evidence, and a Three-Week Execution Plan\par}
+\vspace{0.55in}
+{\Large Edward Wang --- Kitware Internship 2026\par}
+\vfill
+\begin{minipage}{0.84\textwidth}
+\small
+This reference consolidates the internship chronology, status slides, repository history, journals, runbooks, the inherited Every Eval Ever paper, the TMLR draft skeleton, the OLMo deployment-match confirmation path, and the subsequent paper-framing discussion. It distinguishes what can be published now from what requires additional empirical work.
+
+\textbf{Evidence cutoff:} repository snapshot through July 14, 2026; interpretive revision July 15, 2026.
+\end{minipage}
+\end{titlepage}
+
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+
+\section{Executive recommendation}
+
+With approximately 2.5--3 weeks remaining, the best target is neither a pure position paper nor a broad benchmark paper. It is:
+
+\begin{quote}
+\textbf{A systems-and-measurement paper with a clear position, one deep modern empirical case, one historical forensic case, and an optional narrow current-model demonstration.}
+\end{quote}
+
+The paper must remain publishable if the remaining GPU work does not complete. Its core contribution is EvalAudit and a layered account of benchmark reproduction. Its empirical upgrade is an ordinary-path OLMo confirmation. A Qwen comparison is valuable only after that core result and artifact are secured. Fable-distilled models should be treated as a follow-on unless their data and training provenance are already complete.
+
+\callout{Primary decision}{Secure a correct, auditable manuscript first. Increase model count only after the ordinary-HELM OLMo confirmation, result regeneration, and evidence packaging are complete.}
+
+\section{The two-paper lineage}
+
+The repository contains two scientifically distinct paper lines.
+
+\subsection{Inherited EEE paper}
+
+The NeurIPS Every Eval Ever (EEE) work uses a normalized representation to detect discrepancies on Pythia-6.9B, Vicuna-7B-v1.3, and Falcon-7B across fourteen HELM benchmarks. Its scientific endpoint is discrepancy detection and forensic inspection. Its appendix explicitly leaves unresolved whether residual differences arise from checkpoint, quantization, precision, tokenizer, or generation-kernel choices.
+
+This is inherited, substantially pre-internship work. It should be cited and used as motivation, not retold as a new contribution.
+
+\subsection{Internship follow-on}
+
+The pre-existing TMLR skeleton is the natural home for the internship's distinct question:
+
+\begin{quote}
+How far can execution-provenance reconstruction attribute or close the discrepancies that normalized comparison reveals, and when is the original measurement no longer identifiable?
+\end{quote}
+
+The clean positioning sentence is:
+
+\callout{Paper relationship}{EEE detects reproducibility gaps; the follow-on paper studies their attribution, possible closure, and identifiability.}
+
+\section{Recommended thesis and paper identity}
+
+\subsection{Defensible core thesis}
+
+\begin{quote}
+\textbf{Public LLM benchmark artifacts often identify the evaluation recipe but not the complete execution instrument. Exact run-spec replay and controlled reconstruction of model, tokenizer, precision, engine, and harness provenance can attribute---and sometimes close---apparent reproducibility gaps. When that provenance has been lost or post-hoc transformed, the original measurement may remain non-identifiable.}
+\end{quote}
+
+This thesis is supported even if the ordinary-path OLMo confirmation fails.
+
+\subsection{Forward-looking systems motivation}
+
+The strongest ``why care'' framing is not old-model preservation for its own sake. Historical HELM runs provide forensic evidence from which to derive requirements for trustworthy current evaluation.
+
+\begin{quote}
+\textbf{Auditable evaluation is necessary to determine whether measured improvements in small open models exceed variation introduced by the evaluation substrate itself.}
+\end{quote}
+
+The small-model story should be the application of EvalAudit, not a separate benchmark paper attached to a HELM postmortem.
+
+\subsection{Recommended title}
+
+\begin{quote}
+\textbf{EvalAudit: Reconstructing the Execution Substrate of LLM Benchmarks}
+\end{quote}
+
+Possible subtitle:
+
+\begin{quote}
+From HELM reproduction failures to auditable evaluation of current local models
+\end{quote}
+
+Alternative conceptual title:
+
+\begin{quote}
+\textbf{A Benchmark Recipe Is Not an Experiment: Attribution and Identifiability in LLM Evaluation}
+\end{quote}
+
+\section{Current evidence status}
+
+\begin{longtable}{@{}P{0.29\textwidth}P{0.13\textwidth}P{0.49\textwidth}@{}}
+\toprule
+Evidence / capability & Status & Defensible interpretation \\
+\midrule
+Exact public \code{run_spec.json} replay & \ready & Implemented and shown to correct visible recipe drift, including the documented BBQ prompt mismatch. \\
+Containerized HELM execution and GPU leasing & \ready & Reusable infrastructure exists; individual family grids still require result-level verification. \\
+OLMo tokenizer and template diagnoses & \ready & Special-token and chat-template behavior can change the actual model stimulus and outputs. \\
+OLMo float32/engine result & \partstat & Highest-agreement candidates in an oracle-scored 12-instance IFEval probe; not an ordinary HELM reproduction or proof of the historical deployment. \\
+OLMo Hugging Face dense-model divergence & \partstat & Prompt mismatch was rejected for an inspected case; root cause remains unresolved and scientifically relevant. \\
+Classic HELM source archaeology & \ready & Strong evidence of carried-forward artifacts, migrated class paths, and an inferred compatible unreleased source interval. \\
+Classic proxy execution & \partstat & Era machinery exists; full original-model proxy comparisons were not established in the committed runbook state. \\
+GPT-OSS workflow & \partstat & Null-content compatibility issue diagnosed; exact-path result freshness and acceptance status require reconciliation. \\
+Qwen workflow & \partstat & Combined fan-out is implemented; weight mappings and complete GPU acceptance require verification. \\
+Population-level reproducibility rate & \blocked & No frozen denominator and no fully regenerated publication store. \\
+Broad small-model progress claim & \blocked & Requires exact model revisions, fair protocols, substrate sensitivity, and complete benchmark results. \\
+\bottomrule
+\end{longtable}
+
+\section{The technical model}
+
+Represent a measured benchmark result as
+
+\[
+Y = F(R,D,I,A,U),
+\]
+
+where:
+
+\begin{itemize}
+  \item $R$: recorded recipe---scenario, data, prompt construction, decoding, scorer;
+  \item $D$: deployment---weights, model/tokenizer revisions, template, dtype, quantization;
+  \item $I$: execution instrument---harness, engine, packages, kernels, hardware, topology, batching;
+  \item $A$: artifact interpretation---schema, migration, canonicalization, carried-forward outputs;
+  \item $U$: residual stochastic and numerical influences.
+\end{itemize}
+
+The public record exposes only a projection of these variables. Reproduction is identifiable at tolerance $\epsilon$ when all materially compatible configurations produce equivalent results under a declared output-, metric-, or conclusion-level criterion.
+
+Recommended outcome classes:
+
+\begin{enumerate}
+  \item Recipe mismatch
+  \item Deployment mismatch
+  \item Execution-instrument mismatch
+  \item Artifact-interpretation mismatch
+  \item Residual disagreement under controlled equivalence
+  \item Historically non-identifiable reproduction
+  \item Output-level reproduction
+  \item Metric-level reproduction
+  \item Robust conclusion despite non-identical outputs
+\end{enumerate}
+
+\section{EvalAudit as the systems contribution}
+
+EvalAudit should be described as an evaluation auditing and experimental-control system, not merely a HELM wrapper.
+
+\subsection{Evaluation capsules}
+
+Each run should preserve:
+
+\begin{itemize}
+  \item frozen benchmark specification, harness commit, and container digest;
+  \item dataset and scorer versions;
+  \item model and tokenizer repository revisions;
+  \item chat-template text or hash and tokenized-prompt hash;
+  \item dtype, quantization, engine, attention implementation, and generation configuration;
+  \item batching, cache, tensor-parallel, numerical, GPU, CUDA, and driver settings;
+  \item raw requests, token IDs, responses, metrics, and artifact-transformation history.
+\end{itemize}
+
+\subsection{Layered differential comparison}
+
+EvalAudit should identify the earliest divergence layer:
+
+\[
+\text{recipe} \rightarrow \text{prompt} \rightarrow \text{tokens} \rightarrow
+\text{generation} \rightarrow \text{text} \rightarrow \text{metric}.
+\]
+
+\subsection{Controlled replay}
+
+The system should support counterfactual variation of one component while freezing the others: revision, tokenizer, template, special tokens, dtype, engine, harness era, and---where feasible---hardware-sensitive settings.
+
+\subsection{Structured reports}
+
+Reports should separate coverage and failure classes rather than emitting one undifferentiated reproduction rate.
+
+\section{The blocking empirical result}
+
+The highest-priority experiment is to move the OLMo candidate from the deployment probe into the real HELM path.
+
+\begin{enumerate}
+  \item Freeze discovery instances and candidate configurations.
+  \item Determine whether the winning candidate requires probe-only \code{add_special_tokens=False} behavior.
+  \item Implement required behavior through the actual tokenizer/client path.
+  \item Execute the exact public \code{run_spec.json} through normal HELM.
+  \item Generate ordinary HELM artifacts.
+  \item Compare through the normal pair-report pipeline.
+  \item Evaluate on held-out instances and preferably another benchmark.
+  \item Preserve the full candidate surface, not only the winner.
+\end{enumerate}
+
+A success supports a concrete attribution-and-closure claim. A failure remains publishable: it demonstrates that output-matching probes do not automatically translate into faithful benchmark execution.
+
+\section{Minimum empirical package}
+
+\begin{longtable}{@{}P{0.24\textwidth}P{0.14\textwidth}P{0.14\textwidth}P{0.39\textwidth}@{}}
+\toprule
+Study & Models & Benchmarks & Purpose \\
+\midrule
+OLMo ordinary-path confirmation & 2 & 2 & Dense plus MoE; short deterministic plus IFEval; naive, exact recipe, reconstructed deployment. \\
+OLMo bounded ablation & 1--2 & 1--2 & Dtype, template/generation prompt, and special-token behavior. \\
+Repeatability baseline & 1 & 1 & Three same-machine runs; cross-machine only if operational quickly. \\
+Historical case & 1 & 1--2 & Artifact/source proof; optionally two proxy-era executions. \\
+Qwen demonstration & 2 & 2--3 & Compare model-generation delta with variation under one alternative plausible substrate. \\
+\bottomrule
+\end{longtable}
+
+Outcome metrics should include exact tokens, normalized text, first divergence position, common-prefix length, task-specific correctness or IFEval compliance, aggregate score difference, and ranking stability.
+
+\section{Small-model application}
+
+\subsection{Scientific question}
+
+The future-facing question is:
+
+\begin{quote}
+Is the new or fine-tuned model genuinely better, or is the measured difference an artifact of the evaluation configuration?
+\end{quote}
+
+For a model pair, compare
+
+\[
+\Delta_{\mathrm{model}} = Y_{\mathrm{new}} - Y_{\mathrm{old}}
+\]
+
+with
+
+\[
+\Delta_{\mathrm{substrate}} = \max_c Y_{m,c} - \min_c Y_{m,c}.
+\]
+
+A robust progress claim should exceed or remain stable across the tested substrate variation.
+
+\subsection{Qwen scope}
+
+Within the internship, use at most one carefully matched pair, exact model and tokenizer revisions, two or three benchmarks that discriminate within the small-model cohort, and a pinned EvalAudit environment. Separate native model templates from standardized evaluation semantics, and do not mix thinking/reasoning modes with direct-answer modes without a matched compute or token budget.
+
+The purpose is to demonstrate EvalAudit's relevance, not to establish a comprehensive Qwen leaderboard.
+
+\subsection{Fable-distilled models}
+
+Fable-tuned models become a headline result only if the following already exist:
+
+\begin{itemize}
+  \item exact parent and teacher checkpoints;
+  \item teacher prompts and sampling settings;
+  \item training-data manifest, filters, deduplication, and contamination analysis;
+  \item complete training hyperparameters, seeds, and checkpoint-selection rule;
+  \item held-out and unrelated-task evaluation partitions.
+\end{itemize}
+
+Otherwise, include them as exploratory future work. Adding incomplete synthetic-data experiments would create more reviewer risk than value during the final weeks.
+
+\section{Cost and hardware}
+
+The paper should not describe hardware simply as an unmitigable source of non-reproducibility. Some historical hardware cannot be recreated, but it can be recorded, varied, bounded, and tested for conclusion robustness.
+
+Distinguish:
+
+\begin{enumerate}
+  \item \textbf{Exact replay:} same recorded instrument is available.
+  \item \textbf{Equivalent replay:} a different instrument produces outputs or metrics within a declared tolerance.
+  \item \textbf{Robust conclusion:} exact outputs differ, but the scientific conclusion or ranking is stable across tested instruments.
+\end{enumerate}
+
+For current small models, report GPU-hours, peak memory, throughput, latency, and storage/audit overhead. This makes the paper relevant to local-model development and exposes whether a model's gain is worth its resource cost.
+
+\section{Claims and language discipline}
+
+\subsection{Safe claims}
+
+\begin{itemize}
+  \item A benchmark recipe does not fully specify the experiment.
+  \item Exact-spec replay prevents documented recipe-reconstruction errors.
+  \item Unrecorded tokenizer, template, dtype, and serving choices can materially change outputs in the studied cases.
+  \item Some missing provenance is experimentally recoverable; some historical provenance is not uniquely recoverable.
+  \item EvalAudit provides infrastructure to preserve and diagnose these layers.
+\end{itemize}
+
+\subsection{Claims to avoid until further experiments}
+
+\begin{itemize}
+  \item Most HELM results are reproducible.
+  \item Float32 was definitively the original TogetherAI configuration.
+  \item Precision is the dominant hidden variable in general.
+  \item Residual gaps are small or almost always attributable.
+  \item Qwen 3.x/3.5 definitively advances over Qwen 2.5 across the capability spectrum.
+  \item Fable fine-tuning reliably improves small models.
+\end{itemize}
+
+Use ``highest-agreement tested candidate'' rather than ``the original deployment,'' and ``consistent with'' rather than ``proved'' when multiple latent configurations remain possible.
+
+\section{Three-week execution plan}
+
+\subsection{Days 1--3: freeze and draft}
+
+\begin{itemize}
+  \item Freeze thesis, contribution list, model/benchmark roster, and denominator.
+  \item Build a run-status table separating probe, smoke, exact-path, stale, fresh, and completed results.
+  \item Regenerate all non-GPU provenance analyses.
+  \item Draft introduction, EEE relationship, technical model, EvalAudit system, and historical case.
+\end{itemize}
+
+At this point the manuscript should already be viable as a position/experience paper.
+
+\subsection{Days 4--8: OLMo confirmation}
+
+Resolve the request-path blocker and attempt one dense and one MoE model through ordinary HELM on two benchmarks. Regenerate reports with current code.
+
+\callout{Decision gate}{If no ordinary-path confirmation is complete by the end of this block, stop broadening experiments. Preserve the failure as a result and finish the position/systems paper.}
+
+\subsection{Days 9--12: bounded ablation and repeatability}
+
+Run a small staged or $2\times2\times2$ design over dtype, template/generation prompt, and special-token handling. Add three repeats of the final configuration. Prefer held-out confirmation over more factors.
+
+\subsection{Days 13--15: historical evidence and artifact}
+
+Regenerate hashes, source compatibility, and the historical timeline. Run a proxy-era comparison only if the path is already operational. Package immutable evidence and figure scripts.
+
+\subsection{Days 16--18: optional Qwen demonstration}
+
+Proceed only after the paper's core empirical and artifact milestones are complete. Use one matched pair, two or three benchmarks, and one alternative plausible execution configuration.
+
+\subsection{Final days: freeze}
+
+Stop experiments, audit every claim against stored evidence, complete limitations, regenerate every figure from scripts, and archive the paper artifact.
+
+\section{Recommended display items}
+
+The highest-value figures and tables are:
+
+\begin{enumerate}
+  \item Layered measurement-instrument diagram.
+  \item EEE-to-follow-on paper relationship diagram.
+  \item Corpus eligibility and completion funnel.
+  \item OLMo agreement waterfall: naive, exact recipe, reconstructed deployment.
+  \item OLMo bounded-ablation table or heatmap.
+  \item First-divergent-token examples.
+  \item Historical HELM source/artifact timeline.
+  \item Provenance field table: recorded, missing, material, recoverable, recommended.
+  \item Optional Qwen model delta versus substrate variation.
+  \item Capability-cost frontier for the small-model demonstration.
+\end{enumerate}
+
+\section{Submission-readiness criteria}
+
+The hybrid paper is ready when:
+
+\begin{itemize}
+  \item inherited EEE results and internship contributions are explicitly separated;
+  \item every result is labeled probe, smoke, exact-path, historical inference, or completed comparison;
+  \item all cited tables are regenerated from current code and a frozen denominator;
+  \item the ordinary-path OLMo outcome is reported honestly, whether success or failure;
+  \item historical inferences are labeled as source-compatibility inferences;
+  \item raw evidence, manifests, revisions, environments, and figure scripts are archived;
+  \item the paper does not depend on unfinished Qwen or Fable results.
+\end{itemize}
+
+A broader empirical paper additionally requires held-out configuration validation, larger benchmark samples, controlled ablations, local-local and cross-machine baselines, completed modern-family breadth, and statistical uncertainty.
+
+\section{Final recommendation}
+
+The highest expected-value strategy is:
+
+\begin{quote}
+\textbf{Write the position and system paper now; use one end-to-end OLMo study to raise its technical level; add a narrow Qwen demonstration only if the core work finishes early; reserve the full small-model and Fable study for the expanded follow-on paper.}
+\end{quote}
+
+This plan preserves a publishable output under failure, directs scarce GPU time toward the single experiment that changes the paper's evidentiary status, and leaves a coherent path to the higher-value small-model measurement paper.
+
+\end{document}

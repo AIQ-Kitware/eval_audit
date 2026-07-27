@@ -1,0 +1,17 @@
+item,decision,implementation,qualification
+A1 live commit 86ec84af,accept with evidentiary relabel,"Marked collaborator-verified, not established from packaged artifact",Include Git bundle or immutable remote reference to promote
+A2 GPT-OSS store freshness,accept report freshness; reject preservation-only conclusion,Strategy and chronology distinguish report/run/comparison freshness,Publication readiness needs manifest-based acceptance
+A2 OLMo store staleness,accept,Marked blocked and must regenerate,Provisional corrected values remain uncitable
+A2 RedPajama both-era stores,accept with packaging caveat,Marked collaborator-verified proxy execution,Not proof of original instrument
+A2 Qwen store absent,accept,Marked genuinely pending/blocked,Do not depend on Qwen for near-term paper
+A3 deployment-match scope,accept with provenance caveat,Retained IFEval-only discovery status,Package sweep manifests before publication
+A3 59 percent figure,accept as internal estimate only,Added source and denominator regeneration requirement,Not a publication statistic yet
+B1 dense-model HF probe artifact remains live cause,accept,Added as competing explanation,No single root cause claimed
+B2 recorded HuggingFaceClient wording,accept with source-version qualification,Uses recorded client class wording,Does not uniquely identify exact historical implementation build
+B3 30x not two orders,accept,Corrected throughout,Regenerate accepted stores before headline comparison
+B4 canonical ledger,accept,Created master_claim_evidence_ledger CSV as source of truth,Prose tables are snapshots
+B5 vendor-named front matter,accept in principle,Neutralized to independent reconstructions; retained concise governing summary front,Detailed correspondence preserved under validation
+B6 packaging and compile integrity,accept,"Structured package includes appendices, accurate README, compiled PDFs",Guards retained only as resilience
+Independent: reproduction target levels,add,Added artifact/procedural/claim-level axis,Orthogonal to six-category cause taxonomy
+Independent: store acceptance gate,add,Added run/comparison/report freshness and required manifest fields,Prevents report timestamp from becoming a scientific acceptance criterion
+Independent: non-identifiability scope,add,Qualified relative to surviving evidence examined,Avoids absolute impossibility claim

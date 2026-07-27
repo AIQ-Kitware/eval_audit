@@ -1,0 +1,453 @@
+date,hash,subject,insertions,deletions,files_changed
+2026-06-03T11:53:17-04:00,ca46b11eb8d031837a13623f2ae3fd91bab2175e,Add adapter config for the e2e test and update matching logic,319,74,2
+2026-06-04T10:01:04-04:00,ed9e40ed4672aa081f486413bc102e76e21f94b9,Add e2e tests,263,0,6
+2026-06-11T14:46:40-04:00,609e02bb671ea770bede0f5afa54ee8cd1f71855,Fix stale prioritized-example repair test to match no-regeneration contract,48,34,1
+2026-06-11T14:46:40-04:00,59fbdc2d12155895e11078ce51fdc78c3989bc6b,Add repo refactor plan and journal entry,355,0,2
+2026-06-11T14:48:36-04:00,f3953650f7e364f1a553222a804c314135bd0e4d,Phase 0a: clean up repo root (refactor plan),18,12,5
+2026-06-11T14:49:14-04:00,6f294d0323b3a11cfc47f2a672ba9deace49e5ff,Phase 0b: finish vllm_service -> infer_stack rename,2,2,3
+2026-06-11T14:50:32-04:00,3507539d564748726884bb12a2c832a58dae99f3,Phase 0c: consolidate root docs,5,2,4
+2026-06-11T14:53:31-04:00,4a0ae5b73a2fe0439c34a23415c1261a80250f28,Phase 1: every console script resolves to eval_audit.cli.*,71,12,9
+2026-06-11T14:56:13-04:00,6d5035aad9eaeb2cb4ccb83b66e3b05b577e130f,Phase 1: retire grouped-CLI dispatchers and dead alias module,34,37,7
+2026-06-11T14:57:54-04:00,4473bfc925c07e21178fa1d2498e88ff75225248,Phase 1: role docstrings for core_* modules; fix stale runbook command,46,1,6
+2026-06-11T14:59:25-04:00,b3a4b2723decee26a6feee54663f5a25a7fc4667,Phase 2 prep: hoist @profile shim into infra/profiling.py,44,102,15
+2026-06-11T15:11:16-04:00,7f64806b90c802519f4690cf749614f466b83cad,Phase 2: split build_reports_summary into reports/summary/ subpackage,4570,4235,12
+2026-06-11T15:12:03-04:00,72bfeb3d45d6848c6a89fb0ea53648c3a3608d65,Journal: refactor plan implementation session (Phases 0-2),85,0,1
+2026-06-11T15:17:28-04:00,9b7ddb74a0740320a70ca22b54807473e1b933ff,Phase 2: extract Stage 1 library logic from cli/index_historic_helm_runs,639,568,3
+2026-06-11T15:18:39-04:00,ca6f5d7b8ae27a3726a0b9e9d7a94102d423b41b,Phase 2: extract diff primitives from helm/diff.py,715,668,2
+2026-06-11T15:22:35-04:00,dd742728415c72de75fb28fc940377c93cdcaa18,Phase 2: split core_metrics into curves / plots / tables modules,2165,2003,5
+2026-06-11T15:23:48-04:00,9a3778386f2a75fa5188850c389e7c5bc132e0d3,Phase 2: split filter_analysis into tables / text / charts / io modules,1313,1206,5
+2026-06-11T15:26:52-04:00,c201938fb2be24b6f3b5823fa32bb6c33e8e82e9,Phase 2: split eee_only_heatmap into data / render modules,1243,1173,3
+2026-06-11T15:28:53-04:00,9fcdfefe46b618fbdec7b2abe68ed9bb51eb4598,Phase 2: split helm/analysis into instance_stats / analysis_report,1075,1028,3
+2026-06-11T15:30:14-04:00,3822d676024f310b9a9bd5d6174b1e60909d4f22,Mark Phase 2 secondary targets done in plan; journal entry,91,6,2
+2026-06-11T15:44:07-04:00,5b05562ffd0e7101c06b57b2cc47cdb79cfd49cb,Add Phase 3 design docs (comparison-core unification + equivalence matrix),522,27,3
+2026-06-12T09:03:55-04:00,76a320c3ea52c1e6f22b2d55ddfcf3ddedd20bb3,Revise Phase 3 design docs for the new research program,389,261,3
+2026-06-12T09:04:45-04:00,352d55d0eba0ab99dcf7e6cf7a84a0081022845e,Journal: Phase 3 design + research-program revision,73,0,1
+2026-06-12T09:10:35-04:00,94c7fb49bce4993dbaa6def3b72f05c2674b6cd0,"Phase 3 / 4.0: lift metric taxonomy out of helm/, add judge-dependence class",283,115,4
+2026-06-12T09:15:09-04:00,4a36e6d4829fcff06467cffba2c6c810637755fa,Phase 3 / 4.1: recipe_facts accessor + judge-identity fields,453,1,3
+2026-06-12T09:18:48-04:00,1836be3e5172e9ca5ecf19de5152e06af6e7f3ad,Phase 3 / 4.2: normalized/diagnose.py -- framework-free diagnosis port,559,0,2
+2026-06-12T09:23:26-04:00,6656048b209ac541a84c0dcddd73a26caddbc064,Phase 3: behavior baseline capture harness + committed F3/F4 snapshots,1919,0,5
+2026-06-12T09:28:32-04:00,426a211a7e5b8ad4c58af0d430405432c086f9b2,Phase 3 / 4.4: EEE synthesis library home + zero-HELM EEE entry points,507,436,11
+2026-06-12T09:29:18-04:00,12623aa5ccc85061be21336c23407def474f2ab4,"Journal: Phase 3 implementation session (4.0-4.2, baseline, 4.4)",75,0,1
+2026-06-12T09:43:39-04:00,a347eca07121bbca673a4f7d7f89541df96137f6,Phase 3 / 4.3: NormalizedDiff -- the unified comparison core (additive),616,102,3
+2026-06-12T09:46:04-04:00,cc6c9e8b41fd4be7c6e0f1d1564dbad022b61a89,Phase 3: judge-identity inventory across the closed-judge benchmarks,86,0,1
+2026-06-12T09:46:29-04:00,dfe2c941d3888e7a96b25cc8ba88545ac0adad75,Journal: Phase 3 continuation (4.3 + judge inventory),62,0,1
+2026-06-12T09:53:37-04:00,5c8f7a48fcffdb6c7a7909b705fa74e8bebf386a,Phase 3 / 4.6: route the renderer through NormalizedDiff; single diagnosis impl,59,271,3
+2026-06-12T09:59:26-04:00,9e40aa92ea2bd7ed1da88068451c0adef7bff479,Phase 3 / 4.5 (loader half): declared instance-source policy + F6 probe,206,22,2
+2026-06-12T10:05:09-04:00,e5f905c78e9df37b1f033eff4277a25e405ceaca,Phase 3 / 4.5 (renderer half): --instance-source flag + recorded provenance,75,0,6
+2026-06-12T10:06:01-04:00,0299ed0356f5a581955d84fde45d45a1f90ae3e4,Journal + design-doc status: Phase 3 sub-stages 4.0-4.6 complete,75,0,2
+2026-06-12T10:11:18-04:00,3ef5233e53c515306788d35d9434e5aed65b4aa2,Phase 3 / 4.9a: curated judge registry + identity resolution,166,3,3
+2026-06-12T10:17:53-04:00,900ab05c38226fe0d99da7f116de0698c8dd123b,Phase 3 / 4.9b+c: declared judge substitutions through planner + renderer,363,18,5
+2026-06-12T10:22:55-04:00,5b34364fa27a3eaa94048d03420ca18d8bfda483,Phase 3 / 4.9d: Stage-1 --allow-closed-judge-benchmarks relax,147,13,3
+2026-06-12T10:23:45-04:00,ca83c051f770c1d1ac2f616dc2f7a2672dd6a32d,Phase 3 / 4.7: draft the upstream EEE recipe_facts issue,89,0,1
+2026-06-12T10:28:22-04:00,f099bb2a2df0f77f49c5f27bad24488402c2dd1e,Phase 3 / 4.8: docs pass + legacy-bridge marking + final status,100,27,5
+2026-06-12T10:28:54-04:00,ac3445eeb42686cebf64a91ee935db31f9a8021a,Journal: Phase 3 completed (4.9 + 4.7 draft + 4.8),69,0,1
+2026-06-12T13:05:28-04:00,aaa2c9287e6c410303988b66241fad16307c2833,Fix infer_stack adapter: drop removed root= kwarg from load_profile_contract,6,1,1
+2026-06-12T13:12:41-04:00,bcb0e16f60adcc7f4d73cb117c4f5a9bf253a3ad,"Add OLMo reproduction smoke suite: adapter presets, run scripts, and virtual experiment config",1385,0,14
+2026-06-12T13:52:30-04:00,ec4960aa2ce1c0fd73c3322dd74e1c189a9642ea,Update deprecated hf auth call,1,1,1
+2026-06-12T13:55:15-04:00,92f9582a11ac046ee7db9ccd2f907d6671c6764f,Switch profiles without prompting,1,1,1
+2026-06-12T15:23:08-04:00,31961a849464031c959d96f5279ae6c56f2404bd,Fix OLMo tokenizer aliases to match HELM registry,3,3,1
+2026-06-12T16:04:45-04:00,517cbbf5cd88b9216aa9db7dc946fcc5b3af5da6,Add sentencepiece/tiktoken tokenizer backends as deps,6,0,1
+2026-06-12T17:09:59-04:00,2aea115d4a4f441931e46823e5aaf0ae13cdc450,Fix olmo-7b tokenizer load via a HELM entry-point plugin,58,6,2
+2026-06-15T08:48:31-04:00,f85b18170d08aab0b8201916a282cf8071e9243a,Add OLMO_FORCE_RERUN to re-run OLMo smoke grid over prior results,25,1,2
+2026-06-15T09:17:00-04:00,386986536a217f9842e47efc31b385228b8b1d9a,Add OLMo full-run grid; rename runbook to olmo_models; group on full runs,226,57,13
+2026-06-15T11:49:22-04:00,dd6575b6da5c20e9a914ae28df9e1cad28abc5bd,Add updated config to work on aiq-gpu,82,12,1
+2026-06-15T12:46:01-04:00,bef5ccc01521d2c7cf30f94286d3d9042f144692,"Restrict to gpus 2,3",5,0,1
+2026-06-16T09:00:24-04:00,5c0490c9d2289747425efc7358db20ecc5f1063b,Reserve chat-template headroom for OLMo openai-compatible runs,98,0,2
+2026-06-16T09:55:58-04:00,8cb5eb7566bc99948c442fd1ca39f6753049e459,Stage natural_qa data via gcloud auth + helm-run shim (script-only),363,0,6
+2026-06-16T09:57:41-04:00,01a6888018fbf720d6d2cbe12da6bbd368b3d84d,Drop OLMo math runs (competition_math disabled on HF Hub),14,7,1
+2026-06-16T10:13:11-04:00,ddc4040736b8b644206ec7630badc4d8a28d4907,Drop OLMo natural_qa runs (GCS bucket denies authenticated reads),40,364,7
+2026-06-16T10:30:10-04:00,4354ef6845e63afe42241e878f30959a9630a111,Default OLMo smoke grid to force-rerun; keep full grid opt-in,10,5,2
+2026-06-16T13:04:13-04:00,5d02e12b79c37ab49ff1cf0f54447d7694d69f72,Add containerized HELM execution path for the kwdagger pipeline,1484,7,17
+2026-06-16T15:59:26-04:00,7b028102c9ccf818f622ed60e59c90a9bd117e4f,Restructure phi-2 e2e tests into the olmo_models runbook shape,746,121,17
+2026-06-17T09:36:02-04:00,4d5c411e073c204d25585aaa7df54e40c9a0ed7e,"Add containerized phi-2 e2e example (vLLM served on host, HELM via --network host)",327,11,10
+2026-06-17T11:12:01-04:00,63f8c8cd1896a6ce33b2654e4a04b754d802de49,Enable public comparisons for the olmo full virtual experiment,5,5,1
+2026-06-17T14:32:12-04:00,0d4a41836e7fe91c51ecb2c4c6968a12d1157e78,docs(planner): add robust order-insensitive matching plan,200,0,1
+2026-06-17T14:33:35-04:00,b7373676628c06fdea5d8e87791ca11e4b8226e6,feat(run_entries): add order-insensitive canonical_logical_key,147,0,2
+2026-06-17T14:37:38-04:00,a25aac93b22fb2c06f8441a107076fb4ade3a11b,feat(planner): group runs by order-insensitive canonical key,252,100,2
+2026-06-17T14:38:56-04:00,d8e6b698a755a31a43958ae932f27f4b36cc2e37,docs(planner): document canonical-key matching + journal entry,91,0,2
+2026-06-17T15:02:50-04:00,ceefb4603b33e3c624af7e64087ac9717b9a6cd8,Merge branch 'main' into olmo-reproduction,0,0,0
+2026-06-17T15:52:39-04:00,36b7860abb8ab72acd69387ff696a716da0b9d18,Merge branch 'olmo-reproduction' into main,0,0,0
+2026-06-17T15:59:11-04:00,f46445d9c7474ea0602ccdaabd7f6e6281ed8b0c,Merge branch 'main' into e2e-refactor,0,0,0
+2026-06-18T09:26:38-04:00,f23bf6963a967a1e65a6eb68beae6bc31fe3f486,Run the phi-2 container e2e example by default (opt-out),73,28,4
+2026-06-18T10:04:17-04:00,0e8617a7be8a955055e2e214e93073a85b838bf7,Fix dangling venv python in the HELM-runner image (multi-stage uv),59,1,2
+2026-06-18T10:32:06-04:00,fa37fd6ce4ef1b3d921a39ba3226b56048dbfe0f,Run HF e2e scenario first on a freed GPU; spin vLLM down at grid start,59,7,5
+2026-06-18T11:17:40-04:00,1cb228a55d505acead60dec27504999ba8e6e0f0,Enable public comparison in the non-smoke e2e experiments,67,26,3
+2026-06-18T12:06:08-04:00,de439c56b58315a09153cbf24fe5971cc50b40d5,Split the e2e-phi2 report into one virtual experiment per scenario,282,170,11
+2026-06-18T12:18:06-04:00,89695fe60aade1743de6831bb8096d18af29a23a,Force matplotlib Agg backend in report rendering (fix Tk core dump),68,0,6
+2026-06-18T12:47:38-04:00,55fb5ecfd08edf9de2f2d1bb05aaa57b7a7f248a,Merge branch 'e2e-refactor' into main,0,0,0
+2026-06-18T13:33:54-04:00,cc57d5d71d711e8f5e17c3a83f56af95ab93561b,Run OLMo reproduction through the containerized HELM pipeline,430,4,8
+2026-06-18T14:25:31-04:00,c8b3d5257fe91459f1535d349171ed2a8106b10f,Align OLMo BBQ run entries with public recipe (output_format_instructions),391,7,4
+2026-06-22T16:58:27-04:00,10c3db97aef0cd0a638cb82c26c10c07359ca86b,Migrate infer_stack integration to the catalog/leasing API,387,286,5
+2026-06-22T17:01:50-04:00,f779d59671f6f4ea1a77856821dbad8a35ca35af,Reschema the e2e + OLMo infer-stack config dirs to catalog.yaml,169,548,8
+2026-06-22T17:08:06-04:00,f4236d61e1984e461a518b15ddd187339dcb59d8,Migrate the e2e + OLMo runner scripts to the leasing CLI verbs,167,108,8
+2026-06-22T17:11:15-04:00,e8e76818fd3ac86073c4981f9a658a0c14352d8a,Update the e2e + OLMo runbook docs for the leasing CLI,73,52,3
+2026-06-22T17:13:09-04:00,ab8af6c8fc2f033ed8efd3bad575194248c00a7d,journal: infer-stack CLI/API migration session,73,0,1
+2026-06-23T09:55:43-04:00,4afe6a66a0df36abd5e9eeeffc6805c20720d443,Merge branch 'olmo-docker-pipeline' into main,0,0,0
+2026-06-23T10:03:29-04:00,22395e215075b141e0e0668f613c7efa085da57d,Merge branch 'main' into infer-stack-cli-api-migration,0,0,0
+2026-06-23T15:15:20-04:00,d259d2488b00e93aa861758504303143cd3b751a,docs: plan for infer-stack <-> kwdagger high-throughput integration,499,0,1
+2026-06-23T15:16:35-04:00,dac259782b17d8b5409a084ef928e92ff3c415c4,journal: leasing-pipeline-lifecycle planning + implementation session,132,0,1
+2026-06-23T15:40:55-04:00,ee34857c02fc14aa5de3797589e009509eab5f54,Messy state,952,36,19
+2026-06-23T15:49:00-04:00,da930f4c840b3f83a05664e423e550fd0288d5f8,Remove old-schema config.yaml resurrected by a bad merge resolution,39,162,2
+2026-06-23T15:51:05-04:00,de9919dbc8c5b4fa9a0caf5f8bf22a6aa2766343,"docs: drop I4/I5, add eval_audit-integration hand-off",212,28,2
+2026-06-23T16:34:34-04:00,24991d17177dfcf7215176988278b78502e93f53,Wire per-run infer-stack GPU leasing into the HELM fan-out,960,18,11
+2026-06-24T12:20:52-04:00,4158bea0282c7435861c5b2c81d0505e7e0ca066,Require containerized HELM execution; leasing as an orthogonal bracket,358,259,7
+2026-06-24T12:21:00-04:00,c5ff9a35deb708183ccfecc163e82615cf1c4473,Containerize the e2e presets; drop the redundant -container scenario,72,129,5
+2026-06-24T12:21:10-04:00,03dc08e5ddec9f2bd753bf44f8e15665250de90c,Lease + containerize by default across the OLMo and e2e grids; drop the toggles,312,292,9
+2026-06-24T12:21:17-04:00,25811227b990f6c5f48197d9eddfe495d8493a87,docs: containerization mandatory + leasing default; session journal,332,105,4
+2026-06-24T12:49:19-04:00,5317e14fee82b78ceef571a5e28fb365c5fe78ef,Update gitmodules and bump commit hashes,6,6,5
+2026-06-24T13:09:06-04:00,ac444241d9aecd58bdb0a4015666be34a0725423,Merge branch 'main' into infer-stack-cli-api-migration,0,0,0
+2026-06-24T14:05:28-04:00,31dda44ca8b18eb31cb59092e615c32b44a6a3de,infer_stack: make protocol_mode a required preset fact (no silent chat default),134,8,3
+2026-06-24T15:59:06-04:00,2fd3fd6c2806d6e7e8c77558bd272b06daf0a008,e2e/olmo grids: pass --yes to the bootstrap 'release --evict',4,4,4
+2026-06-24T15:59:07-04:00,94980dda38e55805cbe3984d775df88b7e3f97b4,journal: leasing CLI bringup notes (_load_catalog AttributeError fix),47,0,1
+2026-06-24T16:00:18-04:00,d9f075db67c0422e59e519cf9631dde8fdb62f57,infer_stack: bump submodule to the _load_catalog catalog-field fix,1,1,1
+2026-06-24T16:07:47-04:00,b2aff8fe511496818799732496ac53becaf433aa,infer_stack: bump submodule to the dev/lease-polish merge (995f45e),1,1,1
+2026-06-25T08:44:34-04:00,fde72004d20282fe255bcf3e752e8902c0a46f21,infer_stack: bump submodule to the dev/lease-polish merge (0cde11d),1,1,1
+2026-06-25T08:55:13-04:00,be2a72a6b82599493992672a4ae473ba60be4663,catalogs: declare protocol: completions for base-model endpoints,80,7,3
+2026-06-25T09:24:21-04:00,23a204590b17d99df1136f1fdb80224e8e2e8f15,e2e: always force-rerun both grids; remove the E2E_FORCE_RERUN opt-out,21,19,2
+2026-06-25T09:57:53-04:00,248c3b4baa68765dfb300050ac306cab4e312047,e2e: recap every scenario's report path at the end of 40_build_summary,26,0,1
+2026-06-25T10:07:20-04:00,43d3c2b01cbaa5fe13635a1d38ca4defbe41ca32,"e2e: drop the broken ""start here"" README link from the summary recap",1,2,1
+2026-06-25T10:59:41-04:00,212289e55b97f570c71578a1fd73be58d18840e9,docs(planning): bring the run-from-run-spec replay plan onto the impl branch,404,0,1
+2026-06-25T10:59:41-04:00,1cd447783218b6c7a110d7a3b768d1d1f67a52ae,manifests: add from_run_spec + --precomputed-root to make-manifest,41,0,2
+2026-06-25T10:59:41-04:00,622881b2dafcc4e6987299c4e5aa4c64def4d2b6,pipeline+bridge: route from_run_spec runs to the replay docker node,64,0,2
+2026-06-25T10:59:41-04:00,f54d29c4f1b8bd91b4ed7681a9e7d1b0d4a22ee1,test+journal: from_run_spec pipeline wiring tests; session journal,284,0,2
+2026-06-25T11:28:59-04:00,7ee5ecee19cf238dc2b6f49f92403761368f3a61,submodules: bump aiq-magnet gitlink to the from-spec replay CLI (4b10e1b),1,1,1
+2026-06-25T11:30:28-04:00,d5180845be7b9b257c36a758335fa911d7709a35,submodules: bump infer_stack gitlink + track its working branch,2,2,2
+2026-06-25T11:32:36-04:00,bd097610a153f701ba6b2c1ea89a0b58c6db4533,gitmodules: track aiq-magnet impl/run-from-run-spec branch,1,1,1
+2026-06-25T11:51:44-04:00,5e1edb4b7d8733585a135a8a40f4fa9705521bfc,docs(planning): plan to migrate the phi-2 e2e to run_spec.json replay,237,0,1
+2026-06-25T12:26:29-04:00,353e74b54adcfe06fee29dff0affc0a5cf57f0f9,docs(planning): correct the phi-2 e2e from-spec plan after a code review,59,27,1
+2026-06-25T12:32:00-04:00,f18e503601cb620cb5c9468e66255368a7404102,e2e(from-spec): HF override + sibling from-spec manifests (Change 1),113,0,3
+2026-06-25T12:36:02-04:00,1d90f4539e9de00c65aad1b4c98384e6a5e74b74,e2e(from-spec): teach export-benchmark-bundle the from-spec path (Change 2),78,2,2
+2026-06-25T12:37:30-04:00,d81ca3cab2da904ea18c3cb3eaa53e46208c2ca8,"e2e(from-spec): gate the grid on E2E_FROM_SPEC, carve out incomparable (Change 3+4)",56,10,3
+2026-06-25T12:41:08-04:00,2368fe9aea3f3f650ffdf8edc80d9bc2015dfd61,e2e(from-spec): tests for the phi-2 from-spec exporter + discovery (Change 6),223,0,1
+2026-06-25T12:42:11-04:00,ea0141aef37503adb45b2bea2df02518c9d4f6c0,journal: session entry for the phi-2 e2e from-spec review + implementation,59,0,1
+2026-06-25T12:49:58-04:00,daf6dfbb6c57497693be3647ea375e24a3be47f7,"e2e(from-spec): make faithful replay the default, drop the opt-out",81,136,8
+2026-06-25T12:52:49-04:00,33a0606f28e77b4f00f082abfdae51fe6927f99b,docs(e2e): reflect from-spec-as-default (no toggle) in plan + README,84,47,2
+2026-06-25T12:53:28-04:00,05d2932e43d26c0c6914b3a0c3721f7054114a0b,journal: from-spec becomes the e2e default (toggle removed),36,0,1
+2026-06-25T14:37:29-04:00,e2543fb5d460aa5de090c53dc258f4e6313bcf8f,fix(e2e from-spec): override dropped phi-2's context window -> window-service crash,15,0,2
+2026-06-25T14:51:56-04:00,05a704d32580f7025adb9459287dbf09b01be019,docs(planning): plan to record the local deployment on from-spec replays,262,0,1
+2026-06-25T14:57:51-04:00,1a1199197f12a76667f094d12bf86a4fb9dbf4b6,docs(planning): lock in explicit --model-deployment (reject auto-derive),31,19,1
+2026-06-25T15:24:18-04:00,f65997d34959e6e351036972345663adcb23c99a,"from-spec(deployment-rewrite): record the LOCAL deployment, unmask same_deployment",449,71,12
+2026-06-25T15:24:29-04:00,b783a95c47fa780c484dc7499dc1e271d5c4fe18,docs(from-spec): mark deployment-rewrite implemented; amend superseded plans,165,17,7
+2026-06-25T15:37:50-04:00,a4b5bac591680aacff5b5dd448172b0ee46077e9,docker(helm-runner): split helm/magnet install so magnet edits skip the heavy layer,27,6,1
+2026-06-25T15:40:59-04:00,bad2755f4b766f13d59661932c4836f93531641c,gitignore: ignore docker/build.sh staging context (.build-staging/),3,0,1
+2026-06-25T15:44:18-04:00,abc00b3c1c7d81a30e60740f82af60e91a10be3f,submodules: bump aiq-magnet gitlink to the --model-deployment rewrite (50489f0),1,1,1
+2026-06-26T13:07:30-04:00,1eb52704a068bb41f0c87ac4daa41d4233f43a9f,docker(helm-runner): raise build-step nofile ulimit to survive uv bytecode compile,14,0,1
+2026-06-29T08:16:39-04:00,8d96a471a4089888e3aeb87305caac581dbaa57d,e2e(infer-stack): resolve data_dir as env > settings.yaml pin > /data default,54,18,2
+2026-06-29T09:41:53-04:00,0f09fe8737fd6122b282624622db51c2411e3b9b,submodules: bump every_eval_ever gitlink to tmp-branch (b1c5a0f0e),1,1,1
+2026-06-29T09:51:59-04:00,150208259c6e5366f52e22e5c5e8daa51a61ac79,infer_stack: bump submodule to the dev/lease-polish catch-up merge (045536c),1,1,1
+2026-06-29T12:48:49-04:00,b5c4cfeda8848f227786fdddca65537d25107075,fix(eee-convert): replay run prod_env so local deployment aliases resolve,45,0,1
+2026-06-29T12:48:49-04:00,03b98e9ff3ad1808aec8e24ce8071f09df5a0a3c,feat(e2e): aiq-gpu rsync fetch utilities (17 + 42 + shared lib),292,1,4
+2026-06-29T12:48:49-04:00,eb904ea7c23a18f61246ea8aacf313f24e757db1,docs(journal): session entries for aiq-gpu rsync utilities + eee-convert fix,141,0,1
+2026-06-29T12:51:10-04:00,ecd1db15152e0b5b508b10d563e9b7c540e109e5,docs(e2e): add NOTES.md for the venv pin + from-spec conversion gotchas,54,0,2
+2026-06-29T13:27:38-04:00,1b75bd0c9db55e9414844e878bfea313ecc854db,docs(planning): olmo from-run-spec migration plan,252,0,1
+2026-06-29T13:41:04-04:00,5c31a05fa8850df9af27020f0b6cdace89dc0004,feat(olmo-from-spec): Change 4 discovery dry-check + measured baseline,347,30,3
+2026-06-29T14:03:09-04:00,b2ebad72099cecbb39d010bf37538ef0d67339cb,feat(olmo-from-spec): Change 1 -- from-spec preset fields + run-entry reconciliation,180,79,6
+2026-06-29T14:13:17-04:00,ab5bdc2e8c1e62a7069b92a6172aa9c46f60f2a5,docs(planning): handoff prompt to continue the olmo from-spec migration,143,0,1
+2026-06-29T14:21:30-04:00,99bdc0eeae17f90fb176c0c5bd05c9144914b9ef,feat(olmo-from-spec): Change 3 -- wire --from-spec into the smoke/full grids,20,2,2
+2026-06-29T14:21:42-04:00,037ba682c1211e4a6cae46f4bc786567b66dab5f,test(olmo-from-spec): Change 6 -- discovery dry-check + comparability proof,174,0,1
+2026-06-29T14:23:42-04:00,1ad68a8bef5f7ebe9b9fe5c3ca08db44e71224b9,fix(olmo infer-stack): Change 7 -- resolve data_dir as env > settings.yaml pin > /data default,61,7,2
+2026-06-29T14:30:17-04:00,90d95811cb7641a9f3d92d4106c961d7235bb06c,docs(olmo-from-spec): Change 8 -- README from-spec default + annotate NOTES as resolved,145,43,9
+2026-06-29T14:32:46-04:00,91413bac68be78775d9c48e39690b2c51f21f28d,docs(olmo-from-spec): mark Changes 2/3/6/7/8 done; only Change 5 (GPU) remains,148,49,3
+2026-06-29T15:24:39-04:00,5accb6cd1cc67e767362e3ebc0f9208b882a0016,fix(olmo container): install eval_audit in runner image so in-container helm-run loads the olmo-7b tokenizer override,71,1,2
+2026-06-29T15:24:39-04:00,536b060795983830d20d5491f95b85911023a460,docs(journal): in-container olmo-7b tokenizer override (eval_audit missing from runner image),23,0,1
+2026-06-29T16:36:54-04:00,2e1c40e3352a88ff5fba84766646f259d3041ed8,docs(planning): multi-model from-spec via local-deployment-scoped discovery strip,233,0,1
+2026-06-30T09:25:36-04:00,ae14bc7738493154ffb5ce15ee43400b7feccbe0,"fix(container): deliver HF token via mounted cache, not env-forwarding",81,0,2
+2026-06-30T09:25:44-04:00,ebcc5b7d37f492206d1a32ba4a660953827c823a,docs(container): correct HF-token delivery mechanism,49,14,6
+2026-06-30T09:25:49-04:00,c763a6ea6dbeb4a7591aead04f8026b4ffb431c3,docs(journal): HF token on-disk delivery for containerized runs,24,0,1
+2026-06-30T09:41:23-04:00,9ce64278f4420d0774a690d751b8cbd600a4f9eb,fix(olmo container): install crfm-helm[all] + pin huggingface_hub==0.36.2,25,10,3
+2026-06-30T09:44:13-04:00,0fdc74576592fc8d7d4ef87faebcb4e45e6c1fe5,test(olmo smoke): preflight probes container python env (langdetect + hf_hub pin),57,5,2
+2026-06-30T09:44:45-04:00,528d341a6810d95168424859e795d481656ccfba,docs(journal): container env fix (crfm-helm[all] + hf_hub pin) + smoke probe,25,0,1
+2026-06-30T09:54:02-04:00,bf2b9767ed1ff1417cb4271b5752db32e6308713,test(olmo smoke): add wmt_14 + ifeval recipe canaries to smoke grids,23,3,2
+2026-06-30T09:54:24-04:00,676746d0de27d68081694c47e191fd1f5c5b2831,docs(journal): wmt_14 + ifeval smoke canaries (from-spec-constrained selection),16,0,1
+2026-06-30T10:07:37-04:00,99e27c51eb762da4e4cb19544ff7cfae3bbe1044,test(e2e): preflight probes container python env (langdetect + hf_hub pin),53,3,2
+2026-06-30T10:07:56-04:00,3b32c1ebe3da2899540b7134256327c1f68c725a,"docs(journal): e2e container-env probe (no canary, per request)",14,0,1
+2026-06-30T10:13:13-04:00,8d4224904f55fb30f0b570f63da715cce2ce027c,"docs(journal): resolve OLMo-canary question (kept; ""no canary"" was e2e-only)",1,1,1
+2026-06-30T11:21:18-04:00,8dd861b5ce7ef338685b7ee99776b5efad1e71b4,"docs(planning): address reproductions by (public_root, relative_path)",369,0,1
+2026-06-30T11:24:51-04:00,b7b115ccb146f0e373a42aa4823838bd117ffd74,"docs(planning): rel-path plan -- kwdagger cross-products, broadcast map mandatory",15,17,1
+2026-06-30T11:34:29-04:00,e94d2c86ab265c46d13469af1766418a8034f93c,docs(planning): rel-path plan -- host-side resolution + kwdagger submatrix,284,300,1
+2026-06-30T11:42:51-04:00,1d1097d096e28939a67765d6651bc5d13d944db9,docs(planning): rel-path plan -- materialize substituted copies host-side,135,92,1
+2026-06-30T11:48:10-04:00,77f135747a5568e4a7accf1aa719ac1eabc53bff,test(kwdagger): pin the submatrix-zip contract the rel-path plan relies on,123,0,2
+2026-06-30T11:53:43-04:00,515bddbd7d83df7dc02259cb36e057980c1410e4,feat(from-spec): host-side run_spec resolver + materializer (rel-path plan §4.1),452,0,2
+2026-06-30T12:03:22-04:00,6305d294862d70653ebe7b07405805e33dad658c,feat(from-spec): wire exact-path replay through the bridge + docker node (§4.2-4.6),443,54,4
+2026-06-30T12:09:04-04:00,22026464cc9e48ce5f2477579745733fa5e63733,test(from-spec): pin run_spec_json on the from-spec node algo_params,6,3,1
+2026-06-30T12:09:04-04:00,337ac8d4f49e45691d722e26a4c4e8bbe28afb7d,feat(from-spec): make-manifest --run-spec-sources-fpath for exact-path replay (§4.5),157,4,2
+2026-06-30T12:10:43-04:00,c8fe9b769a9e8db31e55851dd791eb9fc76ba5c7,docs(from-spec): mark rel-path plan partially implemented + journal entry,24,1,2
+2026-06-30T12:36:00-04:00,bbbeaeb764b0d91a7d31a9878c20945a8ca5988c,fix(from-spec): gate materialized per-run lease_endpoint on --lease,25,3,2
+2026-06-30T12:36:00-04:00,5f568bf58da6226815bfb83518af0468b4a658ab,feat(from-spec): exporter auto-freeze of rel-paths (rel-path plan §4.5),287,4,3
+2026-06-30T12:37:55-04:00,a9a1a16b3eb06c4a98f3014a55eded393336d64d,feat(from-spec): dry-check existence mode for frozen manifests (rel-path plan §4.7),202,0,2
+2026-06-30T12:38:55-04:00,249735d38f825f7f46be3a846123922f401893fe,docs(from-spec): mark rel-path plan host-side-complete + journal entry,24,10,2
+2026-06-30T12:59:30-04:00,cea323f24b7fe45f8f6f5840bf194e5d6e5f6890,fix(from-spec): content-address the materialized run_spec filename (kwdagger identity),69,11,3
+2026-06-30T13:00:52-04:00,d9b60ec821b73f9ee68235b7745c58c1f2027a3d,docs(from-spec): document kwdagger caching model + content-addressed identity,35,5,2
+2026-06-30T15:34:46-04:00,115a9997e871fcec03bbb4a4d3986a48c7890eb9,debug(olmo): MWE deployment matrix for OLMo-7B fp16-collapse diagnosis,1170,0,9
+2026-06-30T16:33:19-04:00,74ba33de12e315e28e9a75e66a73551ab78a450f,fix(olmo-7b): serve OLMo-1.7 tokenizer to stop spurious EOS append,16,0,1
+2026-07-01T10:31:12-04:00,ab9ccce8f452f8ebfd495838d25aa6827027edba,feat(deployment-match): general HELM deployment-match search tool (Phase 1),1687,0,11
+2026-07-01T10:44:38-04:00,86ad9598ebc04ce57dd882a3098221233b8aa3c1,feat(deployment-match): Phase 2 -- two-tier serve+probe driver (`run`),169,0,2
+2026-07-01T10:47:33-04:00,aee205b452b286eaebf7e0607b8c3173e72b4f96,feat(deployment-match): Phase 3 -- confirm winner via compare-pair (`confirm`),174,0,2
+2026-07-01T10:49:11-04:00,792ce21194e50ac567a3d3247e5be6895c3c4a0c,test(deployment-match): Phase 4 -- pytest coverage + testable tokenizer predicate,196,14,2
+2026-07-01T10:50:57-04:00,c978dea635c83c793c89ad266f62af7e250d78d5,docs(deployment-match): mark plan IMPLEMENTED + document run/confirm,60,16,3
+2026-07-01T10:58:55-04:00,88667c6972e8934c2f0984a6b88e5d41a5e19914,tooling(catalog): catalog core-report packets by decoding temperature,234,0,1
+2026-07-01T11:03:16-04:00,d703ad4cc6a514733c0427db507421fa0f81e0c3,feat(deployment-match): `auto` -- one-shot dry-run->run->score->confirm,73,1,2
+2026-07-01T11:11:25-04:00,c8d8417d146a107d7db560518a01cbfe2e42a3ea,"fix(deployment-match): let infer-stack place GPUs (acquire --queue), don't pin",38,9,4
+2026-07-01T11:26:50-04:00,aaab9a35513a571f1dfaff9875324ae2e11d0eec,tooling(catalog): detect chain-of-thought alongside temperature,143,54,1
+2026-07-01T12:53:44-04:00,f04edd85fe87d5fc9da286683a41992bdbd63ce8,fix(from-spec): thread freeze_rel_paths through export->materialize,54,3,3
+2026-07-01T12:54:02-04:00,b998f53f96f7abe09cdb173be31c14f19b95b2b6,feat(olmo): combined multi-model preset for parent-root fan-out,209,7,2
+2026-07-01T12:54:18-04:00,bb2d959dbd2d08b759f7f6a433e26b508caaf4da,feat(olmo): combined multi-model fan-out runbook,613,0,13
+2026-07-01T13:01:24-04:00,c6d7a2942593e3aeba904009cb00ec7bb3ee3965,chore(olmo): remove superseded fp16-collapse debug MWE,0,1154,8
+2026-07-01T13:36:34-04:00,d65341706cde278a4b87f5ad9cae57855398079b,fix(from-spec): strip model_deployment token from exact-path locator run_entry,67,1,2
+2026-07-01T14:30:07-04:00,a2879335a2e8ea17e96a8642f3094c0800735d05,chore(olmo): remove default GPU restriction (serve across all detected GPUs),12,7,3
+2026-07-02T12:39:03-04:00,8826287814b7241ae6d1a40f6001c6aed1c9be3a,fix(olmo): enable public comparison in combined vexp (was local-only),12,12,1
+2026-07-02T13:00:58-04:00,065b683a56624d195558e6b289347ce4bf4e0825,"docs(olmo): remove stale ""local-only by default"" claims",17,18,3
+2026-07-02T13:03:02-04:00,a14f2faa8afa56618e6efd83eaa7c2c928a9ac93,docs(planning): plan for from-spec adapter_spec decode-param overrides,158,0,1
+2026-07-02T14:03:24-04:00,71249b9d063b0aa025afeeab1882e6f57f84233d,Merge branch 'jons/fable-commits' into impl/run-from-run-spec,0,0,0
+2026-07-02T14:03:56-04:00,3014cea36d772eead578eb0ed55b9b842cd6913d,docs(journal): session entry for fable-commits review + merge,12,0,1
+2026-07-02T14:26:11-04:00,52513fc9f4a8128c0946c4dd4739a5465a6efc7d,feat(olmo): fold base olmo-7b into the combined fan-out vexp (all six models),127,38,8
+2026-07-03T09:44:37-04:00,a90a084fec615fc9dafe09992fcbc299ae7880fb,docs(planning): full codebase audit -- findings catalog + phased fix plan,587,0,2
+2026-07-03T10:25:08-04:00,63cac3fc808b21f9f59cb113d51b7ec8c155950a,"test(kwdagger): guard collection with importorskip(""kwdagger"") (P0-9)",13,0,5
+2026-07-03T10:25:14-04:00,fa8b745a2d64400fad66ad02ad09976b761185c6,fix(cli): repair analyze_backlog import + canonical report layout (P0-8),9,8,2
+2026-07-03T10:25:24-04:00,a5a2a2f57ee73176d9cecbc44e4ac6732d15f905,"build(deps): pin transformers<5 / hf-hub, declare direct deps (P1-24)",13,2,2
+2026-07-03T10:29:17-04:00,3e98614fb9a328f4904e94543292fd2ab2e5e474,fix(summary): tol010 sankeys bucket on the 0.01 curve point (P0-1),68,8,3
+2026-07-03T10:31:31-04:00,6d91122297e8efeefa15b02bea02c3ba1daaf38c,"fix(index): resolve unstamped local index first; single-source resolver (P0-2, R-6)",108,22,4
+2026-07-03T10:35:37-04:00,dbe3b68faf2a5e64da4d12213ef1399a09bbefec,"fix(planning,virtual): match/join on canonical keys, not raw strings (P0-3, P0-4)",171,7,5
+2026-07-03T10:38:11-04:00,05c9dd621f557ef06e8fa3aebdd6f6236e1e7379,fix(helm): correct perturbed/unperturbed agreement split (P0-6),97,4,3
+2026-07-03T10:41:11-04:00,b42064c00f4159cb968ed3cb3210af400dd01ef7,"fix(planning): unknown-on-partial facts; extract official max_eval_instances (P1-1, P1-2)",134,6,4
+2026-07-03T10:47:25-04:00,09fc3294d332ba0b0e7128b4a49ec6c72232d8ad,fix(normalized): filter non-finite scores at row construction (P1-15),181,33,5
+2026-07-03T10:50:17-04:00,d05126d0435a8793b49efa017b9da297165eada4,fix(reports): cross-machine curve uses rel_tol=0 highlights (P1-13),93,1,3
+2026-07-03T11:02:46-04:00,0201ec06dd1cb1929f7ae09b06c0694d9a62682b,fix(eee): derive experiment name from local/<experiment>/ layout (D-1),59,28,7
+2026-07-03T11:06:30-04:00,86d41ae5b8ed07d4673f51513f61c979501b2d19,fix(bundle): content-address model_deployments.yaml filename (P0-5),52,3,2
+2026-07-03T11:09:10-04:00,5a7d270d4185e66e5a50bb554db208c6631c218b,fix(pipeline): precomputed_root is algo identity on from-spec node (P1-21),30,5,2
+2026-07-03T11:10:35-04:00,2896be5976d06ca1ff626769538fcf31a8f19a0c,"fix(manifests): missing-entries NameError; reject duplicate labels (P1-22, P1-23)",25,2,3
+2026-07-03T11:16:00-04:00,54bf35f4ba0ecbfe1bd02cafa06b02e7bd9e0efa,fix(docker): image-id identity for unpinned images; --name + teardown (P2),144,13,6
+2026-07-03T11:20:49-04:00,c5ac0203eeca8acad794403eac5ed6e10089e231,"fix(summary): failure-taxonomy honesty -- colors, categories, ordering (P0-7, P1-8, P1-11)",152,11,4
+2026-07-03T11:25:49-04:00,7642a1b6c2cc8e8637d57e9d8eacbf0ad437136c,"fix(summary): not_analyzed status level; surface unreadable bundles (P1-9, P1-10)",87,19,4
+2026-07-03T11:26:40-04:00,c5d7cdb5bb72f389f26ecf5e850423116a32e130,"fix(filter): one sankey row per excluded run, primary reason (P1-12)",38,2,2
+2026-07-03T11:29:03-04:00,cdac08ec4abc446e496e04a918777e52433ac6c4,"fix(eee): status.json gate on cached/local resolvers; unconditional stale-scope delete (P1-7, P1-6)",94,13,4
+2026-07-03T11:32:29-04:00,6dac5e995d605727de9b119091b4d8c6b83a7a6d,refactor: delete the no-op --allow-single-repeat flag (D-3),16,32,6
+2026-07-03T11:33:39-04:00,ffac9b4ec0109e1565b2aaad2e4ecb22c8c9213e,fix(cli): analyze-many exits non-zero on failure; warns on incomplete summary (P1-19),74,0,2
+2026-07-03T11:35:19-04:00,41e5b962f821c9517824f6544f451e44f5794651,fix(core-metrics): --no-plots preserves previously rendered figures (P1-16),26,7,2
+2026-07-03T11:38:53-04:00,2537b388f067ba874b69bde5fb4734880121ae33,fix(summary): thread invocation flags into reproduce.sh (P1-20),72,5,3
+2026-07-03T11:41:44-04:00,b3130f4281006744a6e9cb195d7c5e93cfe74f95,"fix(stale-state): prune stale packet + breakdown dirs on re-run (P1-4, P1-5)",37,1,2
+2026-07-03T11:45:57-04:00,0ae927fbb10cdc941604580afc211d04a88db917,"fix(determinism): stable benchmark discovery + HelmRunDiff tie-breaks (P1-17, P1-18)",57,8,4
+2026-07-03T11:48:05-04:00,a9a20979e77e4ca8434194791ee3db267626f3b1,"fix(determinism): sort remaining nondeterministic outputs (P2, IM-12)",28,5,4
+2026-07-03T11:51:40-04:00,bdf94a70211c6c07de1ffb08bfd86a9b096836c5,fix(cli): --dry-run vs --run 1 errors; correct stale argv test (P2),12,1,2
+2026-07-03T11:52:55-04:00,688831a3563fa9eb50f4398d5b3d1155bbe865d0,fix(helm-diff): f-string prefix + None-safe group sort (P2),7,3,1
+2026-07-03T11:55:08-04:00,14ce804293544bd47f9b6966df94e9b0109c14b6,"fix(cli,loaders): drop debug blocks; count skipped samples lines (P2, IM-3)",13,13,2
+2026-07-03T11:56:13-04:00,99396f3f8a316340e9bd9c34fc385237ef58d7fd,"fix(secrets,coverage): close HF-token perms window; return sankey paths (P2, IM-9)",14,2,2
+2026-07-03T11:57:28-04:00,235b555ef028544fac559f08ab584e19b0c55db0,fix(loaders): tolerate non-numeric timestamp; preserve EEE provenance (P2),14,5,1
+2026-07-03T12:02:29-04:00,10c8f32da10168cdbac48d7e549bd4dcf60bfa96,docs(journal): session entry for Phases A--F audit-fix implementation,22,0,1
+2026-07-03T12:06:28-04:00,9303ec5e1349ff476b9d78d81edb89593c3b1eb0,"docs(preset,runbook): representative-subset wording (D-2); hashed bundle filename in tree listing",7,5,2
+2026-07-06T09:42:03-04:00,0608b29c501b5fd5addf6ce4997eb802408e5286,test(planner): update stale slow-suite assertions to canonical-key behavior,15,9,1
+2026-07-06T09:43:52-04:00,15487f8e47b9a9c5d79a68fc9d5660d96f0f2c5a,fix(secrets): chmod 0600 the model_deployments bundle YAML holding the live key,24,0,2
+2026-07-06T09:45:49-04:00,6da780deda8108b4a194c94a02cc587a9217e156,fix(reports): route Stage-6 writers through atomic fs_publish helpers (IM-1),18,14,3
+2026-07-06T09:49:12-04:00,607189c8d5612a0c9f84540b9c3b38ade93056cf,"fix(reports,cli): surface mpl fallback error; fix eee caveats indentation",48,7,3
+2026-07-06T09:56:47-04:00,b127aa4839283c07698ec0dee2db8c39e9272391,"fix(cli,adapter): fail fast on backlog/preset/base_url misconfig (P2)",179,12,7
+2026-07-06T10:01:28-04:00,20a16f5f7bfb33c997faba8d5725d10306de79d8,"fix(workflows): dedupe kwdg re-attempts, bucket load errors, preserve CSV dtypes (P2)",151,14,3
+2026-07-06T10:09:59-04:00,ed5760835a5f2d2bc961403e3cee90f3899cac3f,"fix(reports,cli,loaders): honesty fixes IM-6/IM-8/IM-5",208,3,7
+2026-07-06T10:14:38-04:00,0e324ed18ff6a41781279f6e90e595f616aa6149,"perf(reports,loaders): behavior-preserving IM-2/IM-7/IM-4",33,28,4
+2026-07-06T10:17:21-04:00,e9cf6c44726d4b77ada6905fc9da1910cb61f8d6,build(deps): bump python floor to 3.12; annotate aiq-magnet dep pins; relock,537,1318,2
+2026-07-06T10:24:50-04:00,dc8f680eed8a50bd37843cb89e39ad145a11bddc,test(eee): centralize EEE-demo fixture path + skip guard in conftest (IM-11),70,30,7
+2026-07-06T10:27:24-04:00,e09c9176a2ee6f7a2ddbd91a91fb7d0783de63cc,docs(eee-vs-helm): document non-comparable run-level agreement definitions (IM-13),34,0,1
+2026-07-06T10:29:15-04:00,8a9933c782d34ab8768928f5e09c7fc5a944fca4,docs(journal): session entry for Tier-1/Tier-2 audit-backlog implementation,30,0,1
+2026-07-06T10:32:18-04:00,ef6903fb56ca85b1b9e1902c2cefa5a12912c5eb,fix(secrets): warn on stderr when bundle key perms cannot be tightened,9,0,1
+2026-07-06T10:38:01-04:00,bab7df2c65809733936b8dd8d71a855110d6f6b9,refactor(reports): retire reports/quantiles.py (D-4),2,193,3
+2026-07-06T10:42:44-04:00,e0d51e6b6c56607fc73f0051e951d425c7b65442,feat(manifests): --max-eval-instances official sentinel for verbatim replay (D-5),136,4,5
+2026-07-06T10:46:08-04:00,5b1c69f2f224384aa3dcfc4e90c3eebb35c85cf0,refactor(indexing): single classify_model_eligibility policy (R-7),211,94,3
+2026-07-06T10:53:29-04:00,833a84bb4fb81e6190066ab2d17ab6df3a92f141,refactor(summary): single _classify_filter_gates; delete dead sankey builders (R-4a/R-4b),85,392,4
+2026-07-06T10:53:38-04:00,99ff44947b21d8cebb378bb5e0e7296336ead6df,feat(reproduce/olmo): deployment-match runbook for olmoe-1b-7b/ifeval,130,0,1
+2026-07-06T10:58:24-04:00,c8cffa42e2a3d28ebfebd764d0a39ba061f5efda,fix(summary): align the two filter-funnel families on metadata + judge gates (R-4c),85,1,5
+2026-07-06T11:03:26-04:00,fe7fe271a083db71a63342a7509b35a78f4b5a0e,refactor(summary): rename ambiguous agreement-tolerance key family (R-4d),69,58,8
+2026-07-06T11:09:50-04:00,b6bcd2458648b3050450ccbd513aabbf4f73e11b,refactor(normalized): dedupe EEE conversion core + one aggregate predicate (R-5),185,165,5
+2026-07-06T11:14:41-04:00,ba730045b3882f3676b832292eba68d460eac3f3,refactor(normalized): one metric_handle helper; drop dead members (R-9),21,58,5
+2026-07-06T11:22:56-04:00,899e0fd38859442d2ea116ac546697efc8fdc75a,refactor(core-metrics): dead-surface sweep + assert-membership tol guard (R-10),41,254,7
+2026-07-06T11:35:54-04:00,143d3fac0a7d30157c2eb08ee4c36748f1876aad,refactor: misc dead-code sweep (R-11),70,150,10
+2026-07-06T11:41:10-04:00,e5c1bdb48f747c51f95aa7503f59352a4dfd7ec9,refactor: one run-entry model_deployment token utility (R-8),165,34,5
+2026-07-06T11:44:15-04:00,7e1f5f12afd0de8a392954628234e94153543690,"refactor(infer_stack): extract PRESET_CONFIGS to presets.py (R-3, pure relocation)",1162,1140,2
+2026-07-06T11:47:15-04:00,d895a446ca5b0c8bf431337b99a1cc5420174243,"refactor(infer_stack): promote discovery core to public discovery.py (R-3, R-3d)",105,78,4
+2026-07-06T11:49:38-04:00,e7eab858fde19cb062ccb9f150fa3143ba651ba2,"refactor(infer_stack): extract serving_facts.py (R-3b, pure relocation)",165,128,2
+2026-07-06T11:51:06-04:00,9a808120a0c5d23e3d07062510ccd04756fe4355,"refactor(infer_stack): extract freeze.py (R-3d, pure relocation)",93,76,2
+2026-07-06T11:55:02-04:00,ac5ca26a4e918a2952bfe50052c0cfc2dc4f49fd,refactor(infer_stack): extract bundle_export.py; adapter is now a facade (R-3c),667,642,3
+2026-07-06T11:56:36-04:00,79bc030cee40ae820c8c584016fe3633b9c9d20e,"docs(journal): session entry for Tier-3 structural refactors (D-4/D-5, R-3..R-11)",31,0,1
+2026-07-06T11:59:03-04:00,560cdda03b9c0376912722f9f18dd5980873e27b,docs(planning): stamp audit doc IMPLEMENTED (except R-2) with pass summary,17,0,1
+2026-07-06T12:30:33-04:00,cfe7d6a656c8753a9e71ee62651c05c177604248,docs(planning): simplicity & bloat audit findings + phased implementation plan,147,0,1
+2026-07-06T12:38:42-04:00,5b7b62bbcdde076702428f7a00e4a7c212c9e298,chore(dev): delete dead POC and oneoff trees; fix docs that referenced them,22,6901,25
+2026-07-06T12:38:42-04:00,1457a2694cb990792128dbe56fa767b83948d3bd,chore(configs): drop checked-in generated manifests and dead examples/,0,1470,25
+2026-07-06T12:38:42-04:00,8b4c69d5560d79434438e1b687776d8b3ecb1b70,"refactor: remove helm/hashers shim, dead agreement profile, if-1 block",13,178,8
+2026-07-06T12:47:57-04:00,90af80ba91122cea3271b5bc60d4678a74dcd358,"docs: fix first-run and accuracy issues in README, reproduce index, setup",79,82,3
+2026-07-06T12:48:05-04:00,77e126b49017d45a11a1bef521c2a286d0c2ccc5,"chore(docs): move paper analysis scripts out of docs/, archive session logs",32,17,9
+2026-07-06T13:05:35-04:00,425e05a224b3ac4e28e5602634ed775db5fbd82e,docs(planning): archive 12 implemented plans; consolidate olmo/infer-stack clusters,193,132,67
+2026-07-06T13:05:35-04:00,24390f26fca0c1a2ee6e3aefe57fbf3a5aa15930,chore(journals): rotate 544K of append-only journals to archive,5542,5526,4
+2026-07-06T13:15:17-04:00,c804cdc1c46e5ba06916fc819cfe469dab8f0cb2,refactor(utils): finish R-6 helper consolidation into utils/coercion,159,137,14
+2026-07-06T13:26:52-04:00,32622e0b7fef58bbef394c5b9c955749ab9069b6,refactor(reproduce): merge three divergent _lib.sh copies into one shared lib,437,374,4
+2026-07-06T13:46:37-04:00,51797aa9f8509f90b7986fc7a9ad910de608059c,refactor(workflows): split _render_scope_summary into per-stage render helpers,458,197,1
+2026-07-06T13:46:37-04:00,a07736c240811765b2e6b3b1a3284dadac72f175,refactor(reports): split core_metrics.main into per-section helpers,182,57,1
+2026-07-06T14:02:31-04:00,3bd43bf5d37cb7451add3f16ccf41b0e56f321fb,refactor(infer_stack): move PRESET_CONFIGS catalog to a YAML resource,965,1009,3
+2026-07-06T14:44:19-04:00,a849ea32fd836893129ec85f70c88344a830ead1,refactor(reports)!: migrate pair_report/pair_samples onto NormalizedDiff (R-2 stage A),284,117,4
+2026-07-06T14:44:19-04:00,a0cadf269f31e922e5c4dc0996be3838e7af549c,refactor(helm)!: delete the legacy agreement half of diff.py (R-2 stage B),59,986,6
+2026-07-06T14:45:36-04:00,a34241ca3731cdd0e284887922c9b768565c2ee7,docs: stamp simplicity audit IMPLEMENTED; journal entry for the session,69,2,2
+2026-07-06T15:19:12-04:00,066cc5204f9f5539a639f416cc22da36243c03fb,refactor(reproduce/olmo): self-contained combined runbook; remove stale single-run runbook,323,1655,24
+2026-07-06T15:28:56-04:00,7ba018454fd7b6fa10f99a570b23ce4fa98fd18c,chore: remove configs/docs orphaned by the single-model OLMo runbook removal,28,481,13
+2026-07-07T09:37:50-04:00,a1f893fa2d6775dd692bbf703b7cb5a4b44a5d1f,fix(deployment_match): clamp max_model_len to the model's derived ceiling,85,9,4
+2026-07-07T11:38:25-04:00,f4241a878255e8a299811b5e12445392e9b5ac2c,docs(deployment_match): vLLM-vs-HuggingFace deployment-match knob inventory,166,0,1
+2026-07-07T11:38:37-04:00,2a9fb007db4b6d4ddf489de21869100534d16d41,feat(deployment_match): hf-match grid profile to match a HuggingFaceClient run,126,4,5
+2026-07-07T11:42:31-04:00,008987b1b718bb4804a8dbe7426d3653bef000fa,docs(deployment_match): record full sampling replay as a deliberate non-goal,9,3,1
+2026-07-07T11:55:53-04:00,e4e4b7c7b4987248e10f6437d8ba5ef59c56ccf4,feat(deployment_match): sweep/pin attention_backend via the infer-stack option,109,35,6
+2026-07-07T11:58:04-04:00,d5cb46e8af669afa3b0f37f64c3d8fd66d7b0584,docs: instruct agents to proactively commit logical units of work,11,0,1
+2026-07-07T12:00:54-04:00,acf6ca44d702a64b7f9012ab646912a1b32d7d16,docs(deployment_match): correct the confirm-catalog fidelity gap description,15,6,1
+2026-07-07T12:06:07-04:00,0a755c73f045d13733aea6955ba86c6b8da0a581,fix(deployment_match): confirm catalog reproduces the winning serving runtime,69,18,5
+2026-07-07T12:14:12-04:00,070f986cb0fb62517b84e4beac0121ee87bac735,feat(deployment_match): sweep attention_backend in hf-match instead of pinning,55,36,4
+2026-07-07T12:23:29-04:00,7a0908eaa46b847a79322255befc98abcd26f321,feat(reproduce/olmo): default the OLMoE deployment-match to hf-match,18,10,1
+2026-07-07T12:51:24-04:00,3fd80ddbc4f65e4ce3b54d0177be692ac03fcd98,fix(deployment_match): raise max_num_batched_tokens >= max_model_len for hf-match,46,2,2
+2026-07-07T13:09:29-04:00,4b8eb37dd9ac7809e6bdab0a4cc377bf00e3dd61,"chore(submodules): bump cmd_queue to dev/0.3.2, kwdagger to dev/0.2.6",4,4,3
+2026-07-07T13:11:01-04:00,c436308b63d9dd7b7eeaa199d28777156b5cd02d,chore(submodules): bump infer_stack to latest infer-stack-cli-api-migration,1,1,1
+2026-07-07T13:25:05-04:00,2640e108a81e6c416f1deec78a9a63401431a41c,feat(deployment_match): endpoint/cell counters + ETA in the serve loop,41,9,1
+2026-07-07T14:16:12-04:00,f855dea9bed829483e61bdb5cb5bdc98a882ec1b,feat(deployment_match): --dtypes/--attention-backends knobs; OLMoE skips fp32,83,0,4
+2026-07-07T14:32:22-04:00,608bb45f47795fb367541b9b43300d665feeadd7,feat(deployment_match): preflight feasibility filter (generalizes fp32-MoE prune),151,27,6
+2026-07-07T15:35:55-04:00,a8dd792b93e4ad98942dd2d6149ccb610e482f15,fix(deployment_match): hf-match pins protocol=completions (HuggingFaceClient repro),36,1,3
+2026-07-07T15:48:36-04:00,fbc2040db7bb6abb98929d383ba0976f022e1ad2,fix(deployment_match): revert wrong completions pin; HuggingFaceClient IS a chat client,55,31,3
+2026-07-07T15:55:04-04:00,1fb915764fa672f3a249978fbf65fc1314af9abe,feat(deployment_match): --log-requests / --extra-serve-args to expose the vLLM prompt,73,0,5
+2026-07-07T16:06:36-04:00,d32abd3bae3f4f47c05d3559c91320fbaa379d23,feat(deployment_match): compare_prompt.py -- diff HELM get_prompt vs vLLM /tokenize,266,5,4
+2026-07-07T16:27:16-04:00,b3ae01688e3a55d3ea505c8832167eab4c09148d,feat(deployment_match): sweep add_generation_prompt (OLMoE chat-template version drift),96,12,5
+2026-07-07T16:27:59-04:00,19c0ec1cb1275615ffd7824d137c682be705a7f4,bump infer_stack pointer,1,1,1
+2026-07-08T10:10:55-04:00,1690b7ac05114469c390f48ed8da6fa8804b2063,feat(deployment_match): per-model ifeval runbook scripts for the 3 OLMo-2 instruct models,495,0,3
+2026-07-08T10:17:29-04:00,c2c3978d4222d2b77ee609ff6f91404aea73775d,Merge branch 'impl/simplicity-audit' into integrate/simplicity-audit,0,0,0
+2026-07-08T10:34:34-04:00,37a411a5c3d3cc7a729d30c15d44db96d36060b3,docs: fix dangling markdown links after the simplicity-audit merge,81,81,9
+2026-07-08T10:46:14-04:00,9059dad254393a029a05a2c892b3f019eb0ab9f0,Merge branch 'integrate/simplicity-audit' into impl/run-from-run-spec,0,0,0
+2026-07-08T11:04:31-04:00,2698389cbc225c4139dcb4f5a8442f398c441112,feat(deployment_match): --fp32-tensor-parallel-size to serve fp32 MoE on N GPUs,151,11,6
+2026-07-08T11:18:03-04:00,426710fd0b6fad4e95c675ce4391e305c15a522e,docs: inventory HELM's unrecorded deployment params + HF-revision pinning effort,231,0,2
+2026-07-08T11:32:45-04:00,a8c573a3c92b29b30dd102867320b9e97c7f9b48,docs: use precise terms for the provenance machinery,47,5,1
+2026-07-08T13:37:29-04:00,37d91affd601d68127d5803e409ab7a3e176dbaa,feat(deployment_match): hf-probe -- reproduce the official at fp32 via HF and score vs oracle,401,12,4
+2026-07-08T14:11:53-04:00,f52afee7fc0453ab4f31c88cb2cd26decadbeefa,docs: confirm OLMoE fp32 exact-match + scope the dtype gap to all OLMo-2 HF runs,35,2,2
+2026-07-08T14:24:22-04:00,79ab77b6a983be5ba1074fffe56be8227f22ce50,feat(deployment_match): DM_HF_FP32 + DM_FP32_TP on the OLMo-2 7B/13B/32B runbooks,127,33,3
+2026-07-08T15:08:38-04:00,2d792012039035e3f63af760847385e8a38a84ca,feat(hf-inprocess): reproduce HuggingFace-deployed officials on reserved GPUs,765,18,6
+2026-07-08T15:29:53-04:00,19cf7d40ecd4a62f320fe27ef800859e2a6a6685,bump infer-stack submodule pointer,1,1,1
+2026-07-08T15:31:17-04:00,9773233e0d335dedc6543bc7dae2d74eb7e7e49d,Add plan to allow reproductions of old HELM runs in docker containers with package versions pinned to the ones used during the era,90,0,1
+2026-07-08T15:53:26-04:00,545357e7c308ef03c1d81f09ea83e3b5fae53ba4,"feat(heatmap): aggregate-score-diff heatmap (color = local-public, cells annotated with both scores)",631,0,4
+2026-07-08T15:53:56-04:00,59587f295001b0260b9b70a8e963189b15b1c144,docs(journal): aggregate-score-diff heatmap session,61,0,1
+2026-07-08T16:02:41-04:00,c8707eadc9b35b330b46a05c426847107a5a3183,feat(summary): auto-emit aggregate-score-diff heatmaps in build_reports_summary,234,62,5
+2026-07-08T16:02:59-04:00,f87e92ea365e217320485e958c257fd68bfede83,docs(journal): auto-emit aggregate-score-diff in build_reports_summary,48,0,1
+2026-07-08T16:03:58-04:00,ce63eb40f6938a3ffee50837da52d657bc734f86,docs: mark HF-in-process plan implemented (routing pending) + journal entry,77,2,2
+2026-07-08T16:08:28-04:00,5b3522690b06e9df554b8c4e56bd17aa3822ef46,docs(deployment-match): point to the built HF-inprocess resolver + mechanism,19,0,1
+2026-07-08T16:17:30-04:00,0c8d0eb2dda47cf7ffb2e0087b1849c2b2274241,feat(summary): spell out agreement-bucket thresholds on plot legends,93,12,4
+2026-07-08T16:17:49-04:00,0846fb998e8583f2b3979a9f70863e35e7df4f64,docs(journal): agreement-bucket threshold labels on legends,50,0,1
+2026-07-08T16:20:41-04:00,564b087ae48984fa5aae3eadfd7e3c2ab288aeb8,Bump infer_stack pointer,1,1,1
+2026-07-08T16:23:47-04:00,c00394ee81a578678eb282425dbdca7f31f25f09,feat(deployment_match): overnight batch -- HF fp32 + vLLM sweep for all OLMo instruct models,124,0,1
+2026-07-08T16:31:20-04:00,3ff73c5ce1d8f314a7b357f8c452782b150099fb,feat(deployment_match): hf-probe sweeps dtypes (--dtype comma list) + DM_HF_DTYPES,91,39,8
+2026-07-08T16:39:00-04:00,70c867da2240d6cac5de27486e05c75342fcc261,feat(heatmap): holistic headline-metric aggregate-score-diff heatmap,376,10,7
+2026-07-08T16:39:20-04:00,4c2de25ba469d7721b9b31d6ead71ae13e83bf52,docs(journal): holistic headline-metric aggregate-score-diff heatmap,55,0,1
+2026-07-10T08:34:26-04:00,29fc76c4e340a806061250a6420345248aac1e53,feat(heatmap): headline plot uses modelsxbenchmarks layout + squared error,116,56,3
+2026-07-10T08:34:46-04:00,236b3289b8d58a016a1391931ab758a8fb442f0e,docs(journal): headline plot layout + squared-error encoding,40,0,1
+2026-07-10T09:06:08-04:00,50a7117bdfce6a3a73b936f9c5a3c146e304edb2,docs(journal): fp32 reproduces all OLMo instruct officials + HF-probe OLMo-2 fidelity bug,97,0,1
+2026-07-10T09:39:07-04:00,4516b704ef6fc4c914732a0c45ea99d8e843a411,feat(hf-probe): sweep forward-pass numerics (attn_impl/device_map/decode) to reproduce OLMo-2 officials,225,54,5
+2026-07-10T09:40:13-04:00,807144de3af01d0ec5cbe32e03c37ae3d2b45d26,docs(journal): OLMo-2 HF divergence is a fp32 forward-pass diff + hf-probe numerics-sweep axes,118,0,1
+2026-07-10T09:52:38-04:00,d6cc37fd69cd84202e860727ab35e3885b4178d2,feat(overnight): sweep every HF + vLLM parameter across all OLMo models,107,7,5
+2026-07-10T09:53:00-04:00,60921441916f8929d864ec31d0d0d0ea6422cd69,docs(journal): overnight full-sweep follow-up (HF+vLLM axes across all OLMo models),23,0,1
+2026-07-10T10:20:32-04:00,25b00db3bbcc33841912bfbde00472b54aae13cd,feat(eras): era-pinned HELM registry + resolver (commit 1/6),475,0,5
+2026-07-10T10:28:07-04:00,836bbb52c8320a9d7ea3728b57f3bcf29396298a,feat(eras): era image build path in build.sh + era dockerfile (commit 2/6),507,25,4
+2026-07-10T10:38:24-04:00,8d54db186fc59fb79ba405d712779c6423a36738,feat(eras): helm_era_shim replay CLI + OpenAI-compatible client (commit 3/6),834,0,5
+2026-07-10T10:44:20-04:00,3670050f1b3c59039544a2047ff626b858aa69ad,feat(eras): host-side era yaml + materializer guard (commit 4/6),252,19,5
+2026-07-10T10:50:29-04:00,38940ff2e1000991b6d84cf70765ab033cfd0b15,feat(eras): thread era through manifest + pipeline + bridge (commit 5/6),379,1,6
+2026-07-10T10:54:30-04:00,a520062b26543036dcf684809065b3b583404a42,docs(eras): runbook + docs + journal (commit 6/6),358,1,9
+2026-07-10T12:58:34-04:00,5f17e3e344c1ccd4034789cbdc712f28020e092b,docs(eras): multi-angle code-review findings for the era implementation,479,0,1
+2026-07-10T13:12:30-04:00,11fa971d41a39551acf2856bc162ed6c99288510,feat(eras): portable validation-ladder harness + static era-import checker,738,5,10
+2026-07-10T19:37:18-04:00,39c020b26cd31be47be8f1b07bc1d6f9549bd931,docs(era-tests): plan the pre-v0.5 gates' migration to a turnkey dev runbook,431,0,2
+2026-07-11T10:08:16-04:00,0c58ee9652a9c0b6d22df3441bceed9bccaecb58,"fix(era-shim): v0.2.4 compatibility + credentials + run-dir safety (findings 1,2,3,7,8)",300,49,4
+2026-07-11T10:12:44-04:00,befd490dcbb7afbb479dbac96959a426581555ea,"fix(era-export): api_key in args, explicit base_url, multi-endpoint lease (findings 2,5,10)",133,14,4
+2026-07-11T10:15:42-04:00,f549943ec687853f7f5bd51e9e38aee70f9555c3,fix(era-guard): digest-pinned image era<->image guard (finding 4),107,16,3
+2026-07-11T10:16:35-04:00,9bf2228b9a1b69feedd4c5dfaf784e1573cab87a,fix(era-image): persist era identity into runtime ENV (finding 6),14,0,1
+2026-07-11T10:18:12-04:00,f09051beb75273f523c9821aca6976f1e91cfdd3,fix(eras): fail loud on track-less era-suite paths (finding 9),48,2,2
+2026-07-11T10:20:41-04:00,0486bb7965f01d588e100af133513b5571e64d47,"refactor(era): process-context timing, session reuse, setdefault (below-the-cap)",53,2,4
+2026-07-11T10:21:03-04:00,4bba8dfa81991339593e80a44f771202d97739d6,docs(era): record findings resolution + deferred cleanups,18,0,1
+2026-07-11T10:28:30-04:00,67c0b53f6ba9594ceeeec63d9ffe8284a422a91c,feat(era-tests): checked-in serving config + era presets + vexp manifests,192,0,5
+2026-07-11T10:38:46-04:00,99ff4dfd6c62a40d0fca08bddd82cae7c7b0abb5,feat(era-tests): dev runbook mirroring dev/e2e-tests (moves the pre-v0.5 gates),959,429,24
+2026-07-11T10:41:08-04:00,3046c8eab67e9d3a51b2c39200f4b84ae438936a,docs(journal): full era-path remediation + dev/era-tests runbook,71,0,1
+2026-07-11T11:06:08-04:00,4c181be71a004153f4177f2a29f2f0d629fb7386,fix(era-tests): review fixes -- v0.2.4 master-key path + rung mirror-root join,117,11,8
+2026-07-11T14:20:50-04:00,981dfa1fa8d5f4e2168b9b23d8c9743731268a66,feat(era-tests): swap subject pythia-6.9b -> redpajama-3b to fit an 8GB GPU,204,111,13
+2026-07-11T14:43:19-04:00,c2598b49bfe66e39db3a543877ff3a8747ef6a5c,"fix(era-build): import run_benchmarking from helm.benchmark.run, not .runner",22,2,2
+2026-07-11T14:54:18-04:00,2e8338ffb628ffaa14e9a29311a1785ffbfeba7a,fix(era-build): pin pyarrow==11.0.0 in era constraints (datasets 2.5.2 compat),10,0,2
+2026-07-11T15:04:17-04:00,4dc3c4a47773dd72d0f6517398d7a1fbf31a349e,fix(era-build): adopt era frozen requirements.txt as constraints (enriched seed),451,23,3
+2026-07-11T15:09:19-04:00,16ee1eebd25ee13e30c33c10938b5df28ea7c4d2,fix(era-build): revert enriched freeze; setup.cfg ~= ranges already era-pin,47,425,3
+2026-07-11T15:11:22-04:00,e6a21ed1f2c6a736bbf009f6267773ebd0efdec5,docs(era-build): warn against re-adopting the stale era requirements.txt,16,0,2
+2026-07-11T15:32:48-04:00,376771325238ab038e5227931f2a58313abfb801,"fix(era-gate): rung-2 diffs display_requests.json, not the unshipped scenario_state.json",108,35,3
+2026-07-11T15:39:24-04:00,cb14ec80bf77a5054b088ebf6b900cd869ff0fc8,fix(era-gate): sanitize colons from rung-2 dry-run mount path,5,1,1
+2026-07-11T15:54:06-04:00,1c552be28d35b3ef27b603c4ce0ae5b6e96b57f3,fix(era-build): install wget + unzip in the era image for scenario downloads,9,1,1
+2026-07-11T17:00:12-04:00,382605725acd2b86b2666f2b71446409d110443f,"feat(reproduce): from-spec gpt-oss-20b runbook (bbq, ifeval, mmlu_pro, gpqa)",1006,0,19
+2026-07-11T17:07:44-04:00,e40ee63df32db24e6e13de08e37d4b750a0f492f,fix(era-build): pin fsspec==2022.8.2 (datasets 2.5.2 LocalFileSystem skew),14,0,2
+2026-07-11T17:07:44-04:00,6b23e9d815f0eda50ffaf28ade1a80141f56b633,fix(era-gate): forward HF token into rung-2 dry-run (script-dataset auth),4,0,1
+2026-07-11T17:45:39-04:00,d6172b1e06997ac19b9fbb2fb3658c40ef8811d5,docs(planning): qwen text-family combined fan-out implementation plan,377,0,1
+2026-07-11T18:26:33-04:00,973b5b7c4e444e7e3647cfd2721264e29ce7858f,feat(qwen-fanout): qwen-combined preset + 8 from-spec members (generalize combined builder),1395,92,4
+2026-07-11T18:26:48-04:00,fcd149731969cbd6ed7ec1dcf65f386463f15657,feat(reproduce): qwen_models_combined runbook + infer-stack catalog + virtual experiment,1111,0,15
+2026-07-11T18:27:13-04:00,531bc4f854845cdad23428ea207cf4b77a241760,docs(planning): mark qwen fan-out plan implemented (T1 confirmed; V2/V3/V5/V6 deferred),17,1,1
+2026-07-11T18:28:00-04:00,47200f3405c64173c570a98c3927f2e53537b07f,docs(journal): qwen combined fan-out implementation session,61,0,1
+2026-07-11T18:28:04-04:00,7620c2469b7fde19db6e84b8b91b43a0e756ff78,fix(era-gate): rung-2 skips unfetchable-data probes as environment filters,32,0,2
+2026-07-11T18:43:47-04:00,629c4541fa4364cda422d0e2acdaf4cc977cef5d,"docs(planning): plan for producing NEW Qwen 3.6 core results (compute, not reproduce)",339,0,1
+2026-07-11T19:04:56-04:00,faef9ea46532a0c6fcfd9a47f62df80cefdf0ad8,docs(planning): rewrite Qwen 3.6 new-results plan around leased fan-out,212,253,1
+2026-07-11T19:23:47-04:00,17f02583304e08220f7bdb4c01dbd40cc8170edd,fix(provenance): double-quote the label key in image_label's Go template,24,1,2
+2026-07-12T10:33:59-04:00,eb1b9faf4c0391de6d2cfeb5be83e1f53028d21a,Merge impl/era-pinned-helm-containers into impl/run-from-run-spec,0,0,0
+2026-07-12T10:34:31-04:00,34929ae45aeba115b3676031c2568e148ae975cc,docs(journal): era-pinned -> run-from-run-spec merge session,16,0,1
+2026-07-12T10:54:26-04:00,ea74ac389a6bbe73de425168a0383259d6fa4558,"docs(planning): repo simplification/refactor plan (4th pass, post-era)",479,0,1
+2026-07-12T11:11:59-04:00,bffb84a60058374d5982fbfd577238c3509b3a7d,docs(planning): second-pass review revisions to the simplification plan,141,96,1
+2026-07-12T11:11:59-04:00,dee2ba9526c5b7f5f93bb1304b070e160d4e46a7,docs(journal): fourth simplification-pass audit + plan review session,61,0,1
+2026-07-12T11:29:39-04:00,b77bdf82f6edde574db79a26327a133057e444a7,docs(planning): A4 gate caveat -- committed phase3 baseline is EEE-only,6,1,1
+2026-07-12T11:38:22-04:00,bf9172f4055e90cf034636ba358630a13a50b405,docs(planning): live-code read pass -- deltas R-g..R-m + new item E5,100,15,1
+2026-07-12T11:42:23-04:00,911a993f42ff0ecdb062655856eb373a190afe67,refactor(E1): delete five grep-verified dead symbols,3,135,6
+2026-07-12T11:47:11-04:00,f59060cbcc519294dd18b41381ed3ca700d6541d,refactor(E2): de-duplicate the copied plotting helpers,97,78,8
+2026-07-12T11:57:16-04:00,b7300a19f5a12f8c17c8c3ddd8d25bce22a053dc,refactor(E4a): prune facade re-exports with zero internal+external refs,20,78,3
+2026-07-12T11:59:27-04:00,cc487686f5bad40627c4bb6085fc12f219ae9254,refactor(E5a): retire the deprecated EVAL_AUDIT_EEE_STRICT env override,19,19,2
+2026-07-12T12:02:20-04:00,88c6e389529afc6026c5f1a056201a681a0c1ef9,refactor(B3): era config/build dedup -- single source of truth,55,36,5
+2026-07-12T12:03:14-04:00,96b88300f995839e39a27e38bef39b2785c4af8b,chore(F2): trim vestigial norecursedirs entries,5,10,1
+2026-07-12T12:09:44-04:00,4dae513cc88b426cec5b02dedbb8461a5d834931,refactor(D1): shared index-resolution + reproduce-script helpers,111,88,5
+2026-07-12T12:14:45-04:00,7926209e02e1157a4c7c951fea9ea14f7fd3ab9c,refactor(D2): shared EEE render helpers; single-file meta extractor,150,104,4
+2026-07-12T12:17:06-04:00,1f06e9a5a875e9196df20feda3604a194a9d383a,refactor(A1): move run_entries out of helm/ to eval_audit/run_entries.py,46,23,20
+2026-07-12T12:19:09-04:00,9f7c6abd015f5bfc3dbd68865f1c119c677eff5a,refactor(B1): one shared benchmark_output path parser,50,30,3
+2026-07-12T12:26:46-04:00,7e8b527d6e363e3c10111a51901fbe4f2ee15802,fix(E4a): restore _single_run_core_stat_index facade re-export,1,60,3
+2026-07-12T12:28:38-04:00,8078cc1ffa8cc49e0ee80bb10f795ae4ae21ebe4,refactor(A2): delete the prod-dead half of helm/,42,655,8
+2026-07-12T12:31:04-04:00,eb313c0809faa8f3a7b06ad3bec79f6047a02d76,refactor(A3): one json_compatible implementation (utils/jsonify.py),67,60,3
+2026-07-12T12:35:34-04:00,09449188ec8c6de26a1bea3805fdd2dd8bb43910,"refactor(C1): finish the build_reports_summary split (1,715 -> ~330)",1550,1397,6
+2026-07-12T12:37:33-04:00,364925b67fc9f0e55d33a35958da81727eff64d5,refactor(B2): single named era_mode flag in the bundle exporter,18,5,2
+2026-07-12T12:38:41-04:00,648193d34d285c533351bcb14dd2efc920f17405,refactor(D4): portfolio_status logic -> reports/portfolio.py,414,390,2
+2026-07-12T12:39:40-04:00,4d4085ef2786c8a8a799146e761fac251c764712,refactor(E3): local artifact writers in the filter-report emitters,71,45,1
+2026-07-12T12:42:30-04:00,3d077a692dbe0fd608ecd07ebdb3df87306df7f5,refactor(C3): move the repair/publish half out of breakdown.py,214,203,4
+2026-07-12T12:44:00-04:00,e630a5767b34723d210e9b49eaa0445d0c0557db,refactor(D3): layer the failure classifiers -- one generic taxonomy,23,2,1
+2026-07-12T12:45:05-04:00,c42e81597d84bef01742d9257ee16660b27f18e7,docs(E5b): --skip-diagnosis kept -- phase3 4.8 closed as permanent,11,0,2
+2026-07-12T12:50:38-04:00,c9d6c38de993f9bd2c00e70b7d62a4d04db22f72,refactor(C2): extract the shared heatmap grid scaffold,212,221,1
+2026-07-12T12:53:10-04:00,950ae99b74b90465dae7c6fcb44096cabe92cfb1,docs(planning+journal): mark plan Batches 1-3 implemented,81,2,2
+2026-07-12T13:12:42-04:00,36bb74e051f707d26ce0451c74b9b493c689f78c,"refactor(D5): deprecate compare_batch (phase 1, no behavior change)",29,0,3
+2026-07-12T13:20:24-04:00,e1b8547d68fbb72918ce8d701a2e9e6dc9f586d9,test(A4): extend phase3 baseline capture to the HELM render path (F1/F2),2952,18,5
+2026-07-12T13:21:31-04:00,4638f788058becbf49a8c1e3e4dabe8e8e824898,docs(planning): record 2026-07-12 operator decisions + session journal,106,0,2
+2026-07-12T13:28:31-04:00,75366f4213473d39e23c8011906118c916b71b0b,chore(review): two lint fixes from the subagent-work review,3,3,2
+2026-07-12T15:38:03-04:00,e295c13b9b82be1d9993abdc0891524ceb0460c3,fix(era): set tokenizer_name + max_sequence_length on the era model deployment,78,11,3
+2026-07-12T15:51:00-04:00,a3a3301099a337fe7bef1a6d00d5a2d5d49c3697,fix(era-build): pin nltk==3.7 + provision punkt so BiasMetric tokenizes,23,0,3
+2026-07-12T18:01:53-04:00,3651eeb12ac2a0d39115dd79a3cfdb0c53cbb909,fix(runbooks): drop the deleted --allow-single-repeat flag from all callers,9,13,8
+2026-07-12T19:08:44-04:00,3a9aa30b261f519fad0b528b21b74751bd619700,feat(presets): merge runbook-local presets via INFER_STACK_EXTRA_PRESET_FILES,96,0,2
+2026-07-12T19:08:45-04:00,504c6b9f06ce16ce6dc403da0eadcb1bd8fa7690,feat(reproduce): classic Together open-weight combined era-pinned runbook,2546,0,17
+2026-07-12T20:13:13-04:00,b344671dd75340f686aa7ad533fda3fe7cb5bd57,"fix(era-shim): render credentials.conf from the baked deployments key, not the env",74,2,2
+2026-07-13T09:02:51-04:00,47658cf79a36d7b76981946d7cdb42f0738b2c39,fix(olmo): pass a placeholder --base-url in the freeze-only preflight,9,1,1
+2026-07-13T09:09:57-04:00,81c71002da2fe0c0f61e5e45b8ecbda7e6a4736e,"fix(gpt-oss,qwen): placeholder --base-url in the freeze-only preflights",18,1,2
+2026-07-13T11:49:09-04:00,bb0a377b8c859f06eb19b785ac02f04adabf8a26,docs(era): note classic officials are carried forward v0.2.4<->v0.3.0,18,0,2
+2026-07-13T11:52:17-04:00,339748afba1f60c9ed60db49b4e46ef8067dfbb0,"docs(era): record original execution eras (v0.2.2 / v0.2.3), not the pinned eras",13,4,2
+2026-07-13T11:55:34-04:00,5000b8accfb26c1d847ab050126bccfce47f6d2b,"docs(era): correct origin -- pre-v0.2.2 (original HELM), not v0.2.2",19,12,2
+2026-07-13T12:19:21-04:00,b445a7fd638d06ebcdf711fcd7e4384e6b200667,docs(planning): LiteLLM route-registry plan for the shared-gateway 400 bug,578,0,2
+2026-07-13T12:20:38-04:00,d5c70c9497d775e4899c3ddb366462cdd44da263,"fix(freeze): resolve subset run-entries to their exact dir, not AMBIGUOUS",76,5,2
+2026-07-13T12:51:23-04:00,f64c20bd99f290b2feb41f424cd9b3d419c5f5cd,docs(planning): mark litellm-route-registry plan implemented,6,2,1
+2026-07-13T12:52:12-04:00,1fbf4cbf9067a64a87e2ff59b1fdfb2dde646520,docs(journal): route-registry implementation session,70,0,1
+2026-07-13T12:52:50-04:00,9ff068c8d73c7d3d1c8303312247675d645e1361,"feat(classic-together): run all targets in parallel, lease arbitrates GPUs",168,167,4
+2026-07-13T13:33:26-04:00,27e4ee4086cbf2288734bebee56cea5695171522,docs(era): document classic-corpus class_name migration + true origin window,163,12,3
+2026-07-13T13:45:56-04:00,c44a64670afd198b3ec909ad3c55220dee14d05a,chore(submodule): bump infer_stack to route-registry merge (22d94317),1,1,1
+2026-07-13T14:05:03-04:00,c3e68bedeb3b81b2e51dbd6a6221674a302b98c2,feat(era-shim): canonicalize relocated class paths (G13 fix),214,3,3
+2026-07-13T15:40:48-04:00,3d904b928a80b011cef5109cb25955087431d5cc,"fix(gpt-oss): null-safe chat clients normalize content:null -> """" (HELM untouched)",250,18,6
+2026-07-13T16:02:08-04:00,32657a62c3521b9e60c665af53c18825fa5f4323,fix(docker): bump runner image Python 3.11 -> 3.12 to match eval_audit floor,9,5,3
+2026-07-13T16:25:22-04:00,c9f0efacf57b1fb408fdae742f489b24d38af798,fix(docker): prune selenium platform binaries / dangling symlinks before venv COPY,13,0,1
+2026-07-14T09:51:05-04:00,8d0d2c4b9bd0f7a927722957074bd9073cfe32f1,feat(reports): instance-level fallback for aggregate score-drift plot,351,42,8
+2026-07-14T09:51:52-04:00,f34d9f96937a3a275e7a999a552cfeed6c70d98d,docs(journal): instance-level fallback for aggregate score-drift plot,52,0,1
+2026-07-14T11:04:26-04:00,c041abb04b69b5892e94563b7f8d1b328fb7aeb2,fix(heatmap): headline metric resolves over metric family + main split,178,10,2
+2026-07-14T11:05:36-04:00,b83c03e925030ca1a47bf5548646f01dccd986d0,docs(journal): headline metric family/main-split resolver fix,43,0,1
+2026-07-14T11:27:12-04:00,33864be326e398a84e7b6bfe0f21963c8b55d4a6,Make eval audit run kwdagger with other_session_handler=kill,1,0,1
+2026-07-14T11:33:23-04:00,ca88518076a4ac209bf2a9a33cbb6bc0687e2f52,fix(reports): align coverage-matrix axis order with the score-drift plot,86,11,3
+2026-07-14T11:44:10-04:00,cdb314223f3a8f42fbb587b1f292d07e117f13d9,feat(reproduce): add 50_rsync_from_aiq_gpu.sh to olmo/gpt-oss/qwen runbooks,360,0,6
+2026-07-14T11:56:33-04:00,d4bf29d7404c30437861f2d39e11ffa1ae2edbc0,feat(coverage-matrix): show match stats per column + align model order,159,3,2
+2026-07-14T11:56:55-04:00,01351b7380a4a0c0f57e6b6031e81050360c2845,docs(journal): coverage-matrix annotations + axis alignment,43,0,1
+2026-07-14T12:11:29-04:00,7a9f1d5f0aa1e39162910625774f84e8efd8b84d,feat(coverage-matrix): print agreement proportion in each cell,120,118,2
+2026-07-14T12:14:03-04:00,93849b092ff7cc76bb4d9ccce008188fa16d9009,fix(heatmap): dedupe stale local attempts in aggregate score-drift,175,1,2
+2026-07-14T12:14:39-04:00,bec1f57c9945e29254158153fe01d55b69dc744f,docs(journal): aggregate score-drift stale-local dedupe,57,0,1
+2026-07-14T12:59:23-04:00,e1d102175287431b480047ca32f4a1c88e6a3f1e,test(e2e): route-registry survival acceptance check,201,0,2
+2026-07-14T13:43:59-04:00,a36b787c692cc515263000ab397483ce2491491e,fix(heatmap): keep headline drift cells square for small model counts,73,1,2
+2026-07-14T15:24:58-04:00,b8b858697e7c2491af163c8f5d757fe6ae6f3c1a,fix(qwen): serve 8192 window on the instruct-turbo endpoints for from-spec ifeval/mmlu_pro,73,9,3

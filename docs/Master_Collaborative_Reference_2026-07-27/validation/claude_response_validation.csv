@@ -1,0 +1,11 @@
+point,ruling,basis
+Two-paper distinction,valid,Directly supported by paper source history
+Demote broad positive thesis,valid,Experiments do not yet establish prevalence or small residual gap
+Float32 is discovery not reproduction,valid,Confirm tool and probe-only request knob
+Deductive dtype leg,valid_with_conditions,"Strong parameter-level inference, not full deployment proof"
+HF divergence is science,valid,Systematic difference under token equivalence
+Six-category taxonomy,valid,"Separates eligibility, mismatch layers, residual, non-identifiability"
+Recoverable vs non-identifiable,valid_with_wording,OLMo partially recoverable pending confirm
+RedPajama both-era reports,locally_supported_not_packaged,Journal/store references; /data excluded
+Preserve narrative with appendix,valid_but_master_inline_correction_preferred,Avoid reader confusion
+Commit 86ec84af,not_verifiable_in_supplied_git,Attached chronology revised; archive HEAD older

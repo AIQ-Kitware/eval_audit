@@ -1,0 +1,151 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[letterpaper,margin=0.85in]{geometry}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlist{itemsep=2pt,topsep=3pt}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\title{Consensus Response to the Patched Master Collaborative Reference}
+\author{Review prepared for Edward Wang's Kitware internship record}
+\date{July 15, 2026}
+\begin{document}
+\maketitle
+
+\section*{Overall assessment}
+The patch is careful, constructive, and substantively correct. I accept the core
+scientific framing and almost all factual corrections. The remaining disagreements
+concern evidence labels and publication acceptance, not the paper's thesis.
+
+\begin{quote}\itshape
+EEE detects reproducibility gaps. The follow-on work treats benchmark reproduction
+as layered system identification: it attempts to attribute and sometimes close
+disagreement by reconstructing recipe, deployment, execution-instrument, and artifact
+provenance, while recognizing that some historical measurements are non-identifiable
+from the surviving record examined.
+\end{quote}
+
+The near-term manuscript should remain a hybrid position/systems-and-measurement paper.
+OLMo is the partially recoverable modern case; classic HELM supplies proxy-era and
+non-identifiable historical cases; a narrow Qwen study is optional rather than a
+dependency.
+
+\section{Decisions on the patch}
+
+\subsection*{A1. Commit \code{86ec84af}}
+\textbf{Accept the factual correction; modify the evidence label.} The direct live
+repository observation is accepted, but the package does not include the Git object,
+a Git bundle, or an immutable remote reference. The master therefore uses
+\emph{collaborator-verified, artifact not packaged}, rather than \emph{Established}.
+
+\subsection*{A2. Result stores}
+\textbf{GPT-OSS: accept report freshness; reject preservation-only as the remaining
+step.} A report timestamp does not establish run-artifact freshness, comparison
+freshness, or a complete provenance manifest. The cells are promising candidate
+results pending acceptance and preservation.
+
+\textbf{OLMo: accept.} The reported local-halving signature makes the store stale
+relative to corrected comparison logic. Regenerate before citation.
+
+\textbf{RedPajama: accept with scope qualification.} The live inspection strengthens
+the both-era proxy-execution claim. It does not prove either proxy is the original
+instrument. Copy, hash, and preserve the complete inputs and provenance.
+
+\textbf{Qwen: accept.} No result store is present; the study remains pending and is
+not a near-term paper dependency.
+
+\subsection*{A3. Probe scope and the 59\% estimate}
+\textbf{Accept the IFEval-only deployment-match scope}, with a requirement to package
+sweep manifests and outputs. \textbf{Accept the 59\% value only as an internal
+planning estimate.} Regenerate it from a frozen manifest with an explicit numerator,
+denominator, eligibility rule, and date before publication.
+
+\subsection*{B1. Dense OLMo-2 HF divergence}
+\textbf{Accept.} Both genuine execution-instrument divergence and a dense-model probe
+artifact remain live explanations. The evidence locates a divergence, not its unique
+root cause.
+
+\subsection*{B2. \code{HuggingFaceClient} wording}
+\textbf{Accept with a source-version qualification.} ``Recorded as a
+\code{HuggingFaceClient} deployment'' is precise; it must not imply a uniquely known
+historical package build.
+
+\subsection*{B3. Drift ratio}
+\textbf{Accept.} The correct description is approximately 25--35x (about 30x), not two
+orders of magnitude.
+
+\subsection*{B4. Canonical ledger}
+\textbf{Accept and implement.} The source of truth is
+\code{chronicle/data/master_claim_evidence_ledger_2026-07-15c.csv}. Prose tables are
+snapshots. Store status is separately represented in
+\code{chronicle/data/store_status_ledger_2026-07-15c.csv}.
+
+\subsection*{B5. Vendor-named front matter}
+\textbf{Accept in principle.} The front summary now refers to independent
+reconstructions. A concise evidence-status chapter remains near the front because it
+governs the chronology; detailed correspondence is preserved under \code{validation/}.
+
+\subsection*{B6. Packaging and compilation}
+\textbf{Accept and implement fully.} The structured package contains both commit-ledger
+appendices, an accurate README, patch materials, canonical ledgers, and compiled
+primary documents.
+
+\section{Additional concerns from the independent review}
+
+\subsection*{Report freshness is not result freshness}
+Record separately: (1) run-artifact freshness, (2) comparison freshness, and (3)
+report freshness. A recent report timestamp establishes only the third unless a
+manifest links all three.
+
+\subsection*{Add an orthogonal reproduction-target axis}
+The six-category taxonomy explains \emph{why} executions disagree. The paper should
+also distinguish: artifact reconstruction, procedural reproduction, and claim-level
+robustness. Official released artifacts remain ground truth for the historical score;
+reruns test procedure stability and identifiability.
+
+\subsection*{Scope non-identifiability}
+Use ``non-identifiable from the surviving public and repository evidence examined,''
+not an absolute claim that no private archive could resolve the instrument.
+
+\subsection*{Keep EvalAudit's claim at the capability level}
+The current defensible claim is support for exact-spec replay, provenance preservation,
+layered comparison, and controlled diagnosis. Do not claim it guarantees reproducible
+evaluation or ``fixes HELM'' without system validation.
+
+\subsection*{Preserve live-only evidence through attestations}
+For each live-store or post-archive Git claim, preserve identifiers and hashes, times,
+code and dirty state, run specs and targets, model/deployment revisions, environment
+and hardware identity, and generation/comparison commands.
+
+\section{Final consensus}
+There is no remaining substantive disagreement about the paper's core thesis or
+near-term story.
+
+\begin{quote}\bfseries
+A public LLM benchmark recipe is not a complete experimental record. Benchmark
+reproduction is a layered system-identification problem spanning recipe, deployment,
+execution instrument, and artifact interpretation. Controlled reconstruction can
+attribute and sometimes close apparent gaps, while some historical measurements
+remain non-identifiable from the surviving evidence examined.
+\end{quote}
+
+The narrative is: EEE detects; EvalAudit replays, preserves, compares, and diagnoses;
+OLMo is partially recoverable pending ordinary-path confirmation; RedPajama compares
+declared proxy eras; GPT-J/GPT-NeoX/OPT illustrate origin-instrument
+non-identifiability; the paper derives a minimum provenance standard; and Qwen is an
+optional current-model demonstration.
+
+The remaining work is operational: regenerate OLMo, preserve and audit GPT-OSS and
+RedPajama, package sweep manifests, complete or document failure of OLMo confirmation,
+regenerate denominators, and keep the canonical ledger synchronized.
+
+With those qualifications incorporated, the chronology and paper strategy have
+reached consensus.
+\end{document}

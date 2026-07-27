@@ -1,0 +1,187 @@
+--- Master_Collaborative_HELM_Internship_Reference_2026-07-15.tex.orig	2026-07-15 13:55:16.840658629 -0400
++++ Master_Collaborative_HELM_Internship_Reference_2026-07-15.tex	2026-07-15 13:57:39.743673893 -0400
+@@ -84,7 +84,8 @@
+   \normalsize Kitware Research Internship --- Summer 2026}
+ \author{Edward Wang\\ \texttt{edward.wang@kitware.com}\\[4pt]
+   \small Kitware, Inc.}
+-\date{Evidence cutoff: 2026-07-14; collaborative interpretation revised 2026-07-15}
++\date{Evidence cutoff: 2026-07-14; collaborative interpretation revised 2026-07-15;
++  live-repository corrections pass 2026-07-15b (see \S\ref{sec:corrections-applied})}
+ 
+ \begin{document}
+ \maketitle
+@@ -167,9 +168,10 @@
+ per-parameter identifiability map is therefore a useful paper contribution. \\
+ The dense OLMo-2 Hugging Face divergence is scientifically relevant. &
+ \statusEstablished & Prompt-token equivalence rejects one class of explanations.
+-The remaining current-HF versus apparently historical-HF divergence is evidence of
+-execution-stack sensitivity. Its cause remains unresolved and must not be dismissed
+-as merely a broken probe. \\
++The remaining divergence between the current HF stack and a result recorded as a
++\code{HuggingFaceClient} deployment is evidence of execution-stack sensitivity. Its
++cause remains unresolved --- with a dense-model probe artifact still among the
++candidates --- and must not be dismissed as merely a broken probe. \\
+ The six-category disagreement taxonomy is preferable to ``true reproducibility
+ failure.'' & \statusEstablished & Non-runnable cases are an upstream eligibility
+ gate. Observed disagreements should be classified as recipe, deployment,
+@@ -193,10 +195,12 @@
+ must prevent readers from mistaking superseded wording for the final conclusion.
+ This master edition therefore uses corrected wording inline and retains historical
+ interpretations only as explicitly labeled contemporaneous beliefs. \\
+-The claimed commit \code{86ec84af} contains the revisions. & \statusUnresolved & The
+-attached chronology embodies the described changes, but the supplied repository
+-archive ends at \code{b8b8586}; the later commit object is not available for direct
+-Git verification in this package. \\
++The claimed commit \code{86ec84af} contains the revisions. & \statusEstablished &
++\emph{Verified against the live branch (2026-07-15).} \code{86ec84af} is the current
++\textsc{head} of \code{impl/run-from-run-spec} and embodies the described changes; it
++was simply a \emph{post-archive} commit. The supplied \code{git archive} ends at
++\code{b8b8586} (itself an ancestor of the original chronology commit), so the object
++was absent from this package though present in the repository. \\
+ \bottomrule
+ \end{longtable}
+ 
+@@ -221,7 +225,42 @@
+ closure, and identifiability.
+ \end{quote}
+ 
++\section{Corrections applied in this master revision (2026-07-15b)}
++\label{sec:corrections-applied}
+ 
++Following a verification pass against the \emph{live} repository (HEAD \code{86ec84af}
++on \code{impl/run-from-run-spec}, including the \path{/data} stores that the source
++archive omits), the following factual corrections were applied \emph{inline} to this
++document. The reasoning and machine-readable ledgers are carried in the reply package
++(\file{Claude\_Response\_*\_2026-07-15}).
++
++\begin{itemize}[nosep]
++  \item \textbf{Commit \code{86ec84af}} reclassified from \statusUnresolved{} to
++        \statusEstablished --- verified as current \textsc{head}
++        (\S\ref{chap:collaborative-validation}).
++  \item \textbf{Store status split three ways}, replacing the single ``not packaged''
++        label: \code{gpt-oss-20b-from-spec} is \emph{fresh} (current-code; needs only
++        preservation), \code{olmo-models-combined} is \emph{stale} (on-disk
++        \code{olmo-7b} halving \code{0.295/0.144}; regenerate before citing), and Qwen
++        is \emph{genuinely absent} (Chapter~\ref{chap:newmodels},
++        Appendix~\ref{app:revision}).
++  \item \textbf{OLMo-2 HF divergence} now keeps a dense-model probe artifact on the
++        live candidate-cause list, alongside genuine execution-instrument sensitivity
++        (Chapter~\ref{chap:deploymatch}).
++  \item \textbf{Wording and sourcing:} ``apparently HF-produced'' $\rightarrow$
++        ``recorded as a \code{HuggingFaceClient} deployment''; the GPT-OSS-vs-OLMo
++        \code{ifeval} drift ratio ``two orders of magnitude'' $\rightarrow$
++        ``$\approx\!30\times$''; the 59\% classic-track figure now carries its source.
++\end{itemize}
++
++\noindent Three \emph{proposed} changes were deliberately \textbf{not} applied here,
++pending the reviewer's agreement, because they restructure the document rather than
++correct a fact: (i) consolidating the several overlapping claim ledgers into one
++canonical machine-readable source; (ii) demoting the vendor-named validation matter
++out of Chapter~\ref{chap:collaborative-validation}; and (iii) the remaining
++standalone-packaging alignment (the \code{README} directory tree). The absent
++commit-ledger \code{\textbackslash input}s are now guarded so the document compiles
++standalone.
+ 
+ %==============================================================================
+ \chapter{How to Read This Document}
+@@ -1382,14 +1421,19 @@
+ finding, not merely a broken probe.} An earlier framing dismissed the OLMo-2 HF
+ divergence as ``not a science problem'' (a defect in our tool, since vLLM fp32 did
+ match). The sharper reading, which the paper should adopt: a \emph{current}
+-\code{transformers.generate()} at fp32 does \emph{not} reproduce an
+-\emph{apparently} HF-produced historical result \emph{even under byte-identical
+-prompt tokens}. That is precisely an \emph{unresolved systematic divergence under
+-prompt-token equivalence} --- direct evidence of execution-stack sensitivity, and a
+-core datum for the thesis, not an artifact to wave away. Its cause is not yet
+-isolated (candidates: model/tokenizer revision, \code{transformers}/\code{torch}
+-version, attention implementation, generation defaults, device placement, numerical
+-precision, CUDA behavior). That vLLM fp32 happens to match is a separate fact and
++\code{transformers.generate()} at fp32 does \emph{not} reproduce a historical result
++\emph{recorded as a \code{HuggingFaceClient} (in-process \code{transformers})
++deployment} --- \emph{even under byte-identical prompt tokens}. That is precisely an
++\emph{unresolved systematic divergence under prompt-token equivalence} --- direct
++evidence of execution-stack sensitivity, and a core datum for the thesis, not an
++artifact to wave away. Its cause is not yet isolated, and two classes of explanation
++remain live until one is ruled out: a genuine execution-instrument divergence
++(candidates: model/tokenizer revision, \code{transformers}/\code{torch} version,
++attention implementation, generation defaults, device placement, numerical precision,
++CUDA behavior) \emph{and} a defect in the dense-model HF probe path itself (e.g.\
++tokenizer/template handling that differs from the OLMoE path on which the probe
++succeeds). The reframing rejects only the premature dismissal of the divergence, not
++the possibility that our own tooling contributes to it. That vLLM fp32 happens to match is a separate fact and
+ does not make the HF$\to$HF gap uninteresting. The reusable insight stands and is
+ sharper for it: \emph{``same engine family'' (transformers$\rightarrow$transformers)
+ does not imply reproducible} --- device sharding, attention-implementation drift, and
+@@ -1438,7 +1482,8 @@
+ 
+ \section{The problem: the measurement instrument itself has versions}
+ 
+-A large fraction of the audit corpus --- roughly \textbf{59\%}, the classic-track
++A large fraction of the audit corpus --- roughly \textbf{59\%}
++(\file{docs/container-execution.md}; \file{dev/journals/claude.md}), the classic-track
+ \code{v0.2.4} and \code{v0.3.0} runs --- \emph{cannot} be replayed by the modern
+ runner, which pins \textsc{helm} 0.5.x and Python 3.11 and whose from-spec CLI
+ imports v0.5+ module paths that do not exist pre-v0.5. This is not a model problem;
+@@ -1586,14 +1631,21 @@
+ Discovery confirmed all four target run directories resolve 1:1 against the
+ 84{,}966-run corpus with 0 ambiguities.
+ 
+-\evidencebox{Packaged-evidence status}{The July 14 deck and local report-store audit support the following four GPT-OSS comparisons, but the raw \path{/data} run and report directories are excluded from the supplied archive. Treat the numbers as locally reported until the store and its inputs are copied and hashed.}
++\evidencebox{Packaged-evidence status (verified 2026-07-15)}{The
++\code{gpt-oss-20b-from-spec} store exists on \path{/data} and its reports were
++\emph{regenerated Jul 14 13:47 --- after} the drift-plot fixes --- so these four
++comparisons are \emph{current-code}, not stale. They are simply absent from the
++supplied source archive (which excludes \path{/data}). The required action is
++\emph{preservation only}: copy and hash the store and its inputs. The numbers should
++\emph{not} be hedged as possibly stale.}
+ 
+ \finding{GPT-OSS-20B is a promising positive local case.} The headline aggregate score-drift plot
+ (Figure~\ref{fig:gptoss}) shows local and public headline scores agreeing closely
+ across all four benchmarks --- \code{bbq} $0.967/0.963$, \code{gpqa} $0.594/0.610$,
+ \code{ifeval} $0.732/0.754$, \code{mmlu\_pro} $0.740/0.748$ (public/local) --- with
+-squared errors bounded by $\sim\!4\times10^{-4}$, roughly two orders of magnitude
+-tighter than the OLMo instruct drift on \code{ifeval}. This is promising evidence that family-specific deployment and artifact semantics matter; it becomes a publication result only after the underlying store is preserved and regenerated with the final reporting code.
++squared errors bounded by $\sim\!4\times10^{-4}$, more than an order of magnitude
++($\approx\!30\times$) tighter than the OLMo instruct drift on \code{ifeval}
++($\sim\!1$--$1.6\times10^{-2}$). This is promising evidence that family-specific deployment and artifact semantics matter; because this store is fresh (regenerated Jul 14, current code), it becomes a publication result once the underlying store is preserved and hashed.
+ 
+ \begin{figure}[H]
+ \centering
+@@ -2506,14 +2558,20 @@
+ ``Precision is the dominant hidden variable.'' & Supported \emph{within} the OLMo
+ ifeval pilot; not established across benchmarks or model families. \\
+ ``the OLMo-2 HF divergence is the probe mis-generating, not science.'' & Reframed: a
+-\emph{current} HF stack failing to reproduce an \emph{apparently} HF-produced
+-historical result under byte-identical prompt tokens is itself an unresolved
+-systematic divergence under prompt-token equivalence --- evidence for the thesis. \\
++\emph{current} HF stack failing to reproduce a historical result \emph{recorded as a
++\code{HuggingFaceClient} deployment} under byte-identical prompt tokens is itself an
++unresolved systematic divergence under prompt-token equivalence --- evidence for the
++thesis (with a dense-model probe artifact still on the candidate-cause list). \\
+ ``residual drift is small, concentrated, and almost always attributable.'' & A
+ motivating \emph{hypothesis}, pending the confirm step, fresh stores, cross-machine
+ data, and a controlled ablation. Not yet established. \\
+-OLMo/GPT-OSS heatmaps ``exist''. & Report stores exist (Jul 14) but carry
+-stale-local numbers on disk; must be regenerated with current code before citing. \\
++OLMo/GPT-OSS heatmaps ``exist''. & \emph{Split by store (verified 2026-07-15).}
++\code{gpt-oss-20b-from-spec} reports are \emph{fresh} (regenerated Jul 14 13:47,
++current code). \code{olmo-models-combined} reports are \emph{stale}: the on-disk
++headline still shows the un-deduped \code{olmo-7b} halving (MMLU \textbf{0.295/0.144},
++GSM 0.036/0.018, narrative\_qa 0.597/0.311), whereas the corrected value cited in the
++figure is 0.295/0.287. The fix (\code{93849b09}) is committed but the store was never
++regenerated --- do so before citing OLMo base-model numbers. \\
+ \bottomrule
+ \end{longtable}
+ 
+@@ -2607,7 +2665,9 @@
+ only the winner; compatibility rewrites; report-generation version; seeds and
+ repeated-run manifests; and all analysis/figure scripts.
+ 
+-\input{appendices/main_commit_ledger.tex}
+-\input{appendices/submodule_commit_ledger.tex}
++% Guarded so the master document compiles standalone even when the commit-ledger
++% appendices are not shipped alongside it (packaging fix, 2026-07-15b).
++\IfFileExists{appendices/main_commit_ledger.tex}{\input{appendices/main_commit_ledger.tex}}{}
++\IfFileExists{appendices/submodule_commit_ledger.tex}{\input{appendices/submodule_commit_ledger.tex}}{}
+ 
+ \end{document}

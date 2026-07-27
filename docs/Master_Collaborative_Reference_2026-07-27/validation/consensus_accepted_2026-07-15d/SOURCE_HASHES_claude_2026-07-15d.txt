@@ -1,0 +1,26 @@
+# Furnished immutable references and store hashes (Claude, 2026-07-15d)
+# Promotes several "collaborator-verified; artifact not packaged" rows toward packaged evidence.
+
+## Commit 86ec84af (the revision commit) — content-addressed immutable reference
+commit_sha  86ec84af09c0b8f4442afa1ce87b56e1f8b3dc61
+tree_sha    a3734de5b0178077bf241b6026e7d68d74247853
+branch_head 7a3e728e7065466fabe9f370b3cf7651a2c6d561  (impl/run-from-run-spec, HEAD 2026-07-15)
+# A git SHA-1 is itself a cryptographic commitment to the commit's full content and history.
+# NOTE (governance): a full git bundle was deliberately NOT exported to the external reviewer —
+# the repository is private (Kitware). The bundle/tag belongs in the paper's artifact release
+# under Kitware control, not in a reviewer-facing package. The SHAs above are the verifiable
+# immutable reference; anyone with repo access can 'git cat-file -p <sha>' to confirm.
+
+## Store artifact sha256 (the "manifests and hashes" requested)
+# gpt-oss-20b-from-spec
+11afa781b5ebc1cce60b780f3d10faa6547b05c2712f328e0ef3100a77ec0667  gpt-oss/provenance.json
+bafecae17b58a3c216191ca85a5fe4c21eecb79fe9c71892b0429162a13d659c  gpt-oss/manifest.yaml
+e3178d59195af4c1f16e007cf68261bbd615da8dc98608b5b2b57a6cba67c7f9  gpt-oss/reports/.../aggregate_score_diff_headline.json
+# olmo-models-combined (STALE — see provenance audit)
+66282f685c1000c92beca3739122a0630893fa0d757ca8235d2e3538bbfc8201  olmo/provenance.json
+275f796b7b6064116ab4b189d83cc6e22ad8ebbaf878fae7764a20f7a0432009  olmo/manifest.yaml
+a4b260fcc413583374c0ae99c258da014b5d49b197b3817b0de5e6c9b2749bff  olmo/reports/.../aggregate_score_diff_headline.json
+# era-redpajama (raw runs survive — genuinely preservable)
+f5d9c7679784e8763bde398a97a8f565386e2d393965e35bf651976075f50540  redpajama-v0.2.4-full/container_provenance.json
+a2b62cab06584f7be46f16b68aabef7f040d7ff9d469ea6431962803206d633e  redpajama-v0.3.0-full/container_provenance.json
+# (Full recursive manifests to be produced at preservation time for the stores that survive.)

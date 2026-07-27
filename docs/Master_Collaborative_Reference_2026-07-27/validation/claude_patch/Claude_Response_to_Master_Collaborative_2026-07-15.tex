@@ -1,0 +1,180 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{booktabs,longtable,array,xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+\usepackage{enumitem}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\title{Response to the Master Collaborative Reference Set}
+\author{Claude (working in the live \code{eval\_audit} repository, for Edward Wang)}
+\date{July 15, 2026}
+\begin{document}\maketitle
+
+\noindent\textbf{Re:} \code{Master\_Collaborative\_Reference\_Documents\_2026-07-15.zip}.\\
+\textbf{Evidence vantage:} the \emph{live} repository at HEAD \code{86ec84af} on
+\code{impl/run-from-run-spec}, \emph{including} \path{/data}, which the source tarball
+you were given (\code{b8b858697e7c} = \code{b8b85869}) deliberately excludes.
+
+\medskip
+\fbox{\parbox{0.97\textwidth}{\small\textbf{Status update (2026-07-15b).} The
+factual/wording/status corrections below (\textbf{A1, A2, A3, B1, B2, B3}, and the
+compile-guard half of \textbf{B6}) have now been \textbf{applied inline to the
+collaborative master document} (see the enclosed
+\code{Master\_Collaborative\_corrections\_2026-07-15b.diff} and the new ``Corrections
+applied'' section in Chapter~1). The standalone local chronology was removed and the
+repository consolidated onto the master doc. Only three \emph{structural} items remain
+\textbf{proposed, not applied}: \textbf{B4} (consolidate the ledgers), \textbf{B5}
+(demote the vendor-named Chapter~1), and the \code{README}/directory half of
+\textbf{B6}.}}
+
+\section*{0.\quad Overall verdict}
+
+The merge is faithful and, in several places, sharper than my revision. I accept the
+great majority without reservation: the system-identification thesis, the
+$F=(R,D,I,A,U)$ measurement model, fp32-as-discovery plus the conditional deductive
+dtype leg as the stronger evidence, the six-category taxonomy, the
+recoverable-vs-non-identifiable spine, the per-parameter identifiability map, the
+confirm-step protocol, the hybrid-paper scope with OLMo confirmation as the pivotal
+experiment, Qwen-as-demonstration, and the
+\code{model\_revision}+\code{torch\_dtype}+\code{transformers\_version} provenance
+recommendation. The evidence-precedence rule is exactly right, and everything below
+\emph{respects} it --- I am supplying the artifacts, not asking you to trust narrative.
+
+This response (A) resolves the items you marked \emph{Unresolved / not-verifiable /
+not-packaged} using direct inspection of the live repo and \path{/data}; (B) raises six
+concerns where the merge over- or under-corrects, or has a packaging defect; and (C)
+lists what I endorse verbatim.
+
+\section*{Part A --- Reconciling the archive-access asymmetry}
+
+Your archive is a \code{git archive} at \code{b8b85869}, which predates even the
+original chronology commit (\code{3e8e73cd}) and omits \path{/data}. That single fact
+generated most of the ``cannot verify'' rulings. Direct inspection resolves them.
+
+\paragraph{A1. Commit \code{86ec84af} --- Verified, not ``Unresolved.''} It is the
+current HEAD of \code{impl/run-from-run-spec} and contains the described revisions.
+Lineage: \code{b8b85869} (your archive) $\rightarrow$ \code{3e8e73cd} (chronology)
+$\rightarrow$ \code{4a3002ef} (paper plan) $\rightarrow$ \code{156ffa09} $\rightarrow$
+\code{86ec84af} (HEAD).
+
+\paragraph{A2. The \path{/data} stores exist --- with differing freshness that matters.}
+``Not packaged'' is true of all of them (none in your archive, none hashed yet), but
+their \emph{evidential} status is not uniform. Flattening them under one label both
+\textbf{under-sells} a real result (GPT-OSS) and \textbf{under-warns} on a stale one
+(OLMo).
+
+\begin{longtable}{@{}P{0.20\textwidth}P{0.44\textwidth}P{0.28\textwidth}@{}}
+\toprule
+\textbf{Store} & \textbf{On-disk state (verified)} & \textbf{Correct status} \\
+\midrule\endhead
+\code{gpt-oss-20b-from-spec} & Reports regenerated \textbf{Jul 14 13:47}, \emph{after}
+the drift-plot fix commits; numbers are current-code. & \textbf{Fresh, unpackaged} ---
+copy+hash; do not hedge as ``possibly stale.'' \\
+\code{olmo-models-combined} & Headline still carries the \textbf{un-deduped stale-local
+bug}: \code{olmo-7b} MMLU \textbf{0.295/0.144}, GSM 0.036/0.018, narrative\_qa
+0.597/0.311 (local $\approx$ half). Fix \code{93849b09} is in HEAD but the store was
+never regenerated. & \textbf{Stale --- must regenerate.} Your caution is right; this is
+the proof. \\
+\code{era-redpajama} (v0.2.4 + v0.3.0, full+smoke) & Both-era runs present \textbf{Jul
+12}; \code{container\_provenance.json}, \code{helm/}, \code{materialized\_run\_specs/}
+all present. & \textbf{Locally supported} --- correct as stated. \\
+\code{qwen-combined} / \code{qwen-models} & \textbf{Absent.} No store on \path{/data}. &
+\textbf{Genuinely pending} --- correct. \\
+\bottomrule
+\end{longtable}
+
+\textbf{Load-bearing correction.} The chronology's OLMo heatmap figure caption cites the
+\emph{corrected} \code{olmo-7b} numbers (MMLU \textbf{0.295/0.287}, GSM 0.036/0.036,
+narrative\_qa 0.597/0.595). Those are the \emph{intended post-fix values, not what is on
+disk} --- the disk still shows the halved 0.144/0.018/0.311. So the fix is understood and
+committed, but the OLMo base-model figures cannot be cited until the store is
+regenerated. This vindicates your ``regenerate before submission'' ruling and gives it a
+checkable failure signature (\code{local} $\approx$ \code{public}/2 on the \code{olmo-7b}
+classic cells).
+
+\textbf{Proposed change:} replace the single ``locally supported; not packaged'' status
+with a three-way distinction --- \textbf{fresh-but-unpackaged (GPT-OSS)},
+\textbf{stale-must-regenerate (OLMo)}, \textbf{genuinely-absent (Qwen)} --- and record
+RedPajama as present (Jul 12), pending hash.
+
+\paragraph{A3. The deployment-match and 59\% claims are sourced.} The fp32 probe was
+ifeval-only across all four OLMo instruct models (HF and vLLM variants), overnight
+2026-07-08; the table values match the stored sweeps. The ``$\sim$59\% classic-track''
+figure is sourced (\path{docs/container-execution.md:146}; \path{dev/journals/claude.md:629})
+--- add the citation so it is not bare.
+
+\section*{Part B --- Substantive concerns (proposed modifications)}
+
+\paragraph{B1. Don't over-correct the OLMo-2 HF divergence.} Reframing it away from
+``just a defective tool'' is correct, but the current candidate-cause list contains
+\emph{only} substrate axes and silently drops the hypothesis that our own dense-model HF
+probe path is misconfigured. Honest position: the cause is not isolated, and \emph{both}
+a genuine execution-instrument divergence \emph{and} a probe/harness artifact on dense
+models remain live until one is ruled out. \textbf{Add to the list:} ``a defect in the
+dense-model HF probe path itself (e.g.\ tokenizer/template handling that differs from the
+OLMoE path on which the probe succeeds).''
+
+\paragraph{B2. ``apparently HF-produced'' $\rightarrow$ the recorded fact.} The OLMo-2
+officials are \emph{recorded as} \code{HuggingFaceClient} deployments --- the basis of the
+dtype argument. \textbf{Change to} ``a result recorded as a \code{HuggingFaceClient}
+(in-process \code{transformers}) deployment,'' which is stronger and sharpens the puzzle.
+
+\paragraph{B3. ``roughly two orders of magnitude'' is numerically loose.} GPT-OSS squared
+errors are bounded by $\approx 4.8\times10^{-4}$; OLMo instruct ifeval squared errors are
+$\approx 1.0$--$1.6\times10^{-2}$. The ratio is $\approx 25$--$35\times$ ($\approx$1.5
+orders), not two. This originated in \emph{my} chronology; \textbf{already fixed} in
+committed patch \code{63472287} (see the enclosed \code{.patch}).
+
+\paragraph{B4. Consolidate the overlapping claim ledgers.} The set carries five
+overlapping status tables; they will drift. \textbf{Designate one machine-readable ledger
+(the CSV) as source-of-truth}, and have the prose tables cite it rather than restate it.
+
+\paragraph{B5. Move the ``Validation of Claude's response'' framing out of Chapter 1.}
+Adjudicating ``Claude'' vs ``OpenAI'' by vendor name is collaboration-process meta; it
+reads oddly at the front of a reference meant to seed an academic paper. Keep the
+rulings, \textbf{demote to an appendix}, and neutralize to ``two independent
+reconstructions.''
+
+\paragraph{B6. Packaging/compile integrity.} The master \code{.tex} \code{\textbackslash
+input}s \path{appendices/main_commit_ledger.tex} and
+\path{appendices/submodule_commit_ledger.tex}, absent from the flat zip, so it will not
+compile; the \code{README} describes a directory tree the flat archive does not contain.
+Ship the referenced files or guard the inputs and align the README.
+
+\section*{Part C --- Endorsed verbatim (no change requested)}
+
+Thesis (system identification); the $F=(R,D,I,A,U)$ model and outcome classes; fp32 as
+configuration-discovery plus the conditional source-level deductive leg as the stronger
+evidence; the six-category taxonomy with the non-runnable eligibility gate upstream;
+recoverable-vs-non-identifiable as the spine (OLMo partially recoverable pending
+confirmation; GPT-J/NeoX/OPT non-identifiable via G13); the per-parameter identifiability
+map; the seven-step OLMo confirmation protocol with discovery/held-out separation; the
+hybrid position/systems paper; Qwen as a bounded demo and Fable deferred; the provenance
+recommendation and preservation checklist; and the evidence-precedence principle itself.
+
+\section*{Proposed next actions (I can execute these)}
+
+\begin{enumerate}[nosep]
+  \item \textbf{Regenerate} \code{olmo-models-combined} so \code{0.295/0.287} becomes the
+        on-disk truth, materializing the stale-local dedupe fix.
+  \item \textbf{Copy + hash} the fresh \code{gpt-oss-20b-from-spec} and both-era
+        \code{era-redpajama} stores into a preservation bundle.
+  \item \textbf{Errata patch} to the master \code{.tex} implementing B1--B6 and the
+        A1/A2 status refinements.
+  \item Correct the ``two orders of magnitude'' claim (B3) in the committed chronology
+        --- \emph{done} (\code{63472287}).
+\end{enumerate}
+
+\textbf{Two decisions to confirm:} (a) the three-way store-status refinement in A2
+(fresh / stale / absent) replacing the single ``not packaged'' label; and (b) the two
+wording changes in B1 (keep ``probe artifact on dense models'' as a live cause) and B2
+(``recorded as a HuggingFaceClient deployment''). Everything else I will apply as errata
+unless you object.
+
+\end{document}

@@ -1,0 +1,560 @@
+\chapter{Main-repository commit ledger}\label{app:main-commit-ledger}
+\small
+This appendix lists every commit authored as \texttt{Edward Wang <edward.wang@kitware.com>} in the supplied \texttt{eval\_audit} history from 2026-06-03 through 2026-07-14. Insertions and deletions are Git numstat totals and should not be interpreted as net authored lines: they include refactors, moves, generated fixtures, and regenerated lock files.
+\section*{2026-06-03 (1 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{ca46b11e} & Add adapter config for the e2e test and update matching logic & 319 & 74 & 2 \\
+\bottomrule\end{longtable}
+\section*{2026-06-04 (1 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{ed9e40ed} & Add e2e tests & 263 & 0 & 6 \\
+\bottomrule\end{longtable}
+\section*{2026-06-11 (19 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{609e02bb} & Fix stale prioritized-example repair test to match no-regeneration contract & 48 & 34 & 1 \\
+\texttt{59fbdc2d} & Add repo refactor plan and journal entry & 355 & 0 & 2 \\
+\texttt{f3953650} & Phase 0a: clean up repo root (refactor plan) & 18 & 12 & 5 \\
+\texttt{6f294d03} & Phase 0b: finish vllm\_service -> infer\_stack rename & 2 & 2 & 3 \\
+\texttt{3507539d} & Phase 0c: consolidate root docs & 5 & 2 & 4 \\
+\texttt{4a0ae5b7} & Phase 1: every console script resolves to eval\_audit.cli.* & 71 & 12 & 9 \\
+\texttt{6d5035aa} & Phase 1: retire grouped-CLI dispatchers and dead alias module & 34 & 37 & 7 \\
+\texttt{4473bfc9} & Phase 1: role docstrings for core\_* modules; fix stale runbook command & 46 & 1 & 6 \\
+\texttt{b3a4b272} & Phase 2 prep: hoist @profile shim into infra/profiling.py & 44 & 102 & 15 \\
+\texttt{7f64806b} & Phase 2: split build\_reports\_summary into reports/summary/ subpackage & 4570 & 4235 & 12 \\
+\texttt{72bfeb3d} & Journal: refactor plan implementation session (Phases 0-2) & 85 & 0 & 1 \\
+\texttt{9b7ddb74} & Phase 2: extract Stage 1 library logic from cli/index\_historic\_helm\_runs & 639 & 568 & 3 \\
+\texttt{ca6f5d7b} & Phase 2: extract diff primitives from helm/diff.py & 715 & 668 & 2 \\
+\texttt{dd742728} & Phase 2: split core\_metrics into curves / plots / tables modules & 2165 & 2003 & 5 \\
+\texttt{9a377838} & Phase 2: split filter\_analysis into tables / text / charts / io modules & 1313 & 1206 & 5 \\
+\texttt{c201938f} & Phase 2: split eee\_only\_heatmap into data / render modules & 1243 & 1173 & 3 \\
+\texttt{9fcdfefe} & Phase 2: split helm/analysis into instance\_stats / analysis\_report & 1075 & 1028 & 3 \\
+\texttt{3822d676} & Mark Phase 2 secondary targets done in plan; journal entry & 91 & 6 & 2 \\
+\texttt{5b05562f} & Add Phase 3 design docs (comparison-core unification + equivalence matrix) & 522 & 27 & 3 \\
+\bottomrule\end{longtable}
+\section*{2026-06-12 (28 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{76a320c3} & Revise Phase 3 design docs for the new research program & 389 & 261 & 3 \\
+\texttt{352d55d0} & Journal: Phase 3 design + research-program revision & 73 & 0 & 1 \\
+\texttt{94c7fb49} & Phase 3 / 4.0: lift metric taxonomy out of helm/, add judge-dependence class & 283 & 115 & 4 \\
+\texttt{4a36e6d4} & Phase 3 / 4.1: recipe\_facts accessor + judge-identity fields & 453 & 1 & 3 \\
+\texttt{1836be3e} & Phase 3 / 4.2: normalized/diagnose.py -- framework-free diagnosis port & 559 & 0 & 2 \\
+\texttt{6656048b} & Phase 3: behavior baseline capture harness + committed F3/F4 snapshots & 1919 & 0 & 5 \\
+\texttt{426a211a} & Phase 3 / 4.4: EEE synthesis library home + zero-HELM EEE entry points & 507 & 436 & 11 \\
+\texttt{12623aa5} & Journal: Phase 3 implementation session (4.0-4.2, baseline, 4.4) & 75 & 0 & 1 \\
+\texttt{a347eca0} & Phase 3 / 4.3: NormalizedDiff -- the unified comparison core (additive) & 616 & 102 & 3 \\
+\texttt{cc6c9e8b} & Phase 3: judge-identity inventory across the closed-judge benchmarks & 86 & 0 & 1 \\
+\texttt{dfe2c941} & Journal: Phase 3 continuation (4.3 + judge inventory) & 62 & 0 & 1 \\
+\texttt{5c8f7a48} & Phase 3 / 4.6: route the renderer through NormalizedDiff; single diagnosis impl & 59 & 271 & 3 \\
+\texttt{9e40aa92} & Phase 3 / 4.5 (loader half): declared instance-source policy + F6 probe & 206 & 22 & 2 \\
+\texttt{e5f905c7} & Phase 3 / 4.5 (renderer half): --instance-source flag + recorded provenance & 75 & 0 & 6 \\
+\texttt{0299ed03} & Journal + design-doc status: Phase 3 sub-stages 4.0-4.6 complete & 75 & 0 & 2 \\
+\texttt{3ef5233e} & Phase 3 / 4.9a: curated judge registry + identity resolution & 166 & 3 & 3 \\
+\texttt{900ab05c} & Phase 3 / 4.9b+c: declared judge substitutions through planner + renderer & 363 & 18 & 5 \\
+\texttt{5b34364f} & Phase 3 / 4.9d: Stage-1 --allow-closed-judge-benchmarks relax & 147 & 13 & 3 \\
+\texttt{ca83c051} & Phase 3 / 4.7: draft the upstream EEE recipe\_facts issue & 89 & 0 & 1 \\
+\texttt{f099bb2a} & Phase 3 / 4.8: docs pass + legacy-bridge marking + final status & 100 & 27 & 5 \\
+\texttt{ac3445ee} & Journal: Phase 3 completed (4.9 + 4.7 draft + 4.8) & 69 & 0 & 1 \\
+\texttt{aaa2c928} & Fix infer\_stack adapter: drop removed root= kwarg from load\_profile\_contract & 6 & 1 & 1 \\
+\texttt{bcb0e16f} & Add OLMo reproduction smoke suite: adapter presets, run scripts, and virtual experiment config & 1385 & 0 & 14 \\
+\texttt{ec4960aa} & Update deprecated hf auth call & 1 & 1 & 1 \\
+\texttt{92f9582a} & Switch profiles without prompting & 1 & 1 & 1 \\
+\texttt{31961a84} & Fix OLMo tokenizer aliases to match HELM registry & 3 & 3 & 1 \\
+\texttt{517cbbf5} & Add sentencepiece/tiktoken tokenizer backends as deps & 6 & 0 & 1 \\
+\texttt{2aea115d} & Fix olmo-7b tokenizer load via a HELM entry-point plugin & 58 & 6 & 2 \\
+\bottomrule\end{longtable}
+\section*{2026-06-15 (4 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{f85b1817} & Add OLMO\_FORCE\_RERUN to re-run OLMo smoke grid over prior results & 25 & 1 & 2 \\
+\texttt{38698653} & Add OLMo full-run grid; rename runbook to olmo\_models; group on full runs & 226 & 57 & 13 \\
+\texttt{dd6575b6} & Add updated config to work on aiq-gpu & 82 & 12 & 1 \\
+\texttt{bef5ccc0} & Restrict to gpus 2,3 & 5 & 0 & 1 \\
+\bottomrule\end{longtable}
+\section*{2026-06-16 (7 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{5c0490c9} & Reserve chat-template headroom for OLMo openai-compatible runs & 98 & 0 & 2 \\
+\texttt{8cb5eb75} & Stage natural\_qa data via gcloud auth + helm-run shim (script-only) & 363 & 0 & 6 \\
+\texttt{01a68880} & Drop OLMo math runs (competition\_math disabled on HF Hub) & 14 & 7 & 1 \\
+\texttt{ddc40407} & Drop OLMo natural\_qa runs (GCS bucket denies authenticated reads) & 40 & 364 & 7 \\
+\texttt{4354ef68} & Default OLMo smoke grid to force-rerun; keep full grid opt-in & 10 & 5 & 2 \\
+\texttt{5d02e12b} & Add containerized HELM execution path for the kwdagger pipeline & 1484 & 7 & 17 \\
+\texttt{7b028102} & Restructure phi-2 e2e tests into the olmo\_models runbook shape & 746 & 121 & 17 \\
+\bottomrule\end{longtable}
+\section*{2026-06-17 (9 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{4d5c411e} & Add containerized phi-2 e2e example (vLLM served on host, HELM via --network host) & 327 & 11 & 10 \\
+\texttt{63f8c8cd} & Enable public comparisons for the olmo full virtual experiment & 5 & 5 & 1 \\
+\texttt{0d4a4183} & docs(planner): add robust order-insensitive matching plan & 200 & 0 & 1 \\
+\texttt{b7373676} & feat(run\_entries): add order-insensitive canonical\_logical\_key & 147 & 0 & 2 \\
+\texttt{a25aac93} & feat(planner): group runs by order-insensitive canonical key & 252 & 100 & 2 \\
+\texttt{d8e6b698} & docs(planner): document canonical-key matching + journal entry & 91 & 0 & 2 \\
+\texttt{ceefb460} & Merge branch 'main' into olmo-reproduction & 0 & 0 & 0 \\
+\texttt{36b7860a} & Merge branch 'olmo-reproduction' into main & 0 & 0 & 0 \\
+\texttt{f46445d9} & Merge branch 'main' into e2e-refactor & 0 & 0 & 0 \\
+\bottomrule\end{longtable}
+\section*{2026-06-18 (9 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{f23bf696} & Run the phi-2 container e2e example by default (opt-out) & 73 & 28 & 4 \\
+\texttt{0e8617a7} & Fix dangling venv python in the HELM-runner image (multi-stage uv) & 59 & 1 & 2 \\
+\texttt{fa37fd6c} & Run HF e2e scenario first on a freed GPU; spin vLLM down at grid start & 59 & 7 & 5 \\
+\texttt{1cb228a5} & Enable public comparison in the non-smoke e2e experiments & 67 & 26 & 3 \\
+\texttt{de439c56} & Split the e2e-phi2 report into one virtual experiment per scenario & 282 & 170 & 11 \\
+\texttt{89695fe6} & Force matplotlib Agg backend in report rendering (fix Tk core dump) & 68 & 0 & 6 \\
+\texttt{55fb5ecf} & Merge branch 'e2e-refactor' into main & 0 & 0 & 0 \\
+\texttt{cc57d5d7} & Run OLMo reproduction through the containerized HELM pipeline & 430 & 4 & 8 \\
+\texttt{c8b3d525} & Align OLMo BBQ run entries with public recipe (output\_format\_instructions) & 391 & 7 & 4 \\
+\bottomrule\end{longtable}
+\section*{2026-06-22 (5 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{10c3db97} & Migrate infer\_stack integration to the catalog/leasing API & 387 & 286 & 5 \\
+\texttt{f779d596} & Reschema the e2e + OLMo infer-stack config dirs to catalog.yaml & 169 & 548 & 8 \\
+\texttt{f4236d61} & Migrate the e2e + OLMo runner scripts to the leasing CLI verbs & 167 & 108 & 8 \\
+\texttt{e8e76818} & Update the e2e + OLMo runbook docs for the leasing CLI & 73 & 52 & 3 \\
+\texttt{ab8af6c8} & journal: infer-stack CLI/API migration session & 73 & 0 & 1 \\
+\bottomrule\end{longtable}
+\section*{2026-06-23 (8 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{4afe6a66} & Merge branch 'olmo-docker-pipeline' into main & 0 & 0 & 0 \\
+\texttt{22395e21} & Merge branch 'main' into infer-stack-cli-api-migration & 0 & 0 & 0 \\
+\texttt{d259d248} & docs: plan for infer-stack <-> kwdagger high-throughput integration & 499 & 0 & 1 \\
+\texttt{dac25978} & journal: leasing-pipeline-lifecycle planning + implementation session & 132 & 0 & 1 \\
+\texttt{ee34857c} & Messy state & 952 & 36 & 19 \\
+\texttt{da930f4c} & Remove old-schema config.yaml resurrected by a bad merge resolution & 39 & 162 & 2 \\
+\texttt{de9919db} & docs: drop I4/I5, add eval\_audit-integration hand-off & 212 & 28 & 2 \\
+\texttt{24991d17} & Wire per-run infer-stack GPU leasing into the HELM fan-out & 960 & 18 & 11 \\
+\bottomrule\end{longtable}
+\section*{2026-06-24 (11 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{4158bea0} & Require containerized HELM execution; leasing as an orthogonal bracket & 358 & 259 & 7 \\
+\texttt{c5ff9a35} & Containerize the e2e presets; drop the redundant -container scenario & 72 & 129 & 5 \\
+\texttt{03dc08e5} & Lease + containerize by default across the OLMo and e2e grids; drop the toggles & 312 & 292 & 9 \\
+\texttt{25811227} & docs: containerization mandatory + leasing default; session journal & 332 & 105 & 4 \\
+\texttt{5317e14f} & Update gitmodules and bump commit hashes & 6 & 6 & 5 \\
+\texttt{ac444241} & Merge branch 'main' into infer-stack-cli-api-migration & 0 & 0 & 0 \\
+\texttt{31dda44c} & infer\_stack: make protocol\_mode a required preset fact (no silent chat default) & 134 & 8 & 3 \\
+\texttt{2fd3fd6c} & e2e/olmo grids: pass --yes to the bootstrap 'release --evict' & 4 & 4 & 4 \\
+\texttt{94980dda} & journal: leasing CLI bringup notes (\_load\_catalog AttributeError fix) & 47 & 0 & 1 \\
+\texttt{d9f075db} & infer\_stack: bump submodule to the \_load\_catalog catalog-field fix & 1 & 1 & 1 \\
+\texttt{b2aff8fe} & infer\_stack: bump submodule to the dev/lease-polish merge (995f45e) & 1 & 1 & 1 \\
+\bottomrule\end{longtable}
+\section*{2026-06-25 (30 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{fde72004} & infer\_stack: bump submodule to the dev/lease-polish merge (0cde11d) & 1 & 1 & 1 \\
+\texttt{be2a72a6} & catalogs: declare protocol: completions for base-model endpoints & 80 & 7 & 3 \\
+\texttt{23a20459} & e2e: always force-rerun both grids; remove the E2E\_FORCE\_RERUN opt-out & 21 & 19 & 2 \\
+\texttt{248c3b4b} & e2e: recap every scenario's report path at the end of 40\_build\_summary & 26 & 0 & 1 \\
+\texttt{43d3c2b0} & e2e: drop the broken "start here" README link from the summary recap & 1 & 2 & 1 \\
+\texttt{212289e5} & docs(planning): bring the run-from-run-spec replay plan onto the impl branch & 404 & 0 & 1 \\
+\texttt{1cd44778} & manifests: add from\_run\_spec + --precomputed-root to make-manifest & 41 & 0 & 2 \\
+\texttt{622881b2} & pipeline+bridge: route from\_run\_spec runs to the replay docker node & 64 & 0 & 2 \\
+\texttt{f54d29c4} & test+journal: from\_run\_spec pipeline wiring tests; session journal & 284 & 0 & 2 \\
+\texttt{7ee5ecee} & submodules: bump aiq-magnet gitlink to the from-spec replay CLI (4b10e1b) & 1 & 1 & 1 \\
+\texttt{d5180845} & submodules: bump infer\_stack gitlink + track its working branch & 2 & 2 & 2 \\
+\texttt{bd097610} & gitmodules: track aiq-magnet impl/run-from-run-spec branch & 1 & 1 & 1 \\
+\texttt{5e1edb4b} & docs(planning): plan to migrate the phi-2 e2e to run\_spec.json replay & 237 & 0 & 1 \\
+\texttt{353e74b5} & docs(planning): correct the phi-2 e2e from-spec plan after a code review & 59 & 27 & 1 \\
+\texttt{f18e5036} & e2e(from-spec): HF override + sibling from-spec manifests (Change 1) & 113 & 0 & 3 \\
+\texttt{1d90f453} & e2e(from-spec): teach export-benchmark-bundle the from-spec path (Change 2) & 78 & 2 & 2 \\
+\texttt{d81ca3ca} & e2e(from-spec): gate the grid on E2E\_FROM\_SPEC, carve out incomparable (Change 3+4) & 56 & 10 & 3 \\
+\texttt{2368fe9a} & e2e(from-spec): tests for the phi-2 from-spec exporter + discovery (Change 6) & 223 & 0 & 1 \\
+\texttt{ea0141ae} & journal: session entry for the phi-2 e2e from-spec review + implementation & 59 & 0 & 1 \\
+\texttt{daf6dfbb} & e2e(from-spec): make faithful replay the default, drop the opt-out & 81 & 136 & 8 \\
+\texttt{33a0606f} & docs(e2e): reflect from-spec-as-default (no toggle) in plan + README & 84 & 47 & 2 \\
+\texttt{05d2932e} & journal: from-spec becomes the e2e default (toggle removed) & 36 & 0 & 1 \\
+\texttt{e2543fb5} & fix(e2e from-spec): override dropped phi-2's context window -> window-service crash & 15 & 0 & 2 \\
+\texttt{05a704d3} & docs(planning): plan to record the local deployment on from-spec replays & 262 & 0 & 1 \\
+\texttt{1a119919} & docs(planning): lock in explicit --model-deployment (reject auto-derive) & 31 & 19 & 1 \\
+\texttt{f65997d3} & from-spec(deployment-rewrite): record the LOCAL deployment, unmask same\_deployment & 449 & 71 & 12 \\
+\texttt{b783a95c} & docs(from-spec): mark deployment-rewrite implemented; amend superseded plans & 165 & 17 & 7 \\
+\texttt{a4b5bac5} & docker(helm-runner): split helm/magnet install so magnet edits skip the heavy layer & 27 & 6 & 1 \\
+\texttt{bad2755f} & gitignore: ignore docker/build.sh staging context (.build-staging/) & 3 & 0 & 1 \\
+\texttt{abc00b3c} & submodules: bump aiq-magnet gitlink to the --model-deployment rewrite (50489f0) & 1 & 1 & 1 \\
+\bottomrule\end{longtable}
+\section*{2026-06-26 (1 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{1eb52704} & docker(helm-runner): raise build-step nofile ulimit to survive uv bytecode compile & 14 & 0 & 1 \\
+\bottomrule\end{longtable}
+\section*{2026-06-29 (19 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{8d96a471} & e2e(infer-stack): resolve data\_dir as env > settings.yaml pin > /data default & 54 & 18 & 2 \\
+\texttt{0f09fe87} & submodules: bump every\_eval\_ever gitlink to tmp-branch (b1c5a0f0e) & 1 & 1 & 1 \\
+\texttt{15020825} & infer\_stack: bump submodule to the dev/lease-polish catch-up merge (045536c) & 1 & 1 & 1 \\
+\texttt{b5c4cfed} & fix(eee-convert): replay run prod\_env so local deployment aliases resolve & 45 & 0 & 1 \\
+\texttt{03b98e9f} & feat(e2e): aiq-gpu rsync fetch utilities (17 + 42 + shared lib) & 292 & 1 & 4 \\
+\texttt{eb904ea7} & docs(journal): session entries for aiq-gpu rsync utilities + eee-convert fix & 141 & 0 & 1 \\
+\texttt{ecd1db15} & docs(e2e): add NOTES.md for the venv pin + from-spec conversion gotchas & 54 & 0 & 2 \\
+\texttt{1b75bd0c} & docs(planning): olmo from-run-spec migration plan & 252 & 0 & 1 \\
+\texttt{5c31a05f} & feat(olmo-from-spec): Change 4 discovery dry-check + measured baseline & 347 & 30 & 3 \\
+\texttt{b2ebad72} & feat(olmo-from-spec): Change 1 -- from-spec preset fields + run-entry reconciliation & 180 & 79 & 6 \\
+\texttt{ab5bdc2e} & docs(planning): handoff prompt to continue the olmo from-spec migration & 143 & 0 & 1 \\
+\texttt{99bdc0ee} & feat(olmo-from-spec): Change 3 -- wire --from-spec into the smoke/full grids & 20 & 2 & 2 \\
+\texttt{037ba682} & test(olmo-from-spec): Change 6 -- discovery dry-check + comparability proof & 174 & 0 & 1 \\
+\texttt{1ad68a8b} & fix(olmo infer-stack): Change 7 -- resolve data\_dir as env > settings.yaml pin > /data default & 61 & 7 & 2 \\
+\texttt{90d95811} & docs(olmo-from-spec): Change 8 -- README from-spec default + annotate NOTES as resolved & 145 & 43 & 9 \\
+\texttt{91413bac} & docs(olmo-from-spec): mark Changes 2/3/6/7/8 done; only Change 5 (GPU) remains & 148 & 49 & 3 \\
+\texttt{5accb6cd} & fix(olmo container): install eval\_audit in runner image so in-container helm-run loads the olmo-7b tokenizer override & 71 & 1 & 2 \\
+\texttt{536b0607} & docs(journal): in-container olmo-7b tokenizer override (eval\_audit missing from runner image) & 23 & 0 & 1 \\
+\texttt{2e1c40e3} & docs(planning): multi-model from-spec via local-deployment-scoped discovery strip & 233 & 0 & 1 \\
+\bottomrule\end{longtable}
+\section*{2026-06-30 (29 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{ae14bc77} & fix(container): deliver HF token via mounted cache, not env-forwarding & 81 & 0 & 2 \\
+\texttt{ebcc5b7d} & docs(container): correct HF-token delivery mechanism & 49 & 14 & 6 \\
+\texttt{c763a6ea} & docs(journal): HF token on-disk delivery for containerized runs & 24 & 0 & 1 \\
+\texttt{9ce64278} & fix(olmo container): install crfm-helm[all] + pin huggingface\_hub==0.36.2 & 25 & 10 & 3 \\
+\texttt{0fdc7457} & test(olmo smoke): preflight probes container python env (langdetect + hf\_hub pin) & 57 & 5 & 2 \\
+\texttt{528d341a} & docs(journal): container env fix (crfm-helm[all] + hf\_hub pin) + smoke probe & 25 & 0 & 1 \\
+\texttt{bf2b9767} & test(olmo smoke): add wmt\_14 + ifeval recipe canaries to smoke grids & 23 & 3 & 2 \\
+\texttt{676746d0} & docs(journal): wmt\_14 + ifeval smoke canaries (from-spec-constrained selection) & 16 & 0 & 1 \\
+\texttt{99e27c51} & test(e2e): preflight probes container python env (langdetect + hf\_hub pin) & 53 & 3 & 2 \\
+\texttt{3b32c1eb} & docs(journal): e2e container-env probe (no canary, per request) & 14 & 0 & 1 \\
+\texttt{8d422490} & docs(journal): resolve OLMo-canary question (kept; "no canary" was e2e-only) & 1 & 1 & 1 \\
+\texttt{8dd861b5} & docs(planning): address reproductions by (public\_root, relative\_path) & 369 & 0 & 1 \\
+\texttt{b7b115cc} & docs(planning): rel-path plan -- kwdagger cross-products, broadcast map mandatory & 15 & 17 & 1 \\
+\texttt{e94d2c86} & docs(planning): rel-path plan -- host-side resolution + kwdagger submatrix & 284 & 300 & 1 \\
+\texttt{1d1097d0} & docs(planning): rel-path plan -- materialize substituted copies host-side & 135 & 92 & 1 \\
+\texttt{77f13574} & test(kwdagger): pin the submatrix-zip contract the rel-path plan relies on & 123 & 0 & 2 \\
+\texttt{515bddbd} & feat(from-spec): host-side run\_spec resolver + materializer (rel-path plan §4.1) & 452 & 0 & 2 \\
+\texttt{6305d294} & feat(from-spec): wire exact-path replay through the bridge + docker node (§4.2-4.6) & 443 & 54 & 4 \\
+\texttt{22026464} & test(from-spec): pin run\_spec\_json on the from-spec node algo\_params & 6 & 3 & 1 \\
+\texttt{337ac8d4} & feat(from-spec): make-manifest --run-spec-sources-fpath for exact-path replay (§4.5) & 157 & 4 & 2 \\
+\texttt{c8fe9b76} & docs(from-spec): mark rel-path plan partially implemented + journal entry & 24 & 1 & 2 \\
+\texttt{bbbeaeb7} & fix(from-spec): gate materialized per-run lease\_endpoint on --lease & 25 & 3 & 2 \\
+\texttt{5f568bf5} & feat(from-spec): exporter auto-freeze of rel-paths (rel-path plan §4.5) & 287 & 4 & 3 \\
+\texttt{a9a1a16b} & feat(from-spec): dry-check existence mode for frozen manifests (rel-path plan §4.7) & 202 & 0 & 2 \\
+\texttt{249735d3} & docs(from-spec): mark rel-path plan host-side-complete + journal entry & 24 & 10 & 2 \\
+\texttt{cea323f2} & fix(from-spec): content-address the materialized run\_spec filename (kwdagger identity) & 69 & 11 & 3 \\
+\texttt{d9b60ec8} & docs(from-spec): document kwdagger caching model + content-addressed identity & 35 & 5 & 2 \\
+\texttt{115a9997} & debug(olmo): MWE deployment matrix for OLMo-7B fp16-collapse diagnosis & 1170 & 0 & 9 \\
+\texttt{74ba33de} & fix(olmo-7b): serve OLMo-1.7 tokenizer to stop spurious EOS append & 16 & 0 & 1 \\
+\bottomrule\end{longtable}
+\section*{2026-07-01 (15 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{ab9ccce8} & feat(deployment-match): general HELM deployment-match search tool (Phase 1) & 1687 & 0 & 11 \\
+\texttt{86ad9598} & feat(deployment-match): Phase 2 -- two-tier serve+probe driver (`run`) & 169 & 0 & 2 \\
+\texttt{aee205b4} & feat(deployment-match): Phase 3 -- confirm winner via compare-pair (`confirm`) & 174 & 0 & 2 \\
+\texttt{792ce211} & test(deployment-match): Phase 4 -- pytest coverage + testable tokenizer predicate & 196 & 14 & 2 \\
+\texttt{c978dea6} & docs(deployment-match): mark plan IMPLEMENTED + document run/confirm & 60 & 16 & 3 \\
+\texttt{88667c69} & tooling(catalog): catalog core-report packets by decoding temperature & 234 & 0 & 1 \\
+\texttt{d703ad4c} & feat(deployment-match): `auto` -- one-shot dry-run->run->score->confirm & 73 & 1 & 2 \\
+\texttt{c8d8417d} & fix(deployment-match): let infer-stack place GPUs (acquire --queue), don't pin & 38 & 9 & 4 \\
+\texttt{aaab9a35} & tooling(catalog): detect chain-of-thought alongside temperature & 143 & 54 & 1 \\
+\texttt{f04edd85} & fix(from-spec): thread freeze\_rel\_paths through export->materialize & 54 & 3 & 3 \\
+\texttt{b998f53f} & feat(olmo): combined multi-model preset for parent-root fan-out & 209 & 7 & 2 \\
+\texttt{bb2d959d} & feat(olmo): combined multi-model fan-out runbook & 613 & 0 & 13 \\
+\texttt{c6d7a294} & chore(olmo): remove superseded fp16-collapse debug MWE & 0 & 1154 & 8 \\
+\texttt{d6534170} & fix(from-spec): strip model\_deployment token from exact-path locator run\_entry & 67 & 1 & 2 \\
+\texttt{a2879335} & chore(olmo): remove default GPU restriction (serve across all detected GPUs) & 12 & 7 & 3 \\
+\bottomrule\end{longtable}
+\section*{2026-07-02 (6 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{88262878} & fix(olmo): enable public comparison in combined vexp (was local-only) & 12 & 12 & 1 \\
+\texttt{065b683a} & docs(olmo): remove stale "local-only by default" claims & 17 & 18 & 3 \\
+\texttt{a14f2faa} & docs(planning): plan for from-spec adapter\_spec decode-param overrides & 158 & 0 & 1 \\
+\texttt{71249b9d} & Merge branch 'jons/fable-commits' into impl/run-from-run-spec & 0 & 0 & 0 \\
+\texttt{3014cea3} & docs(journal): session entry for fable-commits review + merge & 12 & 0 & 1 \\
+\texttt{52513fc9} & feat(olmo): fold base olmo-7b into the combined fan-out vexp (all six models) & 127 & 38 & 8 \\
+\bottomrule\end{longtable}
+\section*{2026-07-03 (34 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{a90a084f} & docs(planning): full codebase audit -- findings catalog + phased fix plan & 587 & 0 & 2 \\
+\texttt{63cac3fc} & test(kwdagger): guard collection with importorskip("kwdagger") (P0-9) & 13 & 0 & 5 \\
+\texttt{fa8b745a} & fix(cli): repair analyze\_backlog import + canonical report layout (P0-8) & 9 & 8 & 2 \\
+\texttt{a5a2a2f5} & build(deps): pin transformers<5 / hf-hub, declare direct deps (P1-24) & 13 & 2 & 2 \\
+\texttt{3e98614f} & fix(summary): tol010 sankeys bucket on the 0.01 curve point (P0-1) & 68 & 8 & 3 \\
+\texttt{6d911222} & fix(index): resolve unstamped local index first; single-source resolver (P0-2, R-6) & 108 & 22 & 4 \\
+\texttt{dbe3b68f} & fix(planning,virtual): match/join on canonical keys, not raw strings (P0-3, P0-4) & 171 & 7 & 5 \\
+\texttt{05c9dd62} & fix(helm): correct perturbed/unperturbed agreement split (P0-6) & 97 & 4 & 3 \\
+\texttt{b42064c0} & fix(planning): unknown-on-partial facts; extract official max\_eval\_instances (P1-1, P1-2) & 134 & 6 & 4 \\
+\texttt{09fc3294} & fix(normalized): filter non-finite scores at row construction (P1-15) & 181 & 33 & 5 \\
+\texttt{d05126d0} & fix(reports): cross-machine curve uses rel\_tol=0 highlights (P1-13) & 93 & 1 & 3 \\
+\texttt{0201ec06} & fix(eee): derive experiment name from local/<experiment>/ layout (D-1) & 59 & 28 & 7 \\
+\texttt{86d41ae5} & fix(bundle): content-address model\_deployments.yaml filename (P0-5) & 52 & 3 & 2 \\
+\texttt{5a7d270d} & fix(pipeline): precomputed\_root is algo identity on from-spec node (P1-21) & 30 & 5 & 2 \\
+\texttt{2896be59} & fix(manifests): missing-entries NameError; reject duplicate labels (P1-22, P1-23) & 25 & 2 & 3 \\
+\texttt{54bf35f4} & fix(docker): image-id identity for unpinned images; --name + teardown (P2) & 144 & 13 & 6 \\
+\texttt{c5ac0203} & fix(summary): failure-taxonomy honesty -- colors, categories, ordering (P0-7, P1-8, P1-11) & 152 & 11 & 4 \\
+\texttt{7642a1b6} & fix(summary): not\_analyzed status level; surface unreadable bundles (P1-9, P1-10) & 87 & 19 & 4 \\
+\texttt{c5d7cdb5} & fix(filter): one sankey row per excluded run, primary reason (P1-12) & 38 & 2 & 2 \\
+\texttt{cdac08ec} & fix(eee): status.json gate on cached/local resolvers; unconditional stale-scope delete (P1-7, P1-6) & 94 & 13 & 4 \\
+\texttt{6dac5e99} & refactor: delete the no-op --allow-single-repeat flag (D-3) & 16 & 32 & 6 \\
+\texttt{ffac9b4e} & fix(cli): analyze-many exits non-zero on failure; warns on incomplete summary (P1-19) & 74 & 0 & 2 \\
+\texttt{41e5b962} & fix(core-metrics): --no-plots preserves previously rendered figures (P1-16) & 26 & 7 & 2 \\
+\texttt{2537b388} & fix(summary): thread invocation flags into reproduce.sh (P1-20) & 72 & 5 & 3 \\
+\texttt{b3130f42} & fix(stale-state): prune stale packet + breakdown dirs on re-run (P1-4, P1-5) & 37 & 1 & 2 \\
+\texttt{0ae927fb} & fix(determinism): stable benchmark discovery + HelmRunDiff tie-breaks (P1-17, P1-18) & 57 & 8 & 4 \\
+\texttt{a9a20979} & fix(determinism): sort remaining nondeterministic outputs (P2, IM-12) & 28 & 5 & 4 \\
+\texttt{bdf94a70} & fix(cli): --dry-run vs --run 1 errors; correct stale argv test (P2) & 12 & 1 & 2 \\
+\texttt{688831a3} & fix(helm-diff): f-string prefix + None-safe group sort (P2) & 7 & 3 & 1 \\
+\texttt{14ce8042} & fix(cli,loaders): drop debug blocks; count skipped samples lines (P2, IM-3) & 13 & 13 & 2 \\
+\texttt{99396f3f} & fix(secrets,coverage): close HF-token perms window; return sankey paths (P2, IM-9) & 14 & 2 & 2 \\
+\texttt{235b555e} & fix(loaders): tolerate non-numeric timestamp; preserve EEE provenance (P2) & 14 & 5 & 1 \\
+\texttt{10c8f32d} & docs(journal): session entry for Phases A--F audit-fix implementation & 22 & 0 & 1 \\
+\texttt{9303ec5e} & docs(preset,runbook): representative-subset wording (D-2); hashed bundle filename in tree listing & 7 & 5 & 2 \\
+\bottomrule\end{longtable}
+\section*{2026-07-06 (50 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{0608b29c} & test(planner): update stale slow-suite assertions to canonical-key behavior & 15 & 9 & 1 \\
+\texttt{15487f8e} & fix(secrets): chmod 0600 the model\_deployments bundle YAML holding the live key & 24 & 0 & 2 \\
+\texttt{6da780de} & fix(reports): route Stage-6 writers through atomic fs\_publish helpers (IM-1) & 18 & 14 & 3 \\
+\texttt{607189c8} & fix(reports,cli): surface mpl fallback error; fix eee caveats indentation & 48 & 7 & 3 \\
+\texttt{b127aa48} & fix(cli,adapter): fail fast on backlog/preset/base\_url misconfig (P2) & 179 & 12 & 7 \\
+\texttt{20a16f5f} & fix(workflows): dedupe kwdg re-attempts, bucket load errors, preserve CSV dtypes (P2) & 151 & 14 & 3 \\
+\texttt{ed576083} & fix(reports,cli,loaders): honesty fixes IM-6/IM-8/IM-5 & 208 & 3 & 7 \\
+\texttt{0e324ed1} & perf(reports,loaders): behavior-preserving IM-2/IM-7/IM-4 & 33 & 28 & 4 \\
+\texttt{e9cf6c44} & build(deps): bump python floor to 3.12; annotate aiq-magnet dep pins; relock & 537 & 1318 & 2 \\
+\texttt{dc8f680e} & test(eee): centralize EEE-demo fixture path + skip guard in conftest (IM-11) & 70 & 30 & 7 \\
+\texttt{e09c9176} & docs(eee-vs-helm): document non-comparable run-level agreement definitions (IM-13) & 34 & 0 & 1 \\
+\texttt{8a9933c7} & docs(journal): session entry for Tier-1/Tier-2 audit-backlog implementation & 30 & 0 & 1 \\
+\texttt{ef6903fb} & fix(secrets): warn on stderr when bundle key perms cannot be tightened & 9 & 0 & 1 \\
+\texttt{bab7df2c} & refactor(reports): retire reports/quantiles.py (D-4) & 2 & 193 & 3 \\
+\texttt{e0d51e6b} & feat(manifests): --max-eval-instances official sentinel for verbatim replay (D-5) & 136 & 4 & 5 \\
+\texttt{5b1c69f2} & refactor(indexing): single classify\_model\_eligibility policy (R-7) & 211 & 94 & 3 \\
+\texttt{833a84bb} & refactor(summary): single \_classify\_filter\_gates; delete dead sankey builders (R-4a/R-4b) & 85 & 392 & 4 \\
+\texttt{99ff4494} & feat(reproduce/olmo): deployment-match runbook for olmoe-1b-7b/ifeval & 130 & 0 & 1 \\
+\texttt{c8cffa42} & fix(summary): align the two filter-funnel families on metadata + judge gates (R-4c) & 85 & 1 & 5 \\
+\texttt{fe7fe271} & refactor(summary): rename ambiguous agreement-tolerance key family (R-4d) & 69 & 58 & 8 \\
+\texttt{b6bcd245} & refactor(normalized): dedupe EEE conversion core + one aggregate predicate (R-5) & 185 & 165 & 5 \\
+\texttt{ba730045} & refactor(normalized): one metric\_handle helper; drop dead members (R-9) & 21 & 58 & 5 \\
+\texttt{899e0fd3} & refactor(core-metrics): dead-surface sweep + assert-membership tol guard (R-10) & 41 & 254 & 7 \\
+\texttt{143d3fac} & refactor: misc dead-code sweep (R-11) & 70 & 150 & 10 \\
+\texttt{e5c1bdb4} & refactor: one run-entry model\_deployment token utility (R-8) & 165 & 34 & 5 \\
+\texttt{7e1f5f12} & refactor(infer\_stack): extract PRESET\_CONFIGS to presets.py (R-3, pure relocation) & 1162 & 1140 & 2 \\
+\texttt{d895a446} & refactor(infer\_stack): promote discovery core to public discovery.py (R-3, R-3d) & 105 & 78 & 4 \\
+\texttt{e7eab858} & refactor(infer\_stack): extract serving\_facts.py (R-3b, pure relocation) & 165 & 128 & 2 \\
+\texttt{9a808120} & refactor(infer\_stack): extract freeze.py (R-3d, pure relocation) & 93 & 76 & 2 \\
+\texttt{ac5ca26a} & refactor(infer\_stack): extract bundle\_export.py; adapter is now a facade (R-3c) & 667 & 642 & 3 \\
+\texttt{79bc030c} & docs(journal): session entry for Tier-3 structural refactors (D-4/D-5, R-3..R-11) & 31 & 0 & 1 \\
+\texttt{560cdda0} & docs(planning): stamp audit doc IMPLEMENTED (except R-2) with pass summary & 17 & 0 & 1 \\
+\texttt{cfe7d6a6} & docs(planning): simplicity \& bloat audit findings + phased implementation plan & 147 & 0 & 1 \\
+\texttt{5b7b62bb} & chore(dev): delete dead POC and oneoff trees; fix docs that referenced them & 22 & 6901 & 25 \\
+\texttt{1457a269} & chore(configs): drop checked-in generated manifests and dead examples/ & 0 & 1470 & 25 \\
+\texttt{8b4c69d5} & refactor: remove helm/hashers shim, dead agreement profile, if-1 block & 13 & 178 & 8 \\
+\texttt{90af80ba} & docs: fix first-run and accuracy issues in README, reproduce index, setup & 79 & 82 & 3 \\
+\texttt{77e126b4} & chore(docs): move paper analysis scripts out of docs/, archive session logs & 32 & 17 & 9 \\
+\texttt{425e05a2} & docs(planning): archive 12 implemented plans; consolidate olmo/infer-stack clusters & 193 & 132 & 67 \\
+\texttt{24390f26} & chore(journals): rotate 544K of append-only journals to archive & 5542 & 5526 & 4 \\
+\texttt{c804cdc1} & refactor(utils): finish R-6 helper consolidation into utils/coercion & 159 & 137 & 14 \\
+\texttt{32622e0b} & refactor(reproduce): merge three divergent \_lib.sh copies into one shared lib & 437 & 374 & 4 \\
+\texttt{51797aa9} & refactor(workflows): split \_render\_scope\_summary into per-stage render helpers & 458 & 197 & 1 \\
+\texttt{a07736c2} & refactor(reports): split core\_metrics.main into per-section helpers & 182 & 57 & 1 \\
+\texttt{3bd43bf5} & refactor(infer\_stack): move PRESET\_CONFIGS catalog to a YAML resource & 965 & 1009 & 3 \\
+\texttt{a849ea32} & refactor(reports)!: migrate pair\_report/pair\_samples onto NormalizedDiff (R-2 stage A) & 284 & 117 & 4 \\
+\texttt{a0cadf26} & refactor(helm)!: delete the legacy agreement half of diff.py (R-2 stage B) & 59 & 986 & 6 \\
+\texttt{a34241ca} & docs: stamp simplicity audit IMPLEMENTED; journal entry for the session & 69 & 2 & 2 \\
+\texttt{066cc520} & refactor(reproduce/olmo): self-contained combined runbook; remove stale single-run runbook & 323 & 1655 & 24 \\
+\texttt{7ba01845} & chore: remove configs/docs orphaned by the single-model OLMo runbook removal & 28 & 481 & 13 \\
+\bottomrule\end{longtable}
+\section*{2026-07-07 (22 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{a1f893fa} & fix(deployment\_match): clamp max\_model\_len to the model's derived ceiling & 85 & 9 & 4 \\
+\texttt{f4241a87} & docs(deployment\_match): vLLM-vs-HuggingFace deployment-match knob inventory & 166 & 0 & 1 \\
+\texttt{2a9fb007} & feat(deployment\_match): hf-match grid profile to match a HuggingFaceClient run & 126 & 4 & 5 \\
+\texttt{008987b1} & docs(deployment\_match): record full sampling replay as a deliberate non-goal & 9 & 3 & 1 \\
+\texttt{e4e4b7c7} & feat(deployment\_match): sweep/pin attention\_backend via the infer-stack option & 109 & 35 & 6 \\
+\texttt{d5cb46e8} & docs: instruct agents to proactively commit logical units of work & 11 & 0 & 1 \\
+\texttt{acf6ca44} & docs(deployment\_match): correct the confirm-catalog fidelity gap description & 15 & 6 & 1 \\
+\texttt{0a755c73} & fix(deployment\_match): confirm catalog reproduces the winning serving runtime & 69 & 18 & 5 \\
+\texttt{070f986c} & feat(deployment\_match): sweep attention\_backend in hf-match instead of pinning & 55 & 36 & 4 \\
+\texttt{7a0908ea} & feat(reproduce/olmo): default the OLMoE deployment-match to hf-match & 18 & 10 & 1 \\
+\texttt{3fd80ddb} & fix(deployment\_match): raise max\_num\_batched\_tokens >= max\_model\_len for hf-match & 46 & 2 & 2 \\
+\texttt{4b8eb37d} & chore(submodules): bump cmd\_queue to dev/0.3.2, kwdagger to dev/0.2.6 & 4 & 4 & 3 \\
+\texttt{c436308b} & chore(submodules): bump infer\_stack to latest infer-stack-cli-api-migration & 1 & 1 & 1 \\
+\texttt{2640e108} & feat(deployment\_match): endpoint/cell counters + ETA in the serve loop & 41 & 9 & 1 \\
+\texttt{f855dea9} & feat(deployment\_match): --dtypes/--attention-backends knobs; OLMoE skips fp32 & 83 & 0 & 4 \\
+\texttt{608bb45f} & feat(deployment\_match): preflight feasibility filter (generalizes fp32-MoE prune) & 151 & 27 & 6 \\
+\texttt{a8dd792b} & fix(deployment\_match): hf-match pins protocol=completions (HuggingFaceClient repro) & 36 & 1 & 3 \\
+\texttt{fbc2040d} & fix(deployment\_match): revert wrong completions pin; HuggingFaceClient IS a chat client & 55 & 31 & 3 \\
+\texttt{1fb91576} & feat(deployment\_match): --log-requests / --extra-serve-args to expose the vLLM prompt & 73 & 0 & 5 \\
+\texttt{d32abd3b} & feat(deployment\_match): compare\_prompt.py -- diff HELM get\_prompt vs vLLM /tokenize & 266 & 5 & 4 \\
+\texttt{b3ae0168} & feat(deployment\_match): sweep add\_generation\_prompt (OLMoE chat-template version drift) & 96 & 12 & 5 \\
+\texttt{19c0ec1c} & bump infer\_stack pointer & 1 & 1 & 1 \\
+\bottomrule\end{longtable}
+\section*{2026-07-08 (26 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{1690b7ac} & feat(deployment\_match): per-model ifeval runbook scripts for the 3 OLMo-2 instruct models & 495 & 0 & 3 \\
+\texttt{c2c3978d} & Merge branch 'impl/simplicity-audit' into integrate/simplicity-audit & 0 & 0 & 0 \\
+\texttt{37a411a5} & docs: fix dangling markdown links after the simplicity-audit merge & 81 & 81 & 9 \\
+\texttt{9059dad2} & Merge branch 'integrate/simplicity-audit' into impl/run-from-run-spec & 0 & 0 & 0 \\
+\texttt{2698389c} & feat(deployment\_match): --fp32-tensor-parallel-size to serve fp32 MoE on N GPUs & 151 & 11 & 6 \\
+\texttt{426710fd} & docs: inventory HELM's unrecorded deployment params + HF-revision pinning effort & 231 & 0 & 2 \\
+\texttt{a8c573a3} & docs: use precise terms for the provenance machinery & 47 & 5 & 1 \\
+\texttt{37d91aff} & feat(deployment\_match): hf-probe -- reproduce the official at fp32 via HF and score vs oracle & 401 & 12 & 4 \\
+\texttt{f52afee7} & docs: confirm OLMoE fp32 exact-match + scope the dtype gap to all OLMo-2 HF runs & 35 & 2 & 2 \\
+\texttt{79ab77b6} & feat(deployment\_match): DM\_HF\_FP32 + DM\_FP32\_TP on the OLMo-2 7B/13B/32B runbooks & 127 & 33 & 3 \\
+\texttt{2d792012} & feat(hf-inprocess): reproduce HuggingFace-deployed officials on reserved GPUs & 765 & 18 & 6 \\
+\texttt{19cf7d40} & bump infer-stack submodule pointer & 1 & 1 & 1 \\
+\texttt{9773233e} & Add plan to allow reproductions of old HELM runs in docker containers with package versions pinned to the ones used during the era & 90 & 0 & 1 \\
+\texttt{545357e7} & feat(heatmap): aggregate-score-diff heatmap (color = local-public, cells annotated with both scores) & 631 & 0 & 4 \\
+\texttt{59587f29} & docs(journal): aggregate-score-diff heatmap session & 61 & 0 & 1 \\
+\texttt{c8707ead} & feat(summary): auto-emit aggregate-score-diff heatmaps in build\_reports\_summary & 234 & 62 & 5 \\
+\texttt{f87e92ea} & docs(journal): auto-emit aggregate-score-diff in build\_reports\_summary & 48 & 0 & 1 \\
+\texttt{ce63eb40} & docs: mark HF-in-process plan implemented (routing pending) + journal entry & 77 & 2 & 2 \\
+\texttt{5b352269} & docs(deployment-match): point to the built HF-inprocess resolver + mechanism & 19 & 0 & 1 \\
+\texttt{0c8d0eb2} & feat(summary): spell out agreement-bucket thresholds on plot legends & 93 & 12 & 4 \\
+\texttt{0846fb99} & docs(journal): agreement-bucket threshold labels on legends & 50 & 0 & 1 \\
+\texttt{564b087a} & Bump infer\_stack pointer & 1 & 1 & 1 \\
+\texttt{c00394ee} & feat(deployment\_match): overnight batch -- HF fp32 + vLLM sweep for all OLMo instruct models & 124 & 0 & 1 \\
+\texttt{3ff73c5c} & feat(deployment\_match): hf-probe sweeps dtypes (--dtype comma list) + DM\_HF\_DTYPES & 91 & 39 & 8 \\
+\texttt{70c867da} & feat(heatmap): holistic headline-metric aggregate-score-diff heatmap & 376 & 10 & 7 \\
+\texttt{4c2de25b} & docs(journal): holistic headline-metric aggregate-score-diff heatmap & 55 & 0 & 1 \\
+\bottomrule\end{longtable}
+\section*{2026-07-10 (16 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{29fc76c4} & feat(heatmap): headline plot uses modelsxbenchmarks layout + squared error & 116 & 56 & 3 \\
+\texttt{236b3289} & docs(journal): headline plot layout + squared-error encoding & 40 & 0 & 1 \\
+\texttt{50a7117b} & docs(journal): fp32 reproduces all OLMo instruct officials + HF-probe OLMo-2 fidelity bug & 97 & 0 & 1 \\
+\texttt{4516b704} & feat(hf-probe): sweep forward-pass numerics (attn\_impl/device\_map/decode) to reproduce OLMo-2 officials & 225 & 54 & 5 \\
+\texttt{807144de} & docs(journal): OLMo-2 HF divergence is a fp32 forward-pass diff + hf-probe numerics-sweep axes & 118 & 0 & 1 \\
+\texttt{d6cc37fd} & feat(overnight): sweep every HF + vLLM parameter across all OLMo models & 107 & 7 & 5 \\
+\texttt{60921441} & docs(journal): overnight full-sweep follow-up (HF+vLLM axes across all OLMo models) & 23 & 0 & 1 \\
+\texttt{25b00db3} & feat(eras): era-pinned HELM registry + resolver (commit 1/6) & 475 & 0 & 5 \\
+\texttt{836bbb52} & feat(eras): era image build path in build.sh + era dockerfile (commit 2/6) & 507 & 25 & 4 \\
+\texttt{8d54db18} & feat(eras): helm\_era\_shim replay CLI + OpenAI-compatible client (commit 3/6) & 834 & 0 & 5 \\
+\texttt{3670050f} & feat(eras): host-side era yaml + materializer guard (commit 4/6) & 252 & 19 & 5 \\
+\texttt{38940ff2} & feat(eras): thread era through manifest + pipeline + bridge (commit 5/6) & 379 & 1 & 6 \\
+\texttt{a520062b} & docs(eras): runbook + docs + journal (commit 6/6) & 358 & 1 & 9 \\
+\texttt{5f17e3e3} & docs(eras): multi-angle code-review findings for the era implementation & 479 & 0 & 1 \\
+\texttt{11fa971d} & feat(eras): portable validation-ladder harness + static era-import checker & 738 & 5 & 10 \\
+\texttt{39c020b2} & docs(era-tests): plan the pre-v0.5 gates' migration to a turnkey dev runbook & 431 & 0 & 2 \\
+\bottomrule\end{longtable}
+\section*{2026-07-11 (32 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{0c58ee96} & fix(era-shim): v0.2.4 compatibility + credentials + run-dir safety (findings 1,2,3,7,8) & 300 & 49 & 4 \\
+\texttt{befd490d} & fix(era-export): api\_key in args, explicit base\_url, multi-endpoint lease (findings 2,5,10) & 133 & 14 & 4 \\
+\texttt{f549943e} & fix(era-guard): digest-pinned image era<->image guard (finding 4) & 107 & 16 & 3 \\
+\texttt{9bf2228b} & fix(era-image): persist era identity into runtime ENV (finding 6) & 14 & 0 & 1 \\
+\texttt{f09051be} & fix(eras): fail loud on track-less era-suite paths (finding 9) & 48 & 2 & 2 \\
+\texttt{0486bb79} & refactor(era): process-context timing, session reuse, setdefault (below-the-cap) & 53 & 2 & 4 \\
+\texttt{4bba8dfa} & docs(era): record findings resolution + deferred cleanups & 18 & 0 & 1 \\
+\texttt{67c0b53f} & feat(era-tests): checked-in serving config + era presets + vexp manifests & 192 & 0 & 5 \\
+\texttt{99ff4dfd} & feat(era-tests): dev runbook mirroring dev/e2e-tests (moves the pre-v0.5 gates) & 959 & 429 & 24 \\
+\texttt{3046c8ea} & docs(journal): full era-path remediation + dev/era-tests runbook & 71 & 0 & 1 \\
+\texttt{4c181be7} & fix(era-tests): review fixes -- v0.2.4 master-key path + rung mirror-root join & 117 & 11 & 8 \\
+\texttt{981dfa1f} & feat(era-tests): swap subject pythia-6.9b -> redpajama-3b to fit an 8GB GPU & 204 & 111 & 13 \\
+\texttt{c2598b49} & fix(era-build): import run\_benchmarking from helm.benchmark.run, not .runner & 22 & 2 & 2 \\
+\texttt{2e8338ff} & fix(era-build): pin pyarrow==11.0.0 in era constraints (datasets 2.5.2 compat) & 10 & 0 & 2 \\
+\texttt{4dc3c4a4} & fix(era-build): adopt era frozen requirements.txt as constraints (enriched seed) & 451 & 23 & 3 \\
+\texttt{16ee1eeb} & fix(era-build): revert enriched freeze; setup.cfg \textasciitilde{}= ranges already era-pin & 47 & 425 & 3 \\
+\texttt{e6a21ed1} & docs(era-build): warn against re-adopting the stale era requirements.txt & 16 & 0 & 2 \\
+\texttt{37677132} & fix(era-gate): rung-2 diffs display\_requests.json, not the unshipped scenario\_state.json & 108 & 35 & 3 \\
+\texttt{cb14ec80} & fix(era-gate): sanitize colons from rung-2 dry-run mount path & 5 & 1 & 1 \\
+\texttt{1c552be2} & fix(era-build): install wget + unzip in the era image for scenario downloads & 9 & 1 & 1 \\
+\texttt{38260572} & feat(reproduce): from-spec gpt-oss-20b runbook (bbq, ifeval, mmlu\_pro, gpqa) & 1006 & 0 & 19 \\
+\texttt{e40ee63d} & fix(era-build): pin fsspec==2022.8.2 (datasets 2.5.2 LocalFileSystem skew) & 14 & 0 & 2 \\
+\texttt{6b23e9d8} & fix(era-gate): forward HF token into rung-2 dry-run (script-dataset auth) & 4 & 0 & 1 \\
+\texttt{d6172b1e} & docs(planning): qwen text-family combined fan-out implementation plan & 377 & 0 & 1 \\
+\texttt{973b5b7c} & feat(qwen-fanout): qwen-combined preset + 8 from-spec members (generalize combined builder) & 1395 & 92 & 4 \\
+\texttt{fcd14973} & feat(reproduce): qwen\_models\_combined runbook + infer-stack catalog + virtual experiment & 1111 & 0 & 15 \\
+\texttt{531bc4f8} & docs(planning): mark qwen fan-out plan implemented (T1 confirmed; V2/V3/V5/V6 deferred) & 17 & 1 & 1 \\
+\texttt{47200f34} & docs(journal): qwen combined fan-out implementation session & 61 & 0 & 1 \\
+\texttt{7620c246} & fix(era-gate): rung-2 skips unfetchable-data probes as environment filters & 32 & 0 & 2 \\
+\texttt{629c4541} & docs(planning): plan for producing NEW Qwen 3.6 core results (compute, not reproduce) & 339 & 0 & 1 \\
+\texttt{faef9ea4} & docs(planning): rewrite Qwen 3.6 new-results plan around leased fan-out & 212 & 253 & 1 \\
+\texttt{17f02583} & fix(provenance): double-quote the label key in image\_label's Go template & 24 & 1 & 2 \\
+\bottomrule\end{longtable}
+\section*{2026-07-12 (39 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{eb1b9faf} & Merge impl/era-pinned-helm-containers into impl/run-from-run-spec & 0 & 0 & 0 \\
+\texttt{34929ae4} & docs(journal): era-pinned -> run-from-run-spec merge session & 16 & 0 & 1 \\
+\texttt{ea74ac38} & docs(planning): repo simplification/refactor plan (4th pass, post-era) & 479 & 0 & 1 \\
+\texttt{bffb84a6} & docs(planning): second-pass review revisions to the simplification plan & 141 & 96 & 1 \\
+\texttt{dee2ba95} & docs(journal): fourth simplification-pass audit + plan review session & 61 & 0 & 1 \\
+\texttt{b77bdf82} & docs(planning): A4 gate caveat -- committed phase3 baseline is EEE-only & 6 & 1 & 1 \\
+\texttt{bf9172f4} & docs(planning): live-code read pass -- deltas R-g..R-m + new item E5 & 100 & 15 & 1 \\
+\texttt{911a993f} & refactor(E1): delete five grep-verified dead symbols & 3 & 135 & 6 \\
+\texttt{f59060cb} & refactor(E2): de-duplicate the copied plotting helpers & 97 & 78 & 8 \\
+\texttt{b7300a19} & refactor(E4a): prune facade re-exports with zero internal+external refs & 20 & 78 & 3 \\
+\texttt{cc487686} & refactor(E5a): retire the deprecated EVAL\_AUDIT\_EEE\_STRICT env override & 19 & 19 & 2 \\
+\texttt{88c6e389} & refactor(B3): era config/build dedup -- single source of truth & 55 & 36 & 5 \\
+\texttt{96b88300} & chore(F2): trim vestigial norecursedirs entries & 5 & 10 & 1 \\
+\texttt{4dae513c} & refactor(D1): shared index-resolution + reproduce-script helpers & 111 & 88 & 5 \\
+\texttt{7926209e} & refactor(D2): shared EEE render helpers; single-file meta extractor & 150 & 104 & 4 \\
+\texttt{1f06e9a5} & refactor(A1): move run\_entries out of helm/ to eval\_audit/run\_entries.py & 46 & 23 & 20 \\
+\texttt{9f7c6abd} & refactor(B1): one shared benchmark\_output path parser & 50 & 30 & 3 \\
+\texttt{7e8b527d} & fix(E4a): restore \_single\_run\_core\_stat\_index facade re-export & 1 & 60 & 3 \\
+\texttt{8078cc1f} & refactor(A2): delete the prod-dead half of helm/ & 42 & 655 & 8 \\
+\texttt{eb313c08} & refactor(A3): one json\_compatible implementation (utils/jsonify.py) & 67 & 60 & 3 \\
+\texttt{09449188} & refactor(C1): finish the build\_reports\_summary split (1,715 -> \textasciitilde{}330) & 1550 & 1397 & 6 \\
+\texttt{364925b6} & refactor(B2): single named era\_mode flag in the bundle exporter & 18 & 5 & 2 \\
+\texttt{648193d3} & refactor(D4): portfolio\_status logic -> reports/portfolio.py & 414 & 390 & 2 \\
+\texttt{4d4085ef} & refactor(E3): local artifact writers in the filter-report emitters & 71 & 45 & 1 \\
+\texttt{3d077a69} & refactor(C3): move the repair/publish half out of breakdown.py & 214 & 203 & 4 \\
+\texttt{e630a576} & refactor(D3): layer the failure classifiers -- one generic taxonomy & 23 & 2 & 1 \\
+\texttt{c42e8159} & docs(E5b): --skip-diagnosis kept -- phase3 4.8 closed as permanent & 11 & 0 & 2 \\
+\texttt{c9d6c38d} & refactor(C2): extract the shared heatmap grid scaffold & 212 & 221 & 1 \\
+\texttt{950ae99b} & docs(planning+journal): mark plan Batches 1-3 implemented & 81 & 2 & 2 \\
+\texttt{36bb74e0} & refactor(D5): deprecate compare\_batch (phase 1, no behavior change) & 29 & 0 & 3 \\
+\texttt{e1b8547d} & test(A4): extend phase3 baseline capture to the HELM render path (F1/F2) & 2952 & 18 & 5 \\
+\texttt{4638f788} & docs(planning): record 2026-07-12 operator decisions + session journal & 106 & 0 & 2 \\
+\texttt{75366f42} & chore(review): two lint fixes from the subagent-work review & 3 & 3 & 2 \\
+\texttt{e295c13b} & fix(era): set tokenizer\_name + max\_sequence\_length on the era model deployment & 78 & 11 & 3 \\
+\texttt{a3a33010} & fix(era-build): pin nltk==3.7 + provision punkt so BiasMetric tokenizes & 23 & 0 & 3 \\
+\texttt{3651eeb1} & fix(runbooks): drop the deleted --allow-single-repeat flag from all callers & 9 & 13 & 8 \\
+\texttt{3a9aa30b} & feat(presets): merge runbook-local presets via INFER\_STACK\_EXTRA\_PRESET\_FILES & 96 & 0 & 2 \\
+\texttt{504c6b9f} & feat(reproduce): classic Together open-weight combined era-pinned runbook & 2546 & 0 & 17 \\
+\texttt{b344671d} & fix(era-shim): render credentials.conf from the baked deployments key, not the env & 74 & 2 & 2 \\
+\bottomrule\end{longtable}
+\section*{2026-07-13 (16 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{47658cf7} & fix(olmo): pass a placeholder --base-url in the freeze-only preflight & 9 & 1 & 1 \\
+\texttt{81c71002} & fix(gpt-oss,qwen): placeholder --base-url in the freeze-only preflights & 18 & 1 & 2 \\
+\texttt{bb0a377b} & docs(era): note classic officials are carried forward v0.2.4<->v0.3.0 & 18 & 0 & 2 \\
+\texttt{339748af} & docs(era): record original execution eras (v0.2.2 / v0.2.3), not the pinned eras & 13 & 4 & 2 \\
+\texttt{5000b8ac} & docs(era): correct origin -- pre-v0.2.2 (original HELM), not v0.2.2 & 19 & 12 & 2 \\
+\texttt{b445a7fd} & docs(planning): LiteLLM route-registry plan for the shared-gateway 400 bug & 578 & 0 & 2 \\
+\texttt{d5c70c94} & fix(freeze): resolve subset run-entries to their exact dir, not AMBIGUOUS & 76 & 5 & 2 \\
+\texttt{f64c20bd} & docs(planning): mark litellm-route-registry plan implemented & 6 & 2 & 1 \\
+\texttt{1fbf4cbf} & docs(journal): route-registry implementation session & 70 & 0 & 1 \\
+\texttt{9ff068c8} & feat(classic-together): run all targets in parallel, lease arbitrates GPUs & 168 & 167 & 4 \\
+\texttt{27e4ee40} & docs(era): document classic-corpus class\_name migration + true origin window & 163 & 12 & 3 \\
+\texttt{c44a6467} & chore(submodule): bump infer\_stack to route-registry merge (22d94317) & 1 & 1 & 1 \\
+\texttt{c3e68bed} & feat(era-shim): canonicalize relocated class paths (G13 fix) & 214 & 3 & 3 \\
+\texttt{3d904b92} & fix(gpt-oss): null-safe chat clients normalize content:null -> "" (HELM untouched) & 250 & 18 & 6 \\
+\texttt{32657a62} & fix(docker): bump runner image Python 3.11 -> 3.12 to match eval\_audit floor & 9 & 5 & 3 \\
+\texttt{c9f0efac} & fix(docker): prune selenium platform binaries / dangling symlinks before venv COPY & 13 & 0 & 1 \\
+\bottomrule\end{longtable}
+\section*{2026-07-14 (15 commits)}
+\begin{longtable}{@{}p{0.105\textwidth}p{0.665\textwidth}r r r@{}}
+\toprule Hash & Subject & + & - & Files \\ \midrule\endhead
+\texttt{8d0d2c4b} & feat(reports): instance-level fallback for aggregate score-drift plot & 351 & 42 & 8 \\
+\texttt{f34d9f96} & docs(journal): instance-level fallback for aggregate score-drift plot & 52 & 0 & 1 \\
+\texttt{c041abb0} & fix(heatmap): headline metric resolves over metric family + main split & 178 & 10 & 2 \\
+\texttt{b83c03e9} & docs(journal): headline metric family/main-split resolver fix & 43 & 0 & 1 \\
+\texttt{33864be3} & Make eval audit run kwdagger with other\_session\_handler=kill & 1 & 0 & 1 \\
+\texttt{ca885180} & fix(reports): align coverage-matrix axis order with the score-drift plot & 86 & 11 & 3 \\
+\texttt{cdb31422} & feat(reproduce): add 50\_rsync\_from\_aiq\_gpu.sh to olmo/gpt-oss/qwen runbooks & 360 & 0 & 6 \\
+\texttt{d4bf29d7} & feat(coverage-matrix): show match stats per column + align model order & 159 & 3 & 2 \\
+\texttt{01351b73} & docs(journal): coverage-matrix annotations + axis alignment & 43 & 0 & 1 \\
+\texttt{7a9f1d5f} & feat(coverage-matrix): print agreement proportion in each cell & 120 & 118 & 2 \\
+\texttt{93849b09} & fix(heatmap): dedupe stale local attempts in aggregate score-drift & 175 & 1 & 2 \\
+\texttt{bec1f57c} & docs(journal): aggregate score-drift stale-local dedupe & 57 & 0 & 1 \\
+\texttt{e1d10217} & test(e2e): route-registry survival acceptance check & 201 & 0 & 2 \\
+\texttt{a36b787c} & fix(heatmap): keep headline drift cells square for small model counts & 73 & 1 & 2 \\
+\texttt{b8b85869} & fix(qwen): serve 8192 window on the instruct-turbo endpoints for from-spec ifeval/mmlu\_pro & 73 & 9 & 3 \\
+\bottomrule\end{longtable}
+\normalsize
