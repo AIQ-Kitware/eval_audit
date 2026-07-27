@@ -27,7 +27,7 @@ matter and are listed there — read §8 before citing anything.**
 
 ### 1.1 Execution totals *(disk)*
 
-| | count |
+| item | count |
 |---|---|
 | Experiment directories under `/data/crfm-helm-audit` | 74 |
 | Local HELM runs with complete raw artifacts (`run_spec.json` + `scenario_state.json`) | **1,634** |
@@ -73,7 +73,7 @@ generated 2026-06-17). Also reported in the 06-09 deck.
 
 **Results *(disk, recomputed today)*.**
 
-| | value |
+| quantity | value |
 |---|---|
 | Total run records | **34,512** |
 | Selected (eligible) | **1,109** |
