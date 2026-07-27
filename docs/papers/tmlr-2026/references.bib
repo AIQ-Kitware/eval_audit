@@ -91,10 +91,12 @@ series = {ICCSIE '24}
 % --- HELM and other evaluation suites ---
 @misc{eval-harness,
   title  = {A Framework for Few-Shot Language Model Evaluation},
-  author = {Gao, Leo and Tow, Jonathan and Biderman, Stella and others},
+  author = {Gao, Leo and Tow, Jonathan and Abbasi, Baber and Biderman, Stella and
+            Black, Sid and others},
   year   = {2023},
-  howpublished = {EleutherAI lm-evaluation-harness, Zenodo},
-  note   = {% VERIFY version/DOI}
+  month  = {12},
+  howpublished = {EleutherAI lm-evaluation-harness v0.4.0, Zenodo},
+  doi    = {10.5281/zenodo.10256836}
 }
 
 @article{srivastava2023bigbench,
@@ -103,9 +105,10 @@ series = {ICCSIE '24}
   author  = {Srivastava, Aarohi and Rastogi, Abhinav and Rao, Abhishek and others},
   journal = {Transactions on Machine Learning Research (TMLR)},
   year    = {2023},
-  note    = {arXiv:2206.04615 % VERIFY}
+  note    = {arXiv:2206.04615}
 }
 
+% NOTE: not cited by any section as of this revision; kept for possible use.
 @inproceedings{chiang2024arena,
   title     = {Chatbot Arena: An Open Platform for Evaluating {LLM}s by Human Preference},
   author    = {Chiang, Wei-Lin and Zheng, Lianmin and Sheng, Ying and
@@ -121,7 +124,7 @@ series = {ICCSIE '24}
   author = {{Association for Computing Machinery}},
   year   = {2020},
   howpublished = {\url{https://www.acm.org/publications/policies/artifact-review-and-badging-current}},
-  note   = {% VERIFY current version/date}
+  note   = {% VERIFY version/date manually in a browser; acm.org 403s automated fetches}
 }
 
 @inproceedings{gundersen2018state,
@@ -148,8 +151,13 @@ series = {ICCSIE '24}
 @article{pineau2021checklist,
   title   = {Improving Reproducibility in Machine Learning Research
              (A Report from the {NeurIPS} 2019 Reproducibility Program)},
-  author  = {Pineau, Joelle and Vincent-Lamarre, Philippe and Sinha, Koustuv and others},
+  author  = {Pineau, Joelle and Vincent-Lamarre, Philippe and Sinha, Koustuv and
+             Larivi{\`e}re, Vincent and Beygelzimer, Alina and
+             d'Alch{\'e}-Buc, Florence and Fox, Emily and Larochelle, Hugo},
   journal = {Journal of Machine Learning Research (JMLR)},
+  volume  = {22},
+  number  = {164},
+  pages   = {1--20},
   year    = {2021}
 }
 
@@ -157,25 +165,29 @@ series = {ICCSIE '24}
   title     = {Show Your Work: Improved Reporting of Experimental Results},
   author    = {Dodge, Jesse and Gururangan, Suchin and Card, Dallas and
                Schwartz, Roy and Smith, Noah A.},
-  booktitle = {EMNLP},
+  booktitle = {EMNLP-IJCNLP},
+  pages     = {2185--2194},
   year      = {2019}
 }
 
 @inproceedings{bouthillier2019unreproducible,
   title     = {Unreproducible Research is Reproducible},
   author    = {Bouthillier, Xavier and Laurent, C{\'e}sar and Vincent, Pascal},
-  booktitle = {ICML},
-  year      = {2019},
-  note      = {% VERIFY}
+  booktitle = {Proceedings of the 36th International Conference on Machine Learning (ICML)},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {97},
+  pages     = {725--734},
+  year      = {2019}
 }
 
 @inproceedings{bouthillier2021variance,
   title     = {Accounting for Variance in Machine Learning Benchmarks},
   author    = {Bouthillier, Xavier and Delaunay, Pierre and Bronzi, Mirko and
                Trofimov, Assya and Nichyporuk, Brennan and Szeto, Justin and
-               Mohammadi Sepahvand, Nazanin and Raff, Edward and Madan, Kanika and
+               Sepah, Naz and Raff, Edward and Madan, Kanika and
                Voleti, Vikram and Ebrahimi Kahou, Samira and Michalski, Vincent and
-               Arbel, Tal and Pal, Chris and Varoquaux, Ga{\"e}l and Vincent, Pascal},
+               Serdyuk, Dmitriy and Arbel, Tal and Pal, Chris and
+               Varoquaux, Ga{\"e}l and Vincent, Pascal},
   booktitle = {Proceedings of Machine Learning and Systems (MLSys)},
   year      = {2021},
   note      = {arXiv:2103.03098}
@@ -192,7 +204,7 @@ series = {ICCSIE '24}
 
 @article{raue2009identifiability,
   title   = {Structural and Practical Identifiability Analysis of Partially
-             Observed Dynamical Systems by Exploiting the Profile Likelihood},
+             Observed Dynamical Models by Exploiting the Profile Likelihood},
   author  = {Raue, Andreas and Kreutz, Clemens and Maiwald, Thomas and
              Bachmann, Julie and Schilling, Marcel and Klingm{\"u}ller, Ursula and
              Timmer, Jens},
@@ -201,7 +213,7 @@ series = {ICCSIE '24}
   number  = {15},
   pages   = {1923--1929},
   year    = {2009},
-  note    = {% VERIFY volume/pages}
+  doi     = {10.1093/bioinformatics/btp358}
 }
 
 % --- harness and scorer sensitivity ---
@@ -215,17 +227,21 @@ series = {ICCSIE '24}
 
 @article{mizrahi2024state,
   title   = {State of What Art? A Call for Multi-Prompt {LLM} Evaluation},
-  author  = {Mizrahi, Moran and Kaplan, Guy and Malkin, Dan and others},
+  author  = {Mizrahi, Moran and Kaplan, Guy and Malkin, Dan and Dror, Rotem and
+             Shahaf, Dafna and Stanovsky, Gabriel},
   journal = {Transactions of the Association for Computational Linguistics (TACL)},
-  year    = {2024}
+  volume  = {12},
+  pages   = {933--949},
+  year    = {2024},
+  doi     = {10.1162/tacl_a_00681}
 }
 
 @inproceedings{alzahrani2024targets,
   title     = {When Benchmarks are Targets: Revealing the Sensitivity of
                Large Language Model Leaderboards},
   author    = {Alzahrani, Norah and Alyahya, Hisham Abdullah and Alnumay, Yazeed and
-               AlRashed, Sultan and Alsubaie, Shaykhah and Almushayqih, Yousef and
-               Mirza, Faisal and Alotaibi, Nouf and Al-Twairesh, Nora and
+               Alrashed, Sultan and Alsubaie, Shaykhah and Almushaykeh, Yusef and
+               Mirza, Faisal and Alotaibi, Nouf and Altwairesh, Nora and
                Alowisheq, Areeb and Bari, M Saiful and Khan, Haidar},
   booktitle = {ACL (Volume 1: Long Papers)},
   year      = {2024},
@@ -234,18 +250,19 @@ series = {ICCSIE '24}
 
 @misc{hfleaderboard2023mmlu,
   title  = {What's Going On with the Open {LLM} Leaderboard?},
-  author = {Fourrier, Cl{\'e}mentine and Habib, Nathan and Wolf, Thomas and Tunstall, Lewis},
+  author = {Fourrier, Cl{\'e}mentine and Habib, Nathan and Launay, Julien and Wolf, Thomas},
   year   = {2023},
+  month  = {6},
   howpublished = {Hugging Face Blog,
-                  \url{https://huggingface.co/blog/open-llm-leaderboard-mmlu}},
-  note   = {% VERIFY author list}
+                  \url{https://huggingface.co/blog/open-llm-leaderboard-mmlu}}
 }
 
 @misc{biderman2024lessons,
   title  = {Lessons from the Trenches on Reproducible Evaluation of Language Models},
-  author = {Biderman, Stella and Schoelkopf, Hailey and Sutawika, Lintang and others},
+  author = {Biderman, Stella and Schoelkopf, Hailey and Sutawika, Lintang and
+            Gao, Leo and Tow, Jonathan and Abbasi, Baber and others},
   year   = {2024},
-  note   = {arXiv:2405.14782}
+  note   = {arXiv:2405.14782. % VERIFY whether to cite the COLM 2024 version}
 }
 
 @inproceedings{post2018clarity,
@@ -254,7 +271,7 @@ series = {ICCSIE '24}
   booktitle = {Conference on Machine Translation (WMT): Research Papers},
   pages     = {186--191},
   year      = {2018},
-  note      = {% VERIFY}
+  doi       = {10.18653/v1/W18-6319}
 }
 
 % --- serving stacks, kernels, numerics ---
@@ -278,33 +295,39 @@ series = {ICCSIE '24}
                with {IO}-Awareness},
   author    = {Dao, Tri and Fu, Daniel Y. and Ermon, Stefano and Rudra, Atri and
                R{\'e}, Christopher},
-  booktitle = {NeurIPS},
-  year      = {2022},
-  note      = {% VERIFY}
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  volume    = {35},
+  pages     = {16344--16359},
+  year      = {2022}
 }
 
 @inproceedings{dettmers2022int8,
   title     = {{LLM.int8()}: 8-bit Matrix Multiplication for Transformers at Scale},
   author    = {Dettmers, Tim and Lewis, Mike and Belkada, Younes and Zettlemoyer, Luke},
-  booktitle = {NeurIPS},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  volume    = {35},
   year      = {2022},
-  note      = {% VERIFY}
+  note      = {arXiv:2208.07339. % VERIFY pages}
 }
 
 @misc{thinkingmachines2025nondeterminism,
   title  = {Defeating Nondeterminism in {LLM} Inference},
   author = {He, Horace and {Thinking Machines Lab}},
   year   = {2025},
+  month  = {9},
   howpublished = {Thinking Machines Lab Blog,
                   \url{https://thinkingmachines.ai/blog/defeating-nondeterminism-in-llm-inference/}},
-  note   = {% VERIFY authorship}
+  note   = {Bylined ``Horace He in collaboration with others at Thinking Machines''}
 }
 
 @misc{atil2024nondeterminism,
   title  = {Non-Determinism of ``Deterministic'' {LLM} Settings},
-  author = {Atil, Berk and others},
+  author = {Atil, Berk and Aykent, Sarp and Chittams, Alexa and Fu, Lisheng and
+            Passonneau, Rebecca J. and Radcliffe, Evan and Rajagopal, Guru Rajan and
+            Sloan, Adam and Tudrej, Tomasz and Ture, Ferhan and Wu, Zhe and
+            Xu, Lixinyu and Baldwin, Breck},
   year   = {2024},
-  note   = {arXiv:2408.04667 % VERIFY author list}
+  note   = {arXiv:2408.04667}
 }
 
 % --- the EEE line ---
@@ -326,20 +349,29 @@ series = {ICCSIE '24}
 }
 
 % --- benchmark validity and judges ---
+% !! WITHDRAWN BY ITS AUTHORS. arXiv 2507.00460 was withdrawn after review,
+% !! citing substantial overlap with prior work. It is currently cited in
+% !! sections/related_work.tex ("Validity is a different axis"). Either replace
+% !! it with the prior work it overlapped, or drop the claim -- do not ship a
+% !! citation to a withdrawn preprint.
 @misc{pitfalls2025open,
   title  = {Pitfalls of Evaluating Language Models with Open Benchmarks},
-  author = {{Author list to be filled}},
+  author = {Hasan, Md. Najib and Sibat, Md Mahadi Hassan and
+            Babar, Mohammad Fakhruddin and Sarkar, Souvika and
+            Hasan, Monowar and Karmaker, Santu},
   year   = {2025},
-  note   = {arXiv:2507.00460 % VERIFY authors/venue}
+  note   = {arXiv:2507.00460. WITHDRAWN by the authors after review.}
 }
 
 @inproceedings{zheng2023judge,
   title     = {Judging {LLM}-as-a-Judge with {MT}-Bench and Chatbot Arena},
   author    = {Zheng, Lianmin and Chiang, Wei-Lin and Sheng, Ying and
-               Zhuang, Siyuan and Wu, Zhanghao and Zhuang, Yonghao and others},
+               Zhuang, Siyuan and Wu, Zhanghao and Zhuang, Yonghao and Lin, Zi and
+               Li, Zhuohan and Li, Dacheng and Xing, Eric P. and Zhang, Hao and
+               Gonzalez, Joseph E. and Stoica, Ion},
   booktitle = {NeurIPS Datasets and Benchmarks Track},
   year      = {2023},
-  note      = {arXiv:2306.05685 % VERIFY}
+  note      = {arXiv:2306.05685}
 }
 
 % --- provenance and artifact preservation ---
@@ -375,7 +407,7 @@ series = {ICCSIE '24}
   number  = {1},
   pages   = {71--79},
   year    = {2015},
-  note    = {% VERIFY volume/pages}
+  doi     = {10.1145/2723872.2723882}
 }
 
 % --- models, datasets, and scenarios under study (cited from sections/cases.tex) ---
@@ -395,9 +427,11 @@ series = {ICCSIE '24}
 
 @misc{muennighoff2024olmoe,
   title  = {{OLMoE}: Open Mixture-of-Experts Language Models},
-  author = {Muennighoff, Niklas and Soldaini, Luca and Groeneveld, Dirk and others},
+  author = {Muennighoff, Niklas and Soldaini, Luca and Groeneveld, Dirk and
+            Lo, Kyle and Morrison, Jacob and Min, Sewon and Shi, Weijia and
+            Walsh, Pete and Tafjord, Oyvind and Lambert, Nathan and others},
   year   = {2024},
-  note   = {arXiv:2409.02060 % VERIFY}
+  note   = {arXiv:2409.02060. % VERIFY published venue}
 }
 
 @misc{together2023redpajama,
