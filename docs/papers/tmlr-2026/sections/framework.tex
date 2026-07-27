@@ -56,6 +56,17 @@ result. Making this gate explicit --- every excluded run carries a typed
 exclusion reason --- is what allows a defensible ``$X$ of $Y$ runnable runs''
 denominator.
 
+The gate is relative to a target, not to a run. The sharpest case is a
+model-graded scenario whose judge is no longer served: the judging step is
+unrepeatable, so the run is ineligible for procedural reproduction, but the
+judge's per-instance verdicts are themselves part of the released record, and
+the published aggregate can still be recomputed from them and checked. Such a
+run is out of scope for the second target of \S\ref{sec:targets} and fully in
+scope for the first. Treating eligibility as a property of the run alone would
+discard precisely the evidence that survived, and would understate the auditable
+fraction of the corpus; we therefore scope every exclusion reason to the target
+it blocks.
+
 \subsection{Axis 1: what is under test}
 \label{sec:targets}
 
@@ -81,7 +92,10 @@ former with its ``same data and tools'' premise replaced by a declared-equivalen
 instrument, since the original tools are what did not survive. Target (1) has no
 counterpart there: it is available only because \helm releases the per-instance
 prompts, completions, and metric records that make a score recomputable without
-executing a model. Goodman's results reproducibility, which asks for corroboration
+executing a model. Nor is it a fallback for runs that are merely inconvenient to
+execute --- for model-graded scenarios whose judge is no longer served it is the
+only target available at all, and it still answers a real question about them,
+since a scorer or migration defect would show up here with no judge in the loop. Goodman's results reproducibility, which asks for corroboration
 from an independent study, has no counterpart here in the other direction --- a
 fixed historical corpus admits no new study.
 
