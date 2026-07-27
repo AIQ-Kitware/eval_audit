@@ -4089,3 +4089,87 @@ Final decomposition (OLMo-2 instruct ifeval, both 7B/13B):
 
 The fp32/substrate thread is now fully closed AND attributed. No further runs
 needed for this result.
+
+## 2026-07-27 16:13:25 -0400
+
+**Model/harness:** claude-opus-5[1m] (Opus 5, 1M context) via Claude Code
+(VSCode extension).
+
+**User intent:** "Update the latest Master Collaborative Reference document
+with all changes that happened from when it was written to now," with a
+follow-up correction mid-task: *make sure you use the latest zip*.
+
+**The disambiguation that shaped the task.** Four candidate zips sit in
+`docs/`. The newest by mtime is
+`Master_Collaborative_Reference_Consensus_ACCEPTED_2026-07-15d.zip` (14:38),
+but it is a four-file reply package — an acceptance letter, furnished source
+hashes, and a store-provenance audit — with no `main.tex` in it. The document
+lives in `..._Consensus_2026-07-15c.zip` (14:20). So "the latest" is neither
+one alone: it is 15c *as amended by* 15d. I treated 15d's two substantive
+contents (the furnished commit/tree SHAs, and the disk-level audit finding
+that the flagship stores are pruned) as edits to apply, not as an appendix to
+staple on, and folded the package itself into `validation/` for the audit
+trail. Worth recording because "latest file" and "latest document" diverged,
+and the mtime answer would have produced the wrong deliverable.
+
+**Deliverable.** `docs/Master_Collaborative_Reference_2026-07-27/` (committed,
+`45e00b90`) plus a convenience zip left untracked. Four new chronicle
+chapters covering 2026-07-16..27 (127 commits): the Qwen3.5 extension, the
+open-judge experiment, closing the substrate question, and paper
+direction/manuscript. Two new canonical ledgers. A changelog mapping every
+edit back to 15c.
+
+**Three editorial decisions worth keeping.**
+
+1. *Mark superseded rulings in place; never rewrite them.* The 15c consensus
+   ruling that the fp32 result was "discovery, not reproduction" is now
+   discharged, and the ruling that the dense OLMo-2 HF divergence must keep a
+   probe artifact on its candidate list turned out to be exactly right. Both
+   are annotated with a resolution, not replaced. The document's own stated
+   method is that a reader must not mistake superseded wording for a final
+   conclusion — but the inverse failure is worse in a consensus document:
+   deleting a ruling erases the fact that a reviewer's caution was vindicated.
+   §"The residual puzzle" is now the clearest example in the reference of a
+   correction that strengthens the thesis while withdrawing the sentence that
+   was supposed to support it.
+
+2. *Report the refutation as the result.* The natural summary of July 21-23 is
+   "we proved the officials ran fp32." The honest one, and the one the chapter
+   leads with, is that the registered prediction was refuted at full n and the
+   byte-exact recovery came only after the engine was added. I wrote the
+   chapter in that order deliberately: prediction, refutation, resolution.
+   The pre-registration is what makes the layered decomposition a result
+   rather than a fit.
+
+3. *Scope every new claim in the same breath as stating it.* Each new
+   established claim carries its limit inline — one benchmark/one family/two
+   sizes/instruct-only, completion-level on n=32 rather than metric-level, and
+   the judge findings' single-candidate and contamination bounds. This is the
+   discipline the 15c revision imposed on the older claims; applying it to the
+   new ones at authoring time is cheaper than a third interpretive pass.
+
+**Honest gaps in what I shipped.** No LaTeX toolchain on this host, so the
+PDFs are the 15c build, renamed with explicit `_2026-07-15c` /
+`_SUPERSEDED` suffixes and flagged twice (README + changelog) rather than
+silently left in place. No commit ledger regenerated for the new window. And
+the load-bearing one: every figure in the two new empirical chapters is read
+from journal records, not from re-inspected artifact stores — the stores
+themselves are unpreserved, which the new store ledger now says in the
+`publication_status` column for each.
+
+**Process note.** A concurrent commit of Edward's swept my staged 41 files
+into `ac8eafec` under a TMLR-only message. I asked before touching it rather
+than assuming, then split it: soft reset, re-commit the TMLR change with the
+original message/author/date verbatim, then commit the package. Verified with
+`git diff ac8eafec HEAD --stat` returning empty — the split preserved the tree
+exactly. Lesson: in a repo where a human may be committing concurrently,
+`git add` of a large tree is not a private operation; stage and commit in one
+step, or check `git log -1` immediately before committing.
+
+**Next steps.** Rebuild the PDFs (`pdflatex main.tex` twice, in `chronicle/`
+and `strategy/`) on a host with TeX. Regenerate the commit-ledger appendices
+for 2026-07-16..27. If the reference is going to a reviewer, the store
+preservation actions in `store_status_ledger_2026-07-27.csv` are the blocking
+item — the two flagship stores need re-running, and the July 21-23 substrate
+artifacts and the judge snapshots need copying and hashing before any of the
+new chapters' numbers can be cited as packaged evidence.
