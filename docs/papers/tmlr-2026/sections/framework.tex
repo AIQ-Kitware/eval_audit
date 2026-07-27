@@ -60,8 +60,11 @@ denominator.
 \label{sec:targets}
 
 A reproduction attempt must first declare what it is attempting to reproduce.
-Three choices are available, each exercising a different subset of the
-coordinates of Equation~\ref{eq:model}, and they are not interchangeable:
+We adapt the standard methods/results/inferential trichotomy of
+\citet{goodman2016reproducibility} to a benchmark corpus that publishes
+per-instance outputs. The three resulting choices each exercise a different
+subset of the coordinates of Equation~\ref{eq:model}, and they are not
+interchangeable:
 \begin{enumerate}[nosep,leftmargin=1.6em]
   \item \textbf{Artifact reconstruction}: recompute the published aggregates from
         the released prompts, completions, and metric records \emph{without}
@@ -73,6 +76,15 @@ coordinates of Equation~\ref{eq:model}, and they are not interchangeable:
         conclusion (a ranking, or a model-generation improvement) survives
         plausible execution substrates even when byte-identical outputs do not.
 \end{enumerate}
+Targets (2) and (3) are Goodman's methods and inferential reproducibility --- the
+former with its ``same data and tools'' premise replaced by a declared-equivalent
+instrument, since the original tools are what did not survive. Target (1) has no
+counterpart there: it is available only because \helm releases the per-instance
+prompts, completions, and metric records that make a score recomputable without
+executing a model. Goodman's results reproducibility, which asks for corroboration
+from an independent study, has no counterpart here in the other direction --- a
+fixed historical corpus admits no new study.
+
 Released official artifacts remain the historical ground truth for what \helm
 reported; a rerun assesses the \emph{stability and identifiability} of the
 procedure that produced them, and does not overwrite the record. This distinction
