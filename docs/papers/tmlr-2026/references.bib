@@ -103,6 +103,192 @@
   note   = {% VERIFY -- preprint reviewed in the internship literature survey}
 }
 
+% ---------------------------------------------------------------------------
+% Related-work additions. Entries without "% VERIFY" were checked against the
+% source (arXiv id / ACL Anthology / proceedings page); the rest still need it.
+% ---------------------------------------------------------------------------
+
+% --- evaluation suites and harness practice ---
+@misc{biderman2024lessons,
+  title  = {Lessons from the Trenches on Reproducible Evaluation of Language Models},
+  author = {Biderman, Stella and Schoelkopf, Hailey and Sutawika, Lintang and others},
+  year   = {2024},
+  note   = {arXiv:2405.14782}
+}
+
+@article{srivastava2023bigbench,
+  title   = {Beyond the Imitation Game: Quantifying and Extrapolating the
+             Capabilities of Language Models},
+  author  = {Srivastava, Aarohi and Rastogi, Abhinav and Rao, Abhishek and others},
+  journal = {Transactions on Machine Learning Research (TMLR)},
+  year    = {2023},
+  note    = {arXiv:2206.04615 % VERIFY}
+}
+
+% --- reproducibility terminology, variance, identifiability ---
+@misc{acm2020badging,
+  title  = {Artifact Review and Badging --- Version 1.1},
+  author = {{Association for Computing Machinery}},
+  year   = {2020},
+  howpublished = {\url{https://www.acm.org/publications/policies/artifact-review-and-badging-current}},
+  note   = {% VERIFY current version/date}
+}
+
+@inproceedings{gundersen2018state,
+  title     = {State of the Art: Reproducibility in Artificial Intelligence},
+  author    = {Gundersen, Odd Erik and Kjensmo, Sigbj{\o}rn},
+  booktitle = {AAAI},
+  year      = {2018},
+  note      = {% VERIFY pages}
+}
+
+@inproceedings{bouthillier2019unreproducible,
+  title     = {Unreproducible Research is Reproducible},
+  author    = {Bouthillier, Xavier and Laurent, C{\'e}sar and Vincent, Pascal},
+  booktitle = {ICML},
+  year      = {2019},
+  note      = {% VERIFY}
+}
+
+@inproceedings{bouthillier2021variance,
+  title     = {Accounting for Variance in Machine Learning Benchmarks},
+  author    = {Bouthillier, Xavier and Delaunay, Pierre and Bronzi, Mirko and
+               Trofimov, Assya and Nichyporuk, Brennan and Szeto, Justin and
+               Mohammadi Sepahvand, Nazanin and Raff, Edward and Madan, Kanika and
+               Voleti, Vikram and Ebrahimi Kahou, Samira and Michalski, Vincent and
+               Arbel, Tal and Pal, Chris and Varoquaux, Ga{\"e}l and Vincent, Pascal},
+  booktitle = {Proceedings of Machine Learning and Systems (MLSys)},
+  year      = {2021},
+  note      = {arXiv:2103.03098}
+}
+
+@book{ljung1999system,
+  title     = {System Identification: Theory for the User},
+  author    = {Ljung, Lennart},
+  edition   = {2nd},
+  publisher = {Prentice Hall},
+  year      = {1999},
+  note      = {% VERIFY edition/publisher}
+}
+
+@article{raue2009identifiability,
+  title   = {Structural and Practical Identifiability Analysis of Partially
+             Observed Dynamical Systems by Exploiting the Profile Likelihood},
+  author  = {Raue, Andreas and Kreutz, Clemens and Maiwald, Thomas and
+             Bachmann, Julie and Schilling, Marcel and Klingm{\"u}ller, Ursula and
+             Timmer, Jens},
+  journal = {Bioinformatics},
+  volume  = {25},
+  number  = {15},
+  pages   = {1923--1929},
+  year    = {2009},
+  note    = {% VERIFY volume/pages}
+}
+
+% --- harness and scorer sensitivity ---
+@inproceedings{alzahrani2024targets,
+  title     = {When Benchmarks are Targets: Revealing the Sensitivity of
+               Large Language Model Leaderboards},
+  author    = {Alzahrani, Norah and Alyahya, Hisham Abdullah and Alnumay, Yazeed and
+               AlRashed, Sultan and Alsubaie, Shaykhah and Almushayqih, Yousef and
+               Mirza, Faisal and Alotaibi, Nouf and Al-Twairesh, Nora and
+               Alowisheq, Areeb and Bari, M Saiful and Khan, Haidar},
+  booktitle = {ACL (Volume 1: Long Papers)},
+  year      = {2024},
+  note      = {aclanthology 2024.acl-long.744; arXiv:2402.01781. % VERIFY pages}
+}
+
+@misc{hfleaderboard2023mmlu,
+  title  = {What's Going On with the Open {LLM} Leaderboard?},
+  author = {Fourrier, Cl{\'e}mentine and Habib, Nathan and Wolf, Thomas and Tunstall, Lewis},
+  year   = {2023},
+  howpublished = {Hugging Face Blog,
+                  \url{https://huggingface.co/blog/open-llm-leaderboard-mmlu}},
+  note   = {% VERIFY author list}
+}
+
+@inproceedings{post2018clarity,
+  title     = {A Call for Clarity in Reporting {BLEU} Scores},
+  author    = {Post, Matt},
+  booktitle = {Conference on Machine Translation (WMT): Research Papers},
+  pages     = {186--191},
+  year      = {2018},
+  note      = {% VERIFY}
+}
+
+% --- serving stacks, kernels, numerics ---
+@inproceedings{dao2022flashattention,
+  title     = {{FlashAttention}: Fast and Memory-Efficient Exact Attention
+               with {IO}-Awareness},
+  author    = {Dao, Tri and Fu, Daniel Y. and Ermon, Stefano and Rudra, Atri and
+               R{\'e}, Christopher},
+  booktitle = {NeurIPS},
+  year      = {2022},
+  note      = {% VERIFY}
+}
+
+@inproceedings{dettmers2022int8,
+  title     = {{LLM.int8()}: 8-bit Matrix Multiplication for Transformers at Scale},
+  author    = {Dettmers, Tim and Lewis, Mike and Belkada, Younes and Zettlemoyer, Luke},
+  booktitle = {NeurIPS},
+  year      = {2022},
+  note      = {% VERIFY}
+}
+
+@misc{thinkingmachines2025nondeterminism,
+  title  = {Defeating Nondeterminism in {LLM} Inference},
+  author = {He, Horace and {Thinking Machines Lab}},
+  year   = {2025},
+  howpublished = {Thinking Machines Lab Blog,
+                  \url{https://thinkingmachines.ai/blog/defeating-nondeterminism-in-llm-inference/}},
+  note   = {% VERIFY authorship}
+}
+
+@misc{atil2024nondeterminism,
+  title  = {Non-Determinism of ``Deterministic'' {LLM} Settings},
+  author = {Atil, Berk and others},
+  year   = {2024},
+  note   = {arXiv:2408.04667 % VERIFY author list}
+}
+
+% --- benchmark validity, judges, provenance ---
+@misc{pitfalls2025open,
+  title  = {Pitfalls of Evaluating Language Models with Open Benchmarks},
+  author = {{Author list to be filled}},
+  year   = {2025},
+  note   = {arXiv:2507.00460 % VERIFY authors/venue}
+}
+
+@inproceedings{zheng2023judge,
+  title     = {Judging {LLM}-as-a-Judge with {MT}-Bench and Chatbot Arena},
+  author    = {Zheng, Lianmin and Chiang, Wei-Lin and Sheng, Ying and
+               Zhuang, Siyuan and Wu, Zhanghao and Zhuang, Yonghao and others},
+  booktitle = {NeurIPS Datasets and Benchmarks Track},
+  year      = {2023},
+  note      = {arXiv:2306.05685 % VERIFY}
+}
+
+@inproceedings{reuel2024betterbench,
+  title     = {{BetterBench}: Assessing {AI} Benchmarks, Uncovering Issues,
+               and Establishing Best Practices},
+  author    = {Reuel, Anka and Hardy, Amelia and Smith, Chandler and
+               Lamparth, Max and Hardy, Malcolm and Kochenderfer, Mykel J.},
+  booktitle = {NeurIPS Datasets and Benchmarks Track},
+  year      = {2024},
+  note      = {arXiv:2411.12990}
+}
+
+@article{boettiger2015docker,
+  title   = {An Introduction to {Docker} for Reproducible Research},
+  author  = {Boettiger, Carl},
+  journal = {ACM SIGOPS Operating Systems Review},
+  volume  = {49},
+  number  = {1},
+  pages   = {71--79},
+  year    = {2015},
+  note    = {% VERIFY volume/pages}
+}
+
 % --- models under study (add \citep at first mention) ---
 @inproceedings{groeneveld2024olmo,
   title     = {{OLMo}: Accelerating the Science of Language Models},

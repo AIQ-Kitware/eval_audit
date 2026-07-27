@@ -1,58 +1,24 @@
 \section{Related Work}
 \label{sec:related}
 
-\paragraph{Holistic benchmarking and its artifacts.} \helm
-\citep{liang2023helm} standardized multi-metric, multi-scenario LLM evaluation
-and, importantly for us, publishes per-instance request/response artifacts and
-resolved run specifications. We treat those artifacts as the object of study
-rather than as ground-truth-by-construction, and we distinguish the released
-official artifact (the historical record of what \helm reported) from a local
-rerun (a test of procedural stability). Related evaluation frameworks
-\citep{eval-harness} share the property that a compact recipe stands in for a
-much larger latent execution configuration.
+\textbf{HELM:} Our work concerns HELM, the Holistic Evaluation of Language Models framework of \citet{liang2023helm}. HELM addressed the issue of a fragmented model evaluation landscape where each model was reported on its own largely non-overlapping set of benchmarks. Before HELM, a given model had on average been evaluated on only $17.9\%$ of what would become the core HELM scenarios, with some prominent models ``not sharing a single scenario in common.'' Thus, cross-model comparisons were assembled from numbers produced under different prompts, decoding settings, and harnesses.
 
-\paragraph{Reproducibility of ML evaluation.} A substantial literature documents
-that reported model comparisons can be sensitive to implementation and
-environment details \citep{pineau2021checklist,dodge2019show}, and recent work
-specifically finds that LLM benchmark scores shift with prompt formatting,
-few-shot ordering, and decoding \citep{sclar2024quantifying,mizrahi2024state}.
-Our contribution is orthogonal to prompt-sensitivity studies: we hold the
-\emph{recipe} fixed by replaying the resolved specification verbatim, and isolate
-the \emph{execution substrate} --- precision, tokenizer/template version, serving
-engine, kernels, hardware --- as the locus of residual disagreement, then ask
-which of those parameters are recoverable.
+HELM reframed evaluation around three elements of holistic measurement. First, broad coverage: scenarios are organized by an explicit taxonomy of task, domain (what, who, when), and language, so that what the benchmark covers and leaves out is stated rather than assumed. Second, multi-metric measurement: accuracy, calibration, robustness, fairness, bias, toxicity, and efficiency are reported for every scenario, rather than collapsing a model to a single accuracy score. Third and most relevant to our paper, standardization of the conditions under which models are run: all models are evaluated through one adaptation procedure, which rests on a deliberate choice of the object of study --- ``our object of evaluation is the language model, not a scenario-specific system.''
 
-\paragraph{Serving-stack and numerical nondeterminism.} That different serving
-stacks can produce different outputs from the same weights is known in folklore
-and in engine documentation: greedy decoding through Hugging Face
-\code{transformers} \citep{wolf2020transformers} and through vLLM
-\citep{kwon2023vllm} differ in kernels, batching, tokenizer handling, and
-stop-sequence semantics; low-precision inference and attention-kernel choice
-change logits enough to flip near-ties. We make this quantitative at the level of
-benchmark metrics, tie specific flips to named unrecorded parameters, and
-formalize which are identifiable from surviving evidence.
+Under this protocol HELM densely benchmarked 30 models across 42 scenarios, raising average per-model scenario coverage from $17.9\%$ to $96.0\%$. It did so through a modular, extensible evaluation framework that emits detailed artifacts, including the exact prompt issued to each model for each instance, the raw completion returned, the resolved run specification, and the per-instance and aggregate statistics computed from them.
 
-\paragraph{Detection vs.\ attribution: the \eeeshort line.} The immediate
-predecessor of this work, \eee \citep{eee2026}, introduces a normalized
-per-instance representation that makes official-vs-local discrepancies
-\emph{visible} across heterogeneous harness versions, and reports case studies of
-detected gaps on Pythia-6.9B \citep{biderman2023pythia}, Vicuna-7B, and
-Falcon-7B. Its appendix explicitly leaves open whether a residual difference
-arises from checkpoint, quantization, precision, tokenizer, or generation-kernel
-choices. The present paper takes that open question as its subject: we supply the
-machinery to attribute and sometimes close such gaps, and we characterize when
-the answer is fundamentally underdetermined.
+HELM was designed not as a static snapshot but as ``a living benchmark for the community, continuously updated with new scenarios, metrics, and models.'' It has since grown into a large public database of evaluation results, spanning 366 distinct models and 215 scenarios. A standardized protocol, published records of the prompts and completions behind every number, and a large public archive make HELM an unusually tractable target for an independent reproducibility audit: enough is released to attempt a faithful replay, and enough time has passed that drift can be measured and attributed. Throughout, we treat the released artifacts as the object of study rather than as ground-truth-by-construction, and we distinguish the official artifact --- the historical record of what HELM reported --- from a local rerun, which tests procedural stability.
 
-\paragraph{Provenance and artifact preservation.} Our provenance recommendation
-(\S\ref{sec:provenance}) is in the spirit of model and dataset documentation
-efforts \citep{mitchell2019modelcards,gebru2021datasheets} but targets the
-\emph{execution} rather than the model or data: what must be recorded so that a
-benchmark score is reconstructible. The closest operational analogue is
-containerized, digest-pinned execution; we extend it with version-pinned scoring
-instruments for historical corpora and a per-parameter identifiability analysis.
+\textbf{Reproducibility and identifiability:} Reproducibility terminology in computational science separates re-running an author's artifact from re-implementing the method \citep{acm2020badging,gundersen2018state}, and a substantial ML literature documents that reported comparisons are sensitive to implementation and environment detail \citep{pineau2021checklist,dodge2019show}, that methods reproducibility and results variance are different properties \citep{bouthillier2019unreproducible}, and that benchmark variance can be decomposed into identifiable sources \citep{bouthillier2021variance}. Our reproduction targets (\S\ref{sec:model}) refine that vocabulary for the case where the artifact survives but the machine that produced it does not. Casting this as system identification \citep{ljung1999system} also imports the distinction we need: a parameter may be \emph{structurally} unrecoverable from any record of this form, or \emph{practically} unrecoverable from the particular record that survives \citep{raue2009identifiability}. Our classic-model result is the second kind, and we say so precisely rather than claiming irreproducibility.
 
-\paragraph{Efficient benchmarking (peripheral).} A separate thread explored
-whether a small, well-chosen coreset of questions plus regression can predict
-full-benchmark scores \citep{bowyer2026efficient} and whether model-centric
-representations help. That thread is not required for the claims here and is
-summarized only as future work (\S\ref{sec:limitations}).
+\textbf{The harness and the scorer are part of the result:} Benchmark scores move under prompt formatting, few-shot ordering, and answer-selection method, sometimes enough to reorder leaderboards \citep{sclar2024quantifying,mizrahi2024state,alzahrani2024targets}; three implementations of MMLU give three different numbers and three different rankings \citep{hfleaderboard2023mmlu}; and maintainers of a widely used harness report from experience that evaluation results are rarely comparable across setups \citep{biderman2024lessons}. Machine translation confronted the same problem earlier and resolved it by pinning and reporting the scoring implementation itself \citep{post2018clarity}; our version-pinned ``era'' containers (\S\ref{sec:system}) generalize that discipline to a historical corpus whose scorer has since changed underneath it. Our contribution is orthogonal to the prompt-sensitivity line: we hold the \emph{recipe} fixed by replaying the resolved specification verbatim, and isolate the \emph{execution substrate} as the locus of residual disagreement. Nothing here is specific to HELM --- other suites likewise compress a run to a compact recipe \citep{eval-harness,srivastava2023bigbench} --- but HELM is the corpus that published enough artifacts to make the question answerable.
+
+\textbf{Serving stacks and numerical nondeterminism:} That identical weights can yield different outputs across serving stacks is documented in engine behavior and, increasingly, in mechanism: greedy decoding through Hugging Face \texttt{transformers} \citep{wolf2020transformers} and through vLLM \citep{kwon2023vllm} differ in kernels, batching, tokenizer handling, and stop-sequence semantics; attention-kernel choice \citep{dao2022flashattention} and reduced-precision inference \citep{dettmers2022int8} perturb logits enough to flip near-ties; and because common kernels are not batch-invariant, server-side batching makes a hosted endpoint nondeterministic even at temperature zero \citep{thinkingmachines2025nondeterminism,atil2024nondeterminism}. This last point bears directly on the fraction of the open-weight corpus served by external providers, whose batching state is unrecorded and unrecoverable. We make these effects quantitative at the level of benchmark metrics, tie specific flips to named unrecorded parameters, and formalize which are identifiable from surviving evidence.
+
+\textbf{Detection versus attribution:} The immediate predecessor of this work, \textit{Every Eval Ever} \citep{eee2026}, introduces a normalized per-instance representation that makes official-vs-local discrepancies \emph{visible} across heterogeneous harness versions, and reports detected gaps on Pythia-6.9B \citep{biderman2023pythia}, Vicuna-7B, and Falcon-7B. Its appendix explicitly leaves open whether a residual difference arises from checkpoint, quantization, precision, tokenizer, or generation-kernel choices. The present paper takes that open question as its subject: we supply the machinery to attribute and sometimes close such gaps, and characterize when the answer is underdetermined.
+
+\textbf{Validity is a different axis:} A parallel critique asks whether a published benchmark number means what it claims: open corpora invite leakage, and a small model trained on a released HELM scenario can top the leaderboard on that scenario while collapsing on unseen ones \citep{pitfalls2025open}. Model-graded metrics add a further dependence on a judge whose own version and availability are rarely pinned \citep{zheng2023judge}. These threaten the \emph{validity} of a score; we ask the prior question of whether a score can be reconstructed at all, and treat unavailable judges as an eligibility filter rather than a reproduction outcome.
+
+\textbf{Provenance and artifact preservation:} Our provenance recommendation (\S\ref{sec:provenance}) is in the spirit of model and dataset documentation \citep{mitchell2019modelcards,gebru2021datasheets} and of benchmark-quality standards that find most widely used benchmarks do not permit straightforward replication \citep{reuel2024betterbench}, but targets the \emph{execution} rather than the model, the data, or the benchmark design: what must be recorded so that a score is reconstructible. The closest operational analogue is containerized, digest-pinned execution \citep{boettiger2015docker}; we extend it with version-pinned scoring instruments for historical corpora and a per-parameter identifiability analysis, and show that three fields close most of the gap.
+
+\textbf{Efficient benchmarking:} Finally, a separate thread explored whether a small, well-chosen coreset of questions plus regression can predict full-benchmark scores \citep{bowyer2026efficient}. That thread is not required for the claims here and is summarized only as future work (\S\ref{sec:limitations}).
