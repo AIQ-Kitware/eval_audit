@@ -12,7 +12,7 @@ A measured benchmark result is produced by four things acting together.
   \item[Residual --- what nothing fixes.] What remains once the other three are held: sampling randomness, and the nondeterminism an instrument admits without determining --- server-side batch composition varying with other users' traffic being the paradigm case. Unlike the other three, no record could pin it down.
 \end{description}
 
-An engine \emph{supplies} deployment values by default, and does so silently: vLLM's default \texttt{add\_special\_tokens=True} adds a token to the prompt, and an unpinned \texttt{transformers} load chooses the precision, neither of which the recipe asked for (instances in \S\ref{sec:olmo}). In each the engine is the proximate cause while the coordinate that differs is the deployment --- which is why a record should preserve the resolved \emph{value} rather than the component that chose it.
+An engine \emph{supplies} deployment values by default, and does so silently: vLLM's default \texttt{add\_\allowbreak special\_\allowbreak tokens=True} adds a token to the prompt, and an unpinned \texttt{transformers} load chooses the precision, neither of which the recipe asked for (\S\ref{sec:olmo}). In each the engine is the proximate cause while the coordinate that differs is the deployment --- which is why a record should preserve the resolved \emph{value} rather than the component that chose it.
 
 The scorer falls across two coordinates. What it is specified to compute is recipe; the code that computes it is instrument, since the harness has versions --- which is why \S\ref{sec:eras} pins that code by era.
 
