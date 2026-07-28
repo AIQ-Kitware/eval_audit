@@ -3,11 +3,23 @@
 
 \subsection{What produces a score}
 
-A measured benchmark result is produced by five things acting together, and naming them separately is what makes the rest of this section possible. The \textbf{recorded recipe} is the scenario, dataset, prompt construction, in-context examples, decoding parameters, and scorer. The \textbf{deployment} is the weights, the model and tokenizer revisions, the chat template, the load precision, and any quantization. The \textbf{execution instrument} is the harness version, serving engine, package and kernel versions, hardware, device topology, and batching or caching behavior. The \textbf{artifact interpretation} is the storage schema, its migrations, canonicalization, and any carried-forward outputs. What is left over is the \textbf{residual}: stochastic and numerical influences that no record fixes. We call these five the coordinates of a run.
+A measured benchmark result is produced by five things acting together. Each is defined by the role it plays rather than by its membership list --- what the evaluation intends to measure, what fixes the function to be computed, what fixes how that function is numerically realized, how the computed outputs are read back, and what nothing fixes at all. We call these five the coordinates of a run.
+
+\begin{description}[leftmargin=1em,itemsep=2pt]
+  \item[Recorded recipe --- what the evaluation intends to measure.] It fixes the question put to the model and how the answer is scored, without reference to any particular model: the scenario, dataset, prompt construction, in-context examples, decoding parameters, and scorer. This is the coordinate a benchmark exists to standardize, and the only one HELM records in full.
+  \item[Deployment --- what fixes the function to be computed.] Given the recipe's input, it determines the mathematical object that maps that input to a distribution over outputs: the weights, the model and tokenizer revisions, the chat template, the load precision, any quantization, and the client or engine family the deployment names. Changing it changes what is \emph{meant} to be computed, in exact arithmetic as much as in floating point.
+  \item[Execution instrument --- what fixes how that function is numerically realized.] It carries out the computation the deployment specifies without changing what that computation is: the harness version, the serving engine's build and kernels, package versions, hardware, device topology, and batching or caching behavior. In exact arithmetic, changing the instrument would be a no-op.
+  \item[Artifact interpretation --- how the computed outputs are read back.] It maps what was stored to what is reported: the storage schema, its migrations, canonicalization, and any carried-forward outputs. It is the one coordinate that can change a published number with no re-execution at all.
+  \item[Residual --- what nothing fixes.] What remains once the other four are held: sampling randomness, and the nondeterminism an instrument admits without determining --- server-side batch composition varying with other users' traffic being the paradigm case. Unlike the other four, no record could pin it down.
+\end{description}
+
+\paragraph{Deployment versus instrument, and where the engine sits.} These two are the pair most easily confused, and the serving engine is where they meet, so we fix the boundary explicitly. \emph{Which} engine family serves a model --- a hosted API, in-process \texttt{transformers}, vLLM --- belongs to the deployment: HELM names it, and substituting one for another is an intended change to what computes the answer. That engine's build, kernels, scheduler, and batching belong to the instrument: two engines given identical weights, precision, and token identifiers are \emph{supposed} to agree, so a disagreement between them is an artifact of realization rather than a difference of intent. The line matters beyond bookkeeping. It is what lets \S\ref{sec:provenance} recommend a few recorded fields for the deployment while insisting that the instrument needs a container digest and a hardware record; collapsing the two would make either recommendation appear sufficient on its own.
+
+An engine also \emph{supplies} deployment values by default, which is the mechanism behind two of our three confirmed attributions (\S\ref{sec:olmo}, findings (a) and (c)): vLLM's default \texttt{add\_special\_tokens=True} silently changed the prompt tokens, and an unpinned \texttt{transformers} load silently chose the precision. In each the engine is the proximate cause while the coordinate that differs is the deployment --- which is why a record should preserve the resolved \emph{value} rather than the component that chose it.
 
 The public HELM record exposes the recipe, and the names but only a projection of the values within the deployment; of the instrument, the artifact interpretation, and the residual it exposes almost nothing. Reproduction is therefore an inverse problem. One chooses a deployment and an instrument, replays the recorded recipe, and asks whether the result matches the published one --- and when it does not, which coordinate is responsible. We say a run is identifiable at a stated tolerance when every materially compatible choice of coordinates produces equivalent results under a declared output-, metric-, or conclusion-level criterion.
 
-\paragraph{The taxonomy these coordinates imply.} The decomposition dictates how reproduction attempts can be classified, and that classification organizes the rest of the paper. Whether a run can be executed at all is a precondition rather than an outcome, and forms an upstream gate (\S\ref{sec:gate}). Past that gate, an attempt is characterized along two orthogonal axes: which coordinates it puts under test (\S\ref{sec:targets}), and, when its result disagrees with the record, which coordinate accounts for the difference (\S\ref{sec:taxonomy}). Both axes follow from the decomposition rather than being proposed alongside it --- the first partitions the coordinates into those an attempt exercises and those it holds fixed, and the second assigns a disagreement to one coordinate, to the residual, or to no coordinate at all. Neither axis refines the other, and collapsing them is what produces the familiar but uninformative verdict that a benchmark ``did not reproduce.''
+\paragraph{The taxonomy these coordinates imply.} The decomposition dictates how reproduction attempts can be classified, and that classification organizes the rest of the paper. Whether a run can be executed at all is a precondition rather than an outcome, and forms an upstream gate (\S\ref{sec:gate}). Past that gate, an attempt is characterized along two orthogonal axes: which coordinates it puts under test (\S\ref{sec:targets}), and, when its result disagrees with the record, which coordinate accounts for the difference (\S\ref{sec:taxonomy}). Both axes follow from the decomposition rather than being proposed alongside it --- the first partitions the coordinates into those an attempt exercises and those it holds fixed, and the second assigns a disagreement to one of the four controllable coordinates, to the residual, or to no coordinate at all. Neither axis refines the other, and collapsing them is what produces the familiar but uninformative verdict that a benchmark ``did not reproduce.''
 
 \subsection{The eligibility gate}
 \label{sec:gate}
@@ -34,12 +46,12 @@ Released official artifacts remain the historical ground truth for what HELM rep
 \subsection{Axis 2: why two executions disagree}
 \label{sec:taxonomy}
 
-Once the target is fixed and the attempt executes, an observed disagreement admits one of six causes --- one per coordinate, plus a residual and an underdetermined case:
+Once the target is fixed and the attempt executes, an observed disagreement admits one of six causes --- one for each of the four controllable coordinates, plus the residual and an underdetermined case:
 
 \begin{enumerate}[nosep,leftmargin=1.6em]
   \item \textbf{Recipe mismatch} --- the recorded recipe differs: prompt construction, in-context examples, decoding, or scorer.
-  \item \textbf{Deployment mismatch} --- the deployment's client, endpoint, or engine identity differs, as when a hosted API is replaced by a local one, or in-process \texttt{transformers} by vLLM.
-  \item \textbf{Execution-instrument mismatch} --- the instrument differs: precision, tokenizer or template version, attention kernel, device placement, or software-stack versions.
+  \item \textbf{Deployment mismatch} --- the deployment differs: weights, model or tokenizer revision, chat template, load precision, quantization, or the client, endpoint, and engine family, as when a hosted API is replaced by a local one, or in-process \texttt{transformers} by vLLM.
+  \item \textbf{Execution-instrument mismatch} --- the instrument differs: harness or package versions, the engine build, attention kernel, device placement, hardware, or batching and caching behavior.
   \item \textbf{Artifact-interpretation mismatch} --- the interpretation differs: row reordering, schema migration, or carried-forward outputs.
   \item \textbf{Residual disagreement under controlled equivalence} --- every controllable coordinate is matched and a gap remains. This is the only category analogous to conventional repeatability failure.
   \item \textbf{Historically non-identifiable reproduction} --- the surviving evidence does not uniquely specify what execution should count as faithful. Qualitatively different from (5): not ``it failed to repeat'' but ``what would count as a faithful execution is underdetermined.''
@@ -50,14 +62,15 @@ The two axes are independent: any target can fail for any cause, and it is their
 \subsection{Per-parameter identifiability}
 \label{sec:identifiability}
 
-Identifiability in the sense fixed above --- equivalent results, within a stated tolerance, across every materially compatible configuration --- is not a binary property of an entire run. Each latent parameter within the deployment and the instrument has its own status, and the per-case analysis assigns one to each (Table~\ref{tab:identifiability}). This refinement is what makes both the positive attributions and the non-identifiability result precise: we never claim to identify a whole historical deployment, only specific coordinates, each with its own evidentiary basis.
+Identifiability in the sense fixed above --- equivalent results, within a stated tolerance, across every materially compatible configuration --- is not a binary property of an entire run. Each latent parameter within the deployment and the instrument has its own status, and the per-case analysis assigns one to each (Table~\ref{tab:identifiability}). This refinement is what makes both the positive attributions and the non-identifiability result precise: we never claim to identify a whole historical deployment, only specific parameters within it, each with its own evidentiary basis.
 
 A coordinate can fail to be recoverable in two ways, and the difference decides what can be done about it. It may be structurally unrecoverable, in that no record of this form could pin it down, or merely practically unrecoverable, in that the particular record which happens to survive is insufficient \citep{raue2009identifiability}. Our classic-model result (\S\ref{sec:classic}) is the second kind, and that is what makes the provenance recommendation of \S\ref{sec:provenance} actionable: a practically non-identifiable parameter is one a richer record would have recovered, whereas a structurally non-identifiable one would leave a recording standard nothing to fix. We therefore state that result as non-identifiability relative to named evidence rather than as a claim of irreproducibility.
 
 \begin{table}[t]
 \caption{Per-parameter identifiability in the studied cases. The status is per
-coordinate, not per run; \S\ref{sec:cases} assigns each case's disagreement to a
-coordinate and to its status here.}
+parameter, not per run; \S\ref{sec:cases} assigns each case's disagreement to a
+coordinate, and each parameter it names to a row of this table. Row one is the
+recipe, the next five are the deployment, and the last three the instrument.}
 \label{tab:identifiability}
 \begin{center}
 \small
@@ -80,8 +93,8 @@ Chat template / generation prompt & often recoverable & revisioned tokenizer fil
 or controlled rendering sweeps; effective behavior depends on package version. \\
 Model / tokenizer revision & frequently missing & rarely pinned; mutable aliases
 prevent unique historical recovery. \\
-Engine / package / kernel versions & often missing & client family may be known;
-exact versions and kernels usually not. \\
+Engine build / package / kernel versions & often missing & the client family is
+recorded (a deployment fact); its build and kernels usually are not. \\
 Batching, cache, topology, hardware & usually missing historically & measure
 robustness rather than promise exact replay. \\
 Harness era & tagged or proxy-only & tagged releases containerizable; migrated

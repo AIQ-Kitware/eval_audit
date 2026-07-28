@@ -32,8 +32,10 @@ appends an \texttt{<|endoftext|>} token to the prompt under vLLM's default
 which HELM never recorded. Serving the append-free tokenizer and forwarding
 \texttt{add\_special\_tokens=false} restores prompt conditioning. This is the
 paradigm case: an apparent flat irreproducibility was a single unrecorded
-request-time flag --- an execution-instrument mismatch (Table~\ref{tab:identifiability},
-row ``tokenizer special-token behavior''), fully recoverable.
+request-time flag. The coordinate that differs is the deployment --- the prompt
+tokens themselves (Table~\ref{tab:identifiability}, row ``tokenizer
+special-token behavior'') --- while the engine default that supplied it sits in
+the instrument (\S\ref{sec:model}); fully recoverable either way.
 
 \paragraph{(b) A chat-template version dependency (confirmed).} HELM always calls
 \texttt{apply\_chat\_template(\ldots, add\_generation\_prompt=True)}, but that flag

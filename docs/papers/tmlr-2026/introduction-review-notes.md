@@ -3,7 +3,8 @@
 `introduction.tex` is owned by Edward. Nothing here has been applied. Each item
 states the problem, the proposed text, and what happens if it is not done.
 
-Last updated: 2026-07-27. Reflects the intro at commit `6cf60125`.
+Last updated: 2026-07-28. Reflects the intro at commit `6cf60125`; items 6--8
+follow the §3.1 sharpening.
 
 ---
 
@@ -110,6 +111,87 @@ If you want the intro airtight, narrow the claim from *fair comparisons* to
 paper actually supports.
 
 **If not done:** low risk. §8 covers it, and the objection is narrow.
+
+---
+
+## 6. "deployment" is used for what §3.1 now calls the instrument — HIGH
+
+**Problem.** §3.1 was sharpened (2026-07-28) so each coordinate is defined by the
+role it plays, and the deployment/instrument boundary is now explicit:
+
+- **deployment** — *what fixes the function to be computed*: weights, model and
+  tokenizer revision, chat template, load precision, quantization, and the client
+  or engine **family**.
+- **execution instrument** — *what fixes how that function is numerically
+  realized*: harness version, the engine's **build and kernels**, package
+  versions, hardware, device topology, batching and caching.
+
+The intro uses "deployment" for the union of both. Line 8 lists "serving backend,
+software dependencies, numerical precision, batching behavior, hardware and
+runtime configuration" and then says these "are **deployment properties** rather
+than conventional benchmark parameters." Under §3.1, four of those six are
+instrument properties. A reader who arrives at §3.1 with the intro's sense of the
+word has to unlearn it at exactly the point the paper is drawing its central
+distinction.
+
+**Proposed (line 8, one phrase):**
+
+> Many of these factors are difficult to recover because they are
+> **execution properties** rather than conventional benchmark parameters…
+
+"Execution properties" is neutral between the two coordinates and needs no
+forward reference. If you would rather name the split in the intro, the
+alternative is "…because they are properties of the **deployment and the
+execution instrument** rather than of the benchmark recipe" — but that spends a
+forward reference on machinery §3.1 defines properly two pages later.
+
+**If not done:** the paper's most-used technical term means two different things
+in §1 and §3, and the §3.1 boundary paragraph reads as a correction of the intro
+rather than as a definition.
+
+---
+
+## 7. "execution environment" vs. "execution instrument" — MEDIUM
+
+**Problem.** Line 12 lists the four places a discrepancy can be explained:
+"differences in the recorded recipe, model deployment, **execution environment**,
+or interpretation of the resulting artifacts." That is exactly §3.4's four
+controllable coordinates, in §3.4's order — but the third is named
+*execution environment* here and *execution instrument* everywhere else
+(§3.1, §3.4, §5, §7, Table 1). The alignment is close enough that the reader will
+assume the terms are the same thing and then wonder why the paper renamed it.
+
+**Proposed:** change "execution environment" to "execution instrument" on line 12.
+One word, and it turns a near-miss into the forward reference it clearly wants to
+be.
+
+**Related, same line:** "model deployment" here vs. "deployment" as the §3.1
+coordinate name — harmless, since the modifier reads as descriptive.
+
+**If not done:** a reader tracking the four-way decomposition sees five names for
+four things.
+
+---
+
+## 8. Contribution 2's localization list crosses the coordinate boundaries — LOW
+
+**Problem.** Line 20 says failures can be localized to "prompts and adaptation,
+model deployment, tokenizer and chat-template behavior, numerical configuration,
+serving infrastructure, or artifact interpretation." Under §3.1, items 2–4 are
+all the *deployment* coordinate (tokenizer and chat template and precision are
+deployment members), and "serving infrastructure" straddles the deployment/
+instrument line the §3.1 boundary paragraph now draws through the engine.
+
+This is the least urgent of the three. The list reads as an informal enumeration
+of what the tooling can separate, not as a claim about the taxonomy, and it
+predates the coordinates.
+
+**Proposed:** leave it, or align it exactly with §3.4's six causes if you want §1
+and §3 to be readable as the same scheme. Not worth a forward reference on its
+own.
+
+**If not done:** no defect a reviewer would name; a careful reader may read the
+list as a competing decomposition.
 
 ---
 

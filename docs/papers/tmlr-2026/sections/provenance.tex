@@ -27,7 +27,8 @@ We scope that claim deliberately. Of the parameters in
 Table~\ref{tab:identifiability} that are not already identifiable, these three
 address the deployment coordinate --- dtype, tokenizer behavior, chat
 template, revision --- and leave the instrument coordinate untouched: engine
-and kernel versions, batching, cache, device topology, hardware, and harness era.
+build and kernel versions, batching, cache, device topology, hardware, and
+harness era.
 Those are precisely the parameters that make a hosted endpoint nondeterministic
 even at temperature zero (\S\ref{sec:related}), and no three data fields can pin
 them; they require the container digest and engine record that the checklist below

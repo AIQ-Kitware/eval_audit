@@ -76,7 +76,8 @@ harness's own dependency versions change the recorded instances. Because the
 modern runner pins a recent HELM and imports module paths that do not exist in
 older releases, it cannot replay these runs at all.
 
-\textsc{EvalAudit} freezes the instrument by era: each era gets a CPU-only
+\textsc{EvalAudit} freezes the harness half of the execution instrument
+(\S\ref{sec:model}) by era: each era gets a CPU-only
 container whose HELM harness is checked out at that era's release commit, with
 era Python and era dependency pins, while model inference stays out-of-process on
 a modern serving lease. One manifest maps to one era maps to one image maps to one
@@ -84,8 +85,10 @@ measurement instrument, enforced at manifest time and guarded by an
 image$\leftrightarrow$era label check. A standalone shim provides a
 flag-compatible replay CLI plus a backported serving client, so the era image
 depends only on era HELM. This isolates the scoring code as a controlled
-variable, separable from the model --- a prerequisite for treating a historical
-disagreement as evidence about the execution instrument rather than noise.
+variable, separable both from the model and from the serving half of the
+instrument, which stays modern and is varied independently --- a prerequisite for
+treating a historical disagreement as evidence about the execution instrument
+rather than noise.
 
 \subsection{Layered differential comparison}
 \label{sec:diff}
