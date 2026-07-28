@@ -369,11 +369,20 @@ series = {ICCSIE '24}
 }
 
 % --- benchmark validity and judges ---
-% !! WITHDRAWN BY ITS AUTHORS. arXiv 2507.00460 was withdrawn after review,
-% !! citing substantial overlap with prior work. It is currently cited in
-% !! sections/related_work.tex ("Validity is a different axis"). Either replace
-% !! it with the prior work it overlapped, or drop the claim -- do not ship a
-% !! citation to a withdrawn preprint.
+@inproceedings{sainz2023contamination,
+  title     = {{NLP} Evaluation in Trouble: On the Need to Measure {LLM} Data
+               Contamination for each Benchmark},
+  author    = {Sainz, Oscar and Campos, Jon Ander and Garc{\'i}a-Ferrero, Iker and
+               Etxaniz, Julen and Lopez de Lacalle, Oier and Agirre, Eneko},
+  booktitle = {Findings of the Association for Computational Linguistics: EMNLP 2023},
+  year      = {2023},
+  note      = {arXiv:2310.18018}
+}
+
+% !! WITHDRAWN BY ITS AUTHORS, and no longer cited by any section. arXiv
+% !! 2507.00460 was withdrawn after review, citing substantial overlap with
+% !! prior work; sainz2023contamination replaced it in the validity block.
+% !! Do not reinstate.
 @misc{pitfalls2025open,
   title  = {Pitfalls of Evaluating Language Models with Open Benchmarks},
   author = {Hasan, Md. Najib and Sibat, Md Mahadi Hassan and
