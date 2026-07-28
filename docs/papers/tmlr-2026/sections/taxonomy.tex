@@ -55,8 +55,13 @@ Identifiability in the sense fixed above --- equivalent results, within a stated
 A coordinate can fail to be recoverable in two ways, and the difference decides what can be done about it. It may be structurally unrecoverable, in that no record of this form could pin it down, or merely practically unrecoverable, in that the particular record which happens to survive is insufficient \citep{raue2009identifiability}. Our classic-model result (\S\ref{sec:classic}) is the second kind, and that is what makes the provenance recommendation of \S\ref{sec:provenance} actionable: a practically non-identifiable parameter is one a richer record would have recovered, whereas a structurally non-identifiable one would leave a recording standard nothing to fix. We therefore state that result as non-identifiability relative to named evidence rather than as a claim of irreproducibility.
 
 \begin{table}[t]
-\centering\small
-\begin{tabularx}{\linewidth}{@{}p{0.26\linewidth}p{0.20\linewidth}Y@{}}
+\caption{Per-parameter identifiability in the studied cases. The status is per
+coordinate, not per run; \S\ref{sec:cases} assigns each case's disagreement to a
+coordinate and to its status here.}
+\label{tab:identifiability}
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}Z{0.80}Z{0.55}Z{1.65}@{}}
 \toprule
 \textbf{Parameter} & \textbf{Typical status} & \textbf{Basis / limitation} \\
 \midrule
@@ -80,8 +85,5 @@ Harness era & tagged or proxy-only & tagged releases containerizable; migrated
 paths may admit only declared proxy instruments. \\
 \bottomrule
 \end{tabularx}
-\caption{Per-parameter identifiability in the studied cases. The status is per
-coordinate, not per run; \S\ref{sec:cases} assigns each case's disagreement to a
-coordinate and to its status here.}
-\label{tab:identifiability}
+\end{center}
 \end{table}

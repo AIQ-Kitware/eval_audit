@@ -71,7 +71,16 @@ OLMoE outputs, whereas the dense OLMo-2 samples matched most closely under vLLM
 float32.
 
 \begin{table}[t]
-\centering\small
+\caption{Deployment-match \emph{discovery} probe ($n\approx 12$ \code{ifeval}
+instances, scored against sampled public completions; winning cells additionally
+use a probe-only \code{add\_special\_tokens=false} knob). Float32 is the
+highest-agreement tested precision. \textbf{This is configuration discovery, not a
+completed reproduction}: matching a small oracle sample does not uniquely identify
+the producing deployment, and the confirmation step of \S\ref{sec:olmo-confirm}
+has not been run. The deductive dtype argument (text) is the stronger leg.}
+\label{tab:fp32}
+\begin{center}
+\small
 \begin{tabular}{lll}
 \toprule
 \textbf{Model} & \textbf{HF best} & \textbf{vLLM best} \\
@@ -82,14 +91,7 @@ OLMo-2-13B (dense)  & fp32 partial 0.324 (quasi 0.0)       & \textbf{fp32 match 
 OLMo-2-32B (dense)  & fp16 partial 0.234 (quasi 0.0)       & \textbf{fp32-tp2 match 0.961} \\
 \bottomrule
 \end{tabular}
-\caption{Deployment-match \emph{discovery} probe ($n\approx 12$ \code{ifeval}
-instances, scored against sampled public completions; winning cells additionally
-use a probe-only \code{add\_special\_tokens=false} knob). Float32 is the
-highest-agreement tested precision. \textbf{This is configuration discovery, not a
-completed reproduction}: matching a small oracle sample does not uniquely identify
-the producing deployment, and the confirmation step of \S\ref{sec:olmo-confirm}
-has not been run. The deductive dtype argument (text) is the stronger leg.}
-\label{tab:fp32}
+\end{center}
 \end{table}
 
 \paragraph{(d) An unresolved dense-OLMo-2 Hugging Face divergence.} Rigor demanded
