@@ -24,7 +24,7 @@ and the error will not surface as a build warning.
 **Why it is not fixed.** The rename requires editing `\ref{sec:taxonomy}` inside
 `related_work.tex:13`, which is frozen.
 
-**Exact change, if §2 is ever unfrozen.** Rename in `framework.tex`:
+**Exact change, if §2 is ever unfrozen.** Rename in `taxonomy.tex`:
 
 | Label | Currently on | Should be |
 |---|---|---|
@@ -36,7 +36,7 @@ Then update all five references:
 - `sections/cases.tex:4` — `sec:model` → `sec:taxonomy`
 - `sections/system.tex:4` — `sec:model` → `sec:taxonomy`
 - `sections/cases.tex:211` — `sec:taxonomy` → `sec:causes`
-- `sections/framework.tex:10` — `sec:taxonomy` → `sec:causes` (internal, in the
+- `sections/taxonomy.tex:10` — `sec:taxonomy` → `sec:causes` (internal, in the
   "taxonomy these coordinates imply" paragraph)
 - **`sections/related_work.tex:13`** — `sec:taxonomy` → `sec:causes` (the blocker;
   "That attribution is the second axis of our taxonomy (§…)")

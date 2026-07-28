@@ -13,7 +13,7 @@ references.bib        bibliography (entries marked "% VERIFY" need checking)
 sections/
   introduction.tex    reframing + thesis + contributions
   related_work.tex    HELM, EEE (detection→attribution), serving nondeterminism, provenance
-  framework.tex       F=(R,D,I,A,U); six-cause taxonomy; three reproduction targets; per-parameter identifiability
+  taxonomy.tex        five coordinates; eligibility gate; two axes (three reproduction targets, six causes); per-parameter identifiability
   system.tex          EvalAudit: from-spec replay, substrate sweep, era containers, layered diff
   cases.tex           OLMo (recoverable) · RedPajama (proxy-era) · GPT-J/NeoX/OPT (non-identifiable) · GPT-OSS (candidate)
   provenance.tex      the 3-field standard + release checklist
@@ -49,7 +49,7 @@ these are the exhaustive list of gaps. The load-bearing ones:
 | Cross-machine baseline | §7 pending | scoped, not run |
 | Artifact DOI / git bundle | §8 scaffold | at camera-ready |
 
-Everything else (framework, system, the two *confirmed* OLMo attributions, the
+Everything else (the taxonomy, system, the two *confirmed* OLMo attributions, the
 G13 non-identifiability result, the provenance standard, the appendices) is drawn
 from completed work in the master reference.
 
