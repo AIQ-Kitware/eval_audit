@@ -29,16 +29,16 @@ first hypothesis --- fp16 numerical instability --- was \emph{refuted} by a
 deployment sweep. The cause was a tokenizer issue: \code{OLMo-7B-hf}'s tokenizer
 appends an \code{<|endoftext|>} token to the prompt under vLLM's default
 \code{add\_special\_tokens=True}, which the original deployment did not do and
-which \helm never recorded. Serving the append-free tokenizer and forwarding
+which HELM never recorded. Serving the append-free tokenizer and forwarding
 \code{add\_special\_tokens=false} restores prompt conditioning. This is the
 paradigm case: an apparent flat irreproducibility was a single unrecorded
 request-time flag --- an execution-instrument mismatch (Table~\ref{tab:identifiability},
 row ``tokenizer special-token behavior''), fully recoverable.
 
-\paragraph{(b) A chat-template version dependency (confirmed).} \helm always calls
+\paragraph{(b) A chat-template version dependency (confirmed).} HELM always calls
 \code{apply\_chat\_template(\ldots, add\_generation\_prompt=True)}, but that flag
 is a no-op unless the chat template \emph{implements} it. The OLMoE template
-shipped with \helm's older \code{transformers} ignored the flag --- so the model
+shipped with HELM's older \code{transformers} ignored the flag --- so the model
 was fed the prompt \emph{without} the trailing assistant-turn marker --- whereas a
 modern \code{transformers}/vLLM ships an updated template that honors it and
 \emph{appends} the marker, changing the prompt and the output. Rendering with
@@ -49,7 +49,7 @@ depends on the (unrecorded) \code{transformers} version --- a clean example of a
 software-version dependency hiding inside a recipe.
 
 \paragraph{(c) Load precision: a discovery, with a deductive leg (not yet
-confirmed).} \helm's \code{HuggingFaceClient} loads a model with only the kwargs
+confirmed).} HELM's \code{HuggingFaceClient} loads a model with only the kwargs
 the deployment config supplies; for the OLMo instruct deployments that is
 \code{device\_map=auto} and \emph{no} \code{torch\_dtype}. Under every
 \code{transformers} 4.x, an unpinned load defaults to \code{float32}, ignoring the
@@ -133,7 +133,7 @@ protocol separates discovery from held-out confirmation:
   \item determine whether the win requires the probe-only
         \code{add\_special\_tokens=false} behavior, and if so implement it through
         the ordinary tokenizer/client path;
-  \item execute the exact public \file{run\_spec.json} through the normal \helm
+  \item execute the exact public \file{run\_spec.json} through the normal HELM
         path (not the probe), generating standard artifacts;
   \item compare through the standard pair-report pipeline;
   \item evaluate on \emph{held-out} instances and, preferably, a second benchmark;
@@ -195,12 +195,12 @@ The original-paper classic models
 Era-replaying them
 fails the shim's class preflight: their \file{run\_spec.json} names
 \code{helm.benchmark.basic\_metrics.BasicMetric}, a class path that resolves in
-\emph{no} released \helm version. An investigation over a blob-less clone of the
-\helm history establishes that the stored path is a once-migrated hybrid --- a bulk
+\emph{no} released HELM version. An investigation over a blob-less clone of the
+HELM history establishes that the stored path is a once-migrated hybrid --- a bulk
 \code{benchmark.}$\to$\code{helm.benchmark.} prefix rewrite (applied at the
 \code{src/helm/} rename) of a run-spec whose metric class was still \emph{flat} at
 production time. Reversing the naive migration triangulates the producing code to
-an ${\sim}$4-week window of \emph{unreleased pre-v0.1.0} \helm (after scenarios
+an ${\sim}$4-week window of \emph{unreleased pre-v0.1.0} HELM (after scenarios
 were nested but before metrics were). The class-path \emph{shape} (flat vs.\
 subpackage) is thus a sharper origin fingerprint than release dates.
 

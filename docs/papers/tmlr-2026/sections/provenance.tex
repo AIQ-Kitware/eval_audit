@@ -3,8 +3,8 @@
 
 The clearest actionable output of this study is a recommendation to the community:
 a benchmark harness should record the \emph{execution substrate}, not just the
-recipe and the model name. Our investigation of \helm's own deployment metadata
-quantifies the gap: of 148 \code{HuggingFaceClient} deployments in \helm's
+recipe and the model name. Our investigation of HELM's own deployment metadata
+quantifies the gap: of 148 \code{HuggingFaceClient} deployments in HELM's
 \code{model\_deployments.yaml}, only 19 pin \code{torch\_dtype} (all
 \code{bfloat16}) and only 7 pin a model \code{revision}. The parameters that most
 change a greedy output are precisely the ones least often recorded
@@ -37,7 +37,7 @@ What we claim is that these three fields are the highest-leverage additions
 available at negligible cost, not that recording them makes a run reproducible.
 
 \paragraph{Record them out of the identity string.} These fields must live in a
-machine-readable provenance block (\helm's existing recipe-facts slot suffices ---
+machine-readable provenance block (HELM's existing recipe-facts slot suffices ---
 no schema change), \emph{not} in the run-spec identity or the
 \code{model\_deployment} name. A revision SHA in the pairing key would break
 official$\leftrightarrow$local matching, whereas a SHA in the provenance block is

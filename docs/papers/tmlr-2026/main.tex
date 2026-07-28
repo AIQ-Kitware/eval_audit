@@ -43,7 +43,6 @@
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \newcommand{\eee}{\textit{Every Eval Ever}\xspace}
 \newcommand{\eeeshort}{\textsc{eee}\xspace}
-\newcommand{\helm}{\textsc{helm}\xspace}
 \newcommand{\code}[1]{\texttt{#1}}
 \newcommand{\file}[1]{\texttt{#1}}
 \newcommand{\finding}[1]{\par\smallskip\noindent\textbf{Finding.}~\emph{#1}\par\smallskip}
@@ -71,11 +70,11 @@ Attribution and Identifiability in the Reproduction of Open-Weight LLM Evaluatio
 \maketitle
 
 \begin{abstract}
-Public large-language-model benchmarks such as \helm publish, for each
+Public large-language-model benchmarks such as HELM publish, for each
 (scenario, model) pair, the prompts sent, the completions returned, and the
 computed metrics. It is tempting to treat these artifacts as a complete
 experimental record and to ask, simply, whether a locally re-run evaluation
-reproduces the published number. We argue --- and demonstrate on the \helm
+reproduces the published number. We argue --- and demonstrate on the HELM
 corpus --- that this framing is ill-posed: a benchmark \emph{recipe} (scenario,
 prompt construction, decoding, scorer) does not identify the \emph{execution
 instrument} that produced a score. The surviving record routinely omits the

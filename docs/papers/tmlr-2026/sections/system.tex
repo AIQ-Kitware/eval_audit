@@ -2,7 +2,7 @@
 \label{sec:system}
 
 \textsc{EvalAudit} operationalizes the measurement model of \S\ref{sec:model}. It
-is an evaluation-auditing and experimental-control system rather than a thin \helm
+is an evaluation-auditing and experimental-control system rather than a thin HELM
 wrapper: it replays recipes exactly, reconstructs and searches the execution
 substrate, freezes the scoring instrument by era, and reports disagreement at the
 earliest layer it can localize. We describe the four load-bearing components; a
@@ -12,7 +12,7 @@ each component depends on.
 \subsection{Exact recipe replay, not recipe reconstruction}
 \label{sec:fromspec}
 
-Public \helm runs do not record the CLI string that produced them, but they do
+Public HELM runs do not record the CLI string that produced them, but they do
 ship a fully resolved \file{run\_spec.json}: the complete adapter spec, scenario
 spec, metric specs, and annotators, with every default already materialized. The
 prior approach --- taken by essentially every earlier reproduction, including our
@@ -30,7 +30,7 @@ asymmetrically because they demand opposite treatment: a scenario/metric
 preflight (an environment mismatch, surfaced as such), whereas a dropped
 \emph{field} is silent (the codec fills defaults). We guard the silent mode with a
 serialize$\to$deserialize$\to$serialize round-trip test that exploits a
-writer/serializer asymmetry: because \helm writes the spec dropping only
+writer/serializer asymmetry: because HELM writes the spec dropping only
 \code{None} values, any key missing after a round trip is an unambiguous silent
 drop.
 
@@ -73,17 +73,17 @@ A large fraction of any historical corpus was produced by an \emph{older harness
 the measurement instrument itself has versions. Concretely, the exact
 \code{pandas} version flips per-instance row ordering on some scenarios, so the
 harness's own dependency versions change the recorded instances. Because the
-modern runner pins a recent \helm and imports module paths that do not exist in
+modern runner pins a recent HELM and imports module paths that do not exist in
 older releases, it cannot replay these runs at all.
 
 \textsc{EvalAudit} freezes the instrument by era: each era gets a CPU-only
-container whose \helm harness is checked out at that era's release commit, with
+container whose HELM harness is checked out at that era's release commit, with
 era Python and era dependency pins, while model inference stays out-of-process on
 a modern serving lease. One manifest maps to one era maps to one image maps to one
 measurement instrument, enforced at manifest time and guarded by an
 image$\leftrightarrow$era label check. A standalone shim provides a
 flag-compatible replay CLI plus a backported serving client, so the era image
-depends only on era \helm. This isolates the scoring code as a controlled
+depends only on era HELM. This isolates the scoring code as a controlled
 variable, separable from the model --- a prerequisite for treating a historical
 disagreement as evidence about the execution instrument rather than noise.
 

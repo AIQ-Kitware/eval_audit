@@ -2,7 +2,7 @@
 \label{sec:conclusion}
 
 A public benchmark recipe specifies what to compute, not the experiment that
-computed it. Treating open-weight \helm reproduction as a layered
+computed it. Treating open-weight HELM reproduction as a layered
 system-identification problem --- rather than a pass/fail rerun --- lets us do
 three things the pass/fail framing cannot: attribute concrete disagreements to
 named, unrecorded execution parameters (a tokenizer append, a chat-template flag,
@@ -24,11 +24,11 @@ confirmation's outcome. If the community adopts even the three-field provenance
 recommendation, the deployment-side disagreements this paper had to
 reverse-engineer become, for future evaluations, simply readable off the record.
 
-None of this is specific to \helm. Any suite that identifies an evaluation by a
+None of this is specific to HELM. Any suite that identifies an evaluation by a
 short specification --- a task name and its configuration, as in
 \citet{eval-harness} and \citet{srivastava2023bigbench} --- records the recipe
 while leaving the instrument that executed it undescribed, and so inherits the
-same gap between what was written down and what was run. \helm is distinguished
+same gap between what was written down and what was run. HELM is distinguished
 not by having the problem but by having published enough per-instance evidence
 to make it measurable: a suite that records less does not thereby have a smaller
 gap, only less means of seeing it.

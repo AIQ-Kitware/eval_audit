@@ -1,13 +1,13 @@
-\section{The \helm Gotchas Catalogue (condensed)}
+\section{The HELM Gotchas Catalogue (condensed)}
 \label{app:gotchas}
 
-A reviewer-anticipating ledger of undocumented or hard-to-see \helm behaviors
+A reviewer-anticipating ledger of undocumented or hard-to-see HELM behaviors
 encountered while building the audit. Each is a concrete pitfall a reproduction
 paper's appendix should address; we list the load-bearing ones.
 
 \begin{description}[leftmargin=1em,itemsep=2pt]
-  \item[G1. \file{run\_spec.json} schema evolves silently.] Newer \helm populates
-    \code{adapter\_spec} fields older \helm omitted, so byte-for-byte hashing yields
+  \item[G1. \file{run\_spec.json} schema evolves silently.] Newer HELM populates
+    \code{adapter\_spec} fields older HELM omitted, so byte-for-byte hashing yields
     $0/N$ matches across releases even for identical recipes. Workaround: a
     schema-collapsed \emph{canonical recipe hash}.
   \item[G5. \code{instructions} differ across releases on identical scenarios.]
@@ -18,13 +18,13 @@ paper's appendix should address; we list the load-bearing ones.
     \code{transformers.generate()} and vLLM differ (kernels, batching,
     stop-sequence handling, EOS/pad) --- a few-percent per-instance flip rate on
     multiple-choice, tens of percent on long-form.
-  \item[G10. Public-track \code{suite\_version} is not the \helm release version.]
+  \item[G10. Public-track \code{suite\_version} is not the HELM release version.]
     The same spec can appear identically in \code{v0.2.4} and \code{v0.3.0}; era
     replay keys the instrument on \code{(public\_track, suite\_version)}.
-  \item[G13. Classic \code{class\_name} paths resolve in \emph{no} \helm version.]
+  \item[G13. Classic \code{class\_name} paths resolve in \emph{no} HELM version.]
     \code{helm.benchmark.basic\_metrics.BasicMetric} is a once-migrated hybrid
     (a naive \code{benchmark.}$\to$\code{helm.benchmark.} rewrite of a still-flat
-    production path), pinning the producing code to unreleased pre-v0.1.0 \helm.
+    production path), pinning the producing code to unreleased pre-v0.1.0 HELM.
     Class-path \emph{shape} is the origin fingerprint (\S\ref{sec:classic}).
 \end{description}
 \scaffold{Expand to the full G1--G13 table for the camera-ready, with a
@@ -33,7 +33,7 @@ one-line repro pointer for each.}
 \section{The Unrecorded-Parameter Taxonomy}
 \label{app:unrecorded}
 
-\helm serializes the recipe and the model name but almost nothing about \emph{how}
+HELM serializes the recipe and the model name but almost nothing about \emph{how}
 the numbers were computed. Parameters ranked by effect on a greedy (temperature-0)
 output:
 
