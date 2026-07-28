@@ -10,18 +10,31 @@ quantifies the gap: of 148 \code{HuggingFaceClient} deployments in \helm's
 change a greedy output are precisely the ones least often recorded
 (Appendix~\ref{app:unrecorded}).
 
-\paragraph{Three fields close most of the gap.} The high-leverage observation is
-that many parameters collapse into one:
+\paragraph{Three fields close most of the deployment-side gap.} The high-leverage
+observation is that many parameters collapse into one:
 \begin{quote}
 \code{model\_revision} $+$ \code{torch\_dtype} $+$ \code{transformers\_version}
 \end{quote}
-transitively close the majority of the identifiability gap. The revision fixes the
-tokenizer, chat template, and generation config \emph{as of then} (they all live
-inside the model repository); the \code{transformers} version fixes both the
-precision default and whether the chat template honors
+The revision fixes the tokenizer, chat template, and generation config \emph{as of
+then} (they all live inside the model repository); the \code{transformers} version
+fixes both the precision default and whether the chat template honors
 \code{add\_generation\_prompt}; the dtype pins the load precision directly. Each of
-the confirmed OLMo attributions (\S\ref{sec:olmo}) reduces to one of these three
-fields.
+the OLMo findings (\S\ref{sec:olmo}) reduces to one of these three fields --- (a)
+to the revision and (b) to the \code{transformers} version, both confirmed, and
+(c) to the dtype, which remains a discovery.
+
+We scope that claim deliberately. Of the parameters in
+Table~\ref{tab:identifiability} that are not already identifiable, these three
+address the deployment coordinate $D$ --- dtype, tokenizer behavior, chat
+template, revision --- and leave the instrument coordinate $I$ untouched: engine
+and kernel versions, batching, cache, device topology, hardware, and harness era.
+Those are precisely the parameters that make a hosted endpoint nondeterministic
+even at temperature zero (\S\ref{sec:related}), and no three data fields can pin
+them; they require the container digest and engine record that the checklist below
+asks for separately. The evidence for the three-field claim is likewise bounded: it
+is the mapping above, on one model family, two of whose three legs are confirmed.
+What we claim is that these three fields are the highest-leverage additions
+available at negligible cost, not that recording them makes a run reproducible.
 
 \paragraph{Record them out of the identity string.} These fields must live in a
 machine-readable provenance block (\helm's existing recipe-facts slot suffices ---
