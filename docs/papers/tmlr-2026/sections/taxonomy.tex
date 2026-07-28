@@ -60,7 +60,7 @@ Once the target is fixed and the attempt executes, an observed disagreement admi
   \item \textbf{Recipe mismatch} --- the recorded recipe differs: prompt construction, in-context examples, decoding, or scorer.
   \item \textbf{Deployment mismatch} --- the deployment differs: weights, model or tokenizer revision, chat template, load precision, quantization, or the client, endpoint, and engine family, as when a hosted API is replaced by a local one, or in-process \texttt{transformers} by vLLM.
   \item \textbf{Execution-instrument mismatch} --- the instrument differs: harness or package versions, the engine build, attention kernel, device placement, hardware, or batching and caching behavior.
-  \item \textbf{Artifact-interpretation mismatch} --- the interpretation differs: row reordering, schema migration, or carried-forward outputs.
+  \item \textbf{Artifact-interpretation mismatch} --- the interpretation differs: row reordering, schema migration, or carried-forward outputs. Measured corpus-wide in \S\ref{sec:coverage}, where it is the difference between a run pairing that finds comparable runs and one that finds none.
   \item \textbf{Residual disagreement under controlled equivalence} --- every controllable coordinate is matched and a gap remains. This is the only category analogous to conventional repeatability failure.
   \item \textbf{Historically non-identifiable reproduction} --- the surviving evidence does not uniquely specify what execution should count as faithful. Qualitatively different from (5): not ``it failed to repeat'' but ``what would count as a faithful execution is underdetermined.''
 \end{enumerate}

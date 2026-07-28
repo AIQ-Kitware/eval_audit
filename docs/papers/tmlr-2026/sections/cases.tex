@@ -7,7 +7,75 @@ named unrecorded parameters (\S\ref{sec:olmo}). RedPajama-3B demonstrates
 end-to-end execution under \emph{declared proxy} historical instruments
 (\S\ref{sec:redpajama}). The original-paper classic models are the
 \emph{non-identifiable} case: their producing instrument cannot be recovered from
-surviving evidence (\S\ref{sec:classic}).
+surviving evidence (\S\ref{sec:classic}). They are preceded by a corpus-wide
+measurement of the coordinate every one of them depends on:
+what it costs to decide that two runs are the same run at all (\S\ref{sec:coverage}).
+
+\subsection{What pairing costs: measuring the artifact interpretation}
+\label{sec:coverage}
+
+Before a disagreement can be attributed, an official row and a local row must be
+declared to be the same run, and that declaration is an artifact-interpretation
+decision rather than a fact read off the record. We therefore never report a
+single coverage number. Each official row in scope is joined to local rows at
+three nested strictnesses. \emph{Recipe-identical} is agreement on HELM's own
+\texttt{run\_spec\_hash}. \emph{Recipe-canonical} is agreement after we
+additionally collapse the fields newer HELM populates and older HELM omitted
+entirely --- \texttt{chain\_of\_thought\_prefix} and \texttt{\_suffix},
+\texttt{global\_suffix}, \texttt{num\_trials}, \texttt{model\_deployment},
+\texttt{metric\_specs}, \texttt{groups}, \texttt{annotators}. \emph{Logical} is
+agreement on scenario, model, and adaptation, ignoring \texttt{suite\_version}.
+The gaps between the three are the measurement: identical-to-canonical is
+harness-version churn inside the record, and canonical-to-logical is genuine
+recipe drift.
+
+\begin{table}[t]
+\caption{Pairing an official corpus with its local replays at three nested
+strictnesses. The identical column counts agreement on HELM's own run-spec hash;
+canonical collapses the schema-evolving fields; logical ignores suite version.
+Official rows is the number in scope, not the number attempted.}
+\label{tab:coverage}
+\begin{center}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Experiment} & \textbf{Official rows} & \textbf{Logical} & \textbf{Canonical} & \textbf{Identical} \\
+\midrule
+Qwen (modern harness)          & 4723 & 775 & 159 & 0 \\
+OLMo, six models               &  182 & 149 &  27 & 0 \\
+\texttt{gpt-oss-20b} from spec &   11 &   4 &   2 & 0 \\
+RedPajama, era \texttt{v0.2.4} &   74 &   2 &   2 & \textbf{2} \\
+RedPajama, era \texttt{v0.3.0} &   74 &   2 &   2 & \textbf{2} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
+
+\par\smallskip\noindent\textbf{Finding.}~\emph{Under a modern harness, byte-identical
+recipe agreement is unattainable --- zero in every experiment, including those
+whose recipes did not drift at all, because the schema evolved underneath the
+hash. It is nonzero in exactly one place: the era-pinned replays, where both
+reproduced runs match on HELM's own hash. Byte-identical recipe agreement is not
+something a careful modern replay recovers; it is something only an instrument
+pinned to the producing era recovers.}\par\smallskip
+
+This is the artifact-interpretation coordinate measured rather than assumed, and
+it is a precondition for everything that follows: a study that paired on
+\texttt{run\_spec\_hash} would have found no comparable runs anywhere in this
+corpus and concluded, wrongly, that the recipes had drifted. The identical column
+is also the sharpest single argument for era-pinned instruments (\S\ref{sec:eras}),
+which recover on two runs what no amount of care recovers on 4723.
+
+\paragraph{Scope and freshness.} These counts are read from the derived coverage
+layer of the experiment stores, not recomputed for this paper. The RedPajama era
+stores retain their raw run artifacts; the OLMo and \texttt{gpt-oss-20b} stores
+retain only derived layers, so their rows must be regenerated from a re-run
+before the camera-ready rather than re-rendered
+{\color{orange}\textsf{\small[\textsc{pending}: regenerate the coverage funnel for
+the OLMo and GPT-OSS stores from preserved raw runs]}}. The end-to-end
+\texttt{phi-2} fixtures are excluded: they are tutorial-scope and pair against no
+official rows. The Qwen denominator is the full in-scope corpus for that model
+family, so its logical column is a coverage figure and not a success rate.
 
 \subsection{OLMo: attributing modern disagreements to unrecorded parameters}
 \label{sec:olmo}

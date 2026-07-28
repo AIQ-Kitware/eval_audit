@@ -44,13 +44,14 @@ Structural check (run in this dir):
 
 ```
 grep -rc -F 'fcolorbox{orange}{yellow!12}' sections/*.tex   # 6 scaffold blocks
-grep -ro -F 'textsc{pending}' sections/*.tex main.tex | wc -l   # 8 pending markers
+grep -ro -F 'textsc{pending}' sections/*.tex main.tex | wc -l   # 9 pending markers
 ```
 
 These are the exhaustive list of gaps. The load-bearing ones:
 
 | Gap | Marker | Status |
 |---|---|---|
+| Coverage-funnel counts (Table 2) | §5.1 pending | numbers read from derived store layers; OLMo/GPT-OSS rows need **regeneration from preserved raw runs** |
 | Ordinary-path OLMo confirmation (held-out) | §5.1.1 scaffold + pending | experiment designed, **not run** |
 | Regenerated OLMo aggregate heatmap | §5.1 scaffold | store stale → **re-run** |
 | GPT-OSS promoted to a result | §5.1.3 scaffold | candidate; run artifacts pruned → **re-run + preserve** |
