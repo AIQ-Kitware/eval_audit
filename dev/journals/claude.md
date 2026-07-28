@@ -4466,3 +4466,49 @@ motivated the pipeline.
 **Still open.** The numbers are read, not recomputed. If the regeneration changes
 them, the qualitative finding (0 modern, nonzero only era-pinned) is what I would
 expect to survive, but that is a prediction rather than a result.
+
+**Addendum 7 (same session).** Edward rejected the artifact-interpretation
+coordinate outright: "once everything has been scored, there should really be not
+much to interpret," and the extra paragraphs I had written to defend it were
+"more text and more confusion." He was right on both counts, and the failure mode
+is worth recording: across four turns I answered escalating confusion about a
+category by *adding explanation* rather than by asking whether the category was
+wrong. Each addition was individually defensible and the aggregate was a section
+40% longer that a stranger could not follow.
+
+**The diagnosis, once I stopped defending.** The coordinate was doing three
+unrelated jobs. Schema fields a newer harness wrote, and per-instance row
+ordering, are the *instrument* --- the harness generated the record that way,
+which is exactly Edward's point that it is drift at generation and not
+interpretation. Our own dedup, `null`->`""`, instance fallback, and key
+granularity are *audit-tool correctness*: a threat to the validity of our
+measurement, not a coordinate of the original run, so they belong in Sec. 8 and
+now do. What survives is only post-execution change to the stored artifact ---
+migrations applied to stored specs, outputs carried forward unchanged, damage in
+transit --- and that is not interpretation at all. It is the record's own history.
+Renamed to **record history**; the entry is three sentences with no system
+knowledge assumed.
+
+**A correction I had to make against myself.** Two turns earlier I had promoted
+the coverage funnel and said it gave cause (4) an outcome. Under the split it is a
+*cause (3)* result: the funnel measures harness-version churn, the harness version
+is the instrument, and the finding argues for era containers, which is an
+instrument argument. Retitled Sec. 5.1 and moved the pointer. The result stands;
+my attribution of it did not.
+
+**Design insights.** (1) When a reader keeps failing to understand a category,
+the prior should be that the category is wrong, not that the explanation is
+insufficient --- and the tell is that each new paragraph has to *defend* rather
+than *state*. Three defensive paragraphs is a design smell. (2) A useful test for
+whether something is a coordinate of the studied system: could a competent
+third party running the same study get it wrong? If the answer is "yes, and that
+would be a bug in their tooling," it is a threats-to-validity item, not a
+taxonomy category. That single question relocated four of my six examples. (3)
+The narrowed coordinate is smaller but load-bearing in a way the broad one was
+not: carried-forward officials mean "both eras agree" is one execution reported
+twice, and nothing else in the taxonomy covers that.
+
+**Left for Edward's review.** The pass is committed but unreviewed and uncompiled.
+The judge-recursion paragraph survived untouched --- it is independent of this
+change --- but it is the longest thing left in Sec. 3.1 and is the next candidate
+if the section is still too dense.
