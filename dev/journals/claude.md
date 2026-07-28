@@ -4260,3 +4260,31 @@ another document. Insight: when a fix adds a preamble dependency that the
 document did not previously have, a stale-preamble build turns a formatting fix
 into a hard error; preferring the construct that needs no new dependency is
 worth the extra verbosity in a paper whose source gets copied between hosts.
+
+**Addendum 2 (same session).** The next error was `Undefined control sequence`
+reported at `\end{tabularx}` — tabularx re-reads the body before expanding it,
+so a bad macro *inside a cell* surfaces at the environment's end, not at its
+line. The macro was `\file`, which `main.tex` has defined since long before
+this session. That is the second independent signal (after the undefined `Z`
+column type) that Edward's build is not reading this preamble. Rather than keep
+diagnosing which copy of `main.tex` a given build sees — which I cannot do
+without a compiler — Edward called it: stop using custom macros. Complied
+fully: `\code`/`\file` → `\texttt` (108 sites), `\finding`/`\pending`/
+`\scaffold` expanded at their 17 use sites, `\eee`/`\eeeshort`/`\newcolumntype{Y}`
+deleted as unused, and the two `\definecolor` shades swapped for built-in
+xcolor names so the draft markers do not depend on the preamble either. The
+source now contains no `\newcommand`, `\newcolumntype`, or `\definecolor`.
+Caught two latent bugs while expanding: the old `\scaffold` used `\;`, which is
+math-mode-only spacing, in text mode; and my expansion script initially rewrote
+a `\scaffold{...}` mention inside a *comment* in the main.tex header, which is
+a reminder that a brace-matching rewriter over .tex needs to skip comments.
+
+**Insight worth keeping.** A shared preamble is a hidden coupling between the
+document and the build environment, and it fails in a way that points at the
+wrong file: both errors this session named `taxonomy.tex` when the actual
+divergence was in `main.tex`'s reachability. For a draft that gets copied
+between hosts, Overleaf projects, and section-at-a-time compiles, writing the
+constructs out at each use site costs verbosity and buys the property that any
+single file is self-contained. That is a better trade than it looks — and the
+README now records the rule so a future agent does not "helpfully" re-factor
+the repetition back into macros.
