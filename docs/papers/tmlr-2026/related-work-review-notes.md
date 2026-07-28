@@ -5,13 +5,15 @@ problem, the exact change, and what happens if it is not done.
 
 Companion file: [`introduction-review-notes.md`](introduction-review-notes.md).
 
-Last updated: 2026-07-28. Reflects the tree at commit `4a11f89f`; items 3--4
-follow the §3 rework, which ended with **four** coordinates — recipe, deployment,
-execution instrument, residual — and moved record defects (migrations,
-carried-forward outputs, damage in transit) out of the decomposition and into the
-gate, since they are evidence failing rather than causes of a score. Neither item
-below is affected by that move; both concern the deployment/instrument boundary
-and the judge, which survived it unchanged.
+Last updated: 2026-07-28. Reflects the tree at commit `ef777bf1`. §3 now has
+**four** coordinates — recipe, deployment, execution instrument, residual — with
+record defects (migrations, carried-forward outputs, damage in transit) moved out
+of the decomposition and into the gate, since they are evidence failing rather
+than causes of a score. §3.1 was then cut back to the coordinate list plus three
+paragraphs; the engine-boundary, scorer, and judge-recursion paragraphs are gone,
+and their content is carried by the list items' role definitions or dropped. Item
+3 survives that cut and is restated against the list; a fourth item on the judge
+was withdrawn (see *Not proposed*).
 
 ---
 
@@ -69,10 +71,10 @@ does not match the phrase that sent them there.
 
 ## 3. "execution substrate" and "instrument" are both used, neither defined — MEDIUM
 
-**Problem.** §3.1 was sharpened (2026-07-28) so each coordinate carries a role
-definition, and the deployment/instrument boundary now runs *through* the serving
-engine: the engine **family** is a deployment fact (HELM records it), while that
-engine's **build, kernels, scheduler, and batching** are the instrument. §2 uses
+**Problem.** §3.1's coordinate list defines each coordinate by the role it plays,
+and the deployment/instrument boundary runs *through* the serving engine: the
+deployment item ends "…and the client or engine **family** the deployment names",
+the instrument item includes "the serving engine's **build and kernels**". §2 uses
 two umbrella terms across that boundary, neither of them defined at the point of
 use:
 
@@ -100,37 +102,8 @@ Either alone helps; the first matters more, because it is what tells a reader
 that §2's single umbrella becomes two coordinates in §3.
 
 **If not done:** §2 and §3 read as two decompositions of the same territory, and
-the engine — the one component the §3.1 boundary paragraph is written to place —
-sits inside §2's undivided "substrate" with no signal that §3 will split it.
-
----
-
-## 4. "the instrument extends to the judge" places the whole judge — MEDIUM
-
-**Problem.** `related_work.tex:17` ends "For model-graded metrics the instrument
-extends to the judge, whose own version and availability are rarely pinned." True
-of the judge's *serving*, but §3.1 now reads a model-graded metric as **nesting a
-second run inside the scorer**: the judge has a recipe (the grading prompt), a
-deployment (which model, which revision), and an instrument (how it was served,
-and whether it still is). The §2 sentence assigns all of it to the instrument.
-
-That matters for two claims downstream. §3.2's gate argument is that a withdrawn
-judge removes the nested run's *instrument* while leaving the record of what it
-produced — which is only coherent if the judge is not wholly an instrument. And
-`judge_registry.py` documents that official run specs name an annotator class but
-leave its args empty, with the judge models hard-coded per harness version: judge
-identity is a **recipe slot whose value the instrument version supplies**, the
-same shape as the chat-template flag and the unpinned dtype. Collapsing it into
-the instrument loses the third instance of the paper's central pattern.
-
-**Proposed (one clause):**
-
-> For model-graded metrics the scorer is itself a model, so the coordinates apply
-> recursively (\S\ref{sec:model}) --- the judge carries its own deployment and
-> instrument, whose version and availability are rarely pinned…
-
-**If not done:** §2 and §3.1 place the judge differently, and the recursion —
-which is what makes the target-scoped gate work — arrives in §3 unsignalled.
+the engine — the one component §3.1's two list items deliberately split — sits
+inside §2's undivided "substrate" with no signal that §3 will divide it.
 
 ---
 
@@ -139,5 +112,24 @@ which is what makes the target-scoped gate work — arrives in §3 unsignalled.
 - No content changes to §2. The pass ending at `67c2decb` — Goodman crediting, the
   execution-substrate merge, the forward/inverse differentiation, the validity
   demotion, the provenance correction, titles, and order — closed everything found.
-  Items 3--4 above are new, and arise from the §3.1 sharpening rather than from that
-  pass.
+  Item 3 above is new, and arises from §3.1's role-based coordinate list rather
+  than from that pass.
+
+- **Withdrawn: "the instrument extends to the judge" places the whole judge.**
+  Raised 2026-07-28 against `related_work.tex:17`, on the grounds that §3.1 read a
+  model-graded metric as nesting a second run inside the scorer — judge with its
+  own recipe, deployment, and instrument — so §2 assigning all of it to the
+  instrument was a mismatch. §3.1's judge paragraph was then cut deliberately, and
+  with it the recursion. Nothing in §3 now places the judge across coordinates, so
+  §2's sentence contradicts nothing and the item has no basis. What §3 still says
+  about the judge is consistent with it: the gate treats a withdrawn judge as
+  blocking procedural reproduction, and target (1) treats the judge's forward pass
+  as the one step it cannot re-execute.
+
+  Revive only if the recursion returns to §3. Two things went with the cut and are
+  recorded here so they are not lost by accident: that a judge substitution is the
+  nested-run analogue of a declared proxy era, and that official run specs name an
+  annotator class with empty args while the judge models are hard-coded per
+  harness version — making judge identity a recipe slot whose value the instrument
+  version supplies, the same shape as the chat-template flag and the unpinned
+  dtype. `eval_audit/judge_registry.py` is the source for the second.

@@ -3,8 +3,8 @@
 `introduction.tex` is owned by Edward. Nothing here has been applied. Each item
 states the problem, the proposed text, and what happens if it is not done.
 
-Last updated: 2026-07-28. Reflects the intro at commit `6cf60125`; items 6--8
-follow the §3 rework, which ended at `4a11f89f` with **four** coordinates —
+Last updated: 2026-07-28. Reflects the intro at commit `6cf60125` and §3 at
+`ef777bf1`; items 6--8 follow the §3 rework, which ended with **four** coordinates —
 recipe, deployment, execution instrument, residual — of which three are
 controllable, and **five** causes on axis 2. The former fourth coordinate
 ("artifact interpretation", briefly "record history") was retired: a defect in
@@ -121,8 +121,8 @@ paper actually supports.
 
 ## 6. "deployment" is used for what §3.1 now calls the instrument — HIGH
 
-**Problem.** §3.1 was sharpened (2026-07-28) so each coordinate is defined by the
-role it plays, and the deployment/instrument boundary is now explicit:
+**Problem.** §3.1's coordinate list defines each coordinate by the role it plays,
+and the deployment/instrument boundary is explicit in the two list items:
 
 - **deployment** — *what fixes the function to be computed*: weights, model and
   tokenizer revision, chat template, load precision, quantization, and the client
@@ -151,8 +151,8 @@ execution instrument** rather than of the benchmark recipe" — but that spends 
 forward reference on machinery §3.1 defines properly two pages later.
 
 **If not done:** the paper's most-used technical term means two different things
-in §1 and §3, and the §3.1 boundary paragraph reads as a correction of the intro
-rather than as a definition.
+in §1 and §3, and §3.1's coordinate list reads as a correction of the intro rather
+than as a definition.
 
 ---
 
@@ -198,8 +198,8 @@ model deployment, tokenizer and chat-template behavior, numerical configuration,
 serving infrastructure, or **artifact interpretation**." Under §3.1, items 2–4 are
 all the *deployment* coordinate (tokenizer and chat template and precision are
 deployment members), "serving infrastructure" straddles the deployment/instrument
-line the §3.1 boundary paragraph now draws through the engine, and the final item
-names a coordinate that no longer exists (see item 7).
+line §3.1's two list items draw through the engine, and the final item names a
+coordinate that no longer exists (see item 7).
 
 This remains the least urgent of the three. The list reads as an informal
 enumeration of what the tooling can separate, not as a claim about the taxonomy,
