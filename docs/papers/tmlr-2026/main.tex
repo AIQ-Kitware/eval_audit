@@ -41,15 +41,17 @@
 
 % ---- column types & shorthands ----
 % Y: plain ragged-right X column.
-% Z/C: *weighted* X columns -- Z{w} takes w times its share of the width. Use
-% these rather than mixing fixed p{f\linewidth} columns with X: tabularx then
-% allocates the whole table width itself (so the columns always sum to exactly
-% \linewidth), and the ragged-right setting keeps unhyphenatable words from
-% protruding into the margin. The weights of one table must sum to its number
-% of columns.
+%
+% The tabularx tables in this paper weight their columns inline, with
+% >{\raggedright\arraybackslash\hsize=<w>\hsize}X, rather than through a
+% parameterised \newcolumntype. That keeps each table dependent on nothing
+% beyond tabularx + array, so it survives being compiled against an older
+% copy of this preamble or lifted into another document. Do not go back to
+% mixing fixed p{<f>\linewidth} columns with X: tabularx sizes the table to
+% \linewidth either way, but a justified narrow p{} column lets a word it
+% cannot hyphenate protrude into the margin. The weights of one table must
+% sum to its number of columns.
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
-\newcolumntype{Z}[1]{>{\raggedright\arraybackslash\hsize=#1\hsize}X}
-\newcolumntype{C}[1]{>{\centering\arraybackslash\hsize=#1\hsize}X}
 \newcommand{\eee}{\textit{Every Eval Ever}\xspace}
 \newcommand{\eeeshort}{\textsc{eee}\xspace}
 \newcommand{\code}[1]{\texttt{#1}}
