@@ -90,6 +90,29 @@ accidental.
 
 ---
 
+## 5. The "fair comparisons" claim is the one contamination hook — LOW
+
+**Problem.** Paragraph 4 argues that understanding historical benchmark context
+is "essential for making fair comparisons with modern systems." That is the only
+sentence in the paper that invites a contamination objection: if historical
+numbers are being recommended for cross-generation comparison, a reviewer can
+note that contamination is a larger obstacle to fair comparison than
+reproducibility is.
+
+Elsewhere the paper is immune — reconstructibility is orthogonal to validity —
+and §8 now carries a "Score validity is out of scope" paragraph
+(`sainz2023contamination`) stating that boundary. This sentence is the one place
+where the two axes touch.
+
+**Proposed:** no wording change required if you are content to let §8 carry it.
+If you want the intro airtight, narrow the claim from *fair comparisons* to
+*correctly interpreting what a historical number measured*, which is what the
+paper actually supports.
+
+**If not done:** low risk. §8 covers it, and the objection is narrow.
+
+---
+
 ## Not proposed
 
 - Rewriting the two motivating questions in ¶10 — they work and match §3's gate
