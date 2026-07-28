@@ -4428,3 +4428,41 @@ attribute to.
 promote the coverage funnel's raw-hash / canonical-hash / logical-key gaps into §5,
 since those are already-computed quantitative artifact-interpretation measurements
 sitting in Appendix A as a workaround note. Not done --- Edward has not decided.
+
+**Addendum 6 (same session).** Edward said "promote", so the coverage funnel
+became §5.1 and cause (4) finally has an outcome.
+
+**The numbers were better than the argument I made for them.** I expected to
+report the raw/canonical/logical gap as evidence that schema churn defeats naive
+pairing. Reading all twelve funnels in
+`/data/crfm-helm-audit-store/virtual-experiments/*/reports/scoped_funnel/` turned
+up something stronger: `n_reproduced_recipe_identical` is **0 in every modern
+experiment** --- Qwen 0/4723 in scope, OLMo 0/182, gpt-oss 0/11 --- and **2/2 in
+exactly one place**, the era-pinned RedPajama replays. Byte-identical recipe
+agreement is not what a careful modern replay recovers; it is what an instrument
+pinned to the producing era recovers. That is the sharpest quantitative argument
+for the era containers in the paper, and it had been sitting in a derived store
+layer being used only as an internal diagnostic.
+
+**Freshness discipline applied, not assumed.** Two memories bear directly on
+citing these: the `olmo-models` store predates planner fix `a25aac9`, and the
+OLMo/GPT-OSS stores keep only derived layers with raw runs pruned. So I used
+`olmo-models-combined` (post-fix; its 149/27 differs from the stale store's
+144/30, which is itself evidence the fix moved pairing), excluded the phi-2
+tutorial fixtures explicitly rather than silently, said the Qwen denominator is
+scope and not attempts, and carried a pending marker for regenerating the
+OLMo/GPT-OSS rows from preserved raw runs. The paper now states its own store
+provenance in the same paragraph as the numbers.
+
+**Design insight.** A taxonomy category with no measurement attached is
+indistinguishable from padding, and the fix is usually not to argue harder for
+the category --- it is to find the number you are already computing for
+operational reasons and promote it. The three-level funnel existed because
+pairing needed it to work at all; nobody had noticed it was also the corpus-wide
+measurement of a coordinate the paper claims. Diagnostics that a pipeline needs
+in order to function are often the cleanest evidence for the model that
+motivated the pipeline.
+
+**Still open.** The numbers are read, not recomputed. If the regeneration changes
+them, the qualitative finding (0 modern, nonzero only era-pinned) is what I would
+expect to survive, but that is a prediction rather than a result.
