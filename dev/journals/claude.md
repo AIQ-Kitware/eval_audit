@@ -4244,3 +4244,19 @@ the remaining suspect is the tt material in the last column (`run\_spec.json`,
 `add\_generation\_prompt`) which TeX will not hyphenate — the fix there is a
 breakable `\file`/`\code` (e.g. `\seqsplit` or `\allowbreak` after `_`), not a
 further width change.
+
+**Addendum (same session).** The first fix failed to compile on Edward's TeX
+host: `Package array Error: Illegal pream-token (Z)` at every table, i.e. the
+letter was undefined where the table was expanded even though
+`\newcolumntype{Z}[1]{...}` sits in `main.tex` after `array`. The parameterised
+column type is the documented tabularx idiom and should work, so the likely
+cause is a build reading an older copy of the preamble — but I could not
+confirm that without a compiler, and "it should work" is not a fix. Inlined the
+weights as `>{\raggedright\arraybackslash\hsize=<w>\hsize}X` in each table
+preamble and deleted the `Z`/`C` types. Same widths, but the tables now depend
+only on `tabularx` + `array`, which the preamble has carried since before this
+session, so they compile against *any* copy of it and survive being lifted into
+another document. Insight: when a fix adds a preamble dependency that the
+document did not previously have, a stale-preamble build turns a formatting fix
+into a hard error; preferring the construct that needs no new dependency is
+worth the extra verbosity in a paper whose source gets copied between hosts.
