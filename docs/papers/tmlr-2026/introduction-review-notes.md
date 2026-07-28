@@ -195,6 +195,38 @@ list as a competing decomposition.
 
 ---
 
+## 4. Both uses of "interpretation" now name a coordinate that was renamed — LOW
+
+**Problem.** §3.1's fourth coordinate was *artifact interpretation*; it is now
+**record history**, and it is narrower. What it used to cover has been
+redistributed: schema fields a newer harness wrote and per-instance row ordering
+are the **instrument** (the harness generated them that way), our own dedup /
+normalization / key-granularity decisions are **audit-tool correctness** and now
+sit in §8, and only post-execution change to the stored artifact — migrations,
+carried-forward copies, damage in transit — remains a coordinate.
+
+Two phrases in §1 use the old word:
+
+- ¶12: "…differences in the recorded recipe, model deployment, execution
+  environment, or **interpretation of the resulting artifacts**."
+- Contribution 2: "…numerical configuration, serving infrastructure, or
+  **artifact interpretation**."
+
+Neither is wrong as informal English — a reader takes "interpretation of the
+artifacts" to mean roughly "what we made of the files". But both sit in
+enumerations that otherwise track the coordinate names, so a reader who reaches
+§3.1 will look for a coordinate by that name and not find one.
+
+**Proposed:** in ¶12, "…or the later history of the resulting artifacts"; in
+contribution 2, "…serving infrastructure, or the record's own history". Either
+alone is enough; the contribution matters more, since it is the sentence that
+advertises what the tooling separates.
+
+**If not done:** §1 names four coordinates and §3.1 names a different fourth. A
+reviewer is unlikely to flag it; a careful reader will pause.
+
+---
+
 ## Not proposed
 
 - Rewriting the two motivating questions in ¶10 — they work and match §3's gate

@@ -19,6 +19,17 @@ We therefore report these as candidates, not results, and cite no number that
 rests on an unpreserved store. {\color{orange}\textsf{\small[\textsc{pending}: regenerate + preserve OLMo, GPT-OSS
 stores]}}
 
+\paragraph{The audit tool is itself a source of disagreement.} Every number here
+passes through our own comparison layer, which decides which stored rows
+constitute a run, how completions are normalized before they are compared, and at
+what granularity metric keys are matched. Those decisions have been wrong: an
+un-deduplicated local join once halved an aggregate that a correct join
+reproduces. They are not a coordinate of the original run --- they are a threat to
+the validity of our measurement of it --- so we control them by building the
+comparison core additively and proving it byte-equal to the incumbent on fixtures
+before switching any renderer to it (\S\ref{sec:diff}), and we report a
+disagreement only where that core and its predecessor agree.
+
 \paragraph{No frozen population denominator.} We characterize the corpus funnel
 and the runnable subset, but a headline ``fraction reproducible'' statistic
 requires a frozen, checked-in corpus manifest with an explicit numerator and
