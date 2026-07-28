@@ -4339,3 +4339,43 @@ the engine) gets filed twice by different paragraphs and nobody notices, because
 each paragraph is locally plausible. Writing the *criterion* alongside the list
 is what makes the taxonomy answer questions it was not explicitly written to
 answer --- which is the property you actually want from a taxonomy.
+
+**Addendum 4 (same session).** Edward asked what separates artifact
+interpretation from the recipe's scorer --- a fair challenge, since both turn
+per-instance records into a published number, and the §3.1 entry for artifact
+interpretation was a bare membership list. Rewrote it and added a paragraph
+pairing it against the recipe, mirroring the deployment/instrument paragraph.
+
+**The structure that fell out.** The four controllable coordinates are two of
+intent and two of realization: recipe and deployment say what is to be measured
+and what is to compute it; instrument and artifact interpretation govern how the
+outputs are produced and how they are read back. So recipe/interpretation is the
+reading-side counterpart of deployment/instrument, and divides on the same
+principle --- a recipe change is a declared change of what is measured, so a
+different number is its intended consequence, whereas an interpretation change is
+supposed to be a no-op, so when it moves a number one of the two readings is
+simply wrong. That is a usable test: *design choice or error?*
+
+**The scorer is the recipe's engine.** Just as the engine sits in the deployment
+(family) and the instrument (build), the scorer sits in three coordinates under
+three aspects: what it is specified to compute (recipe), the code that computes
+it (instrument --- which is exactly what the era containers pin), and what that
+code is handed and where its output is read from (artifact interpretation). The
+classic-model class path is the worked example: rewritten by a migration while
+the recipe kept naming the same metric, which is what makes it *evidence about
+the producing harness* rather than recipe drift.
+
+**Loose end I did not act on.** §3.3 says target (1) "tests the artifact
+interpretation and the scorer, and nothing else." With the scorer's *code* now
+explicitly an instrument fact, target (1) is not instrument-free --- it is
+serving-instrument-free, and the era containers are what let it hold the scoring
+half fixed. Flagged to Edward, not edited; it is his call whether to add the
+clause.
+
+**Process note worth keeping.** Two turns earlier I answered a "why is X an
+instrument" question by editing the paper, and Edward reverted me: he had asked
+for an explanation, not a change. The tell I missed is that a bare "why"/"what is
+the difference" question is a request for understanding; the edit request came
+one turn later and was explicit ("please rewrite it"). When a user is
+interrogating their own draft, answering in prose first is not a slower path to
+the edit --- it is what lets them decide whether the edit is the right one.
