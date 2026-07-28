@@ -9,26 +9,26 @@ rather than permanent limits.
 oracle-scored sample plus a deductive source-level argument; it has not been
 confirmed through the ordinary HELM path on held-out instances. Matching a small
 sample does not uniquely identify a producing deployment, and the deductive leg is
-conditional on the unrecorded \code{transformers} version. \S\ref{sec:olmo-confirm}
-is the experiment that would settle it. \pending{ordinary-path OLMo confirmation}
+conditional on the unrecorded \texttt{transformers} version. \S\ref{sec:olmo-confirm}
+is the experiment that would settle it. {\color{orange}\textsf{\small[\textsc{pending}: ordinary-path OLMo confirmation]}}
 
 \paragraph{Store freshness and preservation.} Some result stores postdate their
 raw run artifacts, which were pruned; the OLMo aggregate report is stale and the
 GPT-OSS store is a candidate pending re-run and a manifest-based acceptance audit.
 We therefore report these as candidates, not results, and cite no number that
-rests on an unpreserved store. \pending{regenerate + preserve OLMo, GPT-OSS
-stores}
+rests on an unpreserved store. {\color{orange}\textsf{\small[\textsc{pending}: regenerate + preserve OLMo, GPT-OSS
+stores]}}
 
 \paragraph{No frozen population denominator.} We characterize the corpus funnel
 and the runnable subset, but a headline ``fraction reproducible'' statistic
 requires a frozen, checked-in corpus manifest with an explicit numerator and
 denominator, and fresh stores across families. We do not make a population-level
-prevalence claim. \pending{regenerate corpus denominator from a pinned manifest}
+prevalence claim. {\color{orange}\textsf{\small[\textsc{pending}: regenerate corpus denominator from a pinned manifest]}}
 
 \paragraph{Single-machine measurements.} Reported agreement is
 official-vs-local and same-machine; cross-machine variance (which would separate
 platform-specific from recipe-specific drift) is scoped but not completed.
-\pending{cross-machine repeatability baseline}
+{\color{orange}\textsf{\small[\textsc{pending}: cross-machine repeatability baseline]}}
 
 \paragraph{Oracle objective without log-probs.} Because the hosted originals store
 no log-probabilities, the deployment-search objective is completion-text agreement
@@ -50,7 +50,7 @@ benchmark can be perfectly reproducible and an uncontaminated one irreproducible
 reported and make no claim about their construct validity.
 
 \paragraph{Attribution breadth.} The confirmed attributions are on OLMo-family
-\code{ifeval}/classic scenarios; ``precision is \emph{the} dominant hidden
+\texttt{ifeval}/classic scenarios; ``precision is \emph{the} dominant hidden
 variable'' is a hypothesis supported within this pilot, not established across
 benchmarks or model families. The efficient-benchmarking thread
 (\S\ref{sec:related}) is out of scope here and reserved for future work.

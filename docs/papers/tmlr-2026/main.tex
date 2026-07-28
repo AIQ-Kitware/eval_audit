@@ -6,8 +6,10 @@
 %
 % This is a scaffolded first draft generated from the master collaborative
 % reference (docs/Master_Collaborative_Reference_2026-07-15c/). Content that
-% depends on experiments not yet run is wrapped in \scaffold{...} or marked
-% \pending; every such marker is a concrete TODO for the empirical program.
+% depends on experiments not yet run is wrapped in a boxed "[SCAFFOLD --- to be
+% completed]" block or marked inline with "[PENDING: ...]"; every such marker is
+% a concrete TODO for the empirical program. Grep for SCAFFOLD and pending: to
+% enumerate them.
 %
 % COMPILE: drops in the official TMLR style if tmlr.sty is present; otherwise
 % falls back to an article layout so the draft compiles as-is.
@@ -26,7 +28,6 @@
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{microtype}
-\usepackage{xspace}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{booktabs}
 \usepackage{tabularx}
@@ -39,39 +40,28 @@
 \usepackage{url}
 \usepackage{xurl}
 
-% ---- column types & shorthands ----
-% Y: plain ragged-right X column.
+% ---- conventions (no custom macros: everything below is written out at each
+% use site, so any single file compiles against any copy of this preamble) ----
 %
-% The tabularx tables in this paper weight their columns inline, with
-% >{\raggedright\arraybackslash\hsize=<w>\hsize}X, rather than through a
-% parameterised \newcolumntype. That keeps each table dependent on nothing
-% beyond tabularx + array, so it survives being compiled against an older
-% copy of this preamble or lifted into another document. Do not go back to
-% mixing fixed p{<f>\linewidth} columns with X: tabularx sizes the table to
-% \linewidth either way, but a justified narrow p{} column lets a word it
-% cannot hyphenate protrude into the margin. The weights of one table must
-% sum to its number of columns.
-\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
-\newcommand{\eee}{\textit{Every Eval Ever}\xspace}
-\newcommand{\eeeshort}{\textsc{eee}\xspace}
-\newcommand{\code}[1]{\texttt{#1}}
-\newcommand{\file}[1]{\texttt{#1}}
-\newcommand{\finding}[1]{\par\smallskip\noindent\textbf{Finding.}~\emph{#1}\par\smallskip}
-
-% ---- scaffolding markers: make "missing" visible ----
-\definecolor{scaffoldbg}{RGB}{255,249,230}
-\definecolor{scaffoldbd}{RGB}{200,160,40}
-\newcommand{\pending}[1]{{\color{scaffoldbd}\textsf{\small[\textsc{pending}: #1]}}}
-\newcommand{\scaffold}[1]{%
-  \par\smallskip\noindent\fcolorbox{scaffoldbd}{scaffoldbg}{%
-  \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\;#1\end{minipage}}\par\smallskip}
+% Inline code and file names: \texttt{...}.
+%
+% Draft markers: a scaffold block is an \fcolorbox{orange}{yellow!12} around a
+% 0.97\linewidth minipage headed "[SCAFFOLD --- to be completed]"; a pending
+% marker is {\color{orange}\textsf{\small[\textsc{pending}: ...]}}.
+%
+% tabularx tables weight their columns inline, with
+% >{\raggedright\arraybackslash\hsize=<w>\hsize}X. Do not go back to mixing
+% fixed p{<f>\linewidth} columns with X: tabularx sizes the table to \linewidth
+% either way, but a justified narrow p{} column lets a word it cannot hyphenate
+% protrude into the margin. The weights of one table must sum to its number of
+% columns.
 
 \title{A Benchmark Recipe Is Not an Experiment:\\
 Attribution and Identifiability in the Reproduction of Open-Weight LLM Evaluations}
 
 \author{%
   Edward Wang\thanks{Kitware, Inc. Correspondence: \texttt{edward.wang@kitware.com}.}
-  \quad\textnormal{\pending{co-authors / advisor}}\\
+  \quad\textnormal{{\color{orange}\textsf{\small[\textsc{pending}: co-authors / advisor]}}}\\
   Kitware, Inc.
 }
 
@@ -103,7 +93,7 @@ and (ii) exhibit the opposite regime, in which the producing instrument of the
 original-paper classic models (GPT-J, GPT-NeoX, OPT) is \emph{non-identifiable}
 from the surviving public and repository evidence. From this contrast we derive a
 minimal, backward-compatible provenance standard --- three recorded fields
-(\code{model\_revision}, \code{torch\_dtype}, \code{transformers\_version})
+(\texttt{model\_revision}, \texttt{torch\_dtype}, \texttt{transformers\_version})
 account for every disagreement we attribute, and cover most of the
 deployment-side gap at negligible cost --- and an artifact-release checklist that
 addresses the engine and hardware side it leaves open.
@@ -123,6 +113,6 @@ addresses the engine and hardware side it leaves open.
 
 \bibliographystyle{plainnat}
 \IfFileExists{references.bib}{\bibliography{references}}{%
-  \pending{run bibtex --- references.bib present but bibliography backend not configured in fallback mode}}
+  {\color{orange}\textsf{\small[\textsc{pending}: run bibtex --- references.bib present but bibliography backend not configured in fallback mode]}}}
 
 \end{document}

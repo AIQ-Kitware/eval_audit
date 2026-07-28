@@ -38,7 +38,7 @@ Once the target is fixed and the attempt executes, an observed disagreement admi
 
 \begin{enumerate}[nosep,leftmargin=1.6em]
   \item \textbf{Recipe mismatch} --- the recorded recipe differs: prompt construction, in-context examples, decoding, or scorer.
-  \item \textbf{Deployment mismatch} --- the deployment's client, endpoint, or engine identity differs, as when a hosted API is replaced by a local one, or in-process \code{transformers} by vLLM.
+  \item \textbf{Deployment mismatch} --- the deployment's client, endpoint, or engine identity differs, as when a hosted API is replaced by a local one, or in-process \texttt{transformers} by vLLM.
   \item \textbf{Execution-instrument mismatch} --- the instrument differs: precision, tokenizer or template version, attention kernel, device placement, or software-stack versions.
   \item \textbf{Artifact-interpretation mismatch} --- the interpretation differs: row reordering, schema migration, or carried-forward outputs.
   \item \textbf{Residual disagreement under controlled equivalence} --- every controllable coordinate is matched and a gap remains. This is the only category analogous to conventional repeatability failure.
@@ -68,7 +68,7 @@ coordinate and to its status here.}
 \toprule
 \textbf{Parameter} & \textbf{Typical status} & \textbf{Basis / limitation} \\
 \midrule
-Run specification & identifiable & frozen public \file{run\_spec.json};
+Run specification & identifiable & frozen public \texttt{run\_spec.json};
 migration can still alter interpretation. \\
 Client / deployment class & often identifiable & recorded deployment name and
 harness config; hosted-provider internals remain opaque. \\

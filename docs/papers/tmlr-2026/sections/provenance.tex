@@ -4,23 +4,23 @@
 The clearest actionable output of this study is a recommendation to the community:
 a benchmark harness should record the \emph{execution substrate}, not just the
 recipe and the model name. Our investigation of HELM's own deployment metadata
-quantifies the gap: of 148 \code{HuggingFaceClient} deployments in HELM's
-\code{model\_deployments.yaml}, only 19 pin \code{torch\_dtype} (all
-\code{bfloat16}) and only 7 pin a model \code{revision}. The parameters that most
+quantifies the gap: of 148 \texttt{HuggingFaceClient} deployments in HELM's
+\texttt{model\_deployments.yaml}, only 19 pin \texttt{torch\_dtype} (all
+\texttt{bfloat16}) and only 7 pin a model \texttt{revision}. The parameters that most
 change a greedy output are precisely the ones least often recorded
 (Appendix~\ref{app:unrecorded}).
 
 \paragraph{Three fields close most of the deployment-side gap.} The high-leverage
 observation is that many parameters collapse into one:
 \begin{quote}
-\code{model\_revision} $+$ \code{torch\_dtype} $+$ \code{transformers\_version}
+\texttt{model\_revision} $+$ \texttt{torch\_dtype} $+$ \texttt{transformers\_version}
 \end{quote}
 The revision fixes the tokenizer, chat template, and generation config \emph{as of
-then} (they all live inside the model repository); the \code{transformers} version
+then} (they all live inside the model repository); the \texttt{transformers} version
 fixes both the precision default and whether the chat template honors
-\code{add\_generation\_prompt}; the dtype pins the load precision directly. Each of
+\texttt{add\_generation\_prompt}; the dtype pins the load precision directly. Each of
 the OLMo findings (\S\ref{sec:olmo}) reduces to one of these three fields --- (a)
-to the revision and (b) to the \code{transformers} version, both confirmed, and
+to the revision and (b) to the \texttt{transformers} version, both confirmed, and
 (c) to the dtype, which remains a discovery.
 
 We scope that claim deliberately. Of the parameters in
@@ -39,10 +39,10 @@ available at negligible cost, not that recording them makes a run reproducible.
 \paragraph{Record them out of the identity string.} These fields must live in a
 machine-readable provenance block (HELM's existing recipe-facts slot suffices ---
 no schema change), \emph{not} in the run-spec identity or the
-\code{model\_deployment} name. A revision SHA in the pairing key would break
+\texttt{model\_deployment} name. A revision SHA in the pairing key would break
 official$\leftrightarrow$local matching, whereas a SHA in the provenance block is
 invisible to pairing and fully recoverable. Both weight-loading engines already
-accept \code{revision} as a data-only field; the only code gap is a bundle
+accept \texttt{revision} as a data-only field; the only code gap is a bundle
 boundary that currently drops it.
 
 \paragraph{A reproduction-target-aware release checklist.} Beyond the three

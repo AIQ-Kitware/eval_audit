@@ -32,11 +32,22 @@ preamble auto-detects it via `\IfFileExists`. Then:
 pdflatex main && bibtex main && pdflatex main && pdflatex main
 ```
 
+The source defines **no custom macros** — no `\newcommand`, `\newcolumntype`, or
+`\definecolor`. Everything is written out at its use site (`\texttt{...}` for
+code and file names, the draft markers below, inline `>{...}X` weights in the
+`tabularx` preambles), so any one file compiles against any copy of the
+preamble and survives being lifted into another document. Keep it that way.
+
 ## What is real vs. scaffolded
 
 Structural check (run in this dir):
-`python3 -c "..."` reports **7 `\scaffold` blocks** and **8 `\pending` markers** —
-these are the exhaustive list of gaps. The load-bearing ones:
+
+```
+grep -rc -F 'fcolorbox{orange}{yellow!12}' sections/*.tex   # 6 scaffold blocks
+grep -ro -F 'textsc{pending}' sections/*.tex main.tex | wc -l   # 8 pending markers
+```
+
+These are the exhaustive list of gaps. The load-bearing ones:
 
 | Gap | Marker | Status |
 |---|---|---|

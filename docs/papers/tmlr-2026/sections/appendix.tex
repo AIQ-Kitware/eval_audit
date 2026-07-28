@@ -6,29 +6,30 @@ encountered while building the audit. Each is a concrete pitfall a reproduction
 paper's appendix should address; we list the load-bearing ones.
 
 \begin{description}[leftmargin=1em,itemsep=2pt]
-  \item[G1. \file{run\_spec.json} schema evolves silently.] Newer HELM populates
-    \code{adapter\_spec} fields older HELM omitted, so byte-for-byte hashing yields
+  \item[G1. \texttt{run\_spec.json} schema evolves silently.] Newer HELM populates
+    \texttt{adapter\_spec} fields older HELM omitted, so byte-for-byte hashing yields
     $0/N$ matches across releases even for identical recipes. Workaround: a
     schema-collapsed \emph{canonical recipe hash}.
-  \item[G5. \code{instructions} differ across releases on identical scenarios.]
+  \item[G5. \texttt{instructions} differ across releases on identical scenarios.]
     E.g.\ MMLU prepends ``Answer with only a single letter.''; a genuine recipe
     drift (a different prompt), surfaced via a comparability fact rather than
     silently normalized.
   \item[G7. Same weights $\neq$ same output across serving stacks.] Even greedy,
-    \code{transformers.generate()} and vLLM differ (kernels, batching,
+    \texttt{transformers.generate()} and vLLM differ (kernels, batching,
     stop-sequence handling, EOS/pad) --- a few-percent per-instance flip rate on
     multiple-choice, tens of percent on long-form.
-  \item[G10. Public-track \code{suite\_version} is not the HELM release version.]
-    The same spec can appear identically in \code{v0.2.4} and \code{v0.3.0}; era
-    replay keys the instrument on \code{(public\_track, suite\_version)}.
-  \item[G13. Classic \code{class\_name} paths resolve in \emph{no} HELM version.]
-    \code{helm.benchmark.basic\_metrics.BasicMetric} is a once-migrated hybrid
-    (a naive \code{benchmark.}$\to$\code{helm.benchmark.} rewrite of a still-flat
+  \item[G10. Public-track \texttt{suite\_version} is not the HELM release version.]
+    The same spec can appear identically in \texttt{v0.2.4} and \texttt{v0.3.0}; era
+    replay keys the instrument on \texttt{(public\_track, suite\_version)}.
+  \item[G13. Classic \texttt{class\_name} paths resolve in \emph{no} HELM version.]
+    \texttt{helm.benchmark.basic\_metrics.BasicMetric} is a once-migrated hybrid
+    (a naive \texttt{benchmark.}$\to$\texttt{helm.benchmark.} rewrite of a still-flat
     production path), pinning the producing code to unreleased pre-v0.1.0 HELM.
     Class-path \emph{shape} is the origin fingerprint (\S\ref{sec:classic}).
 \end{description}
-\scaffold{Expand to the full G1--G13 table for the camera-ready, with a
-one-line repro pointer for each.}
+\par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
+  \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Expand to the full G1--G13 table for the camera-ready, with a
+one-line repro pointer for each.\end{minipage}}\par\smallskip
 
 \section{The Unrecorded-Parameter Taxonomy}
 \label{app:unrecorded}
@@ -38,7 +39,7 @@ the numbers were computed. Parameters ranked by effect on a greedy (temperature-
 output:
 
 \begin{table}[h]
-\caption{Unrecorded execution parameters (of 148 \code{HuggingFaceClient}
+\caption{Unrecorded execution parameters (of 148 \texttt{HuggingFaceClient}
 deployments, 19 pin dtype, 7 pin revision). Several Tier-3 gaps collapse into
 Tier-1: pinning the model revision recovers the tokenizer, template, and
 generation config together.}
@@ -54,7 +55,7 @@ generation config together.}
 \midrule
 1 & Model weight revision (SHA) & Same name $\neq$ same weights; fixes tokenizer,
     template, generation config as-of-then. Highest leverage. \\
-1 & Load precision / dtype & Unpinned $\Rightarrow$ \code{transformers}-version
+1 & Load precision / dtype & Unpinned $\Rightarrow$ \texttt{transformers}-version
     default (pre-v5 $=$ float32). \\
 1 & Quantization & GPTQ/AWQ/fp8/bnb change weights outright. \\
 1 & Software-stack versions & Sets the fp32-vs-bf16 default \emph{and} chat-template
@@ -64,9 +65,9 @@ generation config together.}
 2 & Hardware / device topology & determines kernels, TF32, and whether fp32 fits;
     multi-GPU reduction order differs. \\
 2 & Batch composition & kernels are not batch-invariant. \\
-3 & Tokenizer $+$ chat-template version & the \code{add\_generation\_prompt} drift. \\
-3 & \code{add\_special\_tokens} / BOS & the OLMo-7B append case. \\
-3 & \code{generation\_config.json} defaults & injects unspecified fields. \\
+3 & Tokenizer $+$ chat-template version & the \texttt{add\_generation\_prompt} drift. \\
+3 & \texttt{add\_special\_tokens} / BOS & the OLMo-7B append case. \\
+3 & \texttt{generation\_config.json} defaults & injects unspecified fields. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -76,7 +77,7 @@ generation config together.}
 \label{app:checklist}
 
 A paper artifact should preserve: source commit and dirty state; container
-digests; Python/\code{transformers}/\code{torch}/CUDA/driver versions; GPU model
+digests; Python/\texttt{transformers}/\texttt{torch}/CUDA/driver versions; GPU model
 and topology; model and tokenizer commit SHAs; effective dtype, quantization,
 attention backend, TF32/matmul flags, batching, caching, tensor parallelism; raw,
 rendered, and tokenized prompts; complete generation configuration; frozen public
@@ -109,7 +110,7 @@ experiments of \S\ref{sec:limitations}.}
 \midrule
 Reproduction is a layered system-identification problem & established & --- \\
 OLMo-7B gibberish caused by tokenizer EOS-append & established & --- \\
-\code{ifeval} sensitive to \code{add\_generation\_prompt} & established & --- \\
+\texttt{ifeval} sensitive to \texttt{add\_generation\_prompt} & established & --- \\
 Historical OLMo dtype most likely float32 & conditional & preserve deployment
     metadata; state version bounds \\
 Float32 best-matches sampled OLMo outputs & preliminary (probe) & ordinary-path

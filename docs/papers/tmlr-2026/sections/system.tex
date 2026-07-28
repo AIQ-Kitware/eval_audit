@@ -13,15 +13,15 @@ each component depends on.
 \label{sec:fromspec}
 
 Public HELM runs do not record the CLI string that produced them, but they do
-ship a fully resolved \file{run\_spec.json}: the complete adapter spec, scenario
+ship a fully resolved \texttt{run\_spec.json}: the complete adapter spec, scenario
 spec, metric specs, and annotators, with every default already materialized. The
 prior approach --- taken by essentially every earlier reproduction, including our
 own first attempts --- \emph{reconstructs} a run-entry string from the run and
 re-parses it. Re-parsing re-derives the recipe under \emph{today's} library
 defaults, which silently drifts from the recipe that produced the official
 numbers.
-\finding{Never reconstruct the recipe; replay the resolved \file{run\_spec.json}
-verbatim.}
+\par\smallskip\noindent\textbf{Finding.}~\emph{Never reconstruct the recipe; replay the resolved \texttt{run\_spec.json}
+verbatim.}\par\smallskip
 Our materializer deserializes the official spec and drives an in-process
 benchmarking call; the reconstructed run-entry string is used only to \emph{locate}
 the official directory, never to drive execution. Two failure modes are handled
@@ -31,12 +31,12 @@ preflight (an environment mismatch, surfaced as such), whereas a dropped
 \emph{field} is silent (the codec fills defaults). We guard the silent mode with a
 serialize$\to$deserialize$\to$serialize round-trip test that exploits a
 writer/serializer asymmetry: because HELM writes the spec dropping only
-\code{None} values, any key missing after a round trip is an unambiguous silent
+\texttt{None} values, any key missing after a round trip is an unambiguous silent
 drop.
 
 Because a local replay serves the model on different hardware than the original,
 a naive by-name replay would record the \emph{official} deployment identity and
-report \code{same\_deployment=yes} --- masking the single most important
+report \texttt{same\_deployment=yes} --- masking the single most important
 difference the audit exists to surface. We therefore rewrite the deployment
 identity to the local endpoint via an explicit argument (a wrong value fails
 loudly \emph{before} any instance runs), so the comparison correctly reports the
@@ -53,16 +53,16 @@ deployments for that model, evaluates a length-stratified prompt sample, and ran
 each cell by agreement with the official completions (Together stores no
 log-probs, so the objective is completion-text agreement plus a model-agnostic
 prompt-independence-collapse detector). The grid is two-tier: serve-time knobs
-(dtype $\times$ tokenizer $\times$ \code{max\_model\_len}) become distinct
-endpoints, while request-time knobs (\code{add\_special\_tokens},
-\code{add\_generation\_prompt}, protocol) are probed per request.
+(dtype $\times$ tokenizer $\times$ \texttt{max\_model\_len}) become distinct
+endpoints, while request-time knobs (\texttt{add\_special\_tokens},
+\texttt{add\_generation\_prompt}, protocol) are probed per request.
 
 A design principle distinguishes two opposite prunings. \emph{Feasibility
 pruning} (safe) drops a configuration that physically cannot serve on the hardware
 with a typed reason (e.g.\ float32 on a mixture-of-experts model exceeds the vLLM
 fused-kernel shared-memory limit). \emph{Relevance pruning} (``this knob probably
 won't matter'') is refused: it is precisely the guess the tool exists to avoid.
-The tool has \code{dry-run}/\code{run}/\code{confirm} phases; \code{confirm}
+The tool has \texttt{dry-run}/\texttt{run}/\texttt{confirm} phases; \texttt{confirm}
 promotes a winning cell into a real, servable one-endpoint configuration for the
 ordinary execution path (the confirmation step of \S\ref{sec:olmo-confirm}).
 
@@ -71,7 +71,7 @@ ordinary execution path (the confirmation step of \S\ref{sec:olmo-confirm}).
 
 A large fraction of any historical corpus was produced by an \emph{older harness}:
 the measurement instrument itself has versions. Concretely, the exact
-\code{pandas} version flips per-instance row ordering on some scenarios, so the
+\texttt{pandas} version flips per-instance row ordering on some scenarios, so the
 harness's own dependency versions change the recorded instances. Because the
 modern runner pins a recent HELM and imports module paths that do not exist in
 older releases, it cannot replay these runs at all.
@@ -106,6 +106,6 @@ is never re-labeled to hide a substitution, and a coverage denominator is report
 at three nested levels (logical / recipe-canonical / recipe-identical) so that
 harness-version churn is separated from genuine recipe drift. Building this core
 \emph{additive-first} --- proven byte-equal to the incumbent on fixtures at
-$\code{atol}=10^{-9}$ before any renderer was switched to it --- is itself part of
+$\texttt{atol}=10^{-9}$ before any renderer was switched to it --- is itself part of
 the reproducibility discipline: a looser tolerance is treated as a finding to
 investigate, not a knob to widen.
