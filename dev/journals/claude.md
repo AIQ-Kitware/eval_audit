@@ -4288,3 +4288,54 @@ constructs out at each use site costs verbosity and buys the property that any
 single file is self-contained. That is a better trade than it looks — and the
 README now records the rule so a future agent does not "helpfully" re-factor
 the repetition back into macros.
+
+**Addendum 3 (same session).** Edward asked why the serving engine is an
+instrument and not a deployment. The honest answer was that the draft did not
+say one thing: §3.1 listed "serving engine" under the instrument, §3.4 cause (2)
+called swapping `transformers` for vLLM a *deployment* mismatch, and cause (3)
+listed precision and template version --- both §3.1 deployment members --- as
+instrument facts. Table 1 already encoded the resolution without the prose
+saying so: *Client / deployment class* is "often identifiable, recorded", while
+*Engine / package / kernel versions* is "often missing".
+
+**The criterion I made explicit.** Deployment is what fixes the *function to be
+computed*; the instrument is what fixes how that function is *numerically
+realized*. In exact arithmetic an instrument change is a no-op and a deployment
+change is not. That criterion puts the engine *family* in the deployment (HELM
+records it; substituting a hosted API for vLLM is an intended change to what
+computes the answer) and the engine's *build, kernels, scheduler, batching* in
+the instrument (two engines on identical weights, precision, and token ids are
+supposed to agree). It is not a bookkeeping preference: the §7 recommendation
+only makes sense if the deployment gap is closable by three recorded fields
+while the instrument gap needs a container digest, and collapsing the two would
+make either half look sufficient alone.
+
+**The subtlety worth publishing.** An engine *supplies deployment values by
+default* --- vLLM's `add_special_tokens=True` changed the prompt tokens, an
+unpinned `transformers` load chose the precision. In both, the engine is the
+proximate cause while the coordinate that differs is the deployment. That is the
+mechanism behind two of the three confirmed OLMo attributions, and it is the
+argument for recording the *resolved value* rather than the component that chose
+it. It also forced a re-label: cases.tex (a) called the EOS-append an
+execution-instrument mismatch; it is a deployment mismatch with an instrument
+proximate cause. The evidence is unchanged, only the label.
+
+**Two consistency bugs found while doing it.** §3.4 opened "one of six causes ---
+one per coordinate, plus a residual", but §3.1 counts the residual as one of the
+five coordinates, so the sentence double-counted. And §3.5 plus the table caption
+used "coordinate" to mean "table row", i.e. *parameter* --- in a section whose
+whole point is that identifiability is per parameter, not per coordinate.
+
+**Process.** Edward froze `introduction.tex` and `related_work.tex` mid-task, so
+the three terminology conflicts they carry went into the two review-notes files
+as items 6--8 and item 3 rather than being applied. The sharpest is intro line 8:
+it calls serving backend, batching, and hardware "deployment properties", which
+is precisely the union §3.1 now splits --- a reader arriving at §3.1 has to
+unlearn the intro's sense of the paper's most-used technical term.
+
+**Insight.** A definition given as a membership list has no way to answer "which
+side does this new thing go on?", so the first genuinely ambiguous member (here,
+the engine) gets filed twice by different paragraphs and nobody notices, because
+each paragraph is locally plausible. Writing the *criterion* alongside the list
+is what makes the taxonomy answer questions it was not explicitly written to
+answer --- which is the property you actually want from a taxonomy.
