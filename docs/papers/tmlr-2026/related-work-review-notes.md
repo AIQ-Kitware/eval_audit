@@ -5,7 +5,7 @@ problem, the exact change, and what happens if it is not done.
 
 Companion file: [`introduction-review-notes.md`](introduction-review-notes.md).
 
-Last updated: 2026-07-28. Reflects the tree at commit `1719e9e6`; item 3 follows
+Last updated: 2026-07-28. Reflects the tree at commit `1719e9e6`; items 3--4 follow
 the §3.1 sharpening.
 
 ---
@@ -100,10 +100,39 @@ sits inside §2's undivided "substrate" with no signal that §3 will split it.
 
 ---
 
+## 4. "the instrument extends to the judge" places the whole judge — MEDIUM
+
+**Problem.** `related_work.tex:17` ends "For model-graded metrics the instrument
+extends to the judge, whose own version and availability are rarely pinned." True
+of the judge's *serving*, but §3.1 now reads a model-graded metric as **nesting a
+second run inside the scorer**: the judge has a recipe (the grading prompt), a
+deployment (which model, which revision), and an instrument (how it was served,
+and whether it still is). The §2 sentence assigns all of it to the instrument.
+
+That matters for two claims downstream. §3.2's gate argument is that a withdrawn
+judge removes the nested run's *instrument* while leaving the record of what it
+produced — which is only coherent if the judge is not wholly an instrument. And
+`judge_registry.py` documents that official run specs name an annotator class but
+leave its args empty, with the judge models hard-coded per harness version: judge
+identity is a **recipe slot whose value the instrument version supplies**, the
+same shape as the chat-template flag and the unpinned dtype. Collapsing it into
+the instrument loses the third instance of the paper's central pattern.
+
+**Proposed (one clause):**
+
+> For model-graded metrics the scorer is itself a model, so the coordinates apply
+> recursively (\S\ref{sec:model}) --- the judge carries its own deployment and
+> instrument, whose version and availability are rarely pinned…
+
+**If not done:** §2 and §3.1 place the judge differently, and the recursion —
+which is what makes the target-scoped gate work — arrives in §3 unsignalled.
+
+---
+
 ## Not proposed
 
 - No content changes to §2. The pass ending at `67c2decb` — Goodman crediting, the
   execution-substrate merge, the forward/inverse differentiation, the validity
   demotion, the provenance correction, titles, and order — closed everything found.
-  Item 3 above is new, and arises from the §3.1 sharpening rather than from that
+  Items 3--4 above are new, and arise from the §3.1 sharpening rather than from that
   pass.
