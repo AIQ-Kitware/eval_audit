@@ -4512,3 +4512,44 @@ twice, and nothing else in the taxonomy covers that.
 The judge-recursion paragraph survived untouched --- it is independent of this
 change --- but it is the longest thing left in Sec. 3.1 and is the next candidate
 if the section is still too dense.
+
+**Addendum 8 (same session).** Edward closed the artifact-interpretation arc with
+the observation that settled it: §3.1 is titled *What produces a score*, and a
+thing that happens after the score exists cannot be one of the things that
+produced it. Three sessions of narrowing, renaming, and defending, and the
+category was simply in the wrong list.
+
+**The distinction I never made.** The coordinates are the *data-generating
+process*; the stored record is the *observation channel*. A record has a history
+the run does not. So a migration, a carried-forward copy, or a truncated upload
+is not a cause of the score --- it is a defect in the evidence about the score.
+Those are different kinds of thing, and no amount of renaming was going to make
+the second fit in a list of the first.
+
+**Where it went.** The gate, which already asks "can we compare this?" and
+already carries typed exclusion reasons in service of a defensible denominator.
+The independence argument lands exactly where it bites: the classic officials are
+byte-identical across v0.2.4 and v0.3.0, so reading "both eras agree" as two
+confirmations is an arithmetic error rather than a finding. The gate now requires
+*independence* of records, not merely presence. Cause list drops from six to
+five; the deleted cause never had a §5 result behind it anyway.
+
+**The arc, for the record.** artifact interpretation (5 members, three
+paragraphs of defence) -> record history (2 members, one paragraph) -> not a
+coordinate at all (one gate paragraph). §3.1 went 1458 -> 1064 -> 1037 words
+while getting strictly clearer. Every step was a deletion.
+
+**Design insight worth keeping.** A section title is a type signature. "What
+produces a score" admits only members of one kind, and I spent three rounds
+trying to fit a member of a different kind into it, treating each failure as a
+wording problem. When a category resists explanation, check whether the container
+it sits in has a stated contract, and whether the category satisfies it --- that
+check is cheap and would have short-circuited all of this. The related lesson is
+the one from Addendum 7 sharpened: repeated defensive elaboration is not evidence
+that the reader is slow, it is evidence that the structure is wrong.
+
+**State.** Committed, unreviewed, uncompiled. Nothing left dangling: the term
+sweep is clean across editable sections, environments balance, and the frozen
+intro's two uses of "interpretation" are item 4 in the introduction review notes
+-- that note now understates the change and should be revised to say the
+coordinate was removed, not renamed.
