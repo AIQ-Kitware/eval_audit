@@ -1,163 +1,58 @@
-\section{A Measurement Model for Benchmark Reproduction}
+\section{A Taxonomy of Benchmark Reproduction}
 \label{sec:model}
 
-\subsection{The generative model of a score}
+\subsection{What produces a score}
 
-Let a measured benchmark result be
-\begin{equation}
-Y \;=\; F(R,\,D,\,I,\,A,\,U),
-\label{eq:model}
-\end{equation}
-where
-\begin{itemize}[nosep,leftmargin=1.4em]
-  \item $R$ --- the \textbf{recorded recipe}: scenario, dataset, prompt
-        construction, in-context examples, decoding parameters, and scorer;
-  \item $D$ --- the \textbf{deployment}: weights, model and tokenizer revisions,
-        chat template, load precision (dtype), and quantization;
-  \item $I$ --- the \textbf{execution instrument}: harness version, serving
-        engine, package and kernel versions, hardware, device topology, and
-        batching/caching;
-  \item $A$ --- the \textbf{artifact interpretation}: storage schema, migration,
-        canonicalization, and carried-forward outputs; and
-  \item $U$ --- \textbf{residual} stochastic and numerical influences.
-\end{itemize}
-The public \helm record exposes $R$ and the \emph{names} within $D$, but only a
-projection of $D$'s values and almost nothing of $I$, $A$, or $U$. Reproduction
-is thus an inverse problem: infer whether a locally chosen $(\hat D, \hat I)$
-yields $F(R,\hat D,\hat I,\hat A,U)\approx Y$, and if not, \emph{which coordinate}
-is responsible. We say a run is \emph{identifiable at tolerance $\epsilon$} when
-all materially compatible configurations produce equivalent results under a
-declared output-, metric-, or conclusion-level criterion.
+A measured benchmark result is produced by five things acting together, and naming them separately is what makes the rest of this section possible. The \textbf{recorded recipe} ($R$) is the scenario, dataset, prompt construction, in-context examples, decoding parameters, and scorer. The \textbf{deployment} ($D$) is the weights, the model and tokenizer revisions, the chat template, the load precision, and any quantization. The \textbf{execution instrument} ($I$) is the harness version, serving engine, package and kernel versions, hardware, device topology, and batching or caching behavior. The \textbf{artifact interpretation} ($A$) is the storage schema, its migrations, canonicalization, and any carried-forward outputs. What is left over is \textbf{residual} ($U$): stochastic and numerical influences that no record fixes. We call these five the coordinates of a run.
 
-\paragraph{The taxonomy this model implies.} Equation~\ref{eq:model} does not
-merely describe a score; it dictates how reproduction attempts can be
-classified, and that taxonomy organizes the rest of the paper. Whether a run can
-be executed at all is a precondition rather than an outcome, and forms an
-upstream gate (\S\ref{sec:gate}). Past that gate, an attempt is characterized
-along two orthogonal axes: which coordinates of the model it puts under test
-(\S\ref{sec:targets}), and, when its result disagrees with the record, which
-coordinate is responsible (\S\ref{sec:taxonomy}). Each axis is read off the
-model rather than proposed independently of it --- the first partitions the
-coordinates into those a given attempt exercises and those it holds fixed, the
-second assigns a disagreement to one coordinate, a residual, or an
-underdetermined case. Neither axis refines the other, and collapsing them is
-what produces the familiar but uninformative verdict that a benchmark ``did not
-reproduce.''
+The public \helm record exposes $R$, and the names but only a projection of the values within $D$; of $I$, $A$, and $U$ it exposes almost nothing. Reproduction is therefore an inverse problem. One chooses a deployment and an instrument, replays the recorded recipe, and asks whether the result matches the published one --- and when it does not, which coordinate is responsible. We say a run is identifiable at tolerance $\epsilon$ when every materially compatible choice of coordinates produces equivalent results under a declared output-, metric-, or conclusion-level criterion.
+
+\paragraph{The taxonomy these coordinates imply.} The decomposition dictates how reproduction attempts can be classified, and that classification organizes the rest of the paper. Whether a run can be executed at all is a precondition rather than an outcome, and forms an upstream gate (\S\ref{sec:gate}). Past that gate, an attempt is characterized along two orthogonal axes: which coordinates it puts under test (\S\ref{sec:targets}), and, when its result disagrees with the record, which coordinate accounts for the difference (\S\ref{sec:taxonomy}). Both axes follow from the decomposition rather than being proposed alongside it --- the first partitions the coordinates into those an attempt exercises and those it holds fixed, and the second assigns a disagreement to one coordinate, to the residual, or to no coordinate at all. Neither axis refines the other, and collapsing them is what produces the familiar but uninformative verdict that a benchmark ``did not reproduce.''
 
 \subsection{The eligibility gate}
 \label{sec:gate}
 
-Before any disagreement is measured, a run must be executable. Gated models or
-datasets, revoked download access, missing credentials, unsupported packaging,
-unavailable judges, and infeasible resource requirements are
-\emph{eligibility/environment filters}. They answer ``can we run this?'', not
-``did it reproduce?'', and must never be folded into a negative reproduction
-result. Making this gate explicit --- every excluded run carries a typed
-exclusion reason --- is what allows a defensible ``$X$ of $Y$ runnable runs''
-denominator.
+Before any disagreement is measured, a run must be executable. Gated models or datasets, revoked download access, missing credentials, unsupported packaging, unavailable judges, and infeasible resource requirements are eligibility and environment filters. They answer ``can we run this?'', not ``did it reproduce?'', and must never be folded into a negative reproduction result. Making this gate explicit --- every excluded run carries a typed exclusion reason --- is what allows a defensible ``$X$ of $Y$ runnable runs'' denominator.
 
-The gate is relative to a target, not to a run. The sharpest case is a
-model-graded scenario whose judge is no longer served: the judging step is
-unrepeatable, so the run is ineligible for procedural reproduction, but the
-judge's per-instance verdicts are themselves part of the released record, and
-the published aggregate can still be recomputed from them and checked. Such a
-run is out of scope for the second target of \S\ref{sec:targets} and fully in
-scope for the first. Treating eligibility as a property of the run alone would
-discard precisely the evidence that survived, and would understate the auditable
-fraction of the corpus; we therefore scope every exclusion reason to the target
-it blocks.
+The gate is relative to a target, not to a run. The sharpest case is a model-graded scenario whose judge is no longer served: the judging step is unrepeatable, so the run is ineligible for procedural reproduction, but the judge's per-instance verdicts are themselves part of the released record, and the published aggregate can still be recomputed from them and checked. Such a run is out of scope for the second target of \S\ref{sec:targets} and fully in scope for the first. Treating eligibility as a property of the run alone would discard precisely the evidence that survived, and would understate the auditable fraction of the corpus; we therefore scope every exclusion reason to the target it blocks.
 
 \subsection{Axis 1: what is under test}
 \label{sec:targets}
 
-A reproduction attempt must first declare what it is attempting to reproduce.
-We adapt the standard methods/results/inferential trichotomy of
-\citet{goodman2016does} to a benchmark corpus that publishes
-per-instance outputs. The three resulting choices each exercise a different
-subset of the coordinates of Equation~\ref{eq:model}, and they are not
-interchangeable:
-\begin{enumerate}[nosep,leftmargin=1.6em]
-  \item \textbf{Artifact reconstruction}: recompute the published aggregates from
-        the released prompts, completions, and metric records \emph{without}
-        rerunning a model. Tests $A$ and the scorer only.
-  \item \textbf{Procedural reproduction}: execute the recorded recipe under a
-        pinned or explicitly equivalent instrument and compare instance-level
-        outputs and metrics. Tests $D$ and $I$.
-  \item \textbf{Claim-level robustness}: determine whether the substantive
-        conclusion (a ranking, or a model-generation improvement) survives
-        plausible execution substrates even when byte-identical outputs do not.
-\end{enumerate}
-Targets (2) and (3) are Goodman's methods and inferential reproducibility --- the
-former with its ``same data and tools'' premise replaced by a declared-equivalent
-instrument, since the original tools are what did not survive. Target (1) has no
-counterpart there: it is available only because \helm releases the per-instance
-prompts, completions, and metric records that make a score recomputable without
-executing a model. Nor is it a fallback for runs that are merely inconvenient to
-execute --- for model-graded scenarios whose judge is no longer served it is the
-only target available at all, and it still answers a real question about them,
-since a scorer or migration defect would show up here with no judge in the loop. Goodman's results reproducibility, which asks for corroboration
-from an independent study, has no counterpart here in the other direction --- a
-fixed historical corpus admits no new study.
+A reproduction attempt must first declare what it is attempting to reproduce. We adapt the methods, results, and inferential trichotomy of \citet{goodman2016does} to a benchmark corpus that publishes per-instance outputs, as described in \S\ref{sec:related}. The three resulting choices each exercise a different subset of the coordinates, and they are not interchangeable:
 
-Released official artifacts remain the historical ground truth for what \helm
-reported; a rerun assesses the \emph{stability and identifiability} of the
-procedure that produced them, and does not overwrite the record. This distinction
-is what licenses us to report a differing rerun as evidence about $I$ rather than
-as a correction of the official number.
+\begin{enumerate}[nosep,leftmargin=1.6em]
+  \item \textbf{Artifact reconstruction}: recompute the published aggregates from the released prompts, completions, and metric records, without rerunning a model. Tests $A$ and the scorer only.
+  \item \textbf{Procedural reproduction}: execute the recorded recipe under a pinned or explicitly equivalent instrument, and compare instance-level outputs and metrics. Tests $D$ and $I$.
+  \item \textbf{Claim-level robustness}: determine whether the substantive conclusion --- a ranking, or a model-generation improvement --- survives plausible execution substrates even when byte-identical outputs do not.
+\end{enumerate}
+
+Targets (2) and (3) correspond to Goodman's methods and inferential reproducibility, the former with its ``same data and tools'' premise necessarily relaxed, since the original tools are what did not survive; target (1) has no counterpart there, and his results reproducibility has none here, because a fixed historical corpus admits no new study.
+
+Released official artifacts remain the historical ground truth for what \helm reported. A rerun assesses the stability and identifiability of the procedure that produced them and does not overwrite the record, which is what licenses us to report a differing rerun as evidence about $I$ rather than as a correction of the official number.
 
 \subsection{Axis 2: why two executions disagree}
 \label{sec:taxonomy}
 
-Once the target is fixed and the attempt executes, an observed disagreement
-admits one of six causes --- one per coordinate of Equation~\ref{eq:model}, plus
-a residual and an underdetermined case:
+Once the target is fixed and the attempt executes, an observed disagreement admits one of six causes --- one per coordinate, plus a residual and an underdetermined case:
+
 \begin{enumerate}[nosep,leftmargin=1.6em]
-  \item \textbf{Recipe mismatch} --- $R$ differs (prompt construction, examples,
-        decoding, scorer).
-  \item \textbf{Deployment mismatch} --- $D$'s client/endpoint/engine identity
-        differs (hosted API vs.\ local; in-process \code{transformers} vs.\ vLLM).
-  \item \textbf{Execution-instrument mismatch} --- $I$ differs (precision,
-        tokenizer/template version, attention kernel, device placement,
-        software-stack versions).
-  \item \textbf{Artifact-interpretation/migration mismatch} --- $A$ differs
-        (row reordering, schema migration, carried-forward outputs).
-  \item \textbf{Residual disagreement under controlled equivalence} --- all
-        controllable layers are matched and a gap remains. This is the only
-        category analogous to conventional repeatability failure.
-  \item \textbf{Historically non-identifiable reproduction} --- surviving
-        evidence does not uniquely specify what execution should count as
-        faithful. Qualitatively different from (5): not ``it failed to repeat''
-        but ``what would count as a faithful execution is underdetermined.''
+  \item \textbf{Recipe mismatch} --- $R$ differs: prompt construction, in-context examples, decoding, or scorer.
+  \item \textbf{Deployment mismatch} --- $D$'s client, endpoint, or engine identity differs, as when a hosted API is replaced by a local one, or in-process \code{transformers} by vLLM.
+  \item \textbf{Execution-instrument mismatch} --- $I$ differs: precision, tokenizer or template version, attention kernel, device placement, or software-stack versions.
+  \item \textbf{Artifact-interpretation mismatch} --- $A$ differs: row reordering, schema migration, or carried-forward outputs.
+  \item \textbf{Residual disagreement under controlled equivalence} --- every controllable coordinate is matched and a gap remains. This is the only category analogous to conventional repeatability failure.
+  \item \textbf{Historically non-identifiable reproduction} --- the surviving evidence does not uniquely specify what execution should count as faithful. Qualitatively different from (5): not ``it failed to repeat'' but ``what would count as a faithful execution is underdetermined.''
 \end{enumerate}
-The two axes are independent: any target can fail for any cause, and it is their
-combination, not either alone, that describes an outcome. We deliberately avoid
-the phrase ``true reproducibility failure'' whenever execution provenance is
-incomplete; categories (1)--(4) are usually recoverable by controlling the
-substrate, and (6) is a first-class result, not a gap to be closed.
+
+The two axes are independent: any target can fail for any cause, and it is their combination, not either alone, that describes an outcome. We deliberately avoid the phrase ``true reproducibility failure'' whenever execution provenance is incomplete. Categories (1) through (4) are usually recoverable by controlling the substrate, and (6) is a first-class result rather than a gap to be closed.
 
 \subsection{Per-parameter identifiability}
 \label{sec:identifiability}
 
-Identifiability in the sense fixed above --- equivalent results at tolerance
-$\epsilon$ across all materially compatible configurations --- is not a binary
-property of an entire run: each latent parameter of $(D,I)$ has its own status,
-and the paper's per-case analysis assigns one to each
-(Table~\ref{tab:identifiability}). This refinement is what makes both the
-positive attributions and the non-identifiability result precise: we never claim
-to identify a whole historical deployment, only specific coordinates, each with
-its own evidentiary basis.
+Identifiability in the sense fixed above --- equivalent results at tolerance $\epsilon$ across every materially compatible configuration --- is not a binary property of an entire run. Each latent parameter within $D$ and $I$ has its own status, and the per-case analysis assigns one to each (Table~\ref{tab:identifiability}). This refinement is what makes both the positive attributions and the non-identifiability result precise: we never claim to identify a whole historical deployment, only specific coordinates, each with its own evidentiary basis.
 
-A coordinate can fail to be recoverable in two ways, and the difference decides
-what can be done about it. It may be \emph{structurally} unrecoverable, in that
-no record of this form could pin it down, or merely \emph{practically}
-unrecoverable, in that the particular record which happens to survive is
-insufficient \citep{raue2009identifiability}. Our classic-model result
-(\S\ref{sec:classic}) is the second kind, and that is what makes the provenance
-recommendation of \S\ref{sec:provenance} actionable: a practically
-non-identifiable parameter is one a richer record would have recovered, whereas
-a structurally non-identifiable one would leave a recording standard nothing to
-fix. We therefore state that result as non-identifiability relative to named
-evidence rather than as a claim of irreproducibility.
+A coordinate can fail to be recoverable in two ways, and the difference decides what can be done about it. It may be structurally unrecoverable, in that no record of this form could pin it down, or merely practically unrecoverable, in that the particular record which happens to survive is insufficient \citep{raue2009identifiability}. Our classic-model result (\S\ref{sec:classic}) is the second kind, and that is what makes the provenance recommendation of \S\ref{sec:provenance} actionable: a practically non-identifiable parameter is one a richer record would have recovered, whereas a structurally non-identifiable one would leave a recording standard nothing to fix. We therefore state that result as non-identifiability relative to named evidence rather than as a claim of irreproducibility.
 
 \begin{table}[t]
 \centering\small
@@ -185,8 +80,8 @@ Harness era & tagged or proxy-only & tagged releases containerizable; migrated
 paths may admit only declared proxy instruments. \\
 \bottomrule
 \end{tabularx}
-\caption{Per-parameter identifiability in the studied cases. The status is
-\emph{per coordinate}, not per run; \S\ref{sec:cases} assigns each case's
-disagreement to a coordinate and its status here.}
+\caption{Per-parameter identifiability in the studied cases. The status is per
+coordinate, not per run; \S\ref{sec:cases} assigns each case's disagreement to a
+coordinate and to its status here.}
 \label{tab:identifiability}
 \end{table}
