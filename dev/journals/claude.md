@@ -4173,3 +4173,74 @@ preservation actions in `store_status_ledger_2026-07-27.csv` are the blocking
 item — the two flagship stores need re-running, and the July 21-23 substrate
 artifacts and the judge snapshots need copying and hashing before any of the
 new chapters' numbers can be cited as packaged evidence.
+
+## 2026-07-28 12:41:00 -0400
+
+**Model / harness.** Claude Opus 5 (`claude-opus-5[1m]`), Claude Code in the
+VS Code extension, on `aivm-2404`.
+
+**User intent.** Two asks, the second arriving mid-turn: (1) the table in the
+TMLR paper's taxonomy section runs off the page; (2) conform every table to
+TMLR's stated table rules — centered, title *before* the table, one line space
+before/after the title and after the table, sentence-case title.
+
+**Constraint that shaped everything: no TeX on this host.** `pdflatex`,
+`latexmk`, and `tectonic` are all absent, so I could not compile to read the
+overfull-hbox warning and confirm which cell protruded. That pushed me from
+"find and patch the one bad cell" to "remove the structural conditions under
+which any cell can protrude" — a fix I can justify by reading the source alone.
+
+**Diagnosis.** `tab:identifiability` was
+`\begin{tabularx}{\linewidth}{@{}p{0.26\linewidth}p{0.20\linewidth}Y@{}}`.
+Two things are wrong with that shape, and neither is the one I first suspected.
+The *total* width is fine: tabularx solves for the X column so the columns sum
+to exactly `\linewidth`, tabcolsep included, no matter what the fixed fractions
+are — so the table box itself cannot be too wide. What can overflow is the
+*content* of a cell, and the fixed `p{}` columns are justified. A 0.20\linewidth
+column is ~94pt; a word TeX cannot hyphenate there has nowhere to go and sticks
+out into the margin as an overfull box. Justified narrow columns are the hazard,
+not the arithmetic.
+
+**Alternatives considered.** (a) Shrink the fractions — guesswork without a
+compile, and it re-breaks the moment a cell's text changes. (b) `\raggedright`
+on the two `p{}` columns only — fixes the symptom but leaves the hand-computed
+fractions to drift out of sync with the X column on the next edit. (c) What I
+did: convert to *weighted* X columns via two new column types in the preamble,
+`Z{w}` (ragged-right) and `C{w}` (centered), each doing `\hsize=#1\hsize` inside
+`>{}`. tabularx then allocates the entire width itself and each column's share
+is a weight summing to the column count (0.80/0.55/1.65 here). Ragged-right
+comes along for free in the column type, so the justification hazard is gone by
+construction rather than by remembering to add `\raggedright`. Applied the same
+conversion to the two appendix tabularx tables, which had the identical mixed
+shape.
+
+**TMLR rules.** Moved `\caption`+`\label` above the body in all four tables and
+wrapped the body in `center` — that is the idiom the ICLR/TMLR template itself
+uses, and the required line spaces around the title and after the table fall out
+of the standard float and `center` spacing rather than from hand-inserted
+`\vspace`. Captions were already sentence case. The paper has no figures, so
+nothing else needed the caption-position treatment.
+
+**Design insights worth reusing.** (1) In tabularx, a too-wide *table* and a
+too-wide *cell* are different bugs with different fixes; the arithmetic of the
+column spec only ever explains the first, and mixing `p{f\linewidth}` with `X`
+is a smell that usually means the author was debugging the wrong one.
+(2) Weighted X columns make the "widths must sum correctly" invariant checkable
+by eye (weights sum to the column count) instead of by compile.
+(3) When the verification tool is missing, prefer the fix whose correctness is
+an argument about the source over the fix that needs a render to confirm.
+
+**Confidence and gaps.** Environment balance is verified by script; the
+structural rewrite is standard tabularx practice. But **the change is
+uncompiled** — I have not seen the PDF, and if the overflow was something other
+than a justified narrow cell (a wide `\file{...}` in the last column, say, or a
+different table than the one I assumed), this will not have fixed it. First
+thing to do on a host with TeX: `pdflatex main` and grep the log for
+`Overfull \hbox` against `taxonomy.tex`, `appendix.tex`, and `cases.tex`. The
+committed message says the same thing so the gap is not buried here.
+
+**Next steps.** Compile and check the log as above. If a cell still protrudes,
+the remaining suspect is the tt material in the last column (`run\_spec.json`,
+`add\_generation\_prompt`) which TeX will not hyphenate — the fix there is a
+breakable `\file`/`\code` (e.g. `\seqsplit` or `\allowbreak` after `_`), not a
+further width change.
