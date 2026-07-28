@@ -38,7 +38,7 @@ The gate is relative to a target, not to a run. The sharpest case is a model-gra
 A reproduction attempt must first declare what it is attempting to reproduce. We adapt the methods, results, and inferential trichotomy of \citet{goodman2016does} to a benchmark corpus that publishes per-instance outputs, as described in \S\ref{sec:related}. The three resulting choices each exercise a different subset of the coordinates, and they are not interchangeable:
 
 \begin{enumerate}[nosep,leftmargin=1.6em]
-  \item \textbf{Artifact reconstruction}: recompute the published aggregates from the released prompts, completions, and metric records, without rerunning a model. Tests the artifact interpretation and the scorer, and nothing else.
+  \item \textbf{Artifact reconstruction}: recompute the published aggregates from the released prompts, completions, and metric records, without rerunning a model. Tests the artifact interpretation and the scoring code, and nothing on the serving side; since the scoring code is itself part of the instrument, this target is instrument-free only once that code is pinned by era (\S\ref{sec:eras}).
   \item \textbf{Procedural reproduction}: execute the recorded recipe under a pinned or explicitly equivalent instrument, and compare instance-level outputs and metrics. Tests the deployment and the instrument.
   \item \textbf{Claim-level robustness}: determine whether the substantive conclusion --- a ranking, or a model-generation improvement --- survives plausible execution substrates even when byte-identical outputs do not.
 \end{enumerate}
