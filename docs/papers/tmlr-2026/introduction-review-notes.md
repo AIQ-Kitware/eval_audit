@@ -4,7 +4,12 @@
 states the problem, the proposed text, and what happens if it is not done.
 
 Last updated: 2026-07-28. Reflects the intro at commit `6cf60125`; items 6--8
-follow the §3.1 sharpening.
+follow the §3 rework, which ended at `4a11f89f` with **four** coordinates —
+recipe, deployment, execution instrument, residual — of which three are
+controllable, and **five** causes on axis 2. The former fourth coordinate
+("artifact interpretation", briefly "record history") was retired: a defect in
+the stored record is evidence failing rather than a cause of the score, so it is
+now a gate reason. Items 7 and 8 are where §1 still reflects the old scheme.
 
 ---
 
@@ -155,21 +160,34 @@ rather than as a definition.
 
 **Problem.** Line 12 lists the four places a discrepancy can be explained:
 "differences in the recorded recipe, model deployment, **execution environment**,
-or interpretation of the resulting artifacts." That is exactly §3.4's four
-controllable coordinates, in §3.4's order — but the third is named
-*execution environment* here and *execution instrument* everywhere else
-(§3.1, §3.4, §5, §7, Table 1). The alignment is close enough that the reader will
-assume the terms are the same thing and then wonder why the paper renamed it.
+or **interpretation of the resulting artifacts**." Two mismatches with §3, and the
+second is now the larger one.
 
-**Proposed:** change "execution environment" to "execution instrument" on line 12.
-One word, and it turns a near-miss into the forward reference it clearly wants to
-be.
+*Naming.* The third item is *execution environment* here and *execution
+instrument* everywhere else (§3.1, §3.4, §5, §7, Table 1). Close enough that a
+reader assumes they are the same thing and then wonders why the paper renamed it.
+
+*Count.* The list used to track §3's four controllable coordinates in order. §3
+now has **three** — recipe, deployment, instrument — and its fourth member no
+longer exists. What "artifact interpretation" covered was redistributed: schema
+fields a newer harness wrote and per-instance row ordering are the **instrument**
+(the harness generated the record that way), our own dedup / normalization /
+key-granularity decisions are audit-tool correctness and sit in §8, and
+post-execution change to the stored artifact — migrations, carried-forward
+copies, damage in transit — is now a **gate** concern rather than a coordinate,
+because it is a defect in the evidence rather than a cause of the score.
+
+**Proposed:** change "execution environment" to "execution instrument", and drop
+the fourth item so the list reads "…the recorded recipe, model deployment, or
+execution instrument." If you want to keep a fourth clause, "…or the later
+history of the resulting artifacts" is accurate and points at the gate, but the
+shorter version aligns §1 with §3.4 exactly.
 
 **Related, same line:** "model deployment" here vs. "deployment" as the §3.1
 coordinate name — harmless, since the modifier reads as descriptive.
 
-**If not done:** a reader tracking the four-way decomposition sees five names for
-four things.
+**If not done:** a reader tracking the decomposition sees §1 name four things and
+§3 name three, with one term differing between them.
 
 ---
 
@@ -177,53 +195,24 @@ four things.
 
 **Problem.** Line 20 says failures can be localized to "prompts and adaptation,
 model deployment, tokenizer and chat-template behavior, numerical configuration,
-serving infrastructure, or artifact interpretation." Under §3.1, items 2–4 are
+serving infrastructure, or **artifact interpretation**." Under §3.1, items 2–4 are
 all the *deployment* coordinate (tokenizer and chat template and precision are
-deployment members), and "serving infrastructure" straddles the deployment/
-instrument line the §3.1 boundary paragraph now draws through the engine.
+deployment members), "serving infrastructure" straddles the deployment/instrument
+line the §3.1 boundary paragraph now draws through the engine, and the final item
+names a coordinate that no longer exists (see item 7).
 
-This is the least urgent of the three. The list reads as an informal enumeration
-of what the tooling can separate, not as a claim about the taxonomy, and it
-predates the coordinates.
+This remains the least urgent of the three. The list reads as an informal
+enumeration of what the tooling can separate, not as a claim about the taxonomy,
+and it predates the coordinates — "artifact interpretation" is defensible here as
+plain English for what the tooling does when it reads two stores.
 
-**Proposed:** leave it, or align it exactly with §3.4's six causes if you want §1
-and §3 to be readable as the same scheme. Not worth a forward reference on its
-own.
+**Proposed:** leave it, or align it exactly with §3.4's five causes if you want §1
+and §3 to be readable as the same scheme. If only one word changes, make the last
+item "artifact **provenance**", which is true of what the tooling separates and
+does not collide with a retired coordinate name.
 
 **If not done:** no defect a reviewer would name; a careful reader may read the
 list as a competing decomposition.
-
----
-
-## 4. Both uses of "interpretation" now name a coordinate that was renamed — LOW
-
-**Problem.** §3.1's fourth coordinate was *artifact interpretation*; it is now
-**record history**, and it is narrower. What it used to cover has been
-redistributed: schema fields a newer harness wrote and per-instance row ordering
-are the **instrument** (the harness generated them that way), our own dedup /
-normalization / key-granularity decisions are **audit-tool correctness** and now
-sit in §8, and only post-execution change to the stored artifact — migrations,
-carried-forward copies, damage in transit — remains a coordinate.
-
-Two phrases in §1 use the old word:
-
-- ¶12: "…differences in the recorded recipe, model deployment, execution
-  environment, or **interpretation of the resulting artifacts**."
-- Contribution 2: "…numerical configuration, serving infrastructure, or
-  **artifact interpretation**."
-
-Neither is wrong as informal English — a reader takes "interpretation of the
-artifacts" to mean roughly "what we made of the files". But both sit in
-enumerations that otherwise track the coordinate names, so a reader who reaches
-§3.1 will look for a coordinate by that name and not find one.
-
-**Proposed:** in ¶12, "…or the later history of the resulting artifacts"; in
-contribution 2, "…serving infrastructure, or the record's own history". Either
-alone is enough; the contribution matters more, since it is the sentence that
-advertises what the tooling separates.
-
-**If not done:** §1 names four coordinates and §3.1 names a different fourth. A
-reviewer is unlikely to flag it; a careful reader will pause.
 
 ---
 

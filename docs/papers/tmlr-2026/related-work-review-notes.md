@@ -5,8 +5,13 @@ problem, the exact change, and what happens if it is not done.
 
 Companion file: [`introduction-review-notes.md`](introduction-review-notes.md).
 
-Last updated: 2026-07-28. Reflects the tree at commit `1719e9e6`; items 3--4 follow
-the §3.1 sharpening.
+Last updated: 2026-07-28. Reflects the tree at commit `4a11f89f`; items 3--4
+follow the §3 rework, which ended with **four** coordinates — recipe, deployment,
+execution instrument, residual — and moved record defects (migrations,
+carried-forward outputs, damage in transit) out of the decomposition and into the
+gate, since they are evidence failing rather than causes of a score. Neither item
+below is affected by that move; both concern the deployment/instrument boundary
+and the judge, which survived it unchanged.
 
 ---
 

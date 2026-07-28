@@ -13,7 +13,7 @@ references.bib        bibliography (entries marked "% VERIFY" need checking)
 sections/
   introduction.tex    reframing + thesis + contributions
   related_work.tex    HELM, EEE (detection→attribution), serving nondeterminism, provenance
-  taxonomy.tex        five coordinates; eligibility gate; two axes (three reproduction targets, six causes); per-parameter identifiability
+  taxonomy.tex        four coordinates; eligibility gate (execution *and* evidence); two axes (three reproduction targets, five causes); per-parameter identifiability
   system.tex          EvalAudit: from-spec replay, substrate sweep, era containers, layered diff
   cases.tex           OLMo (recoverable) · RedPajama (proxy-era) · GPT-J/NeoX/OPT (non-identifiable) · GPT-OSS (candidate)
   provenance.tex      the 3-field standard + release checklist
