@@ -25,8 +25,8 @@ to the revision and (b) to the \code{transformers} version, both confirmed, and
 
 We scope that claim deliberately. Of the parameters in
 Table~\ref{tab:identifiability} that are not already identifiable, these three
-address the deployment coordinate $D$ --- dtype, tokenizer behavior, chat
-template, revision --- and leave the instrument coordinate $I$ untouched: engine
+address the deployment coordinate --- dtype, tokenizer behavior, chat
+template, revision --- and leave the instrument coordinate untouched: engine
 and kernel versions, batching, cache, device topology, hardware, and harness era.
 Those are precisely the parameters that make a hosted endpoint nondeterministic
 even at temperature zero (\S\ref{sec:related}), and no three data fields can pin

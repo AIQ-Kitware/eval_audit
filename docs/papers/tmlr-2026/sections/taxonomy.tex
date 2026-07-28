@@ -3,16 +3,16 @@
 
 \subsection{What produces a score}
 
-A measured benchmark result is produced by five things acting together, and naming them separately is what makes the rest of this section possible. The \textbf{recorded recipe} ($R$) is the scenario, dataset, prompt construction, in-context examples, decoding parameters, and scorer. The \textbf{deployment} ($D$) is the weights, the model and tokenizer revisions, the chat template, the load precision, and any quantization. The \textbf{execution instrument} ($I$) is the harness version, serving engine, package and kernel versions, hardware, device topology, and batching or caching behavior. The \textbf{artifact interpretation} ($A$) is the storage schema, its migrations, canonicalization, and any carried-forward outputs. What is left over is \textbf{residual} ($U$): stochastic and numerical influences that no record fixes. We call these five the coordinates of a run.
+A measured benchmark result is produced by five things acting together, and naming them separately is what makes the rest of this section possible. The \textbf{recorded recipe} is the scenario, dataset, prompt construction, in-context examples, decoding parameters, and scorer. The \textbf{deployment} is the weights, the model and tokenizer revisions, the chat template, the load precision, and any quantization. The \textbf{execution instrument} is the harness version, serving engine, package and kernel versions, hardware, device topology, and batching or caching behavior. The \textbf{artifact interpretation} is the storage schema, its migrations, canonicalization, and any carried-forward outputs. What is left over is the \textbf{residual}: stochastic and numerical influences that no record fixes. We call these five the coordinates of a run.
 
-The public \helm record exposes $R$, and the names but only a projection of the values within $D$; of $I$, $A$, and $U$ it exposes almost nothing. Reproduction is therefore an inverse problem. One chooses a deployment and an instrument, replays the recorded recipe, and asks whether the result matches the published one --- and when it does not, which coordinate is responsible. We say a run is identifiable at tolerance $\epsilon$ when every materially compatible choice of coordinates produces equivalent results under a declared output-, metric-, or conclusion-level criterion.
+The public \helm record exposes the recipe, and the names but only a projection of the values within the deployment; of the instrument, the artifact interpretation, and the residual it exposes almost nothing. Reproduction is therefore an inverse problem. One chooses a deployment and an instrument, replays the recorded recipe, and asks whether the result matches the published one --- and when it does not, which coordinate is responsible. We say a run is identifiable at a stated tolerance when every materially compatible choice of coordinates produces equivalent results under a declared output-, metric-, or conclusion-level criterion.
 
 \paragraph{The taxonomy these coordinates imply.} The decomposition dictates how reproduction attempts can be classified, and that classification organizes the rest of the paper. Whether a run can be executed at all is a precondition rather than an outcome, and forms an upstream gate (\S\ref{sec:gate}). Past that gate, an attempt is characterized along two orthogonal axes: which coordinates it puts under test (\S\ref{sec:targets}), and, when its result disagrees with the record, which coordinate accounts for the difference (\S\ref{sec:taxonomy}). Both axes follow from the decomposition rather than being proposed alongside it --- the first partitions the coordinates into those an attempt exercises and those it holds fixed, and the second assigns a disagreement to one coordinate, to the residual, or to no coordinate at all. Neither axis refines the other, and collapsing them is what produces the familiar but uninformative verdict that a benchmark ``did not reproduce.''
 
 \subsection{The eligibility gate}
 \label{sec:gate}
 
-Before any disagreement is measured, a run must be executable. Gated models or datasets, revoked download access, missing credentials, unsupported packaging, unavailable judges, and infeasible resource requirements are eligibility and environment filters. They answer ``can we run this?'', not ``did it reproduce?'', and must never be folded into a negative reproduction result. Making this gate explicit --- every excluded run carries a typed exclusion reason --- is what allows a defensible ``$X$ of $Y$ runnable runs'' denominator.
+Before any disagreement is measured, a run must be executable. Gated models or datasets, revoked download access, missing credentials, unsupported packaging, unavailable judges, and infeasible resource requirements are eligibility and environment filters. They answer ``can we run this?'', not ``did it reproduce?'', and must never be folded into a negative reproduction result. Making this gate explicit --- every excluded run carries a typed exclusion reason --- is what allows a defensible denominator: how many runs were runnable, how many were excluded, and for which reason each.
 
 The gate is relative to a target, not to a run. The sharpest case is a model-graded scenario whose judge is no longer served: the judging step is unrepeatable, so the run is ineligible for procedural reproduction, but the judge's per-instance verdicts are themselves part of the released record, and the published aggregate can still be recomputed from them and checked. Such a run is out of scope for the second target of \S\ref{sec:targets} and fully in scope for the first. Treating eligibility as a property of the run alone would discard precisely the evidence that survived, and would understate the auditable fraction of the corpus; we therefore scope every exclusion reason to the target it blocks.
 
@@ -22,14 +22,14 @@ The gate is relative to a target, not to a run. The sharpest case is a model-gra
 A reproduction attempt must first declare what it is attempting to reproduce. We adapt the methods, results, and inferential trichotomy of \citet{goodman2016does} to a benchmark corpus that publishes per-instance outputs, as described in \S\ref{sec:related}. The three resulting choices each exercise a different subset of the coordinates, and they are not interchangeable:
 
 \begin{enumerate}[nosep,leftmargin=1.6em]
-  \item \textbf{Artifact reconstruction}: recompute the published aggregates from the released prompts, completions, and metric records, without rerunning a model. Tests $A$ and the scorer only.
-  \item \textbf{Procedural reproduction}: execute the recorded recipe under a pinned or explicitly equivalent instrument, and compare instance-level outputs and metrics. Tests $D$ and $I$.
+  \item \textbf{Artifact reconstruction}: recompute the published aggregates from the released prompts, completions, and metric records, without rerunning a model. Tests the artifact interpretation and the scorer, and nothing else.
+  \item \textbf{Procedural reproduction}: execute the recorded recipe under a pinned or explicitly equivalent instrument, and compare instance-level outputs and metrics. Tests the deployment and the instrument.
   \item \textbf{Claim-level robustness}: determine whether the substantive conclusion --- a ranking, or a model-generation improvement --- survives plausible execution substrates even when byte-identical outputs do not.
 \end{enumerate}
 
 Targets (2) and (3) correspond to Goodman's methods and inferential reproducibility, the former with its ``same data and tools'' premise necessarily relaxed, since the original tools are what did not survive; target (1) has no counterpart there, and his results reproducibility has none here, because a fixed historical corpus admits no new study.
 
-Released official artifacts remain the historical ground truth for what \helm reported. A rerun assesses the stability and identifiability of the procedure that produced them and does not overwrite the record, which is what licenses us to report a differing rerun as evidence about $I$ rather than as a correction of the official number.
+Released official artifacts remain the historical ground truth for what \helm reported. A rerun assesses the stability and identifiability of the procedure that produced them and does not overwrite the record, which is what licenses us to report a differing rerun as evidence about the instrument rather than as a correction of the official number.
 
 \subsection{Axis 2: why two executions disagree}
 \label{sec:taxonomy}
@@ -37,10 +37,10 @@ Released official artifacts remain the historical ground truth for what \helm re
 Once the target is fixed and the attempt executes, an observed disagreement admits one of six causes --- one per coordinate, plus a residual and an underdetermined case:
 
 \begin{enumerate}[nosep,leftmargin=1.6em]
-  \item \textbf{Recipe mismatch} --- $R$ differs: prompt construction, in-context examples, decoding, or scorer.
-  \item \textbf{Deployment mismatch} --- $D$'s client, endpoint, or engine identity differs, as when a hosted API is replaced by a local one, or in-process \code{transformers} by vLLM.
-  \item \textbf{Execution-instrument mismatch} --- $I$ differs: precision, tokenizer or template version, attention kernel, device placement, or software-stack versions.
-  \item \textbf{Artifact-interpretation mismatch} --- $A$ differs: row reordering, schema migration, or carried-forward outputs.
+  \item \textbf{Recipe mismatch} --- the recorded recipe differs: prompt construction, in-context examples, decoding, or scorer.
+  \item \textbf{Deployment mismatch} --- the deployment's client, endpoint, or engine identity differs, as when a hosted API is replaced by a local one, or in-process \code{transformers} by vLLM.
+  \item \textbf{Execution-instrument mismatch} --- the instrument differs: precision, tokenizer or template version, attention kernel, device placement, or software-stack versions.
+  \item \textbf{Artifact-interpretation mismatch} --- the interpretation differs: row reordering, schema migration, or carried-forward outputs.
   \item \textbf{Residual disagreement under controlled equivalence} --- every controllable coordinate is matched and a gap remains. This is the only category analogous to conventional repeatability failure.
   \item \textbf{Historically non-identifiable reproduction} --- the surviving evidence does not uniquely specify what execution should count as faithful. Qualitatively different from (5): not ``it failed to repeat'' but ``what would count as a faithful execution is underdetermined.''
 \end{enumerate}
@@ -50,7 +50,7 @@ The two axes are independent: any target can fail for any cause, and it is their
 \subsection{Per-parameter identifiability}
 \label{sec:identifiability}
 
-Identifiability in the sense fixed above --- equivalent results at tolerance $\epsilon$ across every materially compatible configuration --- is not a binary property of an entire run. Each latent parameter within $D$ and $I$ has its own status, and the per-case analysis assigns one to each (Table~\ref{tab:identifiability}). This refinement is what makes both the positive attributions and the non-identifiability result precise: we never claim to identify a whole historical deployment, only specific coordinates, each with its own evidentiary basis.
+Identifiability in the sense fixed above --- equivalent results, within a stated tolerance, across every materially compatible configuration --- is not a binary property of an entire run. Each latent parameter within the deployment and the instrument has its own status, and the per-case analysis assigns one to each (Table~\ref{tab:identifiability}). This refinement is what makes both the positive attributions and the non-identifiability result precise: we never claim to identify a whole historical deployment, only specific coordinates, each with its own evidentiary basis.
 
 A coordinate can fail to be recoverable in two ways, and the difference decides what can be done about it. It may be structurally unrecoverable, in that no record of this form could pin it down, or merely practically unrecoverable, in that the particular record which happens to survive is insufficient \citep{raue2009identifiability}. Our classic-model result (\S\ref{sec:classic}) is the second kind, and that is what makes the provenance recommendation of \S\ref{sec:provenance} actionable: a practically non-identifiable parameter is one a richer record would have recovered, whereas a structurally non-identifiable one would leave a recording standard nothing to fix. We therefore state that result as non-identifiability relative to named evidence rather than as a claim of irreproducibility.
 
@@ -60,12 +60,12 @@ A coordinate can fail to be recoverable in two ways, and the difference decides 
 \toprule
 \textbf{Parameter} & \textbf{Typical status} & \textbf{Basis / limitation} \\
 \midrule
-Run specification ($R$) & identifiable & frozen public \file{run\_spec.json};
+Run specification & identifiable & frozen public \file{run\_spec.json};
 migration can still alter interpretation. \\
 Client / deployment class & often identifiable & recorded deployment name and
 harness config; hosted-provider internals remain opaque. \\
 Load dtype & conditional & explicit when pinned; else inferable only from loader
-source $+$ package-version bounds. \\
+source and package-version bounds. \\
 Tokenizer special-token behavior & often recoverable & repo/config inspection and
 token-level prompt comparison. \\
 Chat template / generation prompt & often recoverable & revisioned tokenizer files
@@ -73,7 +73,7 @@ or controlled rendering sweeps; effective behavior depends on package version. \
 Model / tokenizer revision & frequently missing & rarely pinned; mutable aliases
 prevent unique historical recovery. \\
 Engine / package / kernel versions & often missing & client family may be known;
-exact versions/kernels usually not. \\
+exact versions and kernels usually not. \\
 Batching, cache, topology, hardware & usually missing historically & measure
 robustness rather than promise exact replay. \\
 Harness era & tagged or proxy-only & tagged releases containerizable; migrated
