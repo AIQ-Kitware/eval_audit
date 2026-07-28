@@ -4379,3 +4379,52 @@ the difference" question is a request for understanding; the edit request came
 one turn later and was explicit ("please rewrite it"). When a user is
 interrogating their own draft, answering in prose first is not a slower path to
 the edit --- it is what lets them decide whether the edit is the right one.
+
+**Addendum 5 (same session).** Edward kept pushing on artifact interpretation and
+was right to: intent-vs-realization did not actually answer his objection. If the
+scorer's intent is recipe and its implementation is instrument, what is left for a
+fourth coordinate? The honest answer is that the first framing had no reply --- an
+interpretation looked like the instrument seen from the reading end.
+
+**What resolves it is timing, not role.** Recipe is fixed at design time,
+deployment and instrument at execution time; all three are historical facts no
+later decision can alter. The artifact interpretation is fixed at *read* time,
+which happens on every occasion anyone reads the record --- and the stored bytes
+keep changing after the producing process exits: carried unchanged into a later
+suite version, rewritten by a migration, truncated in transit. No property of the
+producing instrument accounts for those, because it had already terminated. The
+falsifiable signature that follows: this is the only coordinate that can disagree
+with *itself* --- one stored run aggregated under two dedup policies gives two
+numbers with no second execution anywhere in the comparison. Every other
+coordinate needs two runs to exhibit a mismatch.
+
+**He also caught a real error.** I had said target (1) re-executes "only the
+aggregation" for judge-dependent metrics. Wrong: the chain is completion →
+[judge] → annotation → [metric fn] → stat → [aggregation], and target (1) holds
+only the first arrow fixed. Their own `wildbench_annotator_success` bookkeeping
+metric --- did the judge request *parse* --- is the proof that the annotation is a
+separately stored intermediate. Corrected in the text.
+
+**And I had the judge backwards.** I claimed judge identity was recorded and
+recipe-side. `judge_registry.py` exists precisely because it is not: official run
+specs name an annotator class with empty args, and the judge models are hard-coded
+in the annotator classes per HELM version. So judge identity is a *recipe slot
+whose value the instrument version supplies* --- structurally identical to the
+chat-template flag whose effect the `transformers` version decides, and the load
+precision the loader's default chooses. That is three independent instances of one
+mechanism, which is a considerably stronger claim than three unrelated gotchas,
+and it is now stated in §3.1.
+
+**Design insight.** Two coordinates that share a role can still be distinct if
+they are *fixed at different times*. I reached for role-based separation twice
+(intent/realization) and it kept failing on the scorer, because the scorer
+genuinely spans roles. The temporal axis --- design time, execution time, read time
+--- cuts cleanly where the role axis smears, and it also explains the coordinate's
+practical asymmetry: an interpretation is the one coordinate an auditor still
+controls, which is why it is a confounder to neutralize rather than a cause to
+attribute to.
+
+**Still open.** Cause (4) has no §5 result landing on it. My recommendation stands:
+promote the coverage funnel's raw-hash / canonical-hash / logical-key gaps into §5,
+since those are already-computed quantitative artifact-interpretation measurements
+sitting in Appendix A as a workaround note. Not done --- Edward has not decided.
