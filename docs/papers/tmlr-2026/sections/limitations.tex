@@ -30,11 +30,16 @@ comparison core additively and proving it byte-equal to the incumbent on fixture
 before switching any renderer to it (\S\ref{sec:diff}), and we report a
 disagreement only where that core and its predecessor agree.
 
-\paragraph{No frozen population denominator.} We characterize the corpus funnel
-and the runnable subset, but a headline ``fraction reproducible'' statistic
-requires a frozen, checked-in corpus manifest with an explicit numerator and
-denominator, and fresh stores across families. We do not make a population-level
-prevalence claim. {\color{orange}\textsf{\small[\textsc{pending}: regenerate corpus denominator from a pinned manifest]}}
+\paragraph{The exclusion profile is not reported.} \S\ref{sec:preconditions} makes
+a typed exclusion a first-class outcome of the taxonomy, but this draft does not
+populate it: no corpus-wide breakdown of which runs were excluded, and for which
+reason, appears in \S\ref{sec:cases}, and the case studies state only their own
+exclusions. The machinery exists and is what produced the scoped corpora used
+here; what is missing is a pass over a frozen manifest whose output is fit to
+publish. A headline ``fraction reproducible'' statistic would require that
+manifest with an explicit numerator and denominator, and fresh stores across
+families, so we make no population-level prevalence claim.
+{\color{orange}\textsf{\small[\textsc{pending}: corpus-wide exclusion-reason breakdown from a pinned manifest]}}
 
 \paragraph{Single-machine measurements.} Reported agreement is
 official-vs-local and same-machine; cross-machine variance (which would separate
