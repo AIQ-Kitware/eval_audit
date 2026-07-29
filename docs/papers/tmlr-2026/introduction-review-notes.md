@@ -4,12 +4,13 @@
 states the problem, the proposed text, and what happens if it is not done.
 
 Last updated: 2026-07-28. Reflects the intro at commit `6cf60125` and §3 at
-`ef777bf1`; items 6--8 follow the §3 rework, which ended with **four** coordinates —
+`ef777bf1`; items 6--9 follow the §3 rework, which ended with **four** coordinates —
 recipe, deployment, execution instrument, residual — of which three are
 controllable, and **five** causes on axis 2. The former fourth coordinate
 ("artifact interpretation", briefly "record history") was retired: a defect in
 the stored record is evidence failing rather than a cause of the score, so it is
-now a gate reason. Items 7 and 8 are where §1 still reflects the old scheme.
+now a precondition on an attempt (§3.2). Items 7--9 are where §1 still reflects
+the old scheme.
 
 ---
 
@@ -174,13 +175,14 @@ fields a newer harness wrote and per-instance row ordering are the **instrument*
 (the harness generated the record that way), our own dedup / normalization /
 key-granularity decisions are audit-tool correctness and sit in §8, and
 post-execution change to the stored artifact — migrations, carried-forward
-copies, damage in transit — is now a **gate** concern rather than a coordinate,
+copies, damage in transit — is now a **precondition** on an attempt rather than a
+coordinate,
 because it is a defect in the evidence rather than a cause of the score.
 
 **Proposed:** change "execution environment" to "execution instrument", and drop
 the fourth item so the list reads "…the recorded recipe, model deployment, or
 execution instrument." If you want to keep a fourth clause, "…or the later
-history of the resulting artifacts" is accurate and points at the gate, but the
+history of the resulting artifacts" is accurate and points at §3.2, but the
 shorter version aligns §1 with §3.4 exactly.
 
 **Related, same line:** "model deployment" here vs. "deployment" as the §3.1
@@ -216,9 +218,38 @@ list as a competing decomposition.
 
 ---
 
+## 9. Contribution 1 calls §3.2 "one gate" — LOW
+
+**Problem.** Contribution 1 reads "…derive from it a taxonomy with **one gate**
+and two orthogonal axes: whether a run is eligible to be executed at all; …".
+§3.2 is now titled *Preconditions for a reproduction attempt*, and "gate" no
+longer appears anywhere in §3 except in "gated models", which is the
+access-restriction sense.
+
+The metaphor was dropped because it asserts a single binary checkpoint while
+§3.2's own second paragraph denies exactly that — the preconditions are relative
+to a target, so a run can satisfy them for artifact reconstruction and fail them
+for procedural reproduction. It also frames the thing as machinery one passes and
+forgets, which works against §3.2's claim that the exclusions are findings about
+how a benchmark record decays, reported alongside the survivors.
+
+Low severity: the clause immediately after "one gate" glosses it correctly
+("whether a run is eligible to be executed at all"), and "eligibility" is still
+§3.2's word for the executability branch, so ¶10's "failures of reproduction
+eligibility or recoverability" needs nothing.
+
+**Proposed (one word):** "…a taxonomy with **a precondition** and two orthogonal
+axes: whether a run is eligible to be executed at all; …"
+
+**If not done:** §1 names a structural element the reader never meets under that
+name. A reviewer is unlikely to notice; it is listed so the mismatch is on the
+record rather than discovered late.
+
+---
+
 ## Not proposed
 
-- Rewriting the two motivating questions in ¶10 — they work and match §3's gate
+- Rewriting the two motivating questions in ¶10 — they work and match §3's preconditions
   and axes.
 - Adding the "layer" vocabulary — deliberately dropped from §2 (`e1d6fca4`);
   the intro's two uses of "layer" mean something else (a layer of provenance to

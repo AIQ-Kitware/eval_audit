@@ -8,7 +8,8 @@ Companion file: [`introduction-review-notes.md`](introduction-review-notes.md).
 Last updated: 2026-07-28. Reflects the tree at commit `ef777bf1`. §3 now has
 **four** coordinates — recipe, deployment, execution instrument, residual — with
 record defects (migrations, carried-forward outputs, damage in transit) moved out
-of the decomposition and into the gate, since they are evidence failing rather
+of the decomposition and into the preconditions of §3.2, since they are evidence
+failing rather
 than causes of a score. §3.1 was then cut back to the coordinate list plus three
 paragraphs; the engine-boundary, scorer, and judge-recursion paragraphs are gone,
 and their content is carried by the list items' role definitions or dropped. Item
@@ -122,7 +123,7 @@ inside §2's undivided "substrate" with no signal that §3 will divide it.
   instrument was a mismatch. §3.1's judge paragraph was then cut deliberately, and
   with it the recursion. Nothing in §3 now places the judge across coordinates, so
   §2's sentence contradicts nothing and the item has no basis. What §3 still says
-  about the judge is consistent with it: the gate treats a withdrawn judge as
+  about the judge is consistent with it: §3.2 treats a withdrawn judge as
   blocking procedural reproduction, and target (1) treats the judge's forward pass
   as the one step it cannot re-execute.
 
