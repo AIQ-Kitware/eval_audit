@@ -4553,3 +4553,78 @@ sweep is clean across editable sections, environments balance, and the frozen
 intro's two uses of "interpretation" are item 4 in the introduction review notes
 -- that note now understates the change and should be revised to say the
 coordinate was removed, not renamed.
+
+---
+
+## 2026-07-30 09:34:05 -0400
+
+**Model / harness.** Claude Opus 5 (1M context), `claude-opus-5[1m]`, Claude Code
+in the VSCode extension.
+
+**Intent.** The user had hand-restructured
+`docs/presentations/2026-07-intern-final/Edward Intern Presentation.source.pptx`
+from the builder's 17-slide shape down to 13 slides, replacing a list of five
+one-line case vignettes with three dedicated case slides. Two asks: *decide which
+three case studies*, and *fill slides 9-12 with bullets*.
+
+**Choosing the three.** I did not invent a grouping. `docs/papers/tmlr-2026/
+sections/cases.tex` had already settled one, and the deck should not disagree with
+the paper it is a preview of: OLMo as the partially-recoverable modern case,
+RedPajama-3B as declared-proxy execution under era-pinned instruments, and
+GPT-J / GPT-NeoX / OPT as origin-instrument non-identifiability. The alternative I
+weighed was a drama-ordered trio (OLMo-7B tokenizer collapse → OLMo-2 fp32
+substrate decomposition → classic non-identifiability), which has the better
+opening beat but spends two of three slides on OLMo and drops the era-container
+work entirely. The paper's trio won because each slide lands a *different*
+taxonomy outcome -- recoverable, recoverable-only-by-rebuilding-the-period-
+instrument, not recoverable in principle -- and together they span the three eras
+of the corpus. The flagship fp32 decomposition is still on the deck; it lives
+inside Case 1, which is where it belongs, since it is an OLMo result.
+
+**Numbers.** Everything on the slides traces to
+`docs/experiment-dump-2026-07-27/EXPERIMENTS_AND_RESULTS.md`: A3 for the OLMo
+coverage (149 analyzed, mean 0.935, 0.939 at abs_tol=0.1), A8 for the
+decomposition (+0.10 → +0.067 → byte-exact), A6 for the era containers (1.000 /
+0.817 under both eras) and G13 for the classic class-path result. One correction
+worth carrying: the byte-exact figure is **539/541, not 541/541** -- the probe's
+own `exact` score reports 1.000 but direct byte comparison finds two long-form
+instances diverging mid-stream (§8.4 says so explicitly). My stored memory had the
+wrong number and is now fixed.
+
+**Mechanics, and a trap.** `build_deck.py` is now stale against the restructured
+source: it keys `REPLACE` and `INSERT_BEFORE` on titles that no longer exist
+("Reproduction is simple?", "Conclusions"), and its `NEW_SLIDES` would re-insert
+the five case slides the user just consolidated. The user has also redrawn the two
+pipeline diagrams as *native shapes* on slides 6-7 rather than importing
+`pipeline_naive.png` / `pipeline_reality.png` -- which is exactly the "take the
+deck over by hand, stop running the builder" path the builder's own docstring
+anticipates. So I edited the source deck in place with a one-off script rather
+than resurrecting the builder, and did **not** regenerate
+`Edward Intern Presentation.pptx` (that copy still carries builder-injected
+speaker notes; overwriting it with a plain copy would silently lose them).
+
+**Fit.** No LibreOffice on this box, so I could not render to check overflow. I
+reused `build_deck.py`'s measured line budget for the 9.13 × 3.52in body
+placeholder (17pt → 8 lines, 16 → 10, 15 → 11, 14 → 12) and wrote a
+character-width estimator; the four slides land at 82/84/86/84 % of the box. Two
+rounds of trimming were needed to get there. `<a:normAutofit/>` is re-asserted on
+each body as the renderer-disagreement safety net.
+
+**Design insights.** (1) When a deck previews a paper, the paper's section
+structure is the deck's outline -- deriving the case list from `cases.tex` costs
+nothing and prevents the talk and the submission from telling different stories.
+(2) A generator whose input the human has started hand-editing is no longer a
+generator; the tell here was native shapes replacing generated PNGs, and the right
+response is to stop running it rather than to patch it. (3) Without a renderer,
+an explicit lines-per-inch budget measured once on the real template is a
+serviceable substitute for visual QA -- but only if you keep the fill well under
+100 %, since character-width estimates are the weak link.
+
+**Next steps.** (a) `build_deck.py` and `intern-final-presentation.md` are both
+stale against the 13-slide deck -- the md still describes 17 slides and its
+`## Slide N` notes mapping no longer lines up, so speaker notes for slides 8-13
+are unwritten. If the user wants notes for the three case slides, that md needs
+retargeting first. (b) `docs/presentations/` is entirely untracked; I did not
+`git add` a previously-untracked directory of binaries unilaterally. (c) The A8
+figure `figures/drift_decomposition.png` is not on any slide now -- Case 1 would
+carry it well if the bullets were trimmed to make room.
