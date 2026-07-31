@@ -14,8 +14,8 @@ sections/
   introduction.tex    reframing + thesis + contributions
   related_work.tex    HELM, EEE (detection→attribution), serving nondeterminism, provenance
   taxonomy.tex        four coordinates; preconditions for an attempt (execution *and* evidence); two axes (three reproduction targets, five causes); per-parameter identifiability
-  system.tex          §4 Methodology --- from-spec replay, substrate sweep, era containers, layered diff
-  cases.tex           §5 Results --- OLMo (recoverable) · RedPajama (proxy-era) · GPT-J/NeoX/OPT (non-identifiable) · GPT-OSS (candidate)
+  methodology.tex     §4 --- from-spec replay, substrate sweep, era containers, layered diff + pairing strictnesses
+  results.tex         §5 --- pairing coverage · OLMo (recoverable) · RedPajama (proxy-era) · GPT-J/NeoX/OPT (non-identifiable) · GPT-OSS (candidate)
   provenance.tex      the 3-field standard + release checklist
   limitations.tex     threats to validity (each pending item flagged)
   conclusion.tex
@@ -47,21 +47,22 @@ grep -rc -F 'fcolorbox{orange}{yellow!12}' sections/*.tex   # 6 scaffold blocks
 grep -ro -F 'textsc{pending}' sections/*.tex main.tex | wc -l   # 10 pending markers
 ```
 
-These are the exhaustive list of gaps. The load-bearing ones:
+These are the exhaustive list of gaps. Located by section name rather than
+number, since the numbers move. The load-bearing ones:
 
 | Gap | Marker | Status |
 |---|---|---|
-| Corpus-wide exclusion profile | §8 pending | §3.2 makes typed exclusion a taxonomy outcome; **§5 populates none of it** — needs a Stage-1 pass over a frozen manifest |
-| Coverage-funnel counts (Table 2) | §5.1 pending | numbers read from derived store layers; OLMo/GPT-OSS rows need **regeneration from preserved raw runs** |
-| Ordinary-path OLMo confirmation (held-out) | §5.1.1 scaffold + pending | experiment designed, **not run** |
-| Regenerated OLMo aggregate heatmap | §5.1 scaffold | store stale → **re-run** |
-| GPT-OSS promoted to a result | §5.1.3 scaffold | candidate; run artifacts pruned → **re-run + preserve** |
-| RedPajama validation-ladder table | §5.2 scaffold | raw runs **survive** → directly packageable |
-| OLMo confirmation results table | §5.1.1 scaffold | awaits the run |
-| Cross-machine baseline | §7 pending | scoped, not run |
-| Artifact DOI / git bundle | §8 scaffold | at camera-ready |
+| Corpus-wide exclusion profile | limitations, pending | taxonomy makes typed exclusion an outcome; **results populate none of it** — needs a Stage-1 pass over a frozen manifest |
+| Coverage-funnel counts (Table 2) | results §5.1, pending | numbers read from derived store layers; OLMo/GPT-OSS rows need **regeneration from preserved raw runs** |
+| Ordinary-path OLMo confirmation | limitations, scaffold + pending | experiment designed, **not run**; the design lives with the limitation it answers |
+| OLMo confirmation results table | limitations, scaffold | awaits the run above |
+| Regenerated OLMo aggregate heatmap | results, OLMo case, scaffold | store stale → **re-run** |
+| GPT-OSS promoted to a result | results, GPT-OSS probe, scaffold | candidate; run artifacts pruned → **re-run + preserve** |
+| RedPajama validation-ladder table | results, RedPajama case, scaffold | raw runs **survive** → directly packageable |
+| Cross-machine baseline | limitations, pending | scoped, not run |
+| Artifact DOI / git bundle | conclusion, scaffold | at camera-ready |
 
-Everything else (the taxonomy, system, the two *confirmed* OLMo attributions, the
+Everything else (the taxonomy, the methodology, the two *confirmed* OLMo attributions, the
 G13 non-identifiability result, the provenance standard, the appendices) is drawn
 from completed work in the master reference.
 

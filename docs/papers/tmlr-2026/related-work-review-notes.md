@@ -51,9 +51,9 @@ pair and not the other would be worse than leaving both.
 
 Then update all five references:
 
-- `sections/cases.tex:4` — `sec:model` → `sec:taxonomy`
-- `sections/system.tex:4` — `sec:model` → `sec:taxonomy`
-- `sections/cases.tex:211` — `sec:taxonomy` → `sec:causes`
+- `sections/results.tex:4` — `sec:model` → `sec:taxonomy`
+- `sections/methodology.tex:4` — `sec:model` → `sec:taxonomy`
+- `sections/results.tex` — `sec:taxonomy` → `sec:causes` (in the classic case)
 - `sections/taxonomy.tex:10` — `sec:taxonomy` → `sec:causes` (internal, in the
   "taxonomy these coordinates imply" paragraph)
 - **`sections/related_work.tex:13`** — `sec:taxonomy` → `sec:causes` (the blocker;
@@ -65,7 +65,7 @@ Then update all five references:
 
 ## 2. ~~`system.tex:4` calls §3 "the measurement model"~~ — RESOLVED
 
-`system.tex:4` read "EvalAudit operationalizes the measurement model of
+`system.tex:4` (now `methodology.tex`) read "EvalAudit operationalizes the measurement model of
 \S\ref{sec:model}", pointing at a title that no longer existed after the §3
 rename. Fixed in passing when §4 was retitled *Methodology*: the sentence now
 reads "operationalizes the taxonomy of \S\ref{sec:model}". Kept as a heading so
