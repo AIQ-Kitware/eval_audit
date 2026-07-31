@@ -14,8 +14,8 @@ sections/
   introduction.tex    reframing + thesis + contributions
   related_work.tex    HELM, EEE (detection→attribution), serving nondeterminism, provenance
   taxonomy.tex        four coordinates; preconditions for an attempt (execution *and* evidence); two axes (three reproduction targets, five causes); per-parameter identifiability
-  system.tex          EvalAudit: from-spec replay, substrate sweep, era containers, layered diff
-  cases.tex           OLMo (recoverable) · RedPajama (proxy-era) · GPT-J/NeoX/OPT (non-identifiable) · GPT-OSS (candidate)
+  system.tex          §4 Methodology --- from-spec replay, substrate sweep, era containers, layered diff
+  cases.tex           §5 Results --- OLMo (recoverable) · RedPajama (proxy-era) · GPT-J/NeoX/OPT (non-identifiable) · GPT-OSS (candidate)
   provenance.tex      the 3-field standard + release checklist
   limitations.tex     threats to validity (each pending item flagged)
   conclusion.tex
@@ -58,7 +58,6 @@ These are the exhaustive list of gaps. The load-bearing ones:
 | GPT-OSS promoted to a result | §5.1.3 scaffold | candidate; run artifacts pruned → **re-run + preserve** |
 | RedPajama validation-ladder table | §5.2 scaffold | raw runs **survive** → directly packageable |
 | OLMo confirmation results table | §5.1.1 scaffold | awaits the run |
-| Corpus-wide denominator | §7 pending | regenerate from a pinned manifest |
 | Cross-machine baseline | §7 pending | scoped, not run |
 | Artifact DOI / git bundle | §8 scaffold | at camera-ready |
 

@@ -1,15 +1,17 @@
-\section{Case Studies: From Attribution to Non-Identifiability}
+\section{Results}
 \label{sec:cases}
 
-The three case studies instantiate the two regimes of \S\ref{sec:model}. OLMo is
+The results are one corpus-wide measurement and three case studies. The
+measurement comes first, because every comparison that follows depends on it:
+what it costs to decide that two runs are the same run at all
+(\S\ref{sec:coverage}). The case studies then instantiate the two regimes of
+\S\ref{sec:model}. OLMo is
 the \emph{partially recoverable} modern case: several disagreements attribute to
 named unrecorded parameters (\S\ref{sec:olmo}). RedPajama-3B demonstrates
 end-to-end execution under \emph{declared proxy} historical instruments
 (\S\ref{sec:redpajama}). The original-paper classic models are the
 \emph{non-identifiable} case: their producing instrument cannot be recovered from
-surviving evidence (\S\ref{sec:classic}). They are preceded by a corpus-wide
-measurement of what every one of them depends on: what it costs to decide that
-two runs are the same run at all (\S\ref{sec:coverage}).
+surviving evidence (\S\ref{sec:classic}).
 
 \subsection{What pairing costs: harness-version churn in the record}
 \label{sec:coverage}

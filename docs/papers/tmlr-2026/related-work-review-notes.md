@@ -39,6 +39,15 @@ and the error will not surface as a build warning.
 |---|---|---|
 | `sec:model` → `sec:taxonomy` | §3 (the section) | §3 |
 | `sec:taxonomy` → `sec:causes` | §3.4 (axis 2) | §3.4 |
+| `sec:system` → `sec:methods` | §4, now titled *Methodology* | §4 |
+| `sec:cases` → `sec:results` | §5, now titled *Results* | §5 |
+
+The last two joined the list when §4 and §5 were retitled. `sec:system` is the
+blocker again: `related_work.tex:15` references it ("our version-pinned ``era''
+containers (§…)"), so the label cannot be renamed while §2 is frozen. `sec:cases`
+is referenced only from editable files (`taxonomy.tex:67`,
+`limitations.tex:36`) and could be renamed today, but renaming one of a stale
+pair and not the other would be worse than leaving both.
 
 Then update all five references:
 
@@ -54,19 +63,19 @@ Then update all five references:
 
 ---
 
-## 2. `system.tex:4` calls §3 "the measurement model" — LOW, and not blocked
+## 2. ~~`system.tex:4` calls §3 "the measurement model"~~ — RESOLVED
 
-**Problem.** `system.tex:4` reads "EvalAudit operationalizes the measurement model
-of \S\ref{sec:model}". After the rename, §3 is a taxonomy, and the phrase points at
-a title that no longer exists.
+`system.tex:4` read "EvalAudit operationalizes the measurement model of
+\S\ref{sec:model}", pointing at a title that no longer existed after the §3
+rename. Fixed in passing when §4 was retitled *Methodology*: the sentence now
+reads "operationalizes the taxonomy of \S\ref{sec:model}". Kept as a heading so
+the item numbering below does not shift.
 
-**Not blocked** — `system.tex` is editable. Listed here only to keep the
-consequences of the §3 rename in one place. Suggested wording: "operationalizes
-the taxonomy of §3", or "operationalizes the decomposition of §3.1" if the intent
-was specifically the five coordinates.
-
-**If not done:** a reader following the cross-reference finds a section whose title
-does not match the phrase that sent them there.
+Note that `introduction.tex:18` still says "We give a **measurement model** of how
+a benchmark score is generated". That is §1's own phrasing for the decomposition,
+not a cross-reference to a section title, so it is not a defect — but if §1 is
+ever unfrozen, "measurement model" and "taxonomy" are two names for §3.1 and one
+should go.
 
 ---
 
