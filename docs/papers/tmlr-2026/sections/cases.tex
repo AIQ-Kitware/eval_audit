@@ -188,32 +188,6 @@ reporting code. Expected qualitative pattern: base-model classic benchmarks
 reproduce near-exactly; instruct-model \texttt{ifeval} shows the largest drift,
 consistent with the chat-template and precision findings above.\end{minipage}}\par\smallskip
 
-\subsubsection{The confirmation experiment (design, pending)}
-\label{sec:olmo-confirm}
-
-The precision result is at level ``deployment-match probe'' and must be promoted
-to a confirmed reproduction before it can carry a positive attribution claim. The
-protocol separates discovery from held-out confirmation:
-\begin{enumerate}[nosep,leftmargin=1.6em]
-  \item freeze the discovery instances and the winning candidate configuration;
-  \item determine whether the win requires the probe-only
-        \texttt{add\_special\_tokens=false} behavior, and if so implement it through
-        the ordinary tokenizer/client path;
-  \item execute the exact public \texttt{run\_spec.json} through the normal HELM
-        path (not the probe), generating standard artifacts;
-  \item compare through the standard pair-report pipeline;
-  \item evaluate on \emph{held-out} instances and, preferably, a second benchmark;
-  \item preserve the full candidate surface, not only the winner.
-\end{enumerate}
-A success supports a concrete attribution-and-closure claim; a failure is itself
-publishable --- it would show that output-matching probes do not automatically
-translate into faithful benchmark execution.
-\par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
-  \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Insert the confirmation results table: for one dense and one MoE model
-$\times$ two benchmarks, report \{naive, exact-recipe, reconstructed-deployment\}
-agreement on held-out instances, with exact-token, normalized-text, first-divergent-token,
-common-prefix-length, and task-metric columns. {\color{orange}\textsf{\small[\textsc{pending}: ordinary-path OLMo run]}}\end{minipage}}\par\smallskip
-
 \subsubsection{Generalization probe: GPT-OSS-20B (candidate)}
 \label{sec:gptoss}
 As a test that the machinery generalizes beyond OLMo, we replayed the four

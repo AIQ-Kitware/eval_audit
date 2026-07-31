@@ -9,8 +9,28 @@ rather than permanent limits.
 oracle-scored sample plus a deductive source-level argument; it has not been
 confirmed through the ordinary HELM path on held-out instances. Matching a small
 sample does not uniquely identify a producing deployment, and the deductive leg is
-conditional on the unrecorded \texttt{transformers} version. \S\ref{sec:olmo-confirm}
-is the experiment that would settle it. {\color{orange}\textsf{\small[\textsc{pending}: ordinary-path OLMo confirmation]}}
+conditional on the unrecorded \texttt{transformers} version.
+{\color{orange}\textsf{\small[\textsc{pending}: ordinary-path OLMo confirmation]}}
+
+\paragraph{The confirmation experiment: designed, not run.}
+\label{sec:olmo-confirm}
+Its protocol
+separates discovery from held-out confirmation: freeze the discovery instances
+and the winning candidate configuration; determine whether the win requires the
+probe-only \texttt{add\_special\_tokens=false} behavior, and if so implement it
+through the ordinary tokenizer and client path; execute the exact public
+\texttt{run\_spec.json} through the normal HELM path rather than the probe,
+generating standard artifacts; compare through the standard pair-report
+pipeline; evaluate on \emph{held-out} instances and, preferably, a second
+benchmark; and preserve the full candidate surface rather than only the winner.
+A success would support a concrete attribution-and-closure claim; a failure would
+itself be publishable, since it would show that output-matching probes do not
+automatically translate into faithful benchmark execution.
+\par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
+  \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Insert the confirmation results table: for one dense and one MoE model
+$\times$ two benchmarks, report \{naive, exact-recipe, reconstructed-deployment\}
+agreement on held-out instances, with exact-token, normalized-text, first-divergent-token,
+common-prefix-length, and task-metric columns. {\color{orange}\textsf{\small[\textsc{pending}: ordinary-path OLMo run]}}\end{minipage}}\par\smallskip
 
 \paragraph{Store freshness and preservation.} Some result stores postdate their
 raw run artifacts, which were pruned; the OLMo aggregate report is stale and the
