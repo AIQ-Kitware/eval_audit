@@ -16,20 +16,9 @@ surviving evidence (\S\ref{sec:classic}).
 \subsection{What pairing costs: harness-version churn in the record}
 \label{sec:coverage}
 
-Before a disagreement can be attributed, an official row and a local row must be
-declared to be the same run. That declaration is not a fact read off the record,
-because the harness that wrote each side decided what the record contains, so we
-never report a single coverage number. Each official row in scope is joined to local rows at
-three nested strictnesses. \emph{Recipe-identical} is agreement on HELM's own
-\texttt{run\_spec\_hash}. \emph{Recipe-canonical} is agreement after we
-additionally collapse the fields newer HELM populates and older HELM omitted
-entirely --- \texttt{chain\_of\_thought\_prefix} and \texttt{\_suffix},
-\texttt{global\_suffix}, \texttt{num\_trials}, \texttt{model\_deployment},
-\texttt{metric\_specs}, \texttt{groups}, \texttt{annotators}. \emph{Logical} is
-agreement on scenario, model, and adaptation, ignoring \texttt{suite\_version}.
-The gaps between the three are the measurement: identical-to-canonical is
-harness-version churn inside the record, and canonical-to-logical is genuine
-recipe drift.
+Every official row in scope is joined to local rows at the three nested
+strictnesses of \S\ref{sec:diff} --- recipe-identical, recipe-canonical, logical
+--- and the gaps between them are the measurement.
 
 \begin{table}[t]
 \caption{Pairing an official corpus with its local replays at three nested

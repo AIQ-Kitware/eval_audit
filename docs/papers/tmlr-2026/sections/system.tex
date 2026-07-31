@@ -106,9 +106,23 @@ layer along
 which is what turns a bare ``the numbers differ'' into an attribution. To keep
 comparisons honest, comparability \emph{facts} (e.g.\ same recipe, same
 deployment, same judge) are reported separately from the \emph{diagnosis}: a fact
-is never re-labeled to hide a substitution, and coverage is reported
-at three nested levels (logical / recipe-canonical / recipe-identical) so that
-harness-version churn is separated from genuine recipe drift. Building this core
+is never re-labeled to hide a substitution.
+
+Pairing an official row with a local one is itself such a decision, and not a
+fact read off the record, since the harness that wrote each side decided what
+that side contains. We therefore never report a single coverage number, but join
+at three nested strictnesses. \emph{Recipe-identical} is agreement on HELM's own
+\texttt{run\_spec\_hash}. \emph{Recipe-canonical} is agreement after we
+additionally collapse the fields newer HELM populates and older HELM omitted
+entirely --- \texttt{chain\_of\_thought\_prefix} and \texttt{\_suffix},
+\texttt{global\_suffix}, \texttt{num\_trials}, \texttt{model\_deployment},
+\texttt{metric\_specs}, \texttt{groups}, \texttt{annotators}. \emph{Logical} is
+agreement on scenario, model, and adaptation, ignoring \texttt{suite\_version}.
+The gaps between the three are what the levels are for: identical-to-canonical
+is harness-version churn inside the record, and canonical-to-logical is genuine
+recipe drift.
+
+Building this core
 \emph{additive-first} --- proven byte-equal to the incumbent on fixtures at
 $\texttt{atol}=10^{-9}$ before any renderer was switched to it --- is itself part of
 the reproducibility discipline: a looser tolerance is treated as a finding to
