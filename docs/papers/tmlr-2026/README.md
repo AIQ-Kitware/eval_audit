@@ -15,7 +15,7 @@ sections/
   related_work.tex    HELM, EEE (detection→attribution), serving nondeterminism, provenance
   taxonomy.tex        four coordinates; preconditions for an attempt (execution *and* evidence); two axes (three reproduction targets, five causes); per-parameter identifiability
   methodology.tex     §4 --- from-spec replay, substrate sweep, era containers, layered diff + pairing strictnesses
-  results.tex         §5 --- pairing coverage · OLMo (recoverable) · RedPajama (proxy-era) · GPT-J/NeoX/OPT (non-identifiable) · GPT-OSS (candidate)
+  results.tex         §5 --- pairing coverage · Qwen base rate · OLMo (recoverable) · RedPajama (proxy-era) · GPT-J/NeoX/OPT (non-identifiable) · GPT-OSS (candidate) · open-judge substitution
   provenance.tex      the 3-field standard + release checklist
   limitations.tex     threats to validity (each pending item flagged)
   conclusion.tex
@@ -43,8 +43,8 @@ preamble and survives being lifted into another document. Keep it that way.
 Structural check (run in this dir):
 
 ```
-grep -rc -F 'fcolorbox{orange}{yellow!12}' sections/*.tex   # 6 scaffold blocks
-grep -ro -F 'textsc{pending}' sections/*.tex main.tex | wc -l   # 11 pending markers
+grep -rc -F 'fcolorbox{orange}{yellow!12}' sections/*.tex   # 8 scaffold blocks
+grep -ro -F 'textsc{pending}' sections/*.tex main.tex | wc -l   # 13 pending markers
 ```
 
 These are the exhaustive list of gaps. Located by section name rather than
@@ -60,6 +60,8 @@ number, since the numbers move. The load-bearing ones:
 | Regenerated OLMo aggregate heatmap | results, OLMo case, scaffold | store stale; raw runs survive → **re-render** under fixed code |
 | GPT-OSS promoted to a result | results, GPT-OSS probe, scaffold | candidate; artifacts survive but unhashed → **re-render + hash + audit** |
 | RedPajama validation-ladder table | results, RedPajama case, scaffold | run-level agreement now reported; **byte-match + SKIP counts** still to extract |
+| Qwen 3.5 new evaluations | results, Qwen case, scaffold | 72 runs exist as raw artifacts; **never analysed/reported** — no new execution needed |
+| Open-judge coverage | results, open-judge, scaffold | 2 of N model-graded scenarios; **separate parser failure from judge disagreement** |
 | Cross-machine baseline | limitations, pending | scoped, not run |
 | Artifact DOI / git bundle | conclusion, scaffold | at camera-ready |
 

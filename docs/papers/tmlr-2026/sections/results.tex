@@ -1,17 +1,21 @@
 \section{Results}
 \label{sec:cases}
 
-The results are one corpus-wide measurement and three case studies. The
-measurement comes first, because every comparison that follows depends on it:
-what it costs to decide that two runs are the same run at all
-(\S\ref{sec:coverage}). The case studies then instantiate the two regimes of
-\S\ref{sec:model}. OLMo is
+The results are two corpus-wide measurements, three case studies, and one
+extension. The first measurement comes before everything else, because every
+comparison depends on it: what it costs to decide that two runs are the same run
+at all (\S\ref{sec:coverage}). The second is the broadest reproduction set we
+have, 703 paired Qwen comparisons, which establishes the base rate the case
+studies are exceptions to (\S\ref{sec:qwen}). The case studies then instantiate
+the two regimes of \S\ref{sec:model}. OLMo is
 the \emph{partially recoverable} modern case: several disagreements attribute to
 named unrecorded parameters (\S\ref{sec:olmo}). RedPajama-3B demonstrates
 end-to-end execution under \emph{declared proxy} historical instruments
 (\S\ref{sec:redpajama}). The original-paper classic models are the
 \emph{non-identifiable} case: their producing instrument cannot be recovered from
-surviving evidence (\S\ref{sec:classic}).
+surviving evidence (\S\ref{sec:classic}). The extension asks what happens when the
+scorer itself is the unavailable component, and substitutes an open judge for a
+withdrawn closed one (\S\ref{sec:openjudge}).
 
 \subsection{What pairing costs: harness-version churn in the record}
 \label{sec:coverage}
@@ -69,7 +73,57 @@ current code and hash the inputs against the stored reports
 hash its inputs]}}. The end-to-end
 \texttt{phi-2} fixtures are excluded: they are tutorial-scope and pair against no
 official rows. The Qwen denominator is the full in-scope corpus for that model
-family, so its logical column is a coverage figure and not a success rate.
+family, so its logical column is a coverage figure and not a success rate; most
+of the shortfall is eligibility rather than difficulty, since $3282$ of those
+$4723$ rows ($69\%$) are vision-language, audio, or omni-modal models that have no
+local deployment and are filtered before any attempt.
+
+\subsection{Qwen: the base rate on a modern harness}
+\label{sec:qwen}
+
+The Qwen family gives the broadest reproduction set in this study, and therefore
+the base rate against which the case studies read as exceptions. Eight
+models --- \texttt{qwen1.5-7b/14b/32b/72b/110b-chat}, \texttt{qwen2-72b-instruct},
+and \texttt{qwen2.5-7b/72b-instruct-turbo} --- were replayed from spec and paired
+against their official rows, yielding $703$ built comparisons from $775$ planned
+run entries with no skipped entries.
+
+Instance-level agreement with the official is measured at zero tolerance, so a
+run counts as agreeing only where the per-instance metric values match exactly.
+Across the $703$ comparisons the median is $0.990$ and the mean $0.975$;
+$608$ ($86\%$) sit at or above $0.95$, $159$ are exact or near-exact, and $5$ fall
+below $0.80$, with a minimum of $0.66$. Per-model medians span $0.973$
+(\texttt{qwen2.5-7b-instruct-turbo}) to $1.000$ (\texttt{qwen1.5-110b-chat}).
+
+\par\smallskip\noindent\textbf{Finding.}~\emph{On a modern harness with a
+from-spec replay, most historical Qwen rows reproduce at or near the instance
+level: the median run agrees with the official on $99\%$ of instances at zero
+tolerance. Reproduction failure is not the common case; it is the tail, and the
+case studies below characterize that tail.}\par\smallskip
+
+This is what makes the rest of the section interpretable. A study that reported
+only the disagreements would imply that historical benchmark reproduction is
+generally broken, and this corpus says otherwise. What the tail costs to explain,
+rather than how large it is, is the subject of \S\ref{sec:olmo} onward.
+
+\paragraph{Scope and freshness.} The counts and agreement values are read from the
+store's derived reproducibility rows; all $1406$ run paths recorded in the
+comparison manifests resolve on disk, so the set is re-renderable and hashable
+without re-execution. These are \emph{reproductions} of rows HELM already
+published. The separate arm promised as new Qwen 3.5 evaluations is not reported
+here: $72$ runs of \texttt{qwen3.5-9b-base} covering \texttt{mmlu} ($57$),
+\texttt{math} ($7$), \texttt{legalbench} and \texttt{wmt\_14} ($5$ each) and six
+further scenarios exist as raw artifacts with per-instance statistics, but they
+have never been passed through the analysis and reporting stages, and no store
+exists for them. Because HELM published no Qwen 3.5 rows there is no official
+side to pair against, so that arm needs a reporting path of its own rather than
+the agreement machinery used here.
+\par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
+  \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Run the analysis and reporting stages over the existing
+\texttt{qwen3.5-9b-base} artifacts and insert the resulting per-benchmark table as
+new evaluations, with the caveat that a single base model is narrower than the
+contribution claimed in \S\ref{sec:intro}. No new execution is required.
+{\color{orange}\textsf{\small[\textsc{pending}: analyse and report the Qwen 3.5 runs]}}\end{minipage}}\par\smallskip
 
 \subsection{OLMo: attributing modern disagreements to unrecorded parameters}
 \label{sec:olmo}
@@ -276,3 +330,76 @@ relocation resolves to the same leaf (a genuinely wrong era pin still fails
 loudly). We scope the claim carefully --- non-identifiable \emph{relative to
 surviving evidence}, not an absolute impossibility statement about hypothetical
 private provider archives.
+
+\subsection{Substituting an open judge for a withdrawn one}
+\label{sec:openjudge}
+
+The preconditions of \S\ref{sec:preconditions} treat an unavailable judge as
+blocking procedural reproduction while leaving the released verdicts auditable.
+That is the conservative reading. The stronger question is whether a judge that
+can still be served substitutes for one that cannot, and if so under what
+criterion --- a declared substitution, made explicit exactly as a proxy era is.
+
+We ran two open judges, \texttt{qwen3.5-27b} and \texttt{qwen3.6-35b-a3b}, over
+the released responses of two model-graded scenarios, three replicates each, and
+compared them against both official judges. The comparison that matters is not
+open-versus-official on its own but open-versus-official measured against the
+\emph{official-versus-official} baseline: two closed judges already disagree with
+each other, and a substitute is admissible when it disagrees no more than they do.
+
+\begin{table}[t]
+\caption{Open-judge substitution against the official-versus-official baseline.
+The label scenario reports Cohen's $\kappa$ and exact-agreement rate; the
+continuous scenario reports signed and absolute mean difference and Pearson
+correlation. Each open arm is three replicates over the same released responses.}
+\label{tab:openjudge}
+\begin{center}
+\small
+\begin{tabular}{llrrr}
+\toprule
+\textbf{Scenario} & \textbf{Comparison} & \textbf{$\kappa$ / $r$} & \textbf{signed} & \textbf{within} \\
+\midrule
+\texttt{xstest}    & \texttt{qwen3.5-27b} vs official & 0.936 & $+0.009$ & 98.4\% \\
+($n{=}450$, label) & \texttt{qwen3.6-35b} vs official & 0.928 & $+0.012$ & 98.2\% \\
+                   & \emph{official vs official}      & \emph{0.829} & $-0.030$ & \emph{96.0\%} \\
+\midrule
+\texttt{wildbench}      & \texttt{qwen3.5-27b} vs official & 0.826 & $-0.823$ & 63.6\% \\
+($n{=}1000$, continuous)& \texttt{qwen3.6-35b} vs official & 0.872 & $-0.731$ & 70.5\% \\
+                        & \emph{official vs official}      & \emph{0.936} & $-0.127$ & \emph{91.4\%} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
+
+\par\smallskip\noindent\textbf{Finding.}~\emph{Judge substitutability is a
+property of the metric, not of the judge. On the label scenario both open judges
+agree with an official judge \emph{better than the two official judges agree with
+each other} ($\kappa = 0.936$ and $0.928$ against a $0.829$ baseline), and are
+almost perfectly stable across replicates. On the continuous scenario neither
+does: both carry a systematic negative bias of roughly $0.8$ points on the
+scoring scale, correlate less well with an official judge than the officials do
+with one another, and change $39$--$43\%$ of instance scores between replicates
+of the same judge on the same responses.}\par\smallskip
+
+The practical consequence is that a withdrawn judge does not uniformly rule out
+procedural reproduction. Where the metric is a label, a declared open-judge
+substitution is defensible on this evidence and the run returns to scope. Where
+it is a continuous score, it is not: the substitution introduces a bias larger
+than the disagreement it is meant to stand in for, and the replicate instability
+means a single substituted run is not even self-consistent. Reporting the
+official-versus-official baseline is what makes that call decidable rather than
+rhetorical, and it is the same move as declaring a proxy era instead of quietly
+running a later one.
+
+\paragraph{Scope and freshness.} Both analyses are keyed to a response-set hash,
+so the open arms score exactly the responses the officials scored, and no model
+was re-run to produce them. Two scenarios is a narrow base for a claim about
+label versus continuous metrics generally, and the parse-failure rate on the
+continuous scenario ($15.9\%$ for the $27$b arm, $2.0\%$ for the $35$b) is high
+enough that some of the bias may be parser rather than judge.
+\par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
+  \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Extend the open-judge comparison to the remaining model-graded
+scenarios and the four smaller open arms already served, and separate parser
+failure from judge disagreement on the continuous scenario before generalizing
+the label-versus-continuous split.
+{\color{orange}\textsf{\small[\textsc{pending}: remaining model-graded scenarios and parser/judge separation]}}\end{minipage}}\par\smallskip
