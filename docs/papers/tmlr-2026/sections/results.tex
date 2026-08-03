@@ -60,12 +60,13 @@ is also the sharpest single argument for era-pinned instruments (\S\ref{sec:eras
 which recover on two runs what no amount of care recovers on 4723.
 
 \paragraph{Scope and freshness.} These counts are read from the derived coverage
-layer of the experiment stores, not recomputed for this paper. The RedPajama era
-stores retain their raw run artifacts; the OLMo and \texttt{gpt-oss-20b} stores
-retain only derived layers, so their rows must be regenerated from a re-run
-before the camera-ready rather than re-rendered
-{\color{orange}\textsf{\small[\textsc{pending}: regenerate the coverage funnel for
-the OLMo and GPT-OSS stores from preserved raw runs]}}. The end-to-end
+layer of the experiment stores, not recomputed for this paper. The raw run
+artifacts behind every row survive --- each run path recorded in the stored
+comparison manifests resolves on disk --- so the rows are re-renderable from
+source rather than needing re-execution. What remains is to re-render them under
+current code and hash the inputs against the stored reports
+{\color{orange}\textsf{\small[\textsc{pending}: re-render the coverage funnel and
+hash its inputs]}}. The end-to-end
 \texttt{phi-2} fixtures are excluded: they are tutorial-scope and pair against no
 official rows. The Qwen denominator is the full in-scope corpus for that model
 family, so its logical column is a coverage figure and not a success rate.
@@ -178,9 +179,9 @@ divergence, not the possibility that our tooling contributes to it.
 disk is \emph{stale}: the base-model \texttt{olmo-7b} classic cells carry an
 un-deduplicated local-halving artifact (e.g.\ MMLU public/local $0.295/0.144$),
 whereas the corrected value is $0.295/0.287$. The code fix is committed but the
-store was not regenerated, and --- because the raw run artifacts were pruned --- a
-correct report requires a \emph{re-run}, not merely a re-render. We therefore do
-not cite base-model OLMo aggregates as results in this draft.
+store was not regenerated. The raw run artifacts survive, so a correct report
+requires only a re-render under the fixed code rather than a re-execution; until
+that is done we do not cite base-model OLMo aggregates as results in this draft.
 \par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
   \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Insert the \emph{regenerated} OLMo aggregate score-drift heatmap
 (6 models $\times$ ${\sim}12$ benchmarks) after a fresh run with the current
@@ -198,12 +199,12 @@ hosted and local engines; normalizing null$\to$``'' is faithful). The regenerate
 report shows local and public headline scores agreeing closely (squared error
 ${\le}4{\times}10^{-4}$, more than an order of magnitude --- ${\approx}30\times$
 --- tighter than the OLMo instruct \texttt{ifeval} drift). We report this as a
-\emph{promising candidate}, not a result: the report layer is current-code, but
-the underlying run artifacts were pruned, so run-artifact and comparison
-provenance must be re-established (re-run, preserve, hash, and pass a
-manifest-based acceptance audit) before the numbers are cited.
+\emph{promising candidate}, not a result: the report layer is current-code and the
+run artifacts survive, but they have not been hashed against the stored report, so
+run-artifact and comparison provenance must be established (re-render, preserve,
+hash, and pass a manifest-based acceptance audit) before the numbers are cited.
 \par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
-  \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Promote GPT-OSS to a result after re-running and preserving the store;
+  \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Promote GPT-OSS to a result after re-rendering and preserving the store;
 insert the four-cell public-vs-local headline comparison with a preservation
 manifest.\end{minipage}}\par\smallskip
 
@@ -224,11 +225,27 @@ reconstructing the \emph{original} producing instrument --- the two later eras
 carry byte-identical public artifacts for the shared runs (carried forward, not
 re-run), so ``two eras agree'' is one public number measured by two instruments,
 not two independent confirmations.
+
+Both eras planned and built two packets each, with no skipped run entries, and the
+outcome splits by scenario. On \texttt{mmlu} the replay is exact: all eight core
+metrics --- exact, quasi-exact, prefix, and quasi-prefix match, on both the test
+and valid splits --- agree with the official at $\Delta = 0$, identically under
+v0.2.4 and v0.3.0. On \texttt{synthetic\_reasoning\_natural} they do not agree,
+and not in the direction drift would predict: the official reports exactly
+$0.0000$ on all six set-match metrics while the local run scores $0.147$ to
+$0.184$, again identically under both eras. A published zero across every metric
+of a scenario is not a value a working scorer ordinarily produces, so we treat
+this as an open question about the official record rather than as a reproduction
+failure, and count it as neither pending diagnosis. It is a concrete instance of
+why the record must be screened before a disagreement is attributed
+(\S\ref{sec:preconditions}).
 \par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
-  \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Insert the RedPajama validation-ladder table (per-era packet coverage,
-instrument-fidelity byte match, environment-SKIP counts) from the preserved
-\texttt{era-redpajama} stores; this is the one case whose raw run artifacts survive
-and are directly packageable.\end{minipage}}\par\smallskip
+  \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Insert the remaining rungs of the validation ladder --- instrument-fidelity
+byte match on the \texttt{pandas}-sensitive scenario, and the per-scenario
+environment-SKIP counts --- from the preserved \texttt{era-redpajama} stores, whose
+raw run artifacts survive and are directly packageable. Resolve the
+\texttt{synthetic\_reasoning\_natural} official zero before the table is
+published. {\color{orange}\textsf{\small[\textsc{pending}: diagnose the official all-zero scenario]}}\end{minipage}}\par\smallskip
 
 \subsection{GPT-J, GPT-NeoX, OPT: origin-instrument non-identifiability}
 \label{sec:classic}

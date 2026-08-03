@@ -44,7 +44,7 @@ Structural check (run in this dir):
 
 ```
 grep -rc -F 'fcolorbox{orange}{yellow!12}' sections/*.tex   # 6 scaffold blocks
-grep -ro -F 'textsc{pending}' sections/*.tex main.tex | wc -l   # 10 pending markers
+grep -ro -F 'textsc{pending}' sections/*.tex main.tex | wc -l   # 11 pending markers
 ```
 
 These are the exhaustive list of gaps. Located by section name rather than
@@ -53,12 +53,13 @@ number, since the numbers move. The load-bearing ones:
 | Gap | Marker | Status |
 |---|---|---|
 | Corpus-wide exclusion profile | limitations, pending | taxonomy makes typed exclusion an outcome; **results populate none of it** — needs a Stage-1 pass over a frozen manifest |
-| Coverage-funnel counts (Table 2) | results §5.1, pending | numbers read from derived store layers; OLMo/GPT-OSS rows need **regeneration from preserved raw runs** |
+| RedPajama official all-zero scenario | results, RedPajama case, pending | `synthetic_reasoning_natural` official is 0.0000 on all six metrics, local 0.147–0.184 — **diagnose before publishing the ladder** |
+| Coverage-funnel counts (Table 2) | results §5.1, pending | read from derived layers; raw runs **survive**, so re-render + hash, not re-run |
 | Ordinary-path OLMo confirmation | limitations, scaffold + pending | experiment designed, **not run**; the design lives with the limitation it answers |
 | OLMo confirmation results table | limitations, scaffold | awaits the run above |
-| Regenerated OLMo aggregate heatmap | results, OLMo case, scaffold | store stale → **re-run** |
-| GPT-OSS promoted to a result | results, GPT-OSS probe, scaffold | candidate; run artifacts pruned → **re-run + preserve** |
-| RedPajama validation-ladder table | results, RedPajama case, scaffold | raw runs **survive** → directly packageable |
+| Regenerated OLMo aggregate heatmap | results, OLMo case, scaffold | store stale; raw runs survive → **re-render** under fixed code |
+| GPT-OSS promoted to a result | results, GPT-OSS probe, scaffold | candidate; artifacts survive but unhashed → **re-render + hash + audit** |
+| RedPajama validation-ladder table | results, RedPajama case, scaffold | run-level agreement now reported; **byte-match + SKIP counts** still to extract |
 | Cross-machine baseline | limitations, pending | scoped, not run |
 | Artifact DOI / git bundle | conclusion, scaffold | at camera-ready |
 

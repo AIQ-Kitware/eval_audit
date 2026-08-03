@@ -32,12 +32,16 @@ $\times$ two benchmarks, report \{naive, exact-recipe, reconstructed-deployment\
 agreement on held-out instances, with exact-token, normalized-text, first-divergent-token,
 common-prefix-length, and task-metric columns. {\color{orange}\textsf{\small[\textsc{pending}: ordinary-path OLMo run]}}\end{minipage}}\par\smallskip
 
-\paragraph{Store freshness and preservation.} Some result stores postdate their
-raw run artifacts, which were pruned; the OLMo aggregate report is stale and the
-GPT-OSS store is a candidate pending re-run and a manifest-based acceptance audit.
-We therefore report these as candidates, not results, and cite no number that
-rests on an unpreserved store. {\color{orange}\textsf{\small[\textsc{pending}: regenerate + preserve OLMo, GPT-OSS
-stores]}}
+\paragraph{Store freshness and preservation.} Some result stores predate the code
+that should have produced them: the OLMo aggregate report is stale, and the
+GPT-OSS store is a candidate pending a manifest-based acceptance audit. The raw
+run artifacts survive in both cases --- every run path recorded in the stored
+comparison manifests resolves on disk --- so these are re-render-and-hash tasks
+rather than re-executions. What has not been established is that the surviving
+artifacts are byte-identical to the ones that produced the stored reports. Until
+that audit is done we report these as candidates, not results, and cite no number
+that rests on an unaudited store. {\color{orange}\textsf{\small[\textsc{pending}: re-render, hash, and audit the OLMo and
+GPT-OSS stores]}}
 
 \paragraph{The audit tool is itself a source of disagreement.} Every number here
 passes through our own comparison layer, which decides which stored rows
