@@ -8,10 +8,11 @@ is an evaluation-auditing and experimental-control system rather than a thin HEL
 wrapper: it replays recipes exactly, reconstructs and searches the execution
 substrate, freezes the scoring instrument by era, and reports disagreement at the
 earliest layer it can localize. We describe it as the workflow it runs
-(Table~\ref{tab:pipeline}), because each stage is where one coordinate of
-\S\ref{sec:model} is put under experimental control, and the split between the
-stages decides what a defect costs to fix. A per-run \emph{evaluation capsule}
-(\S\ref{sec:provenance}) records the provenance each stage depends on.
+(Table~\ref{tab:pipeline}), one subsection per stage, because each stage is where
+one coordinate of \S\ref{sec:model} is put under experimental control, and the
+split between the stages decides what a defect costs to fix. A per-run
+\emph{evaluation capsule} (\S\ref{sec:provenance}) records the provenance each
+stage depends on.
 
 \begin{table}[t]
 \caption{The audit workflow. Commands are prefixed \texttt{eval-audit-}. Only
@@ -36,17 +37,26 @@ Aggregation   & \texttt{build-summary}            & Corpus-level views: the cove
 \end{center}
 \end{table}
 
-\emph{Selection} walks a mirror of the public corpus, reads each run's recorded
-spec, and applies the preconditions of \S\ref{sec:preconditions} as typed gates:
-structural completeness first, then modality, weight availability, size, and
-local deployability per model. Every excluded run keeps its reason, which is what
-makes a typed exclusion a reportable outcome rather than a silent drop.
+Every stage writes into a directory that records the command that produced it and
+stamps its own history, so a stale report can be re-rendered from surviving
+artifacts rather than re-executed; \S\ref{sec:limitations} depends on that
+distinction when it prices the outstanding work.
 
-\emph{Execution} produces the local side, and it is where the recorded recipe is
-held fixed.
+\subsection{Selection}
+\label{sec:selection}
+
+We walk a mirror of the public corpus, read each run's recorded spec, and apply
+the preconditions of \S\ref{sec:preconditions} as typed gates: structural
+completeness first, then modality, weight availability, size, and local
+deployability per model. Every excluded run keeps its reason, which is what makes
+a typed exclusion a reportable outcome rather than a silent drop.
+
+\subsection{Execution}
 \label{sec:fromspec}
-Every public HELM run ships a fully resolved \texttt{run\_spec.json} --- the
-complete adapter spec, scenario spec, metric specs, and annotators, with every
+
+This stage produces the local side, and it is where the recorded recipe is held
+fixed. Every public HELM run ships a fully resolved \texttt{run\_spec.json} ---
+the complete adapter spec, scenario spec, metric specs, and annotators, with every
 default already materialized --- and the harness cannot read it back. HELM's
 entry point accepts only \emph{run-entry descriptions}, short strings such as
 \texttt{mmlu:subject=anatomy,model=\ldots}, passed on the command line or in a
@@ -64,7 +74,8 @@ run spec from JSON --- its Slurm backend writes one per job and its worker reads
 it back to execute --- but that capability is unreachable from the public entry
 point. Our materializer drives it directly: it deserializes the official spec and
 makes an in-process benchmarking call, and the reconstructed entry string is used
-only to \emph{locate} the official directory, never to drive execution. Two failure modes are handled
+only to \emph{locate} the official directory, never to drive execution. Two
+failure modes are handled
 asymmetrically because they demand opposite treatment: a scenario/metric
 \emph{class} that does not resolve under the local harness is caught loudly at
 preflight (an environment mismatch, surfaced as such), whereas a dropped
@@ -107,6 +118,7 @@ window --- take effect only under the patched behavior; on stock HELM they are
 recorded and ignored. A local run may therefore truncate a long prompt where
 stock HELM would have sent it and been refused by the server.
 
+\paragraph{Era-pinned harnesses.}
 \label{sec:eras}
 That harness half must sometimes be an \emph{old} one. A large fraction of any
 historical corpus was produced by an older harness: the measurement instrument
@@ -127,18 +139,23 @@ of the instrument, which stays modern and is varied independently --- a
 prerequisite for treating a historical disagreement as evidence about the
 execution instrument rather than noise.
 
-\emph{Normalization} converts both sides into the normalized per-instance
-representation of \citet{eee2026} before any comparison. The comparison core
-therefore never reads a HELM directory; it reads two normalized runs. That is what
-makes the layered diff below framework-free rather than HELM-specific, and it is
-why the same core can compare an official against a replay, a replay against a
-repeat, or either against a run from a different harness entirely. Official runs
-are converted on demand, because converting the whole public corpus is the slow
-step.
+\subsection{Normalization}
+\label{sec:normalization}
 
-\emph{Composition} builds the comparison set. A \emph{virtual experiment} is a
-manifest naming the two indexes it draws from --- one of local audit results, one
-of official public runs --- together with the filters that narrow them to the runs
+Both sides are converted into the normalized per-instance representation of
+\citet{eee2026} before any comparison. The comparison core therefore never reads a
+HELM directory; it reads two normalized runs. That is what makes the layered diff
+of \S\ref{sec:diff} framework-free rather than HELM-specific, and it is why the
+same core can compare an official against a replay, a replay against a repeat, or
+either against a run from a different harness entirely. Official runs are
+converted on demand, because converting the whole public corpus is the slow step.
+
+\subsection{Composition}
+\label{sec:composition}
+
+This stage builds the comparison set. A \emph{virtual experiment} is a manifest
+naming the two indexes it draws from --- one of local audit results, one of
+official public runs --- together with the filters that narrow them to the runs
 under study. The composer resolves that declaration into packets and into the
 coverage funnel of \S\ref{sec:coverage}. The manifest, not the resulting
 directory, is the archived unit: re-running it re-derives the slice.
@@ -157,9 +174,11 @@ The gaps between the three are what the levels are for: identical-to-canonical
 is harness-version churn inside the record, and canonical-to-logical is genuine
 recipe drift.
 
-\emph{Comparison} analyses each packet independently.
+\subsection{Comparison}
 \label{sec:diff}
-All reproducibility verdicts flow through a single framework-free comparison core
+
+Each packet is analysed independently, and all reproducibility verdicts flow
+through a single framework-free comparison core
 that consumes two normalized runs and produces agreement rows, agreement curves,
 tolerance quantiles, a facts-grade diagnosis, and a judge-dependent vs.\
 deterministic metric-class split. It localizes the \emph{earliest} divergence
@@ -177,12 +196,18 @@ $\texttt{atol}=10^{-9}$ before any renderer was switched to it --- is itself par
 the reproducibility discipline: a looser tolerance is treated as a finding to
 investigate, not a knob to widen.
 
-\emph{Aggregation} reads those per-packet reports back to render the corpus-level
-views, including quantile-bucketed best/worst/flagged examples so that extremes
-are inspected rather than averaged away.
+\subsection{Aggregation}
+\label{sec:aggregation}
 
+The per-packet reports are read back to render the corpus-level views, including
+quantile-bucketed best/worst/flagged examples so that extremes are inspected
+rather than averaged away.
+
+\subsection{Substrate search, off the line}
 \label{sec:deploymatch}
-One tool sits deliberately off this line. When a comparison diagnoses a divergence
+
+One tool sits deliberately outside the stages above. When a comparison diagnoses a
+divergence
 the recorded evidence does not explain, the temptation is to guess a single knob;
 two early single-knob theories about the same divergence were both wrong
 (\S\ref{sec:olmo}), which motivated a disciplined alternative. Given any public
@@ -203,10 +228,6 @@ won't matter'') is refused: it is precisely the guess the tool exists to avoid.
 The tool has \texttt{dry-run}/\texttt{run}/\texttt{confirm} phases; \texttt{confirm}
 promotes a winning cell into a real, servable one-endpoint configuration for the
 ordinary execution path (the confirmation step of \S\ref{sec:olmo-confirm}). What
-it returns is therefore a configuration change to execution, so an attribution
-closes a loop back through the workflow rather than terminating it.
-
-Each generated directory records the command that produced it and stamps its own
-history, which is what allows a stale report to be re-rendered from surviving
-artifacts; \S\ref{sec:limitations} depends on that distinction when it prices the
-outstanding work.
+it returns is therefore a configuration change to execution (\S\ref{sec:fromspec}),
+so an attribution closes a loop back through the workflow rather than terminating
+it.

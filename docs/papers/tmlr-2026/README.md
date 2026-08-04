@@ -14,7 +14,7 @@ sections/
   introduction.tex    reframing + thesis + contributions
   related_work.tex    HELM, EEE (detection→attribution), serving nondeterminism, provenance
   taxonomy.tex        four coordinates; preconditions for an attempt (execution *and* evidence); two axes (three reproduction targets, five causes); per-parameter identifiability
-  methodology.tex     §4 --- one continuous section organized as the six-stage workflow (`tab:pipeline`): selection · execution (from-spec replay, era containers) · normalization · composition (pairing strictnesses) · comparison (layered diff) · aggregation, then the off-line substrate sweep
+  methodology.tex     §4 --- one subsection per workflow stage (`tab:pipeline`): selection · execution (from-spec replay, harness patch, era containers) · normalization · composition (pairing strictnesses) · comparison (layered diff) · aggregation · substrate search (off the line)
   results.tex         §5 --- pairing coverage · Qwen base rate · OLMo (recoverable) · RedPajama (proxy-era) · GPT-J/NeoX/OPT (non-identifiable) · GPT-OSS (candidate) · open-judge substitution
   provenance.tex      the 3-field standard + release checklist
   limitations.tex     threats to validity (each pending item flagged)
