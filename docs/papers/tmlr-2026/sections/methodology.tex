@@ -6,9 +6,84 @@ operationalizes the taxonomy of \S\ref{sec:model}. It
 is an evaluation-auditing and experimental-control system rather than a thin HELM
 wrapper: it replays recipes exactly, reconstructs and searches the execution
 substrate, freezes the scoring instrument by era, and reports disagreement at the
-earliest layer it can localize. We describe the four load-bearing components; a
+earliest layer it can localize. We first describe the workflow end to end
+(\S\ref{sec:pipeline}), then the four components that carry the argument; a
 per-run \emph{evaluation capsule} (\S\ref{sec:provenance}) records the provenance
 each component depends on.
+
+\subsection{The workflow}
+\label{sec:pipeline}
+
+A reproduction attempt is six stages (Table~\ref{tab:pipeline}), and the split
+between them decides what a defect costs to fix.
+
+\begin{table}[t]
+\caption{The audit workflow. Commands are prefixed \texttt{eval-audit-}. The
+first two stages consume GPU time and produce evidence; the last four are
+read-only over artifacts already on disk, so an analysis defect is repaired by
+re-rendering rather than re-executing.}
+\label{tab:pipeline}
+\begin{center}
+\footnotesize
+\begin{tabularx}{\textwidth}{l l >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Stage} & \textbf{Entry point} & \textbf{What it produces} \\
+\midrule
+Selection     & \texttt{index-historic}           & An inventory of the public corpus with the typed eligibility gates of \S\ref{sec:preconditions} applied and a reason recorded for every excluded run. \\
+Execution     & \texttt{run}                      & A local run per eligible official run, replayed from the resolved official spec (\S\ref{sec:fromspec}), writing the same artifacts HELM itself writes. \\
+Normalization & \texttt{prepare-eee}              & Both sides rewritten into one framework-neutral per-instance representation \citep{eee2026}, on demand. \\
+Composition   & \texttt{build-virtual-experiment} & A declared slice resolved into \emph{packets}: one official row and the local runs claiming to reproduce it, paired at three strictnesses (\S\ref{sec:diff}). \\
+Comparison    & \texttt{analyze-experiment}       & Per packet: agreement curves over the tolerance sweep, comparability facts, and a layered diagnosis. \\
+Aggregation   & \texttt{build-summary}            & Corpus-level views: the coverage funnels, per-metric drift, and quantile-bucketed examples. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+\end{table}
+
+\emph{Selection} walks a mirror of the public corpus, reads each run's recorded
+spec, and applies the preconditions of \S\ref{sec:preconditions} as typed gates:
+structural completeness first, then modality, weight availability, size, and
+local deployability per model. Every excluded run keeps its reason, which is what
+makes a typed exclusion a reportable outcome rather than a silent drop.
+
+\emph{Execution} produces the local side. Runs are scheduled one run-entry at a
+time across GPU hosts and write the same four files an official run does --- the
+resolved spec, the frozen scenario state, the aggregated statistics, and the
+per-instance statistics --- so official and local are the same shape on disk
+before anything compares them. Model serving is out-of-process behind a local
+endpoint, which is what makes the serving half of the execution instrument a
+variable we can set (\S\ref{sec:deploymatch}) independently of the harness half
+(\S\ref{sec:eras}). The harness half can additionally run inside a container
+image pinned by digest and recorded per run, so the software environment is an
+audited constant rather than whatever the host happened to have installed.
+
+\emph{Normalization} converts both sides into the normalized per-instance
+representation of \citet{eee2026} before any comparison. The comparison core
+therefore never reads a HELM
+directory; it reads two normalized runs. That is what makes the layered diff of
+\S\ref{sec:diff} framework-free rather than HELM-specific, and it is why the same
+core can compare an official against a replay, a replay against a repeat, or
+either against a run from a different harness entirely. Official runs are
+converted on demand, because converting the whole public corpus is the slow step.
+
+\emph{Composition} is where comparisons stop being enumerated by hand. A
+\emph{virtual experiment} is a manifest declaring a scope over two indexes ---
+one of local audit results, one of official public runs --- which the composer
+resolves into packets and into the coverage funnel of \S\ref{sec:coverage}. The
+manifest, not the resulting directory, is the archived unit: re-running it
+re-derives the slice. \emph{Comparison} then analyses each packet independently
+and \emph{aggregation} reads those per-packet reports back to render the
+corpus-level views, including quantile-bucketed best/worst/flagged examples so
+that extremes are inspected rather than averaged away.
+
+The substrate search of \S\ref{sec:deploymatch} is deliberately not a stage in
+this line. It is invoked when a comparison diagnoses a divergence the recorded
+evidence does not explain, and what it returns is a configuration change to
+execution --- so an attribution closes a loop back through the pipeline rather
+than terminating it. Each generated directory records the command that produced
+it and stamps its own history, which is what allows a stale report to be
+re-rendered from surviving artifacts; \S\ref{sec:limitations} depends on that
+distinction when it prices the outstanding work.
 
 \subsection{Exact recipe replay, not recipe reconstruction}
 \label{sec:fromspec}

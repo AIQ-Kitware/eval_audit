@@ -14,7 +14,7 @@ sections/
   introduction.tex    reframing + thesis + contributions
   related_work.tex    HELM, EEE (detection→attribution), serving nondeterminism, provenance
   taxonomy.tex        four coordinates; preconditions for an attempt (execution *and* evidence); two axes (three reproduction targets, five causes); per-parameter identifiability
-  methodology.tex     §4 --- from-spec replay, substrate sweep, era containers, layered diff + pairing strictnesses
+  methodology.tex     §4 --- the six-stage workflow (`tab:pipeline`) + the four load-bearing components: from-spec replay, substrate sweep, era containers, layered diff + pairing strictnesses
   results.tex         §5 --- pairing coverage · Qwen base rate · OLMo (recoverable) · RedPajama (proxy-era) · GPT-J/NeoX/OPT (non-identifiable) · GPT-OSS (candidate) · open-judge substitution
   provenance.tex      the 3-field standard + release checklist
   limitations.tex     threats to validity (each pending item flagged)
@@ -54,7 +54,7 @@ number, since the numbers move. The load-bearing ones:
 |---|---|---|
 | Corpus-wide exclusion profile | limitations, pending | taxonomy makes typed exclusion an outcome; **results populate none of it** — needs a Stage-1 pass over a frozen manifest |
 | RedPajama official all-zero scenario | results, RedPajama case, pending | `synthetic_reasoning_natural` official is 0.0000 on all six metrics, local 0.147–0.184 — **diagnose before publishing the ladder** |
-| Coverage-funnel counts (Table 2) | results §5.1, pending | read from derived layers; raw runs **survive**, so re-render + hash, not re-run |
+| Coverage-funnel counts (`tab:coverage`) | results, pairing coverage, pending | read from derived layers; raw runs **survive**, so re-render + hash, not re-run |
 | Ordinary-path OLMo confirmation | limitations, scaffold + pending | experiment designed, **not run**; the design lives with the limitation it answers |
 | OLMo confirmation results table | limitations, scaffold | awaits the run above |
 | Regenerated OLMo aggregate heatmap | results, OLMo case, scaffold | store stale; raw runs survive → **re-render** under fixed code |
