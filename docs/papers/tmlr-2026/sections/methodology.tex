@@ -52,9 +52,9 @@ prior approach --- taken by essentially every earlier reproduction, including ou
 own first attempts --- \emph{reconstructs} a run-entry string from the run and
 re-parses it. Re-parsing re-derives the recipe under \emph{today's} library
 defaults, which silently drifts from the recipe that produced the official
-numbers.
-\par\smallskip\noindent\textbf{Finding.}~\emph{Never reconstruct the recipe; replay the resolved \texttt{run\_spec.json}
-verbatim.}\par\smallskip
+numbers --- and drifts without announcing itself, since the reconstructed string
+still names the right scenario and model. We therefore never reconstruct a
+recipe; we replay the resolved \texttt{run\_spec.json} verbatim.
 Our materializer deserializes the official spec and drives an in-process
 benchmarking call; the reconstructed run-entry string is used only to \emph{locate}
 the official directory, never to drive execution. Two failure modes are handled
