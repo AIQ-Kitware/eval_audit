@@ -6,15 +6,35 @@ rather than permanent limits.
 
 \paragraph{Discovery vs.\ confirmation.} The precision result
 (\S\ref{sec:olmo}(c)) is at present a configuration \emph{discovery} on a small
-oracle-scored sample plus a deductive source-level argument; it has not been
-confirmed through the ordinary HELM path on held-out instances. Matching a small
+oracle-scored sample plus a deductive source-level argument, partially corroborated
+by two ordinary-path runs (below); it has not been confirmed on \emph{held-out}
+instances. Matching a small
 sample does not uniquely identify a producing deployment, and the deductive leg is
 conditional on the unrecorded \texttt{transformers} version.
-{\color{orange}\textsf{\small[\textsc{pending}: ordinary-path OLMo confirmation]}}
+{\color{orange}\textsf{\small[\textsc{pending}: held-out OLMo confirmation]}}
 
-\paragraph{The confirmation experiment: designed, not run.}
+\paragraph{The confirmation experiment: begun, not completed to protocol.}
 \label{sec:olmo-confirm}
-Its protocol
+Two ordinary-path \texttt{ifeval} runs at float32 exist for
+\texttt{olmo-2-1124-7b-instruct} and \texttt{-13b-instruct}, executed through the
+normal HELM path and producing standard artifacts rather than probe output. They
+support the attribution's direction without closing it: float32 moves the strict
+accuracy from $0.7911$ to $0.7597$ against an official $0.6929$ on the 7B, and
+from $0.8555$ to $0.8121$ against $0.7298$ on the 13B --- about a third of the
+drift in each case. Precision is therefore a real contributor to the
+\texttt{ifeval} gap and not the whole of it, which is a sharper claim than
+\S\ref{sec:olmo}(c) makes and a weaker one than a completed confirmation would.
+
+They do not discharge the protocol. Both are \texttt{ifeval} only, on the full
+instance set rather than held-out instances, with no second benchmark; neither
+has been through the comparison pipeline, so no pair report exists; and the
+container ran by local image id rather than a pinned digest, so the runs are not
+reproducible across machines. We therefore leave the confirmation open and do not
+promote (c) beyond a discovery.
+{\color{orange}\textsf{\small[\textsc{pending}: analyse the two float32 runs; extend to held-out
+instances, a second benchmark, and a digest-pinned image]}}
+
+The full protocol
 separates discovery from held-out confirmation: freeze the discovery instances
 and the winning candidate configuration; determine whether the win requires the
 probe-only \texttt{add\_special\_tokens=false} behavior, and if so implement it
@@ -30,7 +50,7 @@ automatically translate into faithful benchmark execution.
   \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Insert the confirmation results table: for one dense and one MoE model
 $\times$ two benchmarks, report \{naive, exact-recipe, reconstructed-deployment\}
 agreement on held-out instances, with exact-token, normalized-text, first-divergent-token,
-common-prefix-length, and task-metric columns. {\color{orange}\textsf{\small[\textsc{pending}: ordinary-path OLMo run]}}\end{minipage}}\par\smallskip
+common-prefix-length, and task-metric columns. {\color{orange}\textsf{\small[\textsc{pending}: held-out confirmation run]}}\end{minipage}}\par\smallskip
 
 \paragraph{Store freshness and preservation.} Some result stores predate the code
 that should have produced them: the OLMo aggregate report is stale, and the

@@ -83,7 +83,8 @@ local deployment and are filtered before any attempt.
 
 The Qwen family gives the broadest reproduction set in this study, and therefore
 the base rate against which the case studies read as exceptions. Eight
-models --- \texttt{qwen1.5-7b/14b/32b/72b/110b-chat}, \texttt{qwen2-72b-instruct},
+models --- \texttt{qwen1.5-7b}, \texttt{-14b}, \texttt{-32b}, \texttt{-72b},
+\texttt{qwen1.5-110b-chat}, \texttt{qwen2-72b-instruct},
 and \texttt{qwen2.5-7b/72b-instruct-turbo} --- were replayed from spec and paired
 against their official rows, yielding $703$ built comparisons from $775$ planned
 run entries with no skipped entries.
@@ -91,7 +92,7 @@ run entries with no skipped entries.
 Instance-level agreement with the official is measured at zero tolerance, so a
 run counts as agreeing only where the per-instance metric values match exactly.
 Across the $703$ comparisons the median is $0.990$ and the mean $0.975$;
-$608$ ($86\%$) sit at or above $0.95$, $159$ are exact or near-exact, and $5$ fall
+$608$ ($86\%$) sit at or above $0.95$, $159$ agree exactly, and $10$ fall
 below $0.80$, with a minimum of $0.66$. Per-model medians span $0.973$
 (\texttt{qwen2.5-7b-instruct-turbo}) to $1.000$ (\texttt{qwen1.5-110b-chat}).
 
@@ -112,10 +113,13 @@ comparison manifests resolve on disk, so the set is re-renderable and hashable
 without re-execution. These are \emph{reproductions} of rows HELM already
 published. The separate arm promised as new Qwen 3.5 evaluations is not reported
 here: $72$ runs of \texttt{qwen3.5-9b-base} covering \texttt{mmlu} ($57$),
-\texttt{math} ($7$), \texttt{legalbench} and \texttt{wmt\_14} ($5$ each) and six
-further scenarios exist as raw artifacts with per-instance statistics, but they
-have never been passed through the analysis and reporting stages, and no store
-exists for them. Because HELM published no Qwen 3.5 rows there is no official
+\texttt{legalbench} and \texttt{wmt\_14} ($5$ each), and one run each of
+\texttt{boolq}, \texttt{commonsense}, \texttt{gsm}, \texttt{med\_qa} and
+\texttt{narrative\_qa} exist as raw artifacts with per-instance statistics, but
+they have never been passed through the analysis and reporting stages, and no
+store exists for them. A further nine run directories --- seven \texttt{math} and
+two \texttt{natural\_qa} --- were created but are empty, so those two scenarios
+were attempted and produced nothing. Because HELM published no Qwen 3.5 rows there is no official
 side to pair against, so that arm needs a reporting path of its own rather than
 the agreement machinery used here.
 \par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
@@ -166,8 +170,8 @@ toward the official, confirmed empirically. The attribution is to the
 depends on the (unrecorded) \texttt{transformers} version --- a clean example of a
 software-version dependency hiding inside a recipe.
 
-\paragraph{(c) Load precision: a discovery, with a deductive leg (not yet
-confirmed).} HELM's \texttt{HuggingFaceClient} loads a model with only the kwargs
+\paragraph{(c) Load precision: a discovery, with a deductive leg (partially
+corroborated).} HELM's \texttt{HuggingFaceClient} loads a model with only the kwargs
 the deployment config supplies; for the OLMo instruct deployments that is
 \texttt{device\_map=auto} and \emph{no} \texttt{torch\_dtype}. Under every
 \texttt{transformers} 4.x, an unpinned load defaults to \texttt{float32}, ignoring the
@@ -188,6 +192,15 @@ cards and only in-process \texttt{transformers} float32 reproduces the sampled
 OLMoE outputs, whereas the dense OLMo-2 samples matched most closely under vLLM
 float32.
 
+Two ordinary-path \texttt{ifeval} runs at float32 --- on
+\texttt{olmo-2-1124-7b-instruct} and \texttt{-13b-instruct}, through the normal
+HELM path rather than the probe --- move the strict accuracy about a third of the
+way from the default-precision local result to the official
+(\S\ref{sec:olmo-confirm}). Precision is thus a real contributor to this gap and
+demonstrably not the whole of it. That is short of the confirmation protocol,
+which requires held-out instances and a second benchmark, so we continue to report
+(c) as a discovery.
+
 \begin{table}[t]
 \caption{Deployment-match \emph{discovery} probe ($n\approx 12$ \texttt{ifeval}
 instances, scored against sampled public completions; winning cells additionally
@@ -195,7 +208,7 @@ use a probe-only \texttt{add\_special\_tokens=false} knob). Float32 is the
 highest-agreement tested precision. \textbf{This is configuration discovery, not a
 completed reproduction}: matching a small oracle sample does not uniquely identify
 the producing deployment, and the confirmation step of \S\ref{sec:olmo-confirm}
-has not been run. The deductive dtype argument (text) is the stronger leg.}
+is only partially executed. The deductive dtype argument (text) is the stronger leg.}
 \label{tab:fp32}
 \begin{center}
 \small
@@ -250,9 +263,11 @@ ungated-judge public \texttt{gpt-oss-20b} rows (\texttt{bbq}, \texttt{gpqa},
 \texttt{ifeval}, \texttt{mmlu\_pro}) from spec, after diagnosing and fixing a
 null-content chat crash (a null-vs-empty-string serving difference between the
 hosted and local engines; normalizing null$\to$``'' is faithful). The regenerated
-report shows local and public headline scores agreeing closely (squared error
-${\le}4{\times}10^{-4}$, more than an order of magnitude --- ${\approx}30\times$
---- tighter than the OLMo instruct \texttt{ifeval} drift). We report this as a
+report shows local and public headline scores agreeing closely: three of the four
+scenarios agree exactly on every core metric, and the fourth (\texttt{bbq})
+differs by $0.004$, for a worst-case squared error of $1.6{\times}10^{-5}$ ---
+nearly three orders of magnitude (${\approx}800\times$) tighter than the mean
+OLMo instruct \texttt{ifeval} drift of $1.3{\times}10^{-2}$. We report this as a
 \emph{promising candidate}, not a result: the report layer is current-code and the
 run artifacts survive, but they have not been hashed against the stored report, so
 run-artifact and comparison provenance must be established (re-render, preserve,
@@ -351,7 +366,13 @@ each other, and a substitute is admissible when it disagrees no more than they d
 \caption{Open-judge substitution against the official-versus-official baseline.
 The label scenario reports Cohen's $\kappa$ and exact-agreement rate; the
 continuous scenario reports signed and absolute mean difference and Pearson
-correlation. Each open arm is three replicates over the same released responses.}
+correlation. Each open arm is three replicates over the same released responses.
+Two official judges scored each scenario; \textsc{gpt} denotes the stronger of the
+two, and the open arms are shown against it. Against the weaker official the open
+arms score lower ($\kappa$ $0.852$/$0.854$ on \texttt{xstest}, $r$
+$0.779$/$0.824$ on \texttt{wildbench}) but the comparison to the baseline goes the
+same way in both cases. On \texttt{wildbench}, $962$ of the $1000$ responses pair
+across all arms.}
 \label{tab:openjudge}
 \begin{center}
 \small
@@ -359,12 +380,12 @@ correlation. Each open arm is three replicates over the same released responses.
 \toprule
 \textbf{Scenario} & \textbf{Comparison} & \textbf{$\kappa$ / $r$} & \textbf{signed} & \textbf{within} \\
 \midrule
-\texttt{xstest}    & \texttt{qwen3.5-27b} vs official & 0.936 & $+0.009$ & 98.4\% \\
-($n{=}450$, label) & \texttt{qwen3.6-35b} vs official & 0.928 & $+0.012$ & 98.2\% \\
+\texttt{xstest}    & \texttt{qwen3.5-27b} vs \textsc{gpt} & 0.936 & $+0.009$ & 98.4\% \\
+($n{=}450$, label) & \texttt{qwen3.6-35b} vs \textsc{gpt} & 0.928 & $+0.012$ & 98.2\% \\
                    & \emph{official vs official}      & \emph{0.829} & $-0.030$ & \emph{96.0\%} \\
 \midrule
-\texttt{wildbench}      & \texttt{qwen3.5-27b} vs official & 0.826 & $-0.823$ & 63.6\% \\
-($n{=}1000$, continuous)& \texttt{qwen3.6-35b} vs official & 0.872 & $-0.731$ & 70.5\% \\
+\texttt{wildbench}      & \texttt{qwen3.5-27b} vs \textsc{gpt} & 0.826 & $-0.823$ & 63.6\% \\
+($n{=}1000$, continuous)& \texttt{qwen3.6-35b} vs \textsc{gpt} & 0.872 & $-0.731$ & 70.5\% \\
                         & \emph{official vs official}      & \emph{0.936} & $-0.127$ & \emph{91.4\%} \\
 \bottomrule
 \end{tabular}

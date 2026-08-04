@@ -44,7 +44,7 @@ Structural check (run in this dir):
 
 ```
 grep -rc -F 'fcolorbox{orange}{yellow!12}' sections/*.tex   # 8 scaffold blocks
-grep -ro -F 'textsc{pending}' sections/*.tex main.tex | wc -l   # 13 pending markers
+grep -ro -F 'textsc{pending}' sections/*.tex main.tex | wc -l   # 14 pending markers
 ```
 
 These are the exhaustive list of gaps. Located by section name rather than
@@ -55,12 +55,12 @@ number, since the numbers move. The load-bearing ones:
 | Corpus-wide exclusion profile | limitations, pending | taxonomy makes typed exclusion an outcome; **results populate none of it** — needs a Stage-1 pass over a frozen manifest |
 | RedPajama official all-zero scenario | results, RedPajama case, pending | `synthetic_reasoning_natural` official is 0.0000 on all six metrics, local 0.147–0.184 — **diagnose before publishing the ladder** |
 | Coverage-funnel counts (`tab:coverage`) | results, pairing coverage, pending | read from derived layers; raw runs **survive**, so re-render + hash, not re-run |
-| Ordinary-path OLMo confirmation | limitations, scaffold + pending | experiment designed, **not run**; the design lives with the limitation it answers |
-| OLMo confirmation results table | limitations, scaffold | awaits the run above |
+| Held-out OLMo confirmation | limitations, scaffold + pending | two ordinary-path fp32 `ifeval` runs **exist and are reported** (close ~1/3 of the drift); still missing held-out instances, a 2nd benchmark, a pair report, and a pinned digest |
+| OLMo confirmation results table | limitations, scaffold | awaits the held-out run above |
 | Regenerated OLMo aggregate heatmap | results, OLMo case, scaffold | store stale; raw runs survive → **re-render** under fixed code |
 | GPT-OSS promoted to a result | results, GPT-OSS probe, scaffold | candidate; artifacts survive but unhashed → **re-render + hash + audit** |
 | RedPajama validation-ladder table | results, RedPajama case, scaffold | run-level agreement now reported; **byte-match + SKIP counts** still to extract |
-| Qwen 3.5 new evaluations | results, Qwen case, scaffold | 72 runs exist as raw artifacts; **never analysed/reported** — no new execution needed |
+| Qwen 3.5 new evaluations | results, Qwen case, scaffold | 72 runs exist as raw artifacts; **never analysed/reported** — no new execution needed. 9 further dirs (7 `math`, 2 `natural_qa`) are empty |
 | Open-judge coverage | results, open-judge, scaffold | 2 of N model-graded scenarios; **separate parser failure from judge disagreement** |
 | Cross-machine baseline | limitations, pending | scoped, not run |
 | Artifact DOI / git bundle | conclusion, scaffold | at camera-ready |
@@ -71,8 +71,10 @@ from completed work in the master reference.
 
 ## Epistemic discipline (matches the consensus ledger)
 
-- The **float32** result is a *discovery probe* + a *conditional deductive* argument,
-  **not** a completed reproduction (Table `tab:fp32`).
+- The **float32** result is a *discovery probe* + a *conditional deductive* argument
+  + two ordinary-path runs that close about a third of the drift — **not** a
+  completed reproduction (Table `tab:fp32`), since confirmation needs held-out
+  instances and a second benchmark.
 - The **dense OLMo-2 HF divergence** is reported as *unresolved*, with a probe-artifact
   hypothesis kept live.
 - **Non-identifiability** is scoped *relative to the surviving evidence examined*.
