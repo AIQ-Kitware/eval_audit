@@ -23,10 +23,10 @@
 #   OUT_DPATH     where the package and archive are written
 #                                       (default /data/_transfer-package)
 #   PACKAGE_NAME  package dir + archive basename (default eval-audit-analyses)
-#   EVAL_AUDIT_PY python that has eval_audit installed. Set this when the
-#                 console scripts are not on PATH — e.g. a venv that is not
-#                 activated, or a non-login shell.
-#                 (default: the `eval-audit-*` commands on PATH)
+#   EVAL_AUDIT_PY python that has eval_audit installed. Only needed if auto-
+#                 detection fails: the script already tries the eval-audit-*
+#                 console scripts, then .venv/ beside this script, then python3.
+#                 Set it to fail loudly on a specific interpreter instead.
 #   SOURCE_ROOTS  space-separated absolute path roots to follow and rewrite,
 #                 replacing the defaults (/data/crfm-helm-audit-store
 #                 /data/crfm-helm-audit /data/crfm-helm-public). Only needed
@@ -70,12 +70,69 @@ run() {
 
 # --- entry points -----------------------------------------------------------
 
-if [[ -n "${EVAL_AUDIT_PY:-}" ]]; then
-  CRAWL_CMD=("$EVAL_AUDIT_PY" -m eval_audit.cli.crawl_analyses)
-  PACK_CMD=("$EVAL_AUDIT_PY" -m eval_audit.cli.package_analyses)
-else
-  CRAWL_CMD=(eval-audit-crawl-analyses)
-  PACK_CMD=(eval-audit-package-analyses)
+REPO_DPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Can this interpreter (or console script) actually run the packager?
+# Returns 0 and leaves the reason in WHY_NOT on failure.
+can_run() {
+  WHY_NOT="$("$@" --help 2>&1 >/dev/null)" && return 0
+  return 1
+}
+
+# Find something that can run the CLIs. The repository travels to the host it
+# runs on, so a venv beside this script is the likeliest answer after an
+# explicitly-set interpreter -- and an unactivated venv is the single most
+# common reason this fails on a machine that is otherwise fine.
+resolve_python() {
+  local candidates=() why_first=""
+
+  if [[ -n "${EVAL_AUDIT_PY:-}" ]]; then
+    # Explicitly set: use it or fail loudly. Silently falling back to some
+    # other interpreter would package a store with code the user did not pick.
+    if can_run "$EVAL_AUDIT_PY" -m eval_audit.cli.package_analyses; then
+      PY=("$EVAL_AUDIT_PY"); return 0
+    fi
+    die "EVAL_AUDIT_PY=$EVAL_AUDIT_PY cannot run the packager:
+${WHY_NOT:-(no output)}"
+  fi
+
+  if can_run eval-audit-package-analyses; then
+    CRAWL_CMD=(eval-audit-crawl-analyses)
+    PACK_CMD=(eval-audit-package-analyses)
+    return 0
+  fi
+  why_first="console scripts on PATH: ${WHY_NOT:-not found}"
+
+  candidates=(
+    "$REPO_DPATH/.venv/bin/python"
+    "$REPO_DPATH/.venv/bin/python3"
+    "$(command -v python3 || true)"
+  )
+  for candidate in "${candidates[@]}"; do
+    [[ -n "$candidate" && -x "$candidate" ]] || continue
+    if can_run "$candidate" -m eval_audit.cli.package_analyses; then
+      PY=("$candidate")
+      log "using $candidate"
+      return 0
+    fi
+  done
+
+  die "cannot run the eval_audit packaging CLIs.
+  $why_first
+  tried: ${candidates[*]}
+  last error: ${WHY_NOT:-(no output)}
+
+Install the package on this host, e.g. from the repo at $REPO_DPATH:
+    uv venv && uv pip install -e .
+then re-run, or point at an existing environment:
+    EVAL_AUDIT_PY=/path/to/.venv/bin/python $0 ${*:-}"
+}
+
+CRAWL_CMD=(); PACK_CMD=(); PY=()
+resolve_python
+if [[ ${#PY[@]} -gt 0 ]]; then
+  CRAWL_CMD=("${PY[@]}" -m eval_audit.cli.crawl_analyses)
+  PACK_CMD=("${PY[@]}" -m eval_audit.cli.package_analyses)
 fi
 
 ROOT_ARGS=()
@@ -84,11 +141,12 @@ if [[ -n "${SOURCE_ROOTS:-}" ]]; then
 fi
 
 preflight() {
-  [[ -d "$STORE_DPATH" ]] || die "store not found: $STORE_DPATH"
-  "${PACK_CMD[@]}" --help >/dev/null 2>&1 \
-    || die "eval_audit CLI not runnable. Set EVAL_AUDIT_PY to the python that \
-has it installed, e.g. EVAL_AUDIT_PY=/path/to/.venv/bin/python"
-  mkdir -p "$OUT_DPATH"
+  [[ -d "$STORE_DPATH" ]] || die "store not found: $STORE_DPATH
+Set STORE_DPATH to the store you want packaged."
+  mkdir -p "$OUT_DPATH" 2>/dev/null || die "cannot create OUT_DPATH: $OUT_DPATH
+Set OUT_DPATH to somewhere writable with room for the package, e.g.
+    OUT_DPATH=\$HOME/transfer-package $0 ${*:-}"
+  [[ -w "$OUT_DPATH" ]] || die "OUT_DPATH is not writable: $OUT_DPATH"
 }
 
 # --- phases -----------------------------------------------------------------
@@ -116,7 +174,10 @@ phase_plan() {
 # in, rather than after a multi-hour copy.
 summarize_plan() {
   [[ -f "$PLAN_FPATH" ]] || return 0
-  python3 - "$PLAN_FPATH" <<'PY' || true
+  # Reuse whatever interpreter resolve_python settled on; a host that runs the
+  # CLIs via console scripts may still have no bare `python3` on PATH.
+  local summary_py="${PY[0]:-python3}"
+  "$summary_py" - "$PLAN_FPATH" <<'PY' || true
 import json, sys
 p = json.load(open(sys.argv[1]))
 print(f"\n  artifacts {p['n_artifacts']}   {p['n_bytes']/1e9:.2f} GB"
