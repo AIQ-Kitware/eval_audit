@@ -7,9 +7,10 @@ is an evaluation-auditing and experimental-control system rather than a thin HEL
 wrapper: it replays recipes exactly, reconstructs and searches the execution
 substrate, freezes the scoring instrument by era, and reports disagreement at the
 earliest layer it can localize. We first describe the workflow end to end
-(\S\ref{sec:pipeline}), then the four components that carry the argument; a
-per-run \emph{evaluation capsule} (\S\ref{sec:provenance}) records the provenance
-each component depends on.
+(\S\ref{sec:pipeline}), then the four components: three that put a coordinate of
+\S\ref{sec:model} under experimental control, and one that assigns a disagreement
+to one of them. A per-run \emph{evaluation capsule} (\S\ref{sec:provenance})
+records the provenance each component depends on.
 
 \subsection{The workflow}
 \label{sec:pipeline}
