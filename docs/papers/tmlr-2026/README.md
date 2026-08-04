@@ -15,7 +15,7 @@ sections/
   related_work.tex    HELM, EEE (detection→attribution), serving nondeterminism, provenance
   taxonomy.tex        four coordinates; preconditions for an attempt (execution *and* evidence); two axes (three reproduction targets, five causes); per-parameter identifiability
   methodology.tex     §4 --- one subsection per workflow stage (`tab:pipeline`): selection · execution (from-spec replay, harness patch, era containers) · normalization · composition (pairing strictnesses) · comparison (layered diff) · aggregation · substrate search (off the line)
-  results.tex         §5 --- pairing coverage · Qwen base rate · OLMo (recoverable) · RedPajama (proxy-era) · GPT-J/NeoX/OPT (non-identifiable) · GPT-OSS (candidate) · open-judge substitution
+  results.tex         §5 --- exclusion census · pairing coverage · phi-2 instrument control · Qwen base rate · OLMo (recoverable, incl. the fp32/engine closure) · RedPajama (proxy-era) · GPT-J/NeoX/OPT (non-identifiable) · GPT-OSS (candidate) · open-judge (identity replay + substitution)
   provenance.tex      the 3-field standard + release checklist
   limitations.tex     threats to validity (each pending item flagged)
   conclusion.tex
@@ -44,7 +44,7 @@ Structural check (run in this dir):
 
 ```
 grep -rc -F 'fcolorbox{orange}{yellow!12}' sections/*.tex   # 8 scaffold blocks
-grep -ro -F 'textsc{pending}' sections/*.tex main.tex | wc -l   # 14 pending markers
+grep -ro -F 'textsc{pending}' sections/*.tex main.tex | wc -l   # 12 pending markers
 ```
 
 These are the exhaustive list of gaps. Located by section name rather than
@@ -52,7 +52,7 @@ number, since the numbers move. The load-bearing ones:
 
 | Gap | Marker | Status |
 |---|---|---|
-| Corpus-wide exclusion profile | limitations, pending | taxonomy makes typed exclusion an outcome; **results populate none of it** — needs a Stage-1 pass over a frozen manifest |
+| Corpus-wide exclusion census | results §5.1 + limitations, pending | **now reported** from the 2026-06-17 inventory; needs regeneration from a pinned manifest before it is a reproducible figure |
 | RedPajama official all-zero scenario | results, RedPajama case, pending | `synthetic_reasoning_natural` official is 0.0000 on all six metrics, local 0.147–0.184 — **diagnose before publishing the ladder** |
 | Coverage-funnel counts (`tab:coverage`) | results, pairing coverage, pending | read from derived layers; raw runs **survive**, so re-render + hash, not re-run |
 | Held-out OLMo confirmation | limitations, scaffold + pending | two ordinary-path fp32 `ifeval` runs **exist and are reported** (close ~1/3 of the drift); still missing held-out instances, a 2nd benchmark, a pair report, and a pinned digest |

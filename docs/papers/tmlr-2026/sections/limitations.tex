@@ -29,8 +29,11 @@ They do not discharge the protocol. Both are \texttt{ifeval} only, on the full
 instance set rather than held-out instances, with no second benchmark; neither
 has been through the comparison pipeline, so no pair report exists; and the
 container ran by local image id rather than a pinned digest, so the runs are not
-reproducible across machines. We therefore leave the confirmation open and do not
-promote (c) beyond a discovery.
+reproducible across machines. The byte-level closure that follows them
+(\S\ref{sec:olmo}(d)) is stronger evidence but not a discharge either: it is
+completion-level agreement from the probe path, not a metric computed by HELM over
+a held-out split. We therefore leave the confirmation open and do not promote (c)
+beyond a discovery.
 {\color{orange}\textsf{\small[\textsc{pending}: analyse the two float32 runs; extend to held-out
 instances, a second benchmark, and a digest-pinned image]}}
 
@@ -52,15 +55,18 @@ $\times$ two benchmarks, report \{naive, exact-recipe, reconstructed-deployment\
 agreement on held-out instances, with exact-token, normalized-text, first-divergent-token,
 common-prefix-length, and task-metric columns. {\color{orange}\textsf{\small[\textsc{pending}: held-out confirmation run]}}\end{minipage}}\par\smallskip
 
-\paragraph{Store freshness and preservation.} Some result stores predate the code
-that should have produced them: the OLMo aggregate report is stale, and the
-GPT-OSS store is a candidate pending a manifest-based acceptance audit. The raw
-run artifacts survive in both cases --- every run path recorded in the stored
-comparison manifests resolves on disk --- so these are re-render-and-hash tasks
-rather than re-executions. What has not been established is that the surviving
-artifacts are byte-identical to the ones that produced the stored reports. Until
-that audit is done we report these as candidates, not results, and cite no number
-that rests on an unaudited store. {\color{orange}\textsf{\small[\textsc{pending}: re-render, hash, and audit the OLMo and
+\paragraph{Store freshness and preservation.} Some derived layers predate the code
+that should have produced them: the OLMo per-packet reports disagree with the
+regenerated aggregate above them (\S\ref{sec:olmo}), and the GPT-OSS store is a
+candidate pending a manifest-based acceptance audit. The raw run artifacts survive
+in every case --- $1{,}634$ local runs across $74$ experiment directories, each
+pairing $1{:}1$ with its recorded specification --- so these are re-render-and-hash
+tasks rather than re-executions. But \emph{nothing is hashed or bundled}: not one
+of those runs currently carries a content digest tying it to the report that cites
+it, which is the same provenance failure \S\ref{sec:provenance} asks the field to
+fix, present in our own artifacts. Until that audit is done we report the affected
+stores as candidates, not results.
+{\color{orange}\textsf{\small[\textsc{pending}: re-render, hash, and audit the OLMo and
 GPT-OSS stores]}}
 
 \paragraph{The audit tool is itself a source of disagreement.} Every number here
@@ -78,21 +84,23 @@ it changes which prompts get truncated, so it is part of the local execution
 instrument rather than a neutral bug fix, and a reproduction of our
 reproductions would need the patch to land where we did.
 
-\paragraph{The exclusion profile is not reported.} \S\ref{sec:preconditions} makes
-a typed exclusion a first-class outcome of the taxonomy, but this draft does not
-populate it: no corpus-wide breakdown of which runs were excluded, and for which
-reason, appears in \S\ref{sec:cases}, and the case studies state only their own
-exclusions. The machinery exists and is what produced the scoped corpora used
-here; what is missing is a pass over a frozen manifest whose output is fit to
-publish. A headline ``fraction reproducible'' statistic would require that
-manifest with an explicit numerator and denominator, and fresh stores across
-families, so we make no population-level prevalence claim.
-{\color{orange}\textsf{\small[\textsc{pending}: corpus-wide exclusion-reason breakdown from a pinned manifest]}}
+\paragraph{The exclusion census is dated.} \S\ref{sec:census} reports a
+corpus-wide typed exclusion breakdown, but from a Stage-1 inventory generated
+2026-06-17 rather than from a pinned manifest, and one figure derived from the
+same era (a ${\approx}59\%$ pre-v0.5 estimate in our working notes) is
+contradicted by it. A headline ``fraction reproducible'' statistic would require
+that manifest with an explicit numerator and denominator, and fresh stores across
+families, so we report the census as a map of the corpus as crawled and make no
+population-level prevalence claim on it.
+{\color{orange}\textsf{\small[\textsc{pending}: regenerate the census from a pinned manifest]}}
 
 \paragraph{Single-machine measurements.} Reported agreement is
 official-vs-local and same-machine; cross-machine variance (which would separate
 platform-specific from recipe-specific drift) is scoped but not completed.
-{\color{orange}\textsf{\small[\textsc{pending}: cross-machine repeatability baseline]}}
+Same-machine repeat pairs were executed for two model families and never analysed,
+so even the within-machine repeatability floor --- the level below which a
+disagreement should not be attributed to anything --- is unmeasured.
+{\color{orange}\textsf{\small[\textsc{pending}: cross-machine repeatability baseline; analyse the repeat pairs]}}
 
 \paragraph{Oracle objective without log-probs.} Because the hosted originals store
 no log-probabilities, the deployment-search objective is completion-text agreement
@@ -114,7 +122,9 @@ benchmark can be perfectly reproducible and an uncontaminated one irreproducible
 reported and make no claim about their construct validity.
 
 \paragraph{Attribution breadth.} The confirmed attributions are on OLMo-family
-\texttt{ifeval}/classic scenarios; ``precision is \emph{the} dominant hidden
-variable'' is a hypothesis supported within this pilot, not established across
-benchmarks or model families. The efficient-benchmarking thread
+\texttt{ifeval}/classic scenarios. The dtype prediction has since held on a second
+family (\S\ref{sec:olmo}), but on the same benchmark, so ``precision is
+\emph{the} dominant hidden variable'' remains a hypothesis supported within this
+pilot rather than one established across benchmarks. The engine result of
+\S\ref{sec:olmo}(d) is narrower still: one scenario, one family, two sizes. The efficient-benchmarking thread
 (\S\ref{sec:related}) is out of scope here and reserved for future work.

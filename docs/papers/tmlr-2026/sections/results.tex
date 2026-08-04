@@ -1,10 +1,13 @@
 \section{Results}
 \label{sec:cases}
 
-The results are two corpus-wide measurements, three case studies, and one
-extension. The first measurement comes before everything else, because every
-comparison depends on it: what it costs to decide that two runs are the same run
-at all (\S\ref{sec:coverage}). The second is the broadest reproduction set we
+The results are three corpus-wide measurements, an instrument control, three case
+studies, and one extension. The first measurement asks how much of the corpus can
+be attempted at all (\S\ref{sec:census}); the second, what it costs to decide that
+two runs are the same run (\S\ref{sec:coverage}). A control with a known answer
+then establishes that our comparison layer can tell a reproduction from a
+deliberately broken one (\S\ref{sec:phi2}). The third measurement is the broadest
+reproduction set we
 have, 703 paired Qwen comparisons, which establishes the base rate the case
 studies are exceptions to (\S\ref{sec:qwen}). The case studies then instantiate
 the two regimes of \S\ref{sec:model}. OLMo is
@@ -16,6 +19,43 @@ end-to-end execution under \emph{declared proxy} historical instruments
 surviving evidence (\S\ref{sec:classic}). The extension asks what happens when the
 scorer itself is the unavailable component, and substitutes an open judge for a
 withdrawn closed one (\S\ref{sec:openjudge}).
+
+\subsection{What survives: a typed exclusion census}
+\label{sec:census}
+
+\S\ref{sec:intro} asks first how much of a historical corpus can be attempted at
+all. A Stage-1 pass over the public HELM mirror answers it for this corpus, and
+the answer is dominated by eligibility rather than by difficulty. Of $34{,}512$
+discovered run records, $1{,}109$ ($3.2\%$) pass every gate of
+\S\ref{sec:preconditions}; the surviving set covers $33$ of $366$ distinct models
+and $61$ of $185$ distinct benchmarks. The exclusion reasons are not exclusive ---
+a run typically fails several --- and their sizes are informative in themselves:
+no local deployment for the model ($29{,}997$ runs), non-open weights ($18{,}781$),
+excluded modality tags ($17{,}526$), size above the local ceiling ($7{,}624$),
+non-text modality ($6{,}024$), missing model metadata ($2{,}894$), a closed judge
+($484$), a gated dataset ($74$), and structural incompleteness ($14$). Whole
+tracks vanish entirely: the vision, image-generation, and audio tracks contribute
+$9{,}873$, $1{,}992$, and $1{,}737$ records and zero eligible runs.
+
+Read as a fact about the record rather than about us, this says that a public
+benchmark corpus decays overwhelmingly through \emph{access} --- weights,
+deployment, modality, scale --- and only marginally through the damaged-record
+failures that reproduction studies usually worry about: structural incompleteness
+accounts for $14$ runs in $34{,}512$. It also bounds every reproducibility claim
+in this paper: they are claims about the $3.2\%$, and the taxonomy's insistence
+that a typed exclusion is an outcome rather than a discard is what makes that
+bound visible instead of implicit.
+
+\paragraph{Scope and freshness.} This census is read from a Stage-1 inventory
+generated 2026-06-17 and not regenerated from a checked-in manifest, so it is
+evidence about the corpus as crawled on that date rather than a reproducible
+figure. It is also the most-cited and least-refreshed artifact in the project: a
+separate estimate of the pre-v0.5 fraction of the corpus, carried in our own
+working notes at ${\approx}59\%$, is contradicted by this inventory's $24.3\%$ and
+should not be trusted until both are rebuilt. We therefore report the census as a
+map and make no population-level prevalence claim on it.
+{\color{orange}\textsf{\small[\textsc{pending}: regenerate the census from a pinned
+manifest]}}
 
 \subsection{What pairing costs: harness-version churn in the record}
 \label{sec:coverage}
@@ -78,6 +118,30 @@ of the shortfall is eligibility rather than difficulty, since $3282$ of those
 $4723$ rows ($69\%$) are vision-language, audio, or omni-modal models that have no
 local deployment and are filtered before any attempt.
 
+\subsection{Does the instrument work? A control with a known answer}
+\label{sec:phi2}
+
+Every number that follows is produced by our own comparison layer, so before
+reading any of them it is worth asking whether that layer distinguishes a
+reproduction from a non-reproduction at all. We ran one public row
+(\texttt{mmlu:subject=philosophy}, \texttt{microsoft/phi-2}) under four
+deployments plus a deliberately broken fifth. At temperature zero the instance
+agreement is $0.997$ through vLLM, $0.994$ through the same vLLM inside the pinned
+container, and $0.990$ through Hugging Face. The negative control --- the identical
+recipe at temperature $1$, which \emph{should} fail --- lands at $0.778$, in the
+lowest agreement bucket.
+
+The control is the point. A comparison layer that reported high agreement for the
+temperature-1 arm would be measuring nothing, and the three-way spread across
+serving paths at temperature zero ($0.007$) is small beside the gap to the broken
+arm ($0.212$), so the instrument separates the variable it is meant to detect from
+the ones it is meant to tolerate. Containerization costs $0.003$ and does not
+change the verdict, which is the evidence behind treating the pinned image as a
+control rather than a confound. These runs pair against no official row --- they
+compare a local execution to a public one under conditions we chose --- so they
+are reported here as instrument validation and are excluded from every corpus
+count in this section.
+
 \subsection{Qwen: the base rate on a modern harness}
 \label{sec:qwen}
 
@@ -120,6 +184,23 @@ two \texttt{natural\_qa} --- were created but are empty, so those two scenarios
 were attempted and produced nothing. Because HELM published no Qwen 3.5 rows there is no official
 side to pair against, so that arm needs a reporting path of its own rather than
 the agreement machinery used here.
+
+One result from those artifacts is worth stating now, because it is a scoring
+hazard rather than a score. Reading the stored completions directly, the base
+model emits \texttt{<think>} reasoning tags on a plain completions prompt --- on
+$322$ of $470$ \texttt{narrative\_qa} instances ($68.5\%$) and $502$ of $1000$ on
+\texttt{boolq} ($50.2\%$), and on \emph{zero} of the $24{,}416$ instances across
+\texttt{mmlu}, \texttt{wmt\_14}, \texttt{med\_qa}, \texttt{legalbench},
+\texttt{gsm}, and \texttt{commonsense}. The split is exactly free-form generation
+against constrained answer shapes, with nothing in between, and it does not track
+prompt content: the \texttt{boolq} perturbation arms leak at the same rate as
+canonical. With \texttt{max\_tokens=5} a \texttt{<think>} prefix destroys a
+\texttt{boolq} answer outright, so those two cells would be upper bounds depressed
+by a measured formatting failure rather than capability measurements. Whatever
+scores this arm eventually reports, they have to carry the leakage rate beside
+them --- and since an instruct model of the same family would not do this, the
+rate is a measurable property of the base/instruct boundary rather than a defect
+to be fixed.
 \par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
   \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Run the analysis and reporting stages over the existing
 \texttt{qwen3.5-9b-base} artifacts and insert the resulting per-benchmark table as
@@ -190,14 +271,73 @@ cards and only in-process \texttt{transformers} float32 reproduces the sampled
 OLMoE outputs, whereas the dense OLMo-2 samples matched most closely under vLLM
 float32.
 
-Two ordinary-path \texttt{ifeval} runs at float32 --- on
+The prediction this licensed was that float32 alone would close the gap, and it
+did not. Two ordinary-path \texttt{ifeval} runs at float32 --- on
 \texttt{olmo-2-1124-7b-instruct} and \texttt{-13b-instruct}, through the normal
-HELM path rather than the probe --- move the strict accuracy about a third of the
-way from the default-precision local result to the official
-(\S\ref{sec:olmo-confirm}). Precision is thus a real contributor to this gap and
-demonstrably not the whole of it. That is short of the confirmation protocol,
-which requires held-out instances and a second benchmark, so we continue to report
-(c) as a discovery.
+HELM path rather than the probe, at the full $1082$ per-instance rows per side ---
+move the strict accuracy from $0.7911$ to $0.7597$ against an official $0.6929$ on
+the 7B, and from $0.8555$ to $0.8121$ against $0.7298$ on the 13B. Both close
+about a third of the drift: directionally right, magnitude wrong. The same
+fraction and the same sign on two model sizes make the residual systematic rather
+than noise, which is what turns a failed prediction into the next measurement.
+
+\paragraph{(d) The residual is the serving engine.} Serving the same float32
+weights through Hugging Face \texttt{transformers} rather than vLLM reproduces the
+official completions \emph{byte for byte}: on the 7B at the full $n=541$
+\texttt{ifeval} instances, $539$ match exactly ($99.63\%$), identically under both
+\texttt{device\_map} settings. Rendering the same cell with the modern chat
+template instead of the old one collapses it to $13/541$, which independently
+re-confirms (b) at full scale. Decode semantics are not involved: true greedy and
+HELM's \texttt{do\_sample=True, temperature=1e-7} produce byte-identical
+completions on every probe instance. Table~\ref{tab:closure} states the
+decomposition.
+
+\begin{table}[t]
+\caption{Recovering an \texttt{ifeval} score coordinate by coordinate
+(\texttt{olmo-2-1124-7b-instruct}). Each row adds one recovered coordinate to the
+row above. Weights, recipe, prompt, and greedy decode are fixed throughout; the
+last step changes only the serving engine.}
+\label{tab:closure}
+\begin{center}
+\small
+\begin{tabular}{llr}
+\toprule
+\textbf{Local configuration} & \textbf{Coordinates recovered} & \textbf{Drift vs.\ official} \\
+\midrule
+bf16, modern chat template          & none                            & $+0.098$ \\
+vLLM float32, old-template render   & precision, template             & $+0.067$ \\
+HF float32, old-template render     & precision, template, \textbf{engine} & $539/541$ byte-identical \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
+
+Same weights, same precision, same prompt tokens, same greedy decode --- only
+vLLM in place of Hugging Face --- moves a published benchmark metric by
+$+0.067$ on the 7B and $+0.082$ on the 13B. That is the paper's sharpest single
+measurement of the execution instrument, and it is the coordinate the three-field
+provenance standard of \S\ref{sec:provenance} deliberately does \emph{not} cover.
+
+The two non-matching instances are worth their own sentence, because they are the
+thesis in miniature. Both are long-form generations that agree for over a hundred
+characters and then diverge at a single near-tie token --- ``his partner Calvert
+Vaux'' against ``his associate Calvert Vaux'' at character $153$, and an inserted
+adjective at character $189$ --- after which the completions never re-converge. A
+recovered configuration does not eliminate near-tie sensitivity; it reduces how
+often a near-tie is reached.
+
+What this is still short of: one benchmark, one model family, two sizes,
+instruct-only, and completion-level evidence rather than a metric-level run
+through the ordinary HELM path on held-out instances. We therefore report the
+substrate as \emph{recovered} on this cell and keep (c)'s general claim at
+discovery grade (\S\ref{sec:olmo-confirm}).
+
+\paragraph{Cross-family check.} The prediction that an unrecorded dtype resolves
+to float32 was registered before being tested outside OLMo. On
+\texttt{marin-8b-instruct}, a different family with an equally unpinned dtype, the
+deployment sweep ranks float32 at a perfect match ($1.000$), float16 below it
+($0.909$), and \texttt{auto}/bfloat16 at partial agreement ($0.517$) --- the
+predicted ordering, on a family that played no part in forming the hypothesis.
 
 \begin{table}[t]
 \caption{Deployment-match \emph{discovery} probe ($n\approx 12$ \texttt{ifeval}
@@ -223,30 +363,36 @@ OLMo-2-32B (dense)  & fp16 partial 0.234 (quasi 0.0)       & \textbf{fp32-tp2 ma
 \end{center}
 \end{table}
 
-\paragraph{(d) An unresolved dense-OLMo-2 Hugging Face divergence.} Rigor demanded
-following up an inconsistency: the in-process \texttt{transformers} float32 probe
-exactly matched the sampled OLMoE outputs but gave near-zero quasi-match for the
-dense OLMo-2 models, even though those officials are \emph{recorded as}
-\texttt{HuggingFaceClient} deployments. Tokenizing the exact prompt showed
-byte-identical tokens across paths, so it is not a prompt difference; yet the
-current-\texttt{transformers} float32 first token disagreed with the official while
-vLLM float32 matched. A first-token disagreement on byte-identical prompt tokens
-localizes the divergence to the forward pass. We report this as an
-\emph{unresolved systematic divergence under prompt-token equivalence} --- direct
-evidence of execution-stack sensitivity --- and are explicit that its cause is not
-yet isolated: candidates include the model/tokenizer revision, the
-\texttt{transformers}/\texttt{torch} version, the attention implementation, device
-placement, and generation defaults, \emph{and}, not yet ruled out, a defect in our
-own dense-model probe path. We reject only the premature dismissal of the
-divergence, not the possibility that our tooling contributes to it.
+\paragraph{(e) A divergence that was our own instrument.} Table~\ref{tab:fp32}
+records an inconsistency we could not initially explain: the in-process
+\texttt{transformers} float32 probe matched the sampled OLMoE outputs exactly but
+gave near-zero quasi-match for the dense OLMo-2 models, even though those
+officials are \emph{recorded as} \texttt{HuggingFaceClient} deployments.
+Tokenization was byte-identical across paths, so it was not a prompt difference,
+and a first-token disagreement under identical prompt tokens localized it to the
+forward pass. For one draft of this paper we reported it as an unresolved
+systematic divergence, listing a defect in our own probe among the candidate
+causes.
 
-\paragraph{Store status (honest reporting).} The aggregate OLMo drift report on
-disk is \emph{stale}: the base-model \texttt{olmo-7b} classic cells carry an
-un-deduplicated local-halving artifact (e.g.\ MMLU public/local $0.295/0.144$),
-whereas the corrected value is $0.295/0.287$. The code fix is committed but the
-store was not regenerated. The raw run artifacts survive, so a correct report
-requires only a re-render under the fixed code rather than a re-execution; until
-that is done we do not cite base-model OLMo aggregates as results in this draft.
+It was that defect. The probe passed its \texttt{add\_generation\_prompt} and
+\texttt{add\_special\_tokens} arguments as \texttt{0}/\texttt{1} where the client
+expected \texttt{true}/\texttt{false}, so the dense sweeps were scoring a
+configuration they had not actually requested; the corrected sweep ranks the
+same-named cell at a full match. We report this rather than quietly deleting it
+because it is the failure mode \S\ref{sec:limitations} warns about --- the audit
+tool generating a disagreement of its own --- caught here only because the
+inconsistency was followed instead of interpreted. An execution-stack divergence
+and a bug in the instrument that measures execution stacks present identically at
+the point of observation.
+
+\paragraph{Store status (honest reporting).} An un-deduplicated local join once
+halved the base-model \texttt{olmo-7b} classic cells, reporting MMLU
+public/local as $0.295/0.144$ where the correct value is $0.295/0.287$. The fix is
+committed and the aggregate headline table has been regenerated under it, but the
+per-packet layer beneath that table has not, so the two disagree on disk today.
+The raw run artifacts survive, so reconciling them is a re-render rather than a
+re-execution. Until the layers agree and the inputs are hashed we cite no
+base-model OLMo aggregate as a result.
 \par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
   \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Insert the \emph{regenerated} OLMo aggregate score-drift heatmap
 (6 models $\times$ ${\sim}12$ benchmarks) after a fresh run with the current
@@ -353,9 +499,23 @@ That is the conservative reading. The stronger question is whether a judge that
 can still be served substitutes for one that cannot, and if so under what
 criterion --- a declared substitution, made explicit exactly as a proxy era is.
 
-We ran two open judges, \texttt{qwen3.5-27b} and \texttt{qwen3.6-35b-a3b}, over
-the released responses of two model-graded scenarios, three replicates each, and
-compared them against both official judges. The comparison that matters is not
+Before substituting anything we establish that the scoring step is reproducible at
+all when nothing is substituted. Reattaching the \emph{original} judge annotations
+to a reconstructed scenario state and re-running the real official metric returns
+the published statistics on all six model-graded benchmarks available to us
+(\texttt{xstest}, \texttt{wildbench}, \texttt{harm\_bench},
+\texttt{simple\_safety\_tests}, \texttt{anthropic\_red\_team},
+\texttt{omni\_math}): $12{,}750$ instance rows and $69$ aggregate rows, zero
+failures, maximum absolute error $0$ on five benchmarks and $2{\times}10^{-14}$
+on the sixth. This is artifact reconstruction in the sense of
+\S\ref{sec:targets} --- no model executed, the judge's forward pass read as stored
+data --- and it is the control the substitution results are measured against: any
+disagreement below is attributable to the judge, because the surrounding
+machinery reproduces exactly when the judge is held fixed.
+
+We then ran two open judges, \texttt{qwen3.5-27b} and \texttt{qwen3.6-35b-a3b},
+over the released responses of two model-graded scenarios, three replicates each,
+and compared them against both official judges. The comparison that matters is not
 open-versus-official on its own but open-versus-official measured against the
 \emph{official-versus-official} baseline: two closed judges already disagree with
 each other, and a substitute is admissible when it disagrees no more than they do.
@@ -416,6 +576,21 @@ was re-run to produce them. Two scenarios is a narrow base for a claim about
 label versus continuous metrics generally, and the parse-failure rate on the
 continuous scenario ($15.9\%$ for the $27$b arm, $2.0\%$ for the $35$b) is high
 enough that some of the bias may be parser rather than judge.
+
+The two arms reported here are a slice of a wider grid that has been executed but
+not analysed: six judge sizes from $0.8$b to $35$b across five benchmarks,
+$75$ attempt directories in all, three replicates each at temperature zero. Two
+things are already visible in it and both cut against a simple reading. Parse
+success tracks judge size cleanly --- it runs from $14\%$ at $0.8$b to $98\%$ at
+$35$b on the continuous scenario --- while agreement with the official does not,
+so the obvious health check does not predict the quantity of interest. And a
+format-clean judge can be badly miscalibrated in a way no format check would
+catch: on a near-single-class safety benchmark, the smallest arms parse almost
+perfectly while scoring far from the official, which is a label inversion wearing
+the appearance of a successful run. We hold the substitution claim to the two
+analysed scenarios until the rest of the grid is scored, and note that agreement
+on a $99\%$ one-class benchmark is close to a false-positive rate rather than a
+substitutability measurement.
 \par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
   \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Extend the open-judge comparison to the remaining model-graded
 scenarios and the four smaller open arms already served, and separate parser
