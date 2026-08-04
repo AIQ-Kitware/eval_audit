@@ -1,7 +1,14 @@
 # llama2_70b_helm_audit — local LLaMA-2-70B reproduction for Case Study 3
 
-This runbook brings up the new
-[`pythia-llama2-70b-mixed-4x96`](../../submodules/infer_stack/infer_stack/templates/default-profiles.yaml)
+> **STALE (verified 2026-08-04).** Every command below references
+> `infer_stack/templates/default-profiles.yaml`, which no longer exists — the
+> templates directory now holds only `suggestion-pool.yaml`, and the profile
+> name `pythia-llama2-70b-mixed-4x96` appears nowhere in the submodule. The
+> profile system was reworked into the catalog/preset shape the current
+> runbooks use (see `reproduce/olmo_models_combined/config/infer_stack/`).
+> Re-derive the profile before running any of this.
+
+This runbook brings up the `pythia-llama2-70b-mixed-4x96`
 serving profile and re-runs the public HELM Classic v0.3.0 LLaMA-2-70B
 benchmarks locally so the EEE-only reproducibility heatmap (Case Study
 3) can include LLaMA-2-70B as a fourth open-weight model.

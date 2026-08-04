@@ -38,7 +38,7 @@ This document was originally written in the `aiq-magnet` repository and copied i
 
 Original context:
 - workspace/repo at time of writing: `/home/joncrall/code/aiq-magnet`
-- original audit workflow location: `dev/experiments/audit-helm-reproduction`
+- original audit workflow location: `dev/experiments/audit-helm-reproduction` (historical; superseded by `reproduce/`)
 
 Current equivalents in this repo:
 - repo root: `/home/joncrall/code/helm-reproducibility`

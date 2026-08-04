@@ -5,7 +5,7 @@ models in the public HELM corpus, given the local audit results we
 currently have?*
 
 The manifest is checked in at
-[`configs/virtual-experiments/open-helm-models-reproducibility.yaml`](../../../home/joncrall/code/helm_audit/configs/virtual-experiments/open-helm-models-reproducibility.yaml).
+[`configs/virtual-experiments/open-helm-models-reproducibility.yaml`](../../configs/virtual-experiments/open-helm-models-reproducibility.yaml).
 It declares scope as a regex over five open-weight model families, and
 combines the audit-results-index + the public-HELM-index +
 the Stage-1 filter inventory as a `pre_filter` so Sankey A renders the

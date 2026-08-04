@@ -120,7 +120,7 @@ listed in the pythia-mmlu-stress manifest's `include_experiments` (added
 
    The pythia-12b-v0 per-model row should now show 10/10 reproduced
    (was 2/10 after the smoke), and the missing-targets CSV at
-   [`reports/scoped_funnel/missing_targets.csv`](../../../data/crfm-helm-audit-store/virtual-experiments/pythia-mmlu-stress/reports/scoped_funnel/missing_targets.csv)
+   `$AUDIT_STORE_ROOT/virtual-experiments/pythia-mmlu-stress/reports/scoped_funnel/missing_targets.csv`
    should be empty.
 
 ## Fallback: direct `helm-run` (skip the eval-audit/kwdagger layer)

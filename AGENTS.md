@@ -31,7 +31,8 @@ decision, or observation deserves a lesson.
 Each lesson must cite solid evidence:
 - an external reference, such as a file, test, issue, commit, doc, or journal
   entry; or
-- an MWE created under `dev/lessons/mwe/`.
+- an MWE created under `dev/lessons/mwe/` (create the directory if absent; only
+  `dev/lessons/lessons.md` exists today).
 
 Keep entries short and scoped.
 

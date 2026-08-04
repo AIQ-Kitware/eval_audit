@@ -19,12 +19,12 @@ Determine whether current locally reproduced HELM runs meaningfully differ from 
 - Local audit runs:
   - `/data/crfm-helm-audit`
 - Audit experiment workflow:
-  - `dev/experiments/audit-helm-reproduction`
+  - `dev/experiments/audit-helm-reproduction` (historical; the runbooks now live in `reproduce/`)
 
 ## Workflow Built During This Research
 
 - Created a reusable audit experiment folder under:
-  - `dev/experiments/audit-helm-reproduction`
+  - `dev/experiments/audit-helm-reproduction` (historical; the runbooks now live in `reproduce/`)
 - Added shell-first operator scripts for:
   - environment validation
   - manifest generation
@@ -62,8 +62,8 @@ improving the causal story for a paper-quality reproducibility analysis.
   - This avoids misleading Python tracebacks when a job exists but its run directory is incomplete.
 
 See also:
-- `dev/codex/kwdagger-notes.md`
-- `dev/codex/reproduce-helm-session-v2.md`
+- `docs/kwdagger-notes.md`
+- `docs/historical/reproduce-helm-session-v2.md`
 
 ## Provenance / Multi-Machine Goal
 
@@ -295,9 +295,9 @@ Therefore:
 ## Current Reporting Files Worth Inspecting
 
 - Session journal:
-  - `dev/codex/reproduce-helm-session-v2.md`
+  - `docs/historical/reproduce-helm-session-v2.md`
 - kwdagger notes:
-  - `dev/codex/kwdagger-notes.md`
+  - `docs/kwdagger-notes.md`
 - Pairwise report, local repeat:
   - `reports/pairwise/boolq-pythia-repeat-wide/pair_report_20260327T011202Z.txt`
 - Pairwise report, official vs local:
@@ -577,7 +577,7 @@ This document was originally written in the `aiq-magnet` repository and copied i
 
 Original context:
 - workspace/repo at time of writing: `/home/joncrall/code/aiq-magnet`
-- original audit workflow location: `dev/experiments/audit-helm-reproduction`
+- original audit workflow location: `dev/experiments/audit-helm-reproduction` (historical; the runbooks now live in `reproduce/`)
 
 Current equivalents in this repo:
 - repo root: `/home/joncrall/code/helm-reproducibility`
