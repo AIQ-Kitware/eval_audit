@@ -54,9 +54,10 @@ per-instance statistics --- so official and local are the same shape on disk
 before anything compares them. Model serving is out-of-process behind a local
 endpoint, which is what makes the serving half of the execution instrument a
 variable we can set (\S\ref{sec:deploymatch}) independently of the harness half
-(\S\ref{sec:eras}). The harness half can additionally run inside a container
-image pinned by digest and recorded per run, so the software environment is an
-audited constant rather than whatever the host happened to have installed.
+(\S\ref{sec:eras}). The harness half runs inside a container image pinned by
+digest and recorded per run, so the software environment is an audited constant
+rather than whatever the host happened to have installed. This is not optional:
+a manifest with no pinned image is refused at schedule time.
 
 \emph{Normalization} converts both sides into the normalized per-instance
 representation of \citet{eee2026} before any comparison. The comparison core
