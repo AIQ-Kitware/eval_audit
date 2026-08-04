@@ -72,7 +72,11 @@ reproduces. They are not a coordinate of the original run --- they are a threat 
 the validity of our measurement of it --- so we control them by building the
 comparison core additively and proving it byte-equal to the incumbent on fixtures
 before switching any renderer to it (\S\ref{sec:diff}), and we report a
-disagreement only where that core and its predecessor agree.
+disagreement only where that core and its predecessor agree. The same caution
+applies one layer earlier, to the patched window service of \S\ref{sec:system}:
+it changes which prompts get truncated, so it is part of the local execution
+instrument rather than a neutral bug fix, and a reproduction of our
+reproductions would need the patch to land where we did.
 
 \paragraph{The exclusion profile is not reported.} \S\ref{sec:preconditions} makes
 a typed exclusion a first-class outcome of the taxonomy, but this draft does not

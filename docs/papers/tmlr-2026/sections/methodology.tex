@@ -91,6 +91,22 @@ environment is an audited constant rather than whatever the host happened to hav
 installed. This is not optional: a manifest with no pinned image is refused at
 schedule time.
 
+Pinning the environment only fixes the harness we ship; it does not make that
+harness stock, and the difference is worth stating. We run HELM from a fork that
+departs from upstream in two places, both of which make it honor contracts it
+already declares. One is a crash fix in the vLLM client, which forwarded
+tokenizer arguments into an SDK constructor that rejects them. The other changes
+behavior. A HELM deployment carries two ceilings --- how much prompt the model can
+ingest, and the total prompt-plus-generation budget --- but the local window
+service budgeted prompts against the first alone, leaving the second inert: a
+deployment could declare a combined budget and still have its requests rejected
+for exceeding it. We make prompt construction take the tighter of the two. The
+consequence for reading our results is that the per-model token budgets we set
+--- the reserves that keep a chat template's wrapper tokens inside the served
+window --- take effect only under the patched behavior; on stock HELM they are
+recorded and ignored. A local run may therefore truncate a long prompt where
+stock HELM would have sent it and been refused by the server.
+
 \label{sec:eras}
 That harness half must sometimes be an \emph{old} one. A large fraction of any
 historical corpus was produced by an older harness: the measurement instrument
