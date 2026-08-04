@@ -868,7 +868,90 @@ def _write_sidecars(
         json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8"
     )
     (package_dpath / "REPACK.md").write_text(_repack_readme(manifest), encoding="utf-8")
+    _write_standalone_repoint(package_dpath)
     return manifest
+
+
+#: A stdlib-only repoint script written *into* the package.
+#:
+#: The receiving machine should not need ``eval_audit`` installed merely
+#: to make the package usable -- fixing absolute paths is the one step
+#: that must work before anything else can, so it travels with the data.
+_STANDALONE_REPOINT = '''#!/usr/bin/env python3
+"""Repoint this package at wherever it now lives. Standard library only.
+
+    python3 repoint.py            # use this script's own directory
+    python3 repoint.py --check    # report what would change, write nothing
+
+Re-applies the substitutions recorded in rewrites.json, swapping the
+location the package was built at for the location it is now. Safe to
+re-run: if the package has not moved it does nothing.
+"""
+import argparse
+import json
+import sys
+from pathlib import Path
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("package_dpath", nargs="?", type=Path,
+                        default=Path(__file__).resolve().parent)
+    parser.add_argument("--check", action="store_true",
+                        help="report only; write nothing")
+    args = parser.parse_args()
+
+    package = args.package_dpath.resolve()
+    fpath = package / "rewrites.json"
+    if not fpath.exists():
+        print(f"no rewrites.json in {package}", file=sys.stderr)
+        return 2
+
+    payload = json.loads(fpath.read_text(encoding="utf-8"))
+    old = payload["package_dpath"]
+    new = str(package)
+    if old == new:
+        print(f"already pointing at {new}; nothing to do")
+        return 0
+
+    print(f"{old}\\n  -> {new}")
+    changed = missing = 0
+    for row in payload["rewrites"]:
+        target = package / row["file"]
+        if not target.exists():
+            missing += 1
+            continue
+        try:
+            text = target.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"  cannot read {row['file']}: {exc}", file=sys.stderr)
+            missing += 1
+            continue
+        updated = text.replace(old, new)
+        if updated == text:
+            continue
+        changed += 1
+        if not args.check:
+            target.write_text(updated, encoding="utf-8")
+
+    verb = "would update" if args.check else "updated"
+    print(f"{verb} {changed} files" + (f"; {missing} missing" if missing else ""))
+    if not args.check:
+        payload["package_dpath"] = new
+        fpath.write_text(json.dumps(payload, indent=2, sort_keys=True),
+                         encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+'''
+
+
+def _write_standalone_repoint(package_dpath: Path) -> None:
+    fpath = package_dpath / "repoint.py"
+    fpath.write_text(_STANDALONE_REPOINT, encoding="utf-8")
+    fpath.chmod(0o755)
 
 
 def _repack_readme(manifest: dict) -> str:
@@ -900,16 +983,22 @@ the analysis is.
 
 The tree under `root/` mirrors the original absolute layout, so the
 relative symlinks inside every core-report packet resolve unchanged.
-Absolute paths embedded in JSON, CSV and shell artifacts were rewritten
-to point at this package's build location. If you extracted it somewhere
-else, repoint them once:
 
-    eval-audit-package-analyses --repoint <path-to-this-package>
+Absolute paths embedded in JSON, CSV and shell artifacts point at this
+package's build location. If you extracted it somewhere else, repoint
+them once --- this needs nothing installed beyond `python3`:
 
-That re-applies the substitutions recorded in `rewrites.json`.
-`pre_rewrite_hashes.json` holds the SHA-256 of every rewritten file as it
-was in the store, so the transform is invertible and each file can be
-checked against its original.
+    python3 repoint.py            # from inside this directory
+    python3 repoint.py --check    # show what would change, write nothing
+
+It is idempotent, and safe to run again after moving the package again.
+If you do have `eval_audit` installed, `eval-audit-package-analyses
+--repoint <dir>` does the same thing.
+
+`rewrites.json` records every substitution and `pre_rewrite_hashes.json`
+the SHA-256 of each rewritten file as it was in the store, so the
+transform is invertible and each file can be checked against its
+original.
 
 ## Files
 
@@ -920,6 +1009,7 @@ checked against its original.
 | `pre_rewrite_hashes.json` | pre-rewrite SHA-256 per rewritten file |
 | `drops.tsv` | every excluded file, reason, bytes |
 | `missing.tsv` | references that did not resolve, typed |
+| `repoint.py` | stdlib-only path fixer; no install needed |
 
 `missing.tsv` reasons distinguish
 `absent_local_mirror_may_exist_upstream` (the public HELM mirror here is

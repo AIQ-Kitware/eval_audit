@@ -4713,3 +4713,38 @@ deliberately. (d) `local` at 15.22 GB across 1618 run dirs is somewhat above the
 1403 I measured from component manifests alone -- the surplus comes from runs
 referenced by other carriers, and is over-inclusive on our own irreplaceable
 outputs, which is the safe direction.
+
+### Addendum — cross-machine driver
+
+The packager was only ever half the job: the point is to redo the analysis
+*elsewhere*, so `package-analyses-to-host.sh` automates store -> package ->
+archive -> transfer -> repointed-on-arrival. Either end may be remote, which
+covers both readings of "run it on a different machine" (run the packager on
+the host that holds the store, or build here and restore over there) without
+having to guess which was meant.
+
+Two things I changed in the tool because the driver exposed them. First, the
+package now carries its own stdlib-only `repoint.py`. Fixing absolute paths is
+the step that must work *before* anything else can, so making it depend on
+`eval_audit` being installed on the receiving machine was backwards --- the
+receiver now needs only `python3` and `zstd`. Second, `DST_DPATH` defaults to
+`$HOME` for the *destination* shell to expand; when the destination is local
+the rsync runs in this shell instead, which would have created a directory
+literally named `$HOME`. Both were found by running the thing rather than
+reading it.
+
+Phases are separately invocable because they fail for different reasons and
+`pack` is the expensive one; `--partial --append-verify` on the transfer means
+a dropped connection on 30 GB resumes instead of restarting.
+
+Validated end to end on a real (small) store built from the test fixture: all
+five phases, then an independent check of the *restored* package --- 4 of 6
+symlinks resolve and the 2 that do not are exactly the fixture's pre-existing
+dangling ones, no execution state present, `report_dpath` repointed to the new
+location, and the upstream `/data/CLEAR` path untouched. The remaining
+build-location strings live only in `MANIFEST.json` (provenance: where it was
+built) and `rewrites.json` (the recorded transform), which is correct.
+
+**Design insight.** A transfer artifact should assume the receiving machine has
+nothing. Every dependency the far side needs before it can use the data is a
+dependency that can be absent exactly when you cannot fix it.

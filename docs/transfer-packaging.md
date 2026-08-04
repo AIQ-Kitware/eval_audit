@@ -9,6 +9,49 @@ It is not a backup, and it is not a way to re-run the benchmarks. The
 package deliberately excludes everything HELM needed in order to
 *execute*, because none of it is read when the analysis runs.
 
+## Moving it to another machine
+
+[`package-analyses-to-host.sh`](../package-analyses-to-host.sh) automates the
+whole path. Either end may be remote --- the store is read wherever it lives,
+the package is unpacked wherever it is going --- so it covers both "run the
+packager on the big machine and bring the archive back" and "build here and
+restore over there".
+
+```bash
+# look before you leap: crawl, dry-run, fetch plan.json here for review
+SRC_HOST=aiq-gpu ./package-analyses-to-host.sh plan
+
+# the whole path, source -> archive -> transfer -> extracted and repointed
+SRC_HOST=aiq-gpu DST_HOST=namek ./package-analyses-to-host.sh
+
+# print every command instead of running it
+DRY_RUN=1 SRC_HOST=aiq-gpu ./package-analyses-to-host.sh
+```
+
+Five phases, individually selectable because they fail for different reasons
+and the expensive ones should not be repeated: `plan`, `pack`, `archive`,
+`ship`, `restore`. Re-running is safe --- `pack` skips files already copied at
+the right size, and `restore` is idempotent.
+
+Notes on the phases:
+
+- `plan` fetches `plan.json` back to the local machine and prints the five
+  largest artifacts. **Read them.** A packaging mistake shows up as one
+  implausibly large unit at the top, and that is far cheaper to notice here
+  than after a multi-hour copy.
+- `archive` writes a deterministic `tar.zst` (`--sort=name --mtime=@0
+  --owner=0 --group=0 --format=pax`) plus a `.sha256`. `pax` is not optional:
+  HELM run-spec directory names exceed tar's 100-character legacy name limit.
+- `ship` uses `rsync --partial --append-verify`, so a dropped connection on a
+  30 GB transfer resumes rather than restarting, and the checksum is verified
+  on the destination before anything is extracted.
+- `restore` runs the package's own `repoint.py`. The receiving machine needs
+  only `python3` and `zstd` --- not `eval_audit`.
+
+Set `EVAL_AUDIT_PY` to the source machine's venv python if the CLI is not on
+`PATH` for a non-login shell. That is the single most common way this fails on
+a machine that is otherwise fine.
+
 ## Two stages, separated by a flat file
 
 The intermediate JSONL is the point of the split: it makes the scope

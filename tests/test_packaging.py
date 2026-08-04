@@ -10,6 +10,7 @@ upstream HELM path that must survive the rewrite untouched.
 from __future__ import annotations
 
 import json
+import sys
 import os
 from pathlib import Path
 
@@ -225,6 +226,46 @@ def test_package_is_self_contained_and_rewritten(fake_world, tmp_path):
 
     # 8. dedup is reported honestly
     assert manifest["counts"]["dedup_ratio"] > 1.0
+
+
+def test_standalone_repoint_needs_no_eval_audit(fake_world, tmp_path):
+    """The package must be fixable on a machine without eval_audit.
+
+    Fixing absolute paths is the step that has to work before anything
+    else can, so it travels with the data as a stdlib-only script.
+    """
+    import subprocess
+
+    records = crawl_store(fake_world["store"])
+    plan = build_plan(records, roots=fake_world["roots"])
+    package = tmp_path / "pkg"
+    execute_plan(plan, package, roots=fake_world["roots"])
+
+    moved = tmp_path / "elsewhere"
+    package.rename(moved)
+
+    # run it the way the far side would: bare interpreter, no package
+    # installed, cwd deliberately unrelated
+    result = subprocess.run(
+        [sys.executable, str(moved / "repoint.py")],
+        capture_output=True, text=True, cwd=str(tmp_path), env={"PATH": "/usr/bin:/bin"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert str(moved) in result.stdout
+
+    payload = json.loads(
+        next((moved / MIRROR_DIRNAME).rglob("components_manifest.json")).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["report_dpath"].startswith(str(moved))
+
+    # idempotent: a second run is a no-op
+    again = subprocess.run(
+        [sys.executable, str(moved / "repoint.py")], capture_output=True, text=True
+    )
+    assert again.returncode == 0
+    assert "nothing to do" in again.stdout
 
 
 def test_repoint_after_a_move(fake_world, tmp_path):
