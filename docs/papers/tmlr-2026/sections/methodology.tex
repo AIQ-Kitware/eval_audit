@@ -69,9 +69,10 @@ either against a run from a different harness entirely. Official runs are
 converted on demand, because converting the whole public corpus is the slow step.
 
 \emph{Composition} builds the comparison set. A
-\emph{virtual experiment} is a manifest declaring a scope over two indexes ---
-one of local audit results, one of official public runs --- which the composer
-resolves into packets and into the coverage funnel of \S\ref{sec:coverage}. The
+\emph{virtual experiment} is a manifest naming the two indexes it draws from ---
+one of local audit results, one of official public runs --- together with the
+filters that narrow them to the runs under study. The composer resolves that
+declaration into packets and into the coverage funnel of \S\ref{sec:coverage}. The
 manifest, not the resulting directory, is the archived unit: re-running it
 re-derives the slice. \emph{Comparison} then analyses each packet independently
 and \emph{aggregation} reads those per-packet reports back to render the
