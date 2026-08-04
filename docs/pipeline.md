@@ -211,6 +211,15 @@ deprecated no-op — canonicalization is always on.)
 **CLI:** `eval-audit-analyze-experiment` for a single experiment;
 `eval-audit-analyze-many` to batch across experiments.
 
+> **A packet may hold more than one local attempt.** When an experiment contains
+> several local runs for the same official row (a pre-fix attempt and a rerun, a
+> smoke and a full, two suites covering the same subject), the planner keeps all
+> of them and emits `local_repeat` comparisons beside the `official_vs_local`
+> one. Any reduction over `pairs[]` must therefore **select** an attempt, not
+> average them — averaging a collapsed run against a working one halves the cell.
+> See [`docs/helm-gotchas.md`](helm-gotchas.md) §G14 for the check and for the
+> three times this has bitten.
+
 **What it does:** for each packet, loads both sides via the normalized
 loader ([`eval_audit/normalized/loaders.py`](../eval_audit/normalized/loaders.py)),
 runs the **unified comparison core**

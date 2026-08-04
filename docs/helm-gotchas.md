@@ -356,3 +356,48 @@ records the remapped path. Each substitution is recorded on the run manifest as
 run-name/logical-key pairing and canonical-recipe hash (which excludes
 `metric_specs`, see G8) are unaffected, so the local↔official comparison does not
 regress. Tests: `tests/test_era_shim_hostside.py` (era-resolver-simulated).
+
+---
+
+## G14. A store can hold several local attempts per official row — the join must *select*, not average
+
+**Symptom.** An aggregate reports roughly half the score the underlying runs
+show. Concretely: `olmo-models-combined` MMLU for `allenai/olmo-7b` reads
+public/local `0.295/0.144` under one reduction and `0.295/0.287` under another,
+from *the same artifacts*.
+
+**Mechanism.** An experiment legitimately accumulates more than one local run for
+the same official row — a pre-fix attempt and a post-fix rerun, a smoke and a
+full, two suites (`/mmlu` and `/lite`) covering the same subject. The planner
+keeps all of them and emits `local_repeat` comparisons alongside the
+`official_vs_local` one (`eval_audit/planning/core_report_planner.py`). A packet
+therefore has *n* pairs, not one, and any reduction over `pairs[]` that treats
+them as independent observations averages a collapsed run against a working one.
+
+For `olmo-7b` specifically the second attempt is the **tokenizer collapse of
+G-series (a)**: completions are the prompt-independent `"The …"` boilerplate and
+`exact_match` is `0.000`, so averaging with the good run halves the cell exactly.
+
+**How to check.** Count pairs per packet before reducing:
+
+```bash
+python3 -c "
+import json,glob,collections
+c=collections.Counter()
+for f in glob.glob('<store>/analysis/core-reports/*/core_metric_report.json'):
+    c[len(json.load(open(f)).get('pairs',[]))]+=1
+print(dict(c))"
+```
+
+Verified 2026-08-04: `qwen-models-combined` 703/703 single-pair,
+`gpt-oss-20b-from-spec` 4/4, both `era-redpajama-*` 2/2 — but
+`olmo-models-combined` is 78 single and **71 double, all of them `olmo-7b`**.
+
+**Rule.** A figure read from a multi-attempt store is meaningless without the
+selection rule that produced it, and the rule belongs next to the figure. This
+has now bitten three times: once in the aggregation code (fixed), once in an
+ad-hoc analysis that re-derived the halved number, and once as a *false causal
+reading* — two phi-2 reports differing by 0.003 were attributed to
+containerization when they had simply paired against different same-config
+attempts (four of five phi-2 runs are byte-identical, including the
+containerized one; the outlier was the arm being called best).

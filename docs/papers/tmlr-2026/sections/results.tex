@@ -188,8 +188,10 @@ subject of \S\ref{sec:olmo} onward.
 
 \paragraph{Scope and freshness.} The counts and agreement values are read from the
 store's derived reproducibility rows; all $1406$ run paths recorded in the
-comparison manifests resolve on disk, so the set is re-renderable and hashable
-without re-execution. These are \emph{reproductions} of rows HELM already
+comparison manifests resolve on disk --- exactly two per comparison, one official
+and one local, so no Qwen figure depends on choosing among repeated attempts
+(\S\ref{sec:olmo}) --- and the set is re-renderable and hashable without
+re-execution. These are \emph{reproductions} of rows HELM already
 published. The separate arm promised as new Qwen 3.5 evaluations is not reported
 here: $72$ runs of \texttt{qwen3.5-9b-base} covering \texttt{mmlu} ($57$),
 \texttt{legalbench} and \texttt{wmt\_14} ($5$ each), and one run each of
@@ -403,15 +405,24 @@ and a bug in the instrument that measures execution stacks present identically a
 the point of observation.
 
 \paragraph{When a store holds more than one attempt.} The base-model
-\texttt{olmo-7b} MMLU cells illustrate a bookkeeping hazard that is really a
-reproducibility one. Each official row in that experiment has \emph{two} local
-runs against the same deployment: one produced by the collapsed configuration of
-(a), scoring $0.000$ with the prompt-independent boilerplate, and one produced
-after the tokenizer fix, scoring in line with the official. Both are legitimate
-records of what we executed, and the store keeps both. An aggregate that averages
-over local attempts therefore reports $0.295/0.144$ --- half the true value ---
-while one that selects a single attempt per row reports $0.295/0.287$. The
-selecting version is what is on disk and what we would cite.
+\texttt{olmo-7b} rows illustrate a bookkeeping hazard that is really a
+reproducibility one. Each of them has \emph{two} local runs against the same
+deployment: one produced by the collapsed configuration of (a), scoring $0.000$
+with the prompt-independent boilerplate, and one produced after the tokenizer fix,
+scoring in line with the official. Both are legitimate records of what we
+executed, and the store keeps both. An aggregate that averages over local attempts
+therefore reports MMLU as $0.295/0.144$ --- half the true value --- while one that
+selects a single attempt per row reports $0.295/0.287$. The selecting version is
+what is on disk and what we would cite.
+
+The scope of the exposure is worth stating precisely, because it is narrow: $71$
+of the $149$ OLMo packets carry two attempts and \emph{all $71$ are
+\texttt{olmo-7b}}. Every other model in the OLMo corpus, including all four
+instruct \texttt{ifeval} packets whose drift is quoted above and in
+\S\ref{sec:gptoss}, pairs one official row to one local run, as do all $703$ Qwen
+packets, all four \texttt{gpt-oss-20b} packets, and both packets in each
+RedPajama era. No number in this section other than the base-model
+\texttt{olmo-7b} aggregates depends on a selection rule.
 
 The general point is that a comparison layer facing multiple attempts must
 \emph{choose}, and the choice is a judgment about which execution the number
