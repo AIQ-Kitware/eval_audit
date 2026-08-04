@@ -4714,37 +4714,37 @@ deliberately. (d) `local` at 15.22 GB across 1618 run dirs is somewhat above the
 referenced by other carriers, and is over-inclusive on our own irreplaceable
 outputs, which is the safe direction.
 
-### Addendum — cross-machine driver
+### Addendum — the wrapper script
 
-The packager was only ever half the job: the point is to redo the analysis
-*elsewhere*, so `package-analyses-to-host.sh` automates store -> package ->
-archive -> transfer -> repointed-on-arrival. Either end may be remote, which
-covers both readings of "run it on a different machine" (run the packager on
-the host that holds the store, or build here and restore over there) without
-having to guess which was meant.
+The packager needed a runner. I first built an ssh-orchestrating version that
+could put either end remote, then the user clarified: the repository is pushed
+to the remote host, so the script just needs to call the packaging tools where
+it lands. Deleted the remoting entirely --- `package-analyses.sh` is three
+phases (plan/pack/archive) that run wherever they are invoked. The ssh version
+was a solution to a problem that did not exist; asking which end should be
+remote was the right instinct, but the better question was whether either
+needed to be.
 
-Two things I changed in the tool because the driver exposed them. First, the
-package now carries its own stdlib-only `repoint.py`. Fixing absolute paths is
-the step that must work *before* anything else can, so making it depend on
-`eval_audit` being installed on the receiving machine was backwards --- the
-receiver now needs only `python3` and `zstd`. Second, `DST_DPATH` defaults to
-`$HOME` for the *destination* shell to expand; when the destination is local
-the rsync runs in this shell instead, which would have created a directory
-literally named `$HOME`. Both were found by running the thing rather than
-reading it.
+One change survived from that detour and was worth keeping: the package now
+carries its own stdlib-only `repoint.py`. Fixing absolute paths is the step
+that must work *before* anything else can, so making it depend on `eval_audit`
+being installed on the receiving machine was backwards. The receiver now needs
+only `python3` and `zstd`.
 
-Phases are separately invocable because they fail for different reasons and
-`pack` is the expensive one; `--partial --append-verify` on the transfer means
-a dropped connection on 30 GB resumes instead of restarting.
+Validated end to end on a real (small) store built from the test fixture:
+plan -> pack -> archive, then extract the archive elsewhere and repoint under
+`env -i` with a bare interpreter. The restored package checks out --- 4 of 6
+symlinks resolve and the 2 that do not are exactly the fixture's deliberate
+dangling refs, no execution state, run data and job provenance both present,
+paths repointed, upstream `/data/CLEAR` untouched.
 
-Validated end to end on a real (small) store built from the test fixture: all
-five phases, then an independent check of the *restored* package --- 4 of 6
-symlinks resolve and the 2 that do not are exactly the fixture's pre-existing
-dangling ones, no execution state present, `report_dpath` repointed to the new
-location, and the upstream `/data/CLEAR` path untouched. The remaining
-build-location strings live only in `MANIFEST.json` (provenance: where it was
-built) and `rewrites.json` (the recorded transform), which is correct.
+Worth recording: my first verification of that restore reported *all six*
+symlinks broken, and the package was fine --- the check script evaluated
+`readlink "$l"` after `cd`-ing to the link's directory, so the relative path no
+longer resolved. An ad-hoc correctness check is itself code, and a false alarm
+from it costs the same investigation time as a real defect. `test -e` was the
+right check all along.
 
 **Design insight.** A transfer artifact should assume the receiving machine has
 nothing. Every dependency the far side needs before it can use the data is a
-dependency that can be absent exactly when you cannot fix it.
+dependency that can be absent exactly when you are least able to fix it.
