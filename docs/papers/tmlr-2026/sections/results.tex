@@ -124,23 +124,40 @@ local deployment and are filtered before any attempt.
 Every number that follows is produced by our own comparison layer, so before
 reading any of them it is worth asking whether that layer distinguishes a
 reproduction from a non-reproduction at all. We ran one public row
-(\texttt{mmlu:subject=philosophy}, \texttt{microsoft/phi-2}) under four
-deployments plus a deliberately broken fifth. At temperature zero the instance
-agreement is $0.997$ through vLLM, $0.994$ through the same vLLM inside the pinned
-container, and $0.990$ through Hugging Face. The negative control --- the identical
-recipe at temperature $1$, which \emph{should} fail --- lands at $0.778$, in the
-lowest agreement bucket.
+(\texttt{mmlu:subject=philosophy}, \texttt{microsoft/phi-2}) under several
+deployments plus a deliberately broken control. At temperature zero the instance
+agreement against the public row is $0.990$--$0.997$ whether the model is served
+through vLLM, through the same vLLM inside the pinned container, or through
+Hugging Face. The control --- the identical recipe at temperature $1$, which
+\emph{should} fail --- lands at $0.778$, in the lowest agreement bucket.
 
 The control is the point. A comparison layer that reported high agreement for the
-temperature-1 arm would be measuring nothing, and the three-way spread across
-serving paths at temperature zero ($0.007$) is small beside the gap to the broken
-arm ($0.212$), so the instrument separates the variable it is meant to detect from
-the ones it is meant to tolerate. Containerization costs $0.003$ and does not
-change the verdict, which is the evidence behind treating the pinned image as a
-control rather than a confound. These runs pair against no official row --- they
-compare a local execution to a public one under conditions we chose --- so they
-are reported here as instrument validation and are excluded from every corpus
-count in this section.
+temperature-1 arm would be measuring nothing, and the spread across serving paths
+at temperature zero ($0.007$) is small beside the gap to the broken arm ($0.212$),
+so the instrument separates the variable it is meant to detect from the ones it is
+meant to tolerate.
+
+\paragraph{A repeatability floor, and what it costs to ignore it.} That $0.007$
+spread invites a causal reading --- that the serving path costs agreement, and the
+container costs a little more --- and the runs behind it refute that reading. Five
+executions of this row exist at temperature zero under the same recipe and the
+same deployment. \emph{Four are byte-identical to one another across all $311$
+instances, and one of the four is the containerized run.} The fifth differs from
+all of them on $4$ instances, each a single-token multiple-choice answer that
+flips to a different letter.
+
+So containerization changed nothing measurable here, and the apparent ordering
+between the arms is an artifact of \emph{which} execution each report happened to
+pair against: the arm we would have called best is the lone outlier, and the arm
+we would have called slightly degraded sits in the consensus. What the five runs
+do measure is a repeatability floor --- $4$ of $311$ instances, about $1.3\%$,
+moving between executions that differ in nothing we recorded. No disagreement
+smaller than that floor should be attributed to anything, and we have no such
+floor for the corpora in the rest of this section (\S\ref{sec:limitations}).
+
+These runs pair against no official row --- they compare a local execution to a
+public one under conditions we chose --- so they are reported here as instrument
+validation and are excluded from every corpus count in this section.
 
 \subsection{Qwen: the base rate on a modern harness}
 \label{sec:qwen}

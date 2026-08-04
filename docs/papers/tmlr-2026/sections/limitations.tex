@@ -97,9 +97,12 @@ population-level prevalence claim on it.
 \paragraph{Single-machine measurements.} Reported agreement is
 official-vs-local and same-machine; cross-machine variance (which would separate
 platform-specific from recipe-specific drift) is scoped but not completed.
-Same-machine repeat pairs were executed for two model families and never analysed,
-so even the within-machine repeatability floor --- the level below which a
-disagreement should not be attributed to anything --- is unmeasured.
+The one place we do measure a within-machine repeatability floor --- five identical
+phi-2 executions, four byte-identical and one differing on $1.3\%$ of instances
+(\S\ref{sec:phi2}) --- is a single row of a single scenario, and same-machine
+repeat pairs executed for two further model families were never analysed. So the
+level below which a disagreement should not be attributed to anything is
+essentially unmeasured for the corpora we report.
 {\color{orange}\textsf{\small[\textsc{pending}: cross-machine repeatability baseline; analyse the repeat pairs]}}
 
 \paragraph{Oracle objective without log-probs.} Because the hosted originals store
