@@ -45,19 +45,26 @@ makes a typed exclusion a reportable outcome rather than a silent drop.
 \emph{Execution} produces the local side, and it is where the recorded recipe is
 held fixed.
 \label{sec:fromspec}
-Public HELM runs do not record the CLI string that produced them, but they do
-ship a fully resolved \texttt{run\_spec.json}: the complete adapter spec, scenario
-spec, metric specs, and annotators, with every default already materialized. The
-prior approach --- taken by essentially every earlier reproduction, including our
-own first attempts --- \emph{reconstructs} a run-entry string from the run and
-re-parses it. Re-parsing re-derives the recipe under \emph{today's} library
-defaults, which silently drifts from the recipe that produced the official
-numbers --- and drifts without announcing itself, since the reconstructed string
-still names the right scenario and model. We therefore never reconstruct a
-recipe; we replay the resolved \texttt{run\_spec.json} verbatim.
-Our materializer deserializes the official spec and drives an in-process
-benchmarking call; the reconstructed run-entry string is used only to \emph{locate}
-the official directory, never to drive execution. Two failure modes are handled
+Every public HELM run ships a fully resolved \texttt{run\_spec.json} --- the
+complete adapter spec, scenario spec, metric specs, and annotators, with every
+default already materialized --- and the harness cannot read it back. HELM's
+entry point accepts only \emph{run-entry descriptions}, short strings such as
+\texttt{mmlu:subject=anatomy,model=\ldots}, passed on the command line or in a
+configuration file; it turns each into a run spec by re-parsing the string under
+whatever library version happens to be installed. Reproducing a public run from
+the record therefore has exactly one native path: reconstruct an entry string
+from the run and hand it back. That is what essentially every earlier
+reproduction does, our own first attempts included. It re-derives the recipe
+under \emph{today's} defaults rather than the ones that produced the official
+numbers, and it does so silently, because the reconstructed string still names
+the right scenario and model.
+
+So we extended the harness rather than the string. HELM can in fact deserialize a
+run spec from JSON --- its Slurm backend writes one per job and its worker reads
+it back to execute --- but that capability is unreachable from the public entry
+point. Our materializer drives it directly: it deserializes the official spec and
+makes an in-process benchmarking call, and the reconstructed entry string is used
+only to \emph{locate} the official directory, never to drive execution. Two failure modes are handled
 asymmetrically because they demand opposite treatment: a scenario/metric
 \emph{class} that does not resolve under the local harness is caught loudly at
 preflight (an environment mismatch, surfaced as such), whereas a dropped
