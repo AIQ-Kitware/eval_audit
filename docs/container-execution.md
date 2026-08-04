@@ -162,22 +162,27 @@ ERA=helm-v0.3.0 ./docker/build.sh
 # 2. Export an ERA bundle (era-schema model_deployments.yaml + exact-path sources)
 python -m eval_audit.integrations.infer_stack export-benchmark-bundle \
   --preset <era-preset> --era helm-v0.3.0 --freeze-rel-paths \
-  --precomputed-root /data/crfm-helm-public
+  --bundle-root <bundle-root> --precomputed-root /data/crfm-helm-public
 
-# 3. make-manifest resolves the era from the sources' rel-paths (auto)
-eval-audit-make-manifest --from-run-spec --era auto \
-  --run-spec-sources-fpath <sources.yaml> --precomputed-root /data/crfm-helm-public \
-  --container-image helm-runner-era-v0-3-0:dev ...
-
-# 4. Run — the bridge selects the era pipeline (helm_era_shim.replay) and guards
-#    the image's org.aiq.era label against the manifest era at schedule time.
-eval-audit-run <manifest.yaml> --run
+# 3. Run — the bundle export above already wrote <bundle-root>/{smoke,full}_manifest.yaml
+#    with the era stamped on it, so there is no make-manifest step. The bridge
+#    selects the era pipeline (helm_era_shim.replay) and guards the image's
+#    org.aiq.era label against the manifest era at schedule time.
+eval-audit-run <bundle-root>/full_manifest.yaml --lease --run=1 \
+  --container-image helm-runner-era-v0-3-0:dev
 ```
+
+`eval-audit-make-manifest` is **not** part of this flow: `export-benchmark-bundle`
+is the manifest producer for every from-spec and era runbook. See
+[`reproduce/classic_together_combined/_lib.sh`](../reproduce/classic_together_combined/_lib.sh)
+(`run_one_grid`) for the invocation these snippets are abridged from.
 
 Key invariants:
 
 - **One manifest = one era = one image = one measurement instrument.** A mixed-era
-  source set is a hard error at make-manifest time (`eval_audit/eras.py`).
+  source set is a hard error, raised in `eval_audit/eras.py` — at bundle/manifest
+  build time, and again at schedule time when `kwdagger_bridge` resolves the
+  manifest's `era` key against `docker/eras.yaml` and checks the image label.
 - **Verbatim replay.** A pre-v0.5 `adapter_spec` has no `model_deployment` field,
   so nothing is rewritten — routing to vLLM is purely by-name (the era shim
   registers a deployment under the exact official model name). The materializer
