@@ -19,10 +19,10 @@ A reproduction attempt is six stages (Table~\ref{tab:pipeline}), and the split
 between them decides what a defect costs to fix.
 
 \begin{table}[t]
-\caption{The audit workflow. Commands are prefixed \texttt{eval-audit-}. The
-first two stages consume GPU time and produce evidence; the last four are
-read-only over artifacts already on disk, so an analysis defect is repaired by
-re-rendering rather than re-executing.}
+\caption{The audit workflow. Commands are prefixed \texttt{eval-audit-}. Only
+execution consumes GPU time; every later stage is a pure function of artifacts
+already on disk, so an analysis defect is repaired by re-rendering rather than
+re-executing.}
 \label{tab:pipeline}
 \begin{center}
 \footnotesize
