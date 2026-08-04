@@ -576,7 +576,8 @@ def _prepare_container_execution(
 
     Mutates ``manifest`` in place to hold absolute host paths for the HF cache
     and precomputed root (so the docker node can bind-mount them at identical
-    paths). Returns ``(None, None)`` for the bare-python path.
+    paths). Returns ``(None, None)`` when the manifest pins no image, which
+    ``build_helm_matrix`` then rejects -- containerized execution is required.
     """
     container_image = manifest.get("container_image")
     if not container_image:

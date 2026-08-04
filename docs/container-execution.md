@@ -1,17 +1,21 @@
 # Containerized HELM execution
 
-Stage 3 (`eval-audit-run`) normally runs
-`python -m magnet.backends.helm.cli.materialize_helm_run` directly in the host
-venv of whatever GPU machine kwdagger schedules onto. That makes the software
-environment (torch / CUDA / transformers / HELM build) an *uncontrolled*
-variable — precisely the kind of drift the audit tries to separate from true
-reproducibility failures.
+Every HELM run-entry executes inside a **pinned Docker image**, and *which image
+(by `sha256` digest) produced each run* is recorded, so any change to the
+software environment is auditable.
 
-This optional path runs each HELM run-entry inside a **pinned Docker image** and
-records *which image (by `sha256` digest) produced each run*, so any change to
-the environment is auditable. It is **opt-in**: set `container_image` in a
-manifest (or pass `--container-image`). With it unset, the historic bare-python
-path is used unchanged.
+This is **mandatory, not opt-in**: set `container_image` in a manifest (or pass
+`--container-image`). A manifest without one is refused at schedule time
+(`build_helm_matrix` raises), because the bare host-venv path — running
+`python -m magnet.backends.helm.cli.materialize_helm_run` directly in the venv
+of whatever GPU machine kwdagger scheduled onto — made the software environment
+(torch / CUDA / transformers / HELM build) an *uncontrolled* variable, precisely
+the kind of drift the audit exists to separate from true reproducibility
+failures. That path has been removed.
+
+Runs produced before the removal have no `container_provenance.json`; their
+environment is not recoverable from the artifacts and they should not be cited
+as environment-controlled.
 
 ## TL;DR
 
@@ -34,7 +38,7 @@ time either way.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `container_image` | `null` | Tag or digest ref. **Setting it enables the container path.** |
+| `container_image` | `null` | Tag or digest ref. **Required** — scheduling fails without it. |
 | `container_runtime` | `docker` | Container CLI used to resolve/run (e.g. `docker`). |
 | `hf_cache_dir` | `null` | Host dir bind-mounted at `HF_HOME=/hf-cache`. |
 | `container_gpus` | `null` | `null` → follow the scheduler's `$CUDA_VISIBLE_DEVICES`; `"none"` → no GPU (CPU); else passed to `--gpus`. |
