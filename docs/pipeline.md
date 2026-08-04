@@ -1,22 +1,35 @@
 # eval_audit pipeline
 
-This document describes the **active** pipeline: how the
-[analysis-only runbooks](../reproduce/pythia_mmlu_stress/) and
-[`open_helm_models_reproducibility`](../reproduce/open_helm_models_reproducibility/)
-actually run end-to-end, top to bottom.
+This document describes the **active** pipeline. It has two halves:
 
-The pre-EEE-refactor pipeline (with execution stages: manifest building,
-`kwdagger` scheduling, vLLM/KubeAI serving) is preserved as
+- **Execution** — replaying official runs locally from their frozen
+  `run_spec.json`, inside a digest-pinned container, against a leased GPU
+  endpoint. Exercised 2026-07-13 … 07-15 by the four
+  [from-spec / era runbooks](#execution-from-spec-replay); this is what produced
+  the current OLMo, Qwen, GPT-OSS, and RedPajama audit results.
+- **Analysis** — Stages 1–4 below, read-only over audit results already on disk.
+  Exercised continuously by the analysis-only runbooks
+  ([`pythia_mmlu_stress`](../reproduce/pythia_mmlu_stress/),
+  [`open_helm_models_reproducibility`](../reproduce/open_helm_models_reproducibility/)).
+
+The **pre-EEE-refactor** pipeline — `eval-audit-make-manifest` for manifest
+building, plus the KubeAI/LiteLLM serving variants — is preserved as
 [`historical/pipeline-pre-eee-refactor.md`](historical/pipeline-pre-eee-refactor.md).
-That older flow has not been exercised in months and is **not** described here.
+Its analysis stages are superseded by the four below; its manifest-building step
+is superseded by `export-benchmark-bundle` (see
+[Execution](#execution-from-spec-replay)). That older flow is **not** described
+here.
 
 ## Mental model
 
 ```
 Public HELM corpus              Local audit results
 (/data/crfm-helm-public)        (/data/crfm-helm-audit/<exp>/...)
+        │                                  ▲
+        │                                  │  produced by the execution half
+        │                                  │  (export-benchmark-bundle
+        │                                  │   → eval-audit-run, see below)
         │                                  │
-        │   already executed elsewhere     │
         ▼                                  ▼
         ┌──────────────────────────────────┐
         │  1. EEE conversion               │  every_eval_ever convert helm
@@ -43,8 +56,9 @@ Public HELM corpus              Local audit results
         └──────────────────────────────────┘
 ```
 
-No model is run; no benchmark is downloaded. The pipeline is read-only over
-the audit results that already exist on disk.
+In Stages 1–4 no model is run and no benchmark is downloaded: they are read-only
+over the audit results that already exist on disk. Producing those results is the
+[execution half](#execution-from-spec-replay).
 
 ### Virtual experiments over EEE
 
@@ -237,7 +251,11 @@ Two per-component provenance controls (Phase 3):
 **Output:**
 
 ```
-$AUDIT_STORE_ROOT/analysis/core-reports/<packet-slug>/
+# virtual-experiment scope (what the runbooks' 30_compose.sh produces):
+$AUDIT_STORE_ROOT/virtual-experiments/<name>/analysis/core-reports/<packet-slug>/
+# single-experiment scope (eval-audit-analyze-experiment --experiment-name X):
+$AUDIT_STORE_ROOT/analysis/experiments/<experiment>/core-reports/<packet-slug>/
+
 ├── components_manifest.json
 ├── core_metric_management_summary.txt
 ├── core_metric_ecdfs.png         # per-metric agreement ECDF
@@ -307,18 +325,75 @@ Both Stage 2 and Stage 4 read from two indexes:
   from the public HELM corpus mirror at `/data/crfm-helm-public/`. **UNSURE**:
   exact regeneration cadence; check `$AUDIT_STORE_ROOT/indexes/official_public_index*` modification times.
 
+## Execution: from-spec replay
+
+This is how the local side of every current audit result was produced. It does
+**not** use `eval-audit-make-manifest`: the manifest producer is
+`export-benchmark-bundle`, which freezes the official run specs and writes the
+manifest in one step.
+
+```
+official run_spec.json (in /data/crfm-helm-public)
+        │
+        ▼
+  export-benchmark-bundle          python -m eval_audit.integrations.infer_stack
+  --preset <p> --from-spec         → <bundle-root>/{smoke,full}_manifest.yaml
+  [--freeze-rel-paths] [--era K]     + era-schema model_deployments.yaml
+        │
+        ▼
+  eval-audit-run <manifest>        kwdagger schedule → docker run (pinned digest)
+  --lease --run=1                  → /data/crfm-helm-audit/<experiment>/...
+  --container-image <ref>            + container_provenance.json
+```
+
+Two variants, differing only in which HELM builds the run:
+
+| | modern | era-pinned |
+|---|---|---|
+| when | the official run is v0.5+ | the official run is pre-v0.5 (`v0.2.4`, `v0.3.0`) |
+| image | modern runner (HELM 0.5.x) | per-era CPU-only image, HELM at that era's release commit |
+| inner CLI | magnet's from-spec CLI | `helm_era_shim.replay` |
+| export | `--from-spec`, or `--freeze-rel-paths` for exact-path replay | `--freeze-rel-paths --era <key>` (exact-path only) |
+| runbooks | `olmo_models_combined`, `qwen_models_combined`, `gpt_oss_20b_from_spec` | `classic_together_combined` |
+
+Containerization is **mandatory** — a manifest with no pinned image is refused at
+schedule time. Details, including the era invariants and the digest-pinning
+mechanism, are in
+[`docs/container-execution.md`](container-execution.md).
+
+### The runbook step ladder
+
+The from-spec runbooks share a numbered shape; running them in order is the
+end-to-end pipeline, execution half then analysis half:
+
+```
+00_check_env.sh              eval-audit-check-env
+05_check_profiles.sh         the endpoints this preset needs are defined
+06_check_hf_auth.sh          HuggingFace token resolves    (06_check_era_images.sh for eras)
+07_check_container_image.sh  image present + labels match
+08_check_discovery.sh        every official run_spec resolves BEFORE any GPU time
+10_run_smoke.sh              export(freeze) → run a few instances --lease
+15_run_full.sh               the batch
+20_index_local.sh            local audit index (see Indexing above)
+25_index_official_*.sh       official index for this scope (era runbooks)
+30_compose.sh                Stage 2 → virtual experiment (Stage 1 EEE conversion
+                             happens on demand underneath it, and Stage 3 runs per packet)
+40_build_summary.sh          Stage 4 → publication surface
+```
+
+Step `08` is the load-bearing one: discovery failures are environment mismatches,
+and catching them before `10` is what keeps a GPU batch from failing halfway.
+
 ## What this pipeline does *not* cover
 
-- Building execution manifests from scratch (`eval-audit-make-manifest`).
-- Scheduling local HELM runs (`eval-audit-run`, `kwdagger`). For running those
-  inside a pinned, auditable Docker image, see
-  [`docs/container-execution.md`](container-execution.md).
-- Standing up vLLM / KubeAI / LiteLLM serving for those runs.
+- Standing up KubeAI / LiteLLM serving (the current path leases vLLM endpoints
+  through infer-stack). Last-known-good runbooks: `small_models_kubeai/`,
+  `gpt_oss_20b_vllm/`.
+- The pre-container `eval-audit-make-manifest` → bare-venv flow. Runbooks
+  `apples/`, `historic_grid/`, `smoke/`, `qwen2_72b_vllm/` still describe it;
+  it can no longer run, because containerization is now required.
 - Refreshing the public-HELM mirror at `/data/crfm-helm-public/`.
-
-Those flows existed and may still work, but none have been re-validated
-recently. Their last-known-good runbooks are in
-[`reproduce/`](../reproduce/) under `apples/`, `historic_grid/`,
-`smoke/`, `qwen2_72b_vllm/`, `qwen35_vllm/`, `gpt_oss_20b_vllm/`, and
-`small_models_kubeai/` — all marked **UNSURE** in the top-level
-[`README.md`](../README.md).
+- Judge substitution, which has its own pipeline (response snapshots → judgment
+  attempts → judge-variance report): see
+  [`reproduce/open_judge_gpt_oss/`](../reproduce/open_judge_gpt_oss/) and
+  [`docs/planning/open-judge-plan.md`](planning/open-judge-plan.md).
