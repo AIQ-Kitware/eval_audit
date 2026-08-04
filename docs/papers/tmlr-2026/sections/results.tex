@@ -46,13 +46,13 @@ RedPajama, era \texttt{v0.3.0} &   74 &   2 &   2 & \textbf{2} \\
 \end{center}
 \end{table}
 
-\par\smallskip\noindent\textbf{Finding.}~\emph{Under a modern harness, byte-identical
-recipe agreement is unattainable --- zero in every experiment, including those
-whose recipes did not drift at all, because the schema evolved underneath the
-hash. It is nonzero in exactly one place: the era-pinned replays, where both
-reproduced runs match on HELM's own hash. Byte-identical recipe agreement is not
-something a careful modern replay recovers; it is something only an instrument
-pinned to the producing era recovers.}\par\smallskip
+Under a modern harness, byte-identical recipe agreement is unattainable. The
+identical column is zero in every experiment, including those whose recipes did
+not drift at all, because the schema evolved underneath the hash. It is nonzero
+in exactly one place: the era-pinned replays, where both reproduced runs match on
+HELM's own hash. Byte-identical agreement is therefore not something a careful
+modern replay recovers; it is something only an instrument pinned to the
+producing era recovers.
 
 This measures the instrument where the surviving record makes it visible: the
 harness version decides the shape of the file it writes, so two harnesses
@@ -96,16 +96,14 @@ $608$ ($86\%$) sit at or above $0.95$, $159$ agree exactly, and $10$ fall
 below $0.80$, with a minimum of $0.66$. Per-model medians span $0.973$
 (\texttt{qwen2.5-7b-instruct-turbo}) to $1.000$ (\texttt{qwen1.5-110b-chat}).
 
-\par\smallskip\noindent\textbf{Finding.}~\emph{On a modern harness with a
-from-spec replay, most historical Qwen rows reproduce at or near the instance
-level: the median run agrees with the official on $99\%$ of instances at zero
-tolerance. Reproduction failure is not the common case; it is the tail, and the
-case studies below characterize that tail.}\par\smallskip
-
-This is what makes the rest of the section interpretable. A study that reported
-only the disagreements would imply that historical benchmark reproduction is
-generally broken, and this corpus says otherwise. What the tail costs to explain,
-rather than how large it is, is the subject of \S\ref{sec:olmo} onward.
+On a modern harness with a from-spec replay, then, most historical Qwen rows
+reproduce at or near the instance level: the median run agrees with the official
+on $99\%$ of its instances at zero tolerance. Reproduction failure is not the
+common case here; it is the tail. That is what makes the rest of the section
+interpretable. A study that reported only the disagreements would imply that
+historical benchmark reproduction is generally broken, and this corpus says
+otherwise. What the tail costs to explain, rather than how large it is, is the
+subject of \S\ref{sec:olmo} onward.
 
 \paragraph{Scope and freshness.} The counts and agreement values are read from the
 store's derived reproducibility rows; all $1406$ run paths recorded in the
@@ -333,11 +331,11 @@ an ${\sim}$4-week window of \emph{unreleased pre-v0.1.0} HELM (after scenarios
 were nested but before metrics were). The class-path \emph{shape} (flat vs.\
 subpackage) is thus a sharper origin fingerprint than release dates.
 
-\par\smallskip\noindent\textbf{Finding.}~\emph{The producing instrument for GPT-J / GPT-NeoX / OPT is
-\emph{non-identifiable from the surviving public and repository evidence
+The producing instrument for GPT-J, GPT-NeoX, and OPT is therefore
+\emph{non-identifiable from the surviving public and repository evidence we
 examined}: no released version resolves the recorded class, and the triangulated
-origin is unreleased.}\par\smallskip
-This is category (5) of \S\ref{sec:taxonomy}, not a repeatability failure. Because
+origin is unreleased. This is category (5) of \S\ref{sec:taxonomy}, not a
+repeatability failure. Because
 building the true origin instrument is infeasible, we treat any later-era run as a
 \emph{declared proxy} and make the substitution explicit: a self-verifying
 class-path canonicalization remaps the migrated class only when its known
@@ -392,15 +390,15 @@ across all arms.}
 \end{center}
 \end{table}
 
-\par\smallskip\noindent\textbf{Finding.}~\emph{Judge substitutability is a
-property of the metric, not of the judge. On the label scenario both open judges
-agree with an official judge \emph{better than the two official judges agree with
-each other} ($\kappa = 0.936$ and $0.928$ against a $0.829$ baseline), and are
-almost perfectly stable across replicates. On the continuous scenario neither
-does: both carry a systematic negative bias of roughly $0.8$ points on the
-scoring scale, correlate less well with an official judge than the officials do
-with one another, and change $39$--$43\%$ of instance scores between replicates
-of the same judge on the same responses.}\par\smallskip
+The split in that table is by scenario, not by judge, and that is the result:
+judge substitutability is a property of the metric rather than of the substitute.
+On the label scenario both open judges agree with an official judge \emph{better
+than the two official judges agree with each other} ($\kappa = 0.936$ and $0.928$
+against a $0.829$ baseline), and are almost perfectly stable across replicates. On
+the continuous scenario neither does. Both carry a systematic negative bias of
+roughly $0.8$ points on the scoring scale, correlate less well with an official
+judge than the officials do with one another, and change $39$--$43\%$ of instance
+scores between replicates of the same judge on the same responses.
 
 The practical consequence is that a withdrawn judge does not uniformly rule out
 procedural reproduction. Where the metric is a label, a declared open-judge
