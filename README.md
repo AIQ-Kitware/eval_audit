@@ -5,15 +5,20 @@ the public HELM corpus, running local reproductions, comparing local vs.
 public results at instance and metric level, and writing publication-quality
 report bundles.
 
-The recent (2026 Q1–Q2) line of work has been almost entirely on the
-**analysis side** — composing virtual-experiment slices over already-existing
-audit runs and producing reproducibility reports. The execution side
-(`eval-audit-run` → `kwdagger` → `magnet` → `helm-run`) was confirmed working
-on **2026-04-28** by [`reproduce/pythia12b_mmlu_smoke/`](reproduce/pythia12b_mmlu_smoke/),
-which produced a perfect-agreement local reproduction of pythia-12b-v0 ×
-MMLU through the HuggingFace transformers path. The serving-stack
-extensions (vLLM, KubeAI, LiteLLM) and the `eval-audit-make-manifest` path
-have **not** been re-validated; those remain marked **UNSURE** below.
+Both halves are active. **Analysis** — composing virtual-experiment slices over
+already-existing audit runs and producing reproducibility reports — ran
+throughout 2026 Q1–Q3. **Execution** ran most recently **2026-07-13 … 07-15**,
+producing the OLMo, Qwen, GPT-OSS, and RedPajama audit results the paper draft
+reports, through the from-spec / era-pinned path:
+`export-benchmark-bundle` → `eval-audit-run` → `kwdagger` → a digest-pinned
+container → `helm-run` against a leased vLLM endpoint. Containerization is
+**mandatory** as of that work; see
+[`docs/container-execution.md`](docs/container-execution.md).
+
+What has *not* been re-validated is the **older** execution shape:
+`eval-audit-make-manifest` for manifest building (superseded by
+`export-benchmark-bundle`) and the KubeAI / LiteLLM serving variants. Those
+remain marked **UNSURE** below.
 
 Late-April / May 2026 work added the **EEE-only reproducibility heatmap**
 (paper Case Study 3) at
@@ -39,24 +44,35 @@ eval_audit/                 the Python package (renamed from helm_audit on 2026-
 ├── virtual/                virtual-experiment composer (recent, actively maintained)
 ├── normalized/             normalized comparison layer (EEE-aware)
 ├── planning/               comparison-intent planner used by core metrics
-├── manifests/              manifest builders / presets  [not recently exercised]
+├── manifests/              manifest builders / presets  [legacy; superseded by
+│                           integrations/infer_stack's export-benchmark-bundle]
 ├── helm/                   HELM-specific readers + diff helpers (analysis.py, diff.py,
 │                           hashers.py, metrics.py, run_entries.py)
 ├── indexing/               run-spec hash + schema helpers
 ├── infra/                  paths, env, yaml IO, logging, plotly env
-├── integrations/           kwdagger_bridge.py + infer_stack/  [not recently exercised]
+├── integrations/           kwdagger_bridge.py (scheduling + container pinning)
+│                           + infer_stack/ (bundle export, leases)  [active]
+├── eras.py                 era registry: pre-v0.5 HELM images, one per era
+├── pipelines/              kwdagger pipeline factories (modern / era docker)
 ├── compat/                 backward-compat shims
 └── model_registry.py
 ```
 
 External directories the workflow depends on:
 
-- `reproduce/` — runbooks; one folder per scenario. Most are execution-shaped
-  shell sequences (`00_check_env`, `10_make_manifest`, `20_run`, `30_compare`)
-  and are **UNSURE** as of 2026-04. The two **analysis-only** runbooks at
-  [`reproduce/pythia_mmlu_stress/`](reproduce/pythia_mmlu_stress/) and
-  [`reproduce/open_helm_models_reproducibility/`](reproduce/open_helm_models_reproducibility/)
-  *are* known-good — those are what the recent commits exercise.
+- `reproduce/` — runbooks; one folder per scenario, in three generations. The
+  **current** ones are numbered `00_check_env` → `40_build_summary` and run
+  from-spec through a pinned container
+  ([`olmo_models_combined`](reproduce/olmo_models_combined/),
+  [`qwen_models_combined`](reproduce/qwen_models_combined/),
+  [`gpt_oss_20b_from_spec`](reproduce/gpt_oss_20b_from_spec/),
+  [`classic_together_combined`](reproduce/classic_together_combined/) for eras).
+  The **analysis-only** ones
+  ([`pythia_mmlu_stress`](reproduce/pythia_mmlu_stress/),
+  [`open_helm_models_reproducibility`](reproduce/open_helm_models_reproducibility/))
+  compose + summarize existing results. The **legacy** ones
+  (`10_make_manifest` / `20_run` shape) are **UNSURE** as of 2026-04 and can no
+  longer run unchanged, since containerization is now required.
 - `configs/` — checked-in manifests and overrides only; generated state lives
   outside the repo.
 - `docs/` — supporting docs. Several are **STALE** and need triage; see
@@ -117,23 +133,40 @@ current.
 ## Execution runbooks
 
 These are the original framing of the project: schedule a local HELM run via
-`kwdagger`, point HELM at a model deployment (vLLM, KubeAI, LiteLLM, or
-HuggingFace), then compare. The core chain
-(`eval-audit-run` → `kwdagger` → `magnet` → `helm-run`) was confirmed working
-on **2026-04-28** by the [`pythia12b_mmlu_smoke`](reproduce/pythia12b_mmlu_smoke/)
-runbook on aiq-gpu — pythia-12b-v0 × MMLU abstract_algebra, 1000 instances,
-HELM `huggingface/*` HuggingFaceClient deployment. That run reproduced the
-public HELM v0.2.4/v0.3.0 reference *exactly* (1.000 agreement, max |Δ| = 0.0
-across all 8 metrics). So the basic execution stack is alive.
+`kwdagger`, point HELM at a model deployment, then compare.
 
-The other runbooks bring in additional serving stacks (vLLM, LiteLLM, KubeAI)
-and additional scenario-specific assumptions (server URLs, deployment YAML,
-namespace setup) that **have not been re-validated**. Pick one, run it, and
-update its README before claiming it's still good.
+The **current** shape replays each official `run_spec.json` verbatim inside a
+digest-pinned container, with model inference out-of-process on a leased vLLM
+endpoint. It last ran **2026-07-13 … 07-15** across four runbooks, producing
+every audit result the paper draft reports. `export-benchmark-bundle` writes the
+manifest (there is no `make-manifest` step), and `eval-audit-run --lease --run=1
+--container-image <ref>` schedules it. See
+[`docs/pipeline.md`](docs/pipeline.md#execution-from-spec-replay) for the flow and
+the shared step ladder, and [`docs/container-execution.md`](docs/container-execution.md)
+for the pinning and era mechanics.
+
+Earlier, on **2026-04-28**, the [`pythia12b_mmlu_smoke`](reproduce/pythia12b_mmlu_smoke/)
+runbook validated the pre-container chain on aiq-gpu — pythia-12b-v0 × MMLU
+abstract_algebra, 1000 instances, HELM `huggingface/*` HuggingFaceClient
+deployment — reproducing the public HELM v0.2.4/v0.3.0 reference *exactly*
+(1.000 agreement, max |Δ| = 0.0 across all 8 metrics). That runbook predates the
+container requirement and would need a pinned image to run today.
+
+The remaining runbooks bring in serving stacks (KubeAI, LiteLLM) and
+scenario-specific assumptions (server URLs, deployment YAML, namespace setup)
+that **have not been re-validated**. Pick one, run it, and update its README
+before claiming it's still good.
 
 | runbook | what it claims to do | status |
 |---|---|---|
-| `reproduce/pythia12b_mmlu_smoke/` | pythia-12b-v0 × abstract_algebra via HF transformers + kwdagger | **WORKING** (2026-04-28) |
+| `reproduce/olmo_models_combined/` | from-spec replay of six OLMo models as one multi-deployment fan-out | **WORKING** (2026-07, execution) |
+| `reproduce/qwen_models_combined/` | from-spec replay of the Qwen family; source of the 703-comparison base rate | **WORKING** (2026-07-15, execution) |
+| `reproduce/gpt_oss_20b_from_spec/` | from-spec replay of the 4 ungated-judge public gpt-oss-20b rows (bbq, ifeval, mmlu_pro, gpqa) | **WORKING** (2026-07-13, execution; store unhashed) |
+| `reproduce/classic_together_combined/` | era-pinned replay of gpt-j / gpt-neox / opt across `v0.2.4` + `v0.3.0` | **WORKING** (2026-07-13, execution; RedPajama arm complete) |
+| `reproduce/open_judge_gpt_oss/` | rejudge gpt-oss-20b XSTest/WildBench with open-weight judges | **WORKING** (2026-07-17 through the identity-replay gate) |
+| `reproduce/gpt_oss_20b_core_grid/` | gpt-oss-20b core-benchmark grid | **UNSURE** (superseded by `_from_spec`) |
+| `reproduce/qwen35_small_vllm/` | small-model vLLM smoke for the qwen3.5 line | **UNSURE** (vLLM-side) |
+| `reproduce/pythia12b_mmlu_smoke/` | pythia-12b-v0 × abstract_algebra via HF transformers + kwdagger | **WORKING** (2026-04-28); pre-container, needs a pinned image today |
 | `reproduce/pythia_mmlu_stress/` | analysis-only pythia × MMLU slice | **WORKING** (analysis) |
 | `reproduce/open_helm_models_reproducibility/` | analysis-only open-weight × benchmark slice | **WORKING** (analysis) |
 | `reproduce/eee_only_demo/` | tutorial: pure-EEE comparison via `eval-audit-from-eee` against checked-in 3×3 fixture | **WORKING** (2026-04-29) |
@@ -150,7 +183,6 @@ update its README before claiming it's still good.
 | `reproduce/qwen35_vllm/` | local vLLM smoke for `qwen/qwen3.5-9b` | **UNSURE** (vLLM-side) |
 | `reproduce/qwen2_72b_vllm/` | vLLM smoke + EWOK historic grid for qwen2-72b | **UNSURE** (vLLM-side) |
 | `reproduce/gpt_oss_20b_vllm/` | LiteLLM-fronted vLLM batch for gpt-oss-20b | **UNSURE** (vLLM/LiteLLM-side) |
-| `reproduce/gpt_oss_20b_from_spec/` | from-spec replay of the 4 ungated-judge public gpt-oss-20b rows (bbq, ifeval, mmlu_pro, gpqa) | **WIRED** (2026-07; discovery 4/4 RESOLVED, GPU run pending) |
 | `reproduce/small_models_kubeai/` | KubeAI overnight batch (qwen2.5-7b + vicuna-7b) | **UNSURE** (KubeAI-side) |
 | `reproduce/setup/` | one-time host setup scripts | **UNSURE** but harmless |
 
@@ -196,23 +228,29 @@ dormant breakdown:
   See [`docs/eee-vs-helm-metadata.md`](docs/eee-vs-helm-metadata.md)
   for the full HELM↔EEE field mapping and recommendations.
 
-**Execution path (verified 2026-04-28 by `pythia12b_mmlu_smoke`):**
+**Execution path (exercised 2026-07-13 … 07-15 by the four from-spec / era runbooks):**
 
 - `eval-audit-check-env` — host-environment preflight (light; works)
+- `python -m eval_audit.integrations.infer_stack export-benchmark-bundle` — the
+  manifest producer: freezes the official run specs for a preset and writes
+  `<bundle-root>/{smoke,full}_manifest.yaml`. Not a console script.
 - `eval-audit-run` — preview/execute a kwdagger experiment from a manifest
-  (default is preview; `--run=1` to execute). End-to-end chain through
-  kwdagger → magnet → helm-run is alive.
+  (default is preview; `--run=1` to execute, `--lease` to acquire GPUs,
+  `--container-image` to pin). A manifest with no pinned image is **refused**.
+
+**Judge substitution (open-judge extension, 2026-07):**
+`eval-audit-audit-judge-sources`, `eval-audit-build-response-snapshot`,
+`eval-audit-verify-judge-replay`, `eval-audit-rejudge-helm`,
+`eval-audit-analyze-judges`, `eval-audit-schedule-rejudge`,
+`eval-audit-export-judge-bundle`, `eval-audit-judge-prompt-lengths` — driven by
+[`reproduce/open_judge_gpt_oss/`](reproduce/open_judge_gpt_oss/).
 
 **UNSURE:**
 
 - `eval-audit-make-manifest` — `historic` and `preset` subcommands read from
-  `$STORE_ROOT/configs/run_specs.yaml`; not exercised by the recent runbook
-  (which writes its manifest by hand because pythia-12b-v0 was Stage-1
-  filtered out). The two subcommands haven't been touched in months.
-
-`eval-audit-run` was originally the scheduling boundary. It still imports
-cleanly but its kwdagger and HELM-execution side-effects haven't been
-re-tested.
+  `$STORE_ROOT/configs/run_specs.yaml`. Superseded by `export-benchmark-bundle`
+  and not exercised by any current runbook; it also cannot set a container
+  image, so its output no longer schedules.
 
 ## Install
 
@@ -233,7 +271,10 @@ straightforward apt invocation).
 
 | file | status | note |
 |---|---|---|
-| [`docs/pipeline.md`](docs/pipeline.md) | **CURRENT** | rewritten 2026-04-28 to match the active EEE-driven analysis pipeline; the prior version is preserved at [`docs/historical/pipeline-pre-eee-refactor.md`](docs/historical/pipeline-pre-eee-refactor.md) |
+| [`docs/pipeline.md`](docs/pipeline.md) | **CURRENT** | the canonical "how do I run this": the four analysis stages plus the from-spec / era execution half (added 2026-08-04); the pre-EEE version is preserved at [`docs/historical/pipeline-pre-eee-refactor.md`](docs/historical/pipeline-pre-eee-refactor.md) |
+| [`docs/container-execution.md`](docs/container-execution.md) | **CURRENT** | digest pinning, the era images, and why containerization is mandatory |
+| [`docs/helm-unrecorded-deployment-params.md`](docs/helm-unrecorded-deployment-params.md) | **CURRENT** | which execution parameters the public record does not carry |
+| [`docs/vllm-vs-huggingface-deployment-match.md`](docs/vllm-vs-huggingface-deployment-match.md) | **CURRENT** | the deployment-search results behind the OLMo attributions |
 | [`docs/helm-gotchas.md`](docs/helm-gotchas.md) | **CURRENT** | running ledger of HELM-specific behaviors hit during analysis |
 | [`docs/helm-reproduction-research-journal.md`](docs/helm-reproduction-research-journal.md) | **CURRENT** | research context, failure taxonomies |
 | [`docs/eee-vs-helm-metadata.md`](docs/eee-vs-helm-metadata.md) | **CURRENT** | what HELM has that EEE doesn't, what `unknown` comparability facts mean, how to ship sidecar metadata so they evaluate normally |
@@ -254,12 +295,13 @@ approached at the time):
 
 ## Caveats / things to verify before relying on a claim here
 
-- **STALE** annotations above mean "I (the writer of this README on
-  2026-04-28) couldn't quickly verify the file was still correct." It does
-  not mean the file is wrong — only that nobody has confirmed it isn't.
-- The `eval-audit-run` execution path still compiles and imports. It has not
-  been *run* in months, so the kwdagger-side, vLLM-side, and
-  manifest-building integration-test surface is **unverified**.
+- **STALE** / **UNSURE** annotations above mean "nobody has confirmed this file
+  is still correct." It does not mean the file is wrong. This README was last
+  swept against the tree on **2026-08-04**.
+- The `eval-audit-run` execution path is exercised (2026-07). What remains
+  unverified is the *legacy* surface it used to drive: `make-manifest` output,
+  the KubeAI/LiteLLM serving variants, and the bare-venv (uncontainerized) path,
+  which has been removed outright.
 - The `crfm-helm-audit-store` and `crfm-helm-audit` data-store paths are
   preserved verbatim from the pre-rename world (HELM-the-benchmark naming);
   see [`docs/helm-gotchas.md`](docs/helm-gotchas.md).
