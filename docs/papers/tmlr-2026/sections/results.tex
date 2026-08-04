@@ -385,14 +385,26 @@ inconsistency was followed instead of interpreted. An execution-stack divergence
 and a bug in the instrument that measures execution stacks present identically at
 the point of observation.
 
-\paragraph{Store status (honest reporting).} An un-deduplicated local join once
-halved the base-model \texttt{olmo-7b} classic cells, reporting MMLU
-public/local as $0.295/0.144$ where the correct value is $0.295/0.287$. The fix is
-committed and the aggregate headline table has been regenerated under it, but the
-per-packet layer beneath that table has not, so the two disagree on disk today.
-The raw run artifacts survive, so reconciling them is a re-render rather than a
-re-execution. Until the layers agree and the inputs are hashed we cite no
-base-model OLMo aggregate as a result.
+\paragraph{When a store holds more than one attempt.} The base-model
+\texttt{olmo-7b} MMLU cells illustrate a bookkeeping hazard that is really a
+reproducibility one. Each official row in that experiment has \emph{two} local
+runs against the same deployment: one produced by the collapsed configuration of
+(a), scoring $0.000$ with the prompt-independent boilerplate, and one produced
+after the tokenizer fix, scoring in line with the official. Both are legitimate
+records of what we executed, and the store keeps both. An aggregate that averages
+over local attempts therefore reports $0.295/0.144$ --- half the true value ---
+while one that selects a single attempt per row reports $0.295/0.287$. The
+selecting version is what is on disk and what we would cite.
+
+The general point is that a comparison layer facing multiple attempts must
+\emph{choose}, and the choice is a judgment about which execution the number
+describes rather than a detail of the join. We halved this aggregate once by not
+choosing, and re-derived the halved figure a second time while preparing this
+paper by averaging the per-attempt reports directly. Both times the artifacts were
+correct and the reduction over them was not, which is the same failure mode as
+citing a benchmark score without identifying the run that produced it, one level
+up. We cite no base-model OLMo aggregate until the inputs behind it are hashed to
+the attempts they select.
 \par\smallskip\noindent\fcolorbox{orange}{yellow!12}{%
   \begin{minipage}{0.97\linewidth}\small\textsf{\textbf{[SCAFFOLD --- to be completed]}}\ Insert the \emph{regenerated} OLMo aggregate score-drift heatmap
 (6 models $\times$ ${\sim}12$ benchmarks) after a fresh run with the current

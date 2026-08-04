@@ -55,10 +55,10 @@ $\times$ two benchmarks, report \{naive, exact-recipe, reconstructed-deployment\
 agreement on held-out instances, with exact-token, normalized-text, first-divergent-token,
 common-prefix-length, and task-metric columns. {\color{orange}\textsf{\small[\textsc{pending}: held-out confirmation run]}}\end{minipage}}\par\smallskip
 
-\paragraph{Store freshness and preservation.} Some derived layers predate the code
-that should have produced them: the OLMo per-packet reports disagree with the
-regenerated aggregate above them (\S\ref{sec:olmo}), and the GPT-OSS store is a
-candidate pending a manifest-based acceptance audit. The raw run artifacts survive
+\paragraph{Store freshness and preservation.} The GPT-OSS store is a candidate
+pending a manifest-based acceptance audit, and the OLMo store holds multiple local
+attempts per official row, so any figure read from it depends on a selection rule
+that is not itself recorded alongside the figure (\S\ref{sec:olmo}). The raw run artifacts survive
 in every case --- $1{,}634$ local runs across $74$ experiment directories, each
 pairing $1{:}1$ with its recorded specification --- so these are re-render-and-hash
 tasks rather than re-executions. But \emph{nothing is hashed or bundled}: not one
