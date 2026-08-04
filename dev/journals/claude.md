@@ -4628,3 +4628,88 @@ retargeting first. (b) `docs/presentations/` is entirely untracked; I did not
 `git add` a previously-untracked directory of binaries unilaterally. (c) The A8
 figure `figures/drift_decomposition.png` is not on any slide now -- Case 1 would
 carry it well if the bullets were trimmed to make room.
+
+## 2026-08-04 16:40:00 -0400
+
+**Model / harness.** claude-opus-5[1m], Claude Code in the VSCode extension.
+
+**Intent.** Build a standalone tool that packages the local runs and local
+analysis into a transfer archive: crawl a store to enumerate analyses, then
+resolve and copy everything those analyses reference, deduplicated. The user's
+priority, stated explicitly: *do not lose anything that cannot be fixed in
+post*. Anything reconstructible on the far side (paths, plots) is cheap to
+repair because the eval_audit code is public; anything not carried is gone.
+
+**The scoping conversation did the real work.** The user answered five design
+questions, and two answers changed the shape of the tool. "We don't need the
+sqlite files -- not regenerable means *needed for the analysis*" reframed the
+retention criterion from provenance-completeness to analysis-sufficiency, and
+that single reframing removed ~41 GB of job-directory execution state (20 GB of
+HELM request caches, 21 GB of downloaded scenario data) plus 71 GB of
+`eee/by-run-path`. I had been arguing to keep the caches on "can't fix in post"
+grounds; the correct test is narrower, and the user was right.
+
+**Design: mirror, don't reorganise.** The package puts everything under
+`root/<absolute source path>`. The temptation was a tidy
+`artifacts/local-runs/<exp>/...` taxonomy, but the store's 7619 `components/`
+symlinks are *relative and depth-coupled*
+(`../../../../../../../crfm-helm-audit/...`), valid only because a packet sits
+at a known depth below a store root that has `crfm-helm-audit` as a sibling.
+Mirroring preserves that and the symlinks need no rewriting at all -- which
+matters because a rewritten symlink that resolves nowhere still looks like a
+symlink. Path rewriting then collapses to one prefix substitution, and
+deduplication (2.8x) falls out for free since two analyses referencing one run
+map to one destination.
+
+**Three scope defects, all in `classify_ref`, all caught by dry runs.** Worth
+recording because they share a root cause.
+
+  1. Structure inferred from a `helm` path component, with unrecognized
+     directories defaulting to *copy whole*. An experiment directory is
+     `/data/crfm-helm-audit/<exp>` -- no `helm` component -- so every
+     referenced container pulled its entire subtree. **Plan: 1168 GB.**
+  2. "Catalog" recognized by file *format* (CSV). But
+     `analysis/filter_inventory.json` is the Stage-1 discovery inventory --
+     a corpus-wide catalog that happens to be JSON -- and it pulled 50,272
+     public runs, 801 GB of it HEIM image-generation output. **Plan: 826 GB.**
+  3. Execution state reachable by *direct* reference: a report named
+     `.../helm_id_x/prod_env/cache`, which never passes through the
+     job-directory rule and, being a leaf, hit the leaf-directory fallback.
+     A sqlite cache in a package defined by excluding sqlite caches.
+
+The through-line is that I fixed instances rather than categories: (2) is (1)
+recurring through a different door. The fixes that stuck were the ones that
+inverted a default -- an unrecognized directory is now a *container* (skip),
+never a unit -- and the one that keyed on semantics instead of syntax: a public
+run is copied only when a *packet manifest or symlink* names it, because those
+are written when a comparison actually consumed the run. Every other mention
+merely enumerates.
+
+**Validation.** Final plan 32.60 GB / 8373 artifacts. Two components were
+independently derivable and both matched exactly: 919 official run dirs and 16
+EEE artifacts, counted hours earlier straight from the component manifests by a
+different method. Marker sets were verified against the corpus rather than
+assumed -- 1403/1403 job dirs carry all three job markers, 2322/2322 run dirs
+carry all five run markers.
+
+**Design insights.** (1) When a package must be navigable elsewhere, mirroring
+the source layout beats any tidier taxonomy, because the existing relative
+links are load-bearing and invisible until they break. (2) A classifier's
+*default* is its risk surface: defaulting unrecognized input to the expansive
+action makes every future gap a size explosion, and inverting the default is
+worth more than enumerating cases. (3) Reference strength is semantic, not
+syntactic -- "this file mentions run X" and "this analysis consumed run X" are
+different claims, and only the second justifies copying. (4) A plan artifact
+sorted largest-first is the cheapest possible defect detector; all three bugs
+above were one glance at the top of `plan.json`.
+
+**Next steps.** (a) No real copy has been run -- the tool has only ever planned.
+The destination is the user's call; the scratchpad is not the right home for
+32.6 GB. (b) 183 references do not resolve (146 `absent_parent_missing`, 37
+`absent_sibling_dir_present`), all in the known-dangling `e2e-phi_2-vllm-philosophy-*`
+families; they are recorded in `missing.tsv`, not fatal. (c) The store carries 83
+already-broken symlinks; verification reports these as notes rather than errors,
+deliberately. (d) `local` at 15.22 GB across 1618 run dirs is somewhat above the
+1403 I measured from component manifests alone -- the surplus comes from runs
+referenced by other carriers, and is over-inclusive on our own irreplaceable
+outputs, which is the safe direction.

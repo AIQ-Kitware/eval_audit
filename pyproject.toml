@@ -103,6 +103,8 @@ eval-audit-analyze-judges = "eval_audit.cli.analyze_judge_variance:main"
 eval-audit-schedule-rejudge = "eval_audit.cli.schedule_rejudge:main"
 eval-audit-export-judge-bundle = "eval_audit.cli.export_judge_bundle:main"
 eval-audit-judge-prompt-lengths = "eval_audit.cli.judge_prompt_lengths:main"
+eval-audit-crawl-analyses = "eval_audit.cli.crawl_analyses:main"
+eval-audit-package-analyses = "eval_audit.cli.package_analyses:main"
 
 [tool.uv.build-backend]
 # Flat layout: the package lives at the repo root as ``eval_audit/``,
