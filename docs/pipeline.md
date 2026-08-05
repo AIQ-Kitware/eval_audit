@@ -290,6 +290,22 @@ Measured cost ≈ 15.9 MB and 0.1 s per packet, so ≈ 2 min added to a
 A digest proves *same inputs*, not *same answer*, and says a number is
 attributable — not that it is correct.
 
+**Checking it later.** `eval-audit-verify-provenance <store-root>` re-hashes each
+component from the path its report recorded and compares:
+
+| verdict | means | exit |
+|---|---|---|
+| `match` | re-hashes to what the report recorded | 0 |
+| `drifted` | the path resolves, the content differs — the report describes something that is no longer there | **1** |
+| `missing` | the recorded artifacts are gone | 1, or 0 with `--allow-missing` |
+| `unhashed` | the report predates digests and records nothing to check | 0, or 1 with `--require-digests` |
+
+`unhashed` passes rather than failing because every store rendered before
+2026-08-05 is in that state; it is counted so the gap reads as a gap instead of
+as "verified". Scope with `--store`, `--model`, `--benchmark`. Pairs with
+`eval-audit-lint-store`: the lint says whether a packet's number depended on an
+unrecorded choice, this says whether its inputs are still there.
+
 **Output:**
 
 ```

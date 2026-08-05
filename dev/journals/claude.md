@@ -5134,3 +5134,66 @@ phase 3 (`cited_numbers.yaml` → LaTeX table). Phase 2 can also replace the
 hand-set free-text `freshness` field in `packaging/crawl.py:98` with a computed
 one, which is the part of the paper's `related_work.tex` provenance claim the
 tooling does not yet keep.
+
+## 2026-08-05 15:10:33 -0400
+
+**Model/config.** claude-opus-5[1m], Claude Code CLI (VS Code extension), repo
+`eval_audit` on `main`. Same session as the four entries above.
+
+**User intent.** Finish phase 2 of the provenance work: the CLI that checks a
+store's reports still describe the artifacts on disk. Phase 3 was **cancelled**
+mid-flight — see the scope note below.
+
+**Scope correction, driven by the user.** I had planned phase 3 as a
+`cited_numbers.yaml` under the paper directory plus an
+`eval-audit-export-cited-numbers` CLI emitting LaTeX. The user pushed three
+times — "independent of the paper", "is it currently", and finally "I don't want
+any interaction between the tool and the paper" — and each push found something
+real. First: the four landed modules were independent but the two planned ones
+were not. Second: the CLI was coupled at the *concept* level, not just by file
+location; a tool in `eval_audit/` that speaks in sections and `\begin{tabular}`
+stays coupled wherever you put the file. The repo already had the answer —
+`PaperLabelManager` keeps a generic mechanism in `eval_audit/` and the
+paper-specific data in `configs/paper_label_mappings.yaml`, and degrades to
+passing hostnames through when the config is absent. Third, and decisively: with
+no paper-facing consumer, a generic claims-manifest tool is speculative
+infrastructure, so I dropped it rather than build it hoping for a use. Nothing
+committed ever referenced the paper, so there was nothing to unwind.
+
+**What phase 2 is.** `eval-audit-verify-provenance <root>` re-hashes each
+component from the path its report recorded and compares against the recorded
+digest. Four verdicts, and the fourth is the one that took thought: `unhashed`
+**passes**. Every store rendered before today is in that state, so failing on it
+would make the tool useless on arrival and train an operator to pass
+`--ignore-everything`. It is counted instead, so the coverage gap reads as a gap
+rather than as "verified". `--require-digests` flips it for a context that has
+already re-rendered.
+
+The scoping/resolution layer (`reports/provenance.py`) is shared rather than
+CLI-local, because it is the same walk the cancelled export needed — and keeping
+it separate means the next consumer, whatever it is, does not re-implement
+packet filtering.
+
+**Validation, including the part that mattered.** Unit tests cover each verdict,
+the scope filters and the exit codes (15 new). But the convincing check was
+end-to-end: render the EEE demo fixture (9 packets, all `match`), append **one
+byte** to a single committed artifact, re-run — one packet flips to `drifted`,
+names the component, prints both digests, exits 1. Then `git checkout` to
+restore the fixture I had deliberately corrupted. Baseline on the real store:
+1040 packets, all `unhashed`, 5.3 s.
+
+**Design insights.** (1) A checker that fails on the state every existing input
+is in will be silenced on its first run; make the not-yet-covered case a counted
+pass, not a failure. (2) "Independent of X" is a claim about concepts, not
+directories — a tool that names X's vocabulary is coupled however the files are
+arranged. (3) Tamper-test a verifier against a real artifact; a suite of
+synthetic fixtures cannot tell you the thing actually notices a single byte in a
+real render.
+
+**Next steps.** The re-render of `olmo-models-combined` and `olmo-models` under
+the current planner, which is now worth doing on its own terms: it fixes the
+stored instance-agreement values that C corrected, converts 137 ambiguous
+packets into graded demotions, and brings those packets under digest coverage so
+`verify-provenance` has something to check. Run `eval-audit-lint-store` and
+`eval-audit-verify-provenance` over the result. `e2e-phi2` first-pass still must
+not be re-rendered until its arms have separate experiment names.
