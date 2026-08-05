@@ -267,6 +267,29 @@ Two per-component provenance controls (Phase 3):
   separating deterministic metrics (the reproduction control) from
   judge-dependent metrics (the substitution measurement).
 
+**Provenance emitted per packet.** `core_metric_report.json` records what each
+side's number was computed *from* and what code computed it, so "this figure is
+still what is on disk" becomes a check rather than a claim
+([`eval_audit/normalized/digests.py`](../eval_audit/normalized/digests.py)):
+
+| field | is |
+|---|---|
+| `component_digests[<id>].scores` | sha256 over `run_spec.json` + `stats.json` + `per_instance_stats.json` (EEE: the aggregate `.json` + `_samples.jsonl`) — what every reported metric is a function of |
+| `component_digests[<id>].completions` | sha256 over `scenario_state.json` — what the diagnostics read. Separate, so a re-conversion touching completions cannot invalidate a score claim |
+| `component_digests[<id>].status` | `ok` / `partial` / `missing` — a pruned run records the absence rather than failing the render |
+| `pairs[].input_digest` | one digest over both sides plus the tolerance grid and the code identity |
+| `code_identity` | git sha + `eval_audit` version |
+
+The code identity is *inside* the comparison digest, not beside it: identical
+artifacts through changed code give a different number, so a digest that
+omitted it would certify a result it cannot reproduce. Only the named files are
+hashed — hashing the run directory would churn on logs and absolute paths.
+Measured cost ≈ 15.9 MB and 0.1 s per packet, so ≈ 2 min added to a
+1000-packet render.
+
+A digest proves *same inputs*, not *same answer*, and says a number is
+attributable — not that it is correct.
+
 **Output:**
 
 ```

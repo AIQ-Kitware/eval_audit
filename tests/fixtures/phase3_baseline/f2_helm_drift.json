@@ -1,5 +1,9 @@
 {
  "core_metric_report": {
+  "code_identity": {
+   "eval_audit_version": "0.0.0",
+   "git_sha": "<GIT-SHA>"
+  },
   "comparability": {
    "component_metadata": {
     "local-attempt-a": {
@@ -67,6 +71,72 @@
    }
   ],
   "comparisons_manifest_path": "<OUT>/comparisons_manifest.json",
+  "component_digests": {
+   "local-attempt-a": {
+    "artifact_format": "helm",
+    "completions": "e3e55958542ccf7662eaf2cf682e3d78c7173b3ba5884c6e2f5058818283f8e6",
+    "completions_spec": "completions.v1",
+    "files": [
+     {
+      "bytes": 1999,
+      "name": "run_spec.json",
+      "sha256": "a39976df4df9a186b3ad29f051dbe0ca34e23c717cbc3f1f36ea17f224c32b78"
+     },
+     {
+      "bytes": 40077,
+      "name": "stats.json",
+      "sha256": "a84a6ea1140ab09f8885791926a3552258d8200411a988aadd8b5d9f564c8cb9"
+     },
+     {
+      "bytes": 44540,
+      "name": "per_instance_stats.json",
+      "sha256": "d17f293119f09839d3d5f5d31bea6e93d113e356d647c4ceac3f7a8696885444"
+     },
+     {
+      "bytes": 36412,
+      "name": "scenario_state.json",
+      "sha256": "74ef181e2be6a7961197e7cda353fcbfffd1e875a1be681a52b8a4058e2094d4"
+     }
+    ],
+    "missing_files": [],
+    "root": "<LOCAL-DIR>",
+    "scores": "09d7f5730eac66c4b37e8b996cdb462361cbddda09181f2d4a0f3cadb790997b",
+    "spec": "scores.v1",
+    "status": "ok"
+   },
+   "official-run": {
+    "artifact_format": "helm",
+    "completions": "e3e55958542ccf7662eaf2cf682e3d78c7173b3ba5884c6e2f5058818283f8e6",
+    "completions_spec": "completions.v1",
+    "files": [
+     {
+      "bytes": 1999,
+      "name": "run_spec.json",
+      "sha256": "a39976df4df9a186b3ad29f051dbe0ca34e23c717cbc3f1f36ea17f224c32b78"
+     },
+     {
+      "bytes": 54470,
+      "name": "stats.json",
+      "sha256": "2ef96498f2464c6830e252f8aaf9261e163105f5c39ab474b1acfccb1a0565b2"
+     },
+     {
+      "bytes": 75277,
+      "name": "per_instance_stats.json",
+      "sha256": "6b444efb07af4d1bb9496e177a57d9708aacd5a9c5592c506dbfe2179da35deb"
+     },
+     {
+      "bytes": 36412,
+      "name": "scenario_state.json",
+      "sha256": "74ef181e2be6a7961197e7cda353fcbfffd1e875a1be681a52b8a4058e2094d4"
+     }
+    ],
+    "missing_files": [],
+    "root": "<OFFICIAL-DIR>",
+    "scores": "6d573b7056439264292bc9359e9e47f849caba3af5604c6b564675ee96f96110",
+    "spec": "scores.v1",
+    "status": "ok"
+   }
+  },
   "components": [
    {
     "attempt_identity": null,
@@ -160,6 +230,11 @@
        "priority": 3
       }
      ]
+    },
+    "input_digest": {
+     "digest": "<DIGEST>",
+     "spec": "comparison.v1",
+     "status": "ok"
     },
     "inputs": {
      "run_a": "<OFFICIAL-DIR>",

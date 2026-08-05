@@ -5057,3 +5057,80 @@ planner, and **E** (run id + input digest beside every cited number), whose phas
 1 is worth landing before that re-render so it emits digests first. `e2e-phi2`
 first-pass still must not be re-rendered until its arms have separate experiment
 names.
+
+## 2026-08-05 14:22:05 -0400
+
+**Model/config.** claude-opus-5[1m], Claude Code CLI (VS Code extension), repo
+`eval_audit` on `main`. Same session as the three entries above.
+
+**User intent.** Plan, then implement **phase 1 of option E**: emit, per packet,
+a content digest of the artifacts each number was computed from plus the code
+identity that computed it. Deliberately ahead of the owed olmo re-render, so
+that re-render is the first to produce digests rather than needing a second pass.
+
+**Risk retired before writing code.** The plan flagged one thing that could have
+made the whole scheme a false-alarm generator: `packaging/pack.py` rewrites
+absolute `/data` paths *inside* text artifacts, so a content digest of any file
+it touches would differ between a store and its package. Scanning 22 real runs
+showed none of `run_spec.json`, `stats.json`, `per_instance_stats.json`,
+`scenario_state.json` contains a rewritable root — the rewriter never touches
+them and digests survive packaging unchanged. That is recorded in the module
+docstring with the date, because if it ever stops being true the file sets are
+the thing to revisit.
+
+**Design decisions.**
+
+*Two digests, not one.* `scores` covers the recipe and the two score files;
+`completions` covers `scenario_state.json` alone. Splitting them means a
+re-conversion that touches completions cannot invalidate a score claim, and the
+expensive half is separable. Sizes on a real olmo run: per-instance stats 3.7 MB,
+scenario state 1.4 MB, stats 32 KB, spec 4 KB.
+
+*Named files, never the directory.* Hashing the run dir would churn on logs,
+timestamps and absolute paths — an alarm that fires on nothing is an alarm you
+learn to ignore. There is a test asserting a new `helm-run.log` does not move
+the digest.
+
+*Code identity inside the comparison digest, not beside it.* Identical artifacts
+through changed code give a different number; a digest that omitted the code
+would certify a result it cannot reproduce. This also let me delete the
+duplicated `git rev-parse` shell-out in `analyze_experiment.py` in favour of a
+shared cached helper, so an experiment's provenance and its packets' provenance
+now name the same build.
+
+*Missing is a status, not an exception.* A component whose artifacts were pruned
+records `status="missing"` and the render continues. The absence is the finding;
+crashing the render would just mean the finding never gets written down.
+
+**The failure I nearly shipped.** Adding `code_identity` made the four phase-3
+golden baselines carry the current commit sha, which would have required
+re-capturing them on *every commit*. A gate that must be blind-recaptured
+routinely is worse than no gate — it is precisely the "stop reading your own
+alarms" failure this whole option exists to prevent. Fixed in the normalizer
+instead: `git_sha` and the comparison `digest` (which folds it in) are redacted
+by key, exactly as `generated_utc` already was. **Component** digests are
+deliberately *not* redacted — they hash committed fixture content, so pinning
+them makes the baseline notice a fixture changing underneath it, which it could
+not do before. Baseline diff is +266 lines, zero deletions, and re-running the
+capture twice is stable.
+
+**Validation.** 918 passed with `--run-slow` (15 new digest tests). Measured cost
+on a real packet: 15.9 MB hashed in 104 ms across 3 components, i.e. ~2 minutes
+added to a 1000-packet render, I/O bound rather than CPU bound.
+
+**Design insights.** (1) Check the invariant a new check depends on *before*
+building it — "does packaging rewrite these files?" was a 30-second scan that
+decided whether the feature was viable. (2) A golden-file gate that embeds build
+identity trains you to re-capture without reading; redact the volatile keys and
+keep the gate meaningful. (3) When adding provenance, ask what it would certify
+that it cannot actually reproduce — that question is what put the code identity
+inside the digest rather than next to it.
+
+**Next steps.** Phase 2: `eval-audit-verify-provenance <store>` re-hashing from
+recorded paths and classifying match / drifted / missing / unhashed (the last so
+it runs on today's un-digested stores), with the packaging manifest consulted
+only if the rewrite scan above ever stops holding. Then the olmo re-render, then
+phase 3 (`cited_numbers.yaml` → LaTeX table). Phase 2 can also replace the
+hand-set free-text `freshness` field in `packaging/crawl.py:98` with a computed
+one, which is the part of the paper's `related_work.tex` provenance claim the
+tooling does not yet keep.

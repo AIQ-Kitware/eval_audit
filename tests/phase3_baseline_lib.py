@@ -135,6 +135,21 @@ def _path_hash_replacements(official_dir: Path, local_dir: Path) -> list[tuple[s
     ]
 
 
+#: Values that legitimately differ between two runs of the same code on the
+#: same inputs, redacted by key so the baseline pins behavior rather than the
+#: build. ``git_sha`` and the comparison ``digest`` that folds it in would
+#: otherwise change on every commit, and a gate that must be re-captured every
+#: commit teaches you to re-capture without reading the diff. The *component*
+#: digests are deliberately NOT redacted: they hash committed fixture content,
+#: so pinning them makes the baseline notice a fixture changing underneath it.
+#: Digest construction itself is covered directly by tests/test_digests.py.
+_VOLATILE_KEYS = {
+    "generated_utc": "<UTC>",
+    "git_sha": "<GIT-SHA>",
+    "digest": "<DIGEST>",
+}
+
+
 def _normalize(obj: Any, replacements: list[tuple[str, str]]) -> Any:
     if isinstance(obj, dict):
         # Component/job/packet ids embed the path-derived hash and are
@@ -143,7 +158,9 @@ def _normalize(obj: Any, replacements: list[tuple[str, str]]) -> Any:
         # values.
         return {
             _normalize(key, replacements): (
-                "<UTC>" if key == "generated_utc" else _normalize(value, replacements)
+                _VOLATILE_KEYS[key]
+                if key in _VOLATILE_KEYS
+                else _normalize(value, replacements)
             )
             for key, value in obj.items()
         }

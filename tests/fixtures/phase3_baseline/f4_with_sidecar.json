@@ -1,5 +1,9 @@
 {
  "core_metric_report": {
+  "code_identity": {
+   "eval_audit_version": "0.0.0",
+   "git_sha": "<GIT-SHA>"
+  },
   "comparability": {
    "component_metadata": {
     "local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356": {
@@ -128,6 +132,60 @@
    }
   ],
   "comparisons_manifest_path": "<OUT>/comparisons_manifest.json",
+  "component_digests": {
+   "local::eee_only_pair::job_<LOCAL-HASH>::imdb/toy/m1-small/fdc8d021-382f-50fb-a374-f5df8a31b356": {
+    "artifact_format": "eee",
+    "completions": null,
+    "files": [
+     {
+      "bytes": 1769,
+      "name": "fdc8d021-382f-50fb-a374-f5df8a31b356.json",
+      "sha256": "74d5714fa4a65b73efc8e3023290a892fda635e5bf02c7921bee57882bff3ff6"
+     },
+     {
+      "bytes": 5448,
+      "name": "fdc8d021-382f-50fb-a374-f5df8a31b356_samples.jsonl",
+      "sha256": "09d266cf1f8b17f4e8969047f2089939bf11567ab67c020617dc1024fe4245b6"
+     },
+     {
+      "bytes": 278,
+      "name": "run_spec.json",
+      "sha256": "e6f85af8e05979c09203157ce23dc1f5180820fc43f92d4ecde839746d86f49f"
+     }
+    ],
+    "missing_files": [],
+    "root": "<LOCAL-DIR>",
+    "scores": "be3786407beac8b0475ec538d5e46b0406e81010ca4d8e1be1f1037a5cb39006",
+    "spec": "scores.v1",
+    "status": "ok"
+   },
+   "official::eee_only::toy/m1-small::imdb::<OFFICIAL-HASH>": {
+    "artifact_format": "eee",
+    "completions": null,
+    "files": [
+     {
+      "bytes": 1772,
+      "name": "817b5221-cb13-5c66-8f0c-92a55deb0348.json",
+      "sha256": "68701ffd8b1b80dec2da02cb79e22edcaa0fc765f95445833fca5e3c908b964d"
+     },
+     {
+      "bytes": 5464,
+      "name": "817b5221-cb13-5c66-8f0c-92a55deb0348_samples.jsonl",
+      "sha256": "7bb7b509f10a34834f43b976953da6f376d36067716f774235ec7da63b401c40"
+     },
+     {
+      "bytes": 278,
+      "name": "run_spec.json",
+      "sha256": "e6f85af8e05979c09203157ce23dc1f5180820fc43f92d4ecde839746d86f49f"
+     }
+    ],
+    "missing_files": [],
+    "root": "<OFFICIAL-DIR>",
+    "scores": "4fa2ee8172dbeef3a0acf72af60f8d05372b00ca8e9a89e9a2a4219b8ff6ec64",
+    "spec": "scores.v1",
+    "status": "ok"
+   }
+  },
   "components": [
    {
     "artifact_format": "eee",
@@ -312,6 +370,11 @@
        "priority": 3
       }
      ]
+    },
+    "input_digest": {
+     "digest": "<DIGEST>",
+     "spec": "comparison.v1",
+     "status": "ok"
     },
     "inputs": {
      "run_a": "<OFFICIAL-DIR>",

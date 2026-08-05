@@ -35,6 +35,8 @@ from eval_audit.normalized import (
     NormalizedRun,
 )
 from eval_audit.normalized.diff import DEFAULT_ABS_TOL_THRESHOLDS
+from eval_audit.infra.code_identity import code_identity
+from eval_audit.normalized.digests import comparison_digest, component_digest
 from eval_audit.reports.paper_labels import load_paper_label_manager
 from eval_audit.utils.labels import emit_label_legend_artifacts, short_alias_map
 from eval_audit.reports.core_packet import load_packet_manifests
@@ -448,6 +450,25 @@ def _assemble_report(
         'component_metadata': component_comparability.get('component_metadata', {}),
     }
 
+    # Provenance: what each side's number was computed from, and what code
+    # computed it. Content digests over the scoring artifacts, so "this figure
+    # is still what is on disk" becomes a check rather than a claim
+    # (eval_audit/normalized/digests.py). A component whose artifacts have been
+    # pruned records status="missing" instead of failing the render — the
+    # absence is the finding.
+    code = code_identity()
+    component_digests = {
+        component['component_id']: component_digest(component)
+        for component in components
+    }
+    for pair in pairs:
+        pair['input_digest'] = comparison_digest(
+            list(pair.get('component_ids') or []),
+            component_digests,
+            thresholds=thresholds,
+            code=code,
+        )
+
     report = {
         'generated_utc': stamp,
         'run_spec_name': run_spec_name,
@@ -466,6 +487,8 @@ def _assemble_report(
         'diagnostic_flags': _diagnostic_flags(run_diagnostics, components, comparisons),
         'single_run_mode': single_run_mode,
         'comparability': comparability,
+        'code_identity': code,
+        'component_digests': component_digests,
         'packet_warnings': components_manifest.get('warnings') or [],
         'packet_caveats': components_manifest.get('caveats') or [],
         'official_selection': components_manifest.get('official_selection') or {},

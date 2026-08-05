@@ -11,6 +11,7 @@ import pandas as pd
 from loguru import logger
 
 from eval_audit.infra.api import default_index_root
+from eval_audit.infra.code_identity import repo_git_sha
 from eval_audit.infra.logging import rich_link, setup_cli_logging
 from eval_audit.infra.paths import official_public_index_dpath
 from eval_audit.utils.numeric import nested_get
@@ -596,18 +597,12 @@ def main(argv: list[str] | None = None) -> None:
         'n_planned_packets': len(packets),
         'n_built_reports': len(summary_rows),
     }
-    try:
-        import subprocess
-        from eval_audit.infra.env import load_env as _load_env
-        git_sha = subprocess.check_output(
-            ['git', 'rev-parse', 'HEAD'],
-            cwd=str(_load_env().repo_root),
-            text=True,
-            stderr=subprocess.DEVNULL,
-        ).strip()
+    # Same code identity the per-packet reports embed in their input digests
+    # (eval_audit/infra/code_identity.py), so an experiment's provenance and
+    # its packets' provenance name the same build.
+    git_sha = repo_git_sha()
+    if git_sha:
         provenance['git_sha'] = git_sha
-    except Exception:
-        pass
     provenance_fpath = out_dpath / 'provenance.json'
     write_text_atomic(provenance_fpath, json.dumps(provenance, indent=2))
     logger.debug(f'Write to: {rich_link(provenance_fpath)}')
