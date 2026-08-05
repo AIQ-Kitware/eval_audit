@@ -173,6 +173,12 @@ class NormalizedPlannerComponent:
             "tags": list(self.tags),
             "machine_host": self.machine_host,
             "experiment_name": self.experiment_name,
+            # Serialized so downstream reductions can apply the same
+            # latest-attempt rule this planner sorts by (_component_sort_key).
+            # Without it, eval_audit.reports.attempt_selection has to recover
+            # the timestamp from attempt_fallback_key or fall back to pair
+            # order. See docs/helm-gotchas.md §G14.
+            "manifest_timestamp": self.manifest_timestamp,
             "run_entry": self.run_entry,
             "logical_run_key": self.logical_run_key,
             "provenance": self.provenance,

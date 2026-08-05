@@ -89,6 +89,27 @@ def test_exit_code_fails_on_material_and_strict_fails_on_benign(tmp_path: Path) 
     assert main([str(tmp_path)]) == 1
 
 
+def test_finding_names_the_attempt_the_reporting_layer_would_pick(tmp_path: Path) -> None:
+    """The lint's verdict and the rendered number must refer to the same attempt."""
+    fpath = _write_packet(
+        tmp_path,
+        "collapsed-first",
+        [_pair("local::exp::collapsed", 0.0), _pair("local::exp::rerun", 0.99)],
+    )
+    report = json.loads(fpath.read_text())
+    report["components"] = [
+        {"component_id": "local::exp::collapsed", "manifest_timestamp": "1"},
+        {"component_id": "local::exp::rerun", "manifest_timestamp": "2"},
+    ]
+    fpath.write_text(json.dumps(report))
+
+    finding = audit_packet(fpath, tol=1e-6)
+    assert finding is not None
+    assert finding["selection_rule"] == "latest_manifest_timestamp"
+    assert finding["selected_agreement_at_zero"] == 0.99
+    assert [row["selected"] for row in finding["attempts"]] == [False, True]
+
+
 def test_summary_counts_every_packet_scanned(tmp_path: Path) -> None:
     _write_packet(tmp_path, "one", [_pair("local::exp::a", 0.99)])
     _write_packet(tmp_path, "two", [_pair("local::exp::a", 0.99), _pair("local::exp::b", 0.10)])

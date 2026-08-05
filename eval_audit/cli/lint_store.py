@@ -45,6 +45,11 @@ from pathlib import Path
 from typing import Any
 
 from eval_audit.infra.logging import setup_cli_logging
+from eval_audit.reports.attempt_selection import (
+    local_component_id,
+    official_vs_local_attempts,
+    select_official_vs_local,
+)
 
 REPORT_GLOB = "**/core_metric_report.json"
 
@@ -63,14 +68,6 @@ def _zero_tol_agreement(pair: dict[str, Any]) -> float | None:
     return None
 
 
-def _local_component_id(pair: dict[str, Any]) -> str | None:
-    reference = pair.get("reference_component_id")
-    for component_id in pair.get("component_ids") or []:
-        if component_id != reference and str(component_id).startswith("local::"):
-            return str(component_id)
-    return None
-
-
 def audit_packet(report_fpath: Path, tol: float) -> dict[str, Any] | None:
     """Return an ambiguity record for one packet, or None when unambiguous."""
     try:
@@ -86,17 +83,21 @@ def audit_packet(report_fpath: Path, tol: float) -> dict[str, Any] | None:
             "attempts": [],
         }
 
-    attempts = [
-        pair for pair in report.get("pairs") or []
-        if pair.get("comparison_kind") == "official_vs_local"
-    ]
+    attempts = official_vs_local_attempts(report)
     if len(attempts) <= 1:
         return None
 
+    # The rule the reporting layer would apply to this packet, so the lint and
+    # the rendered number name the same attempt rather than merely agreeing
+    # that a choice exists.
+    selection = select_official_vs_local(report)
     scored = [
         {
-            "local_component_id": _local_component_id(pair),
+            "local_component_id": local_component_id(pair),
             "agreement_at_zero": _zero_tol_agreement(pair),
+            # Identity, not comparison_id: both come from the same parsed
+            # report, and older packets may not carry a comparison_id at all.
+            "selected": pair is selection.pair,
         }
         for pair in attempts
     ]
@@ -116,6 +117,11 @@ def audit_packet(report_fpath: Path, tol: float) -> dict[str, Any] | None:
         "severity": severity,
         "n_attempts": len(attempts),
         "spread": spread,
+        "selection_rule": selection.rule,
+        "selected_comparison_id": selection.selected_comparison_id,
+        "selected_agreement_at_zero": next(
+            (row["agreement_at_zero"] for row in scored if row["selected"]), None
+        ),
         "attempts": scored,
     }
 
@@ -157,12 +163,15 @@ def _render(result: dict[str, Any]) -> str:
     for finding in material:
         lines.append(
             f"MATERIAL  spread={finding['spread']:.4f}  attempts={finding['n_attempts']}  "
-            f"{finding['packet'][:72]}"
+            f"rule={finding.get('selection_rule')}  {finding['packet'][:72]}"
         )
         for attempt in finding["attempts"]:
             agreement = attempt["agreement_at_zero"]
             shown = f"{agreement:.4f}" if agreement is not None else "  n/a "
-            lines.append(f"            agree@0={shown}  {str(attempt['local_component_id'])[-58:]}")
+            marker = "->" if attempt.get("selected") else "  "
+            lines.append(
+                f"         {marker} agree@0={shown}  {str(attempt['local_component_id'])[-58:]}"
+            )
     other = [f for f in result["findings"] if f["severity"] != "MATERIAL"]
     if other:
         lines.append("")

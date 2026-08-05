@@ -407,6 +407,50 @@ All 71 in `olmo-models-combined` are `olmo-7b`. The `e2e-phi2` first-pass packet
 holds **seven** attempts scoring 0.77–0.99, and the number that store reports is
 its first — so that store's headline is a selection, not a measurement.
 
+**How the code chooses.** Every reduction over `pairs[]` routes through
+`eval_audit/reports/attempt_selection.py::select_official_vs_local`, which
+returns the chosen pair *plus the rule that chose it*, in priority order:
+
+| rule | when | provenance |
+|---|---|---|
+| `single_attempt` | one candidate | no choice was made |
+| `latest_manifest_timestamp` | serialized `manifest_timestamp` on every candidate | strong |
+| `latest_manifest_timestamp:attempt_fallback_key` | timestamp recovered by parsing `attempt_fallback_key` | weaker — packet predates the field |
+| `pair_order` | no timestamps, or a tie | historical fallback |
+
+Latest-wins matches the order the planner already sorts components by
+(`_component_sort_key`), so the analysis layer and the planning layer name the
+same run. It is a convention, not evidence — the newest attempt is not
+necessarily the correct one — so a `MATERIAL` packet stays uncitable regardless
+of which attempt the rule picks. `local_repeat` is never a candidate: a repeat is
+an intentional noise measurement, not a rival answer.
+
+Two behaviours changed when the guard landed (2026-08-05):
+
+* the aggregate score-drift collector already selected, but by `ovl_pairs[0]`;
+  it now selects by the shared rule and logs which one it used. On the existing
+  olmo stores the two agree on all 162 cells, because the planner had already
+  emitted newest-first — the guard makes that accidental agreement deliberate;
+* the **instance-agreement** collectors (`_collect_cells`,
+  `_collect_cells_per_metric`) were genuinely pooling `matched`/`count` across
+  attempts. Selecting instead moves exactly the `olmo-7b` cells:
+
+  | cell | pooled | selected |
+  |---|--:|--:|
+  | `olmo-7b` / `narrative_qa` | 0.637 | 0.948 |
+  | `olmo-7b` / `mmlu` | 0.824 | 0.939 |
+  | `olmo-7b` / `legalbench` | 0.794 | 0.967 |
+  | `olmo-7b` / `med_qa` | 0.860 | 0.937 |
+  | `olmo-7b` / `commonsense` | 0.852 | 0.926 |
+  | `olmo-7b` / `gsm` | 0.977 | 0.990 |
+
+  No other model in any store moves. Cells now also carry
+  `n_attempts_dropped`, `n_ambiguous_packets` and `selection_rules`, so a cell
+  built from a choice says so.
+
+Rendered store artifacts predate this and still show the pooled values until
+re-rendered.
+
 **Rule.** A figure read from a multi-attempt store is meaningless without the
 selection rule that produced it, and the rule belongs next to the figure. This
 has now bitten three times: once in the aggregation code (fixed), once in an

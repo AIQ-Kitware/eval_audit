@@ -14,6 +14,7 @@ from eval_audit.infra.fs_publish import link_alias, write_text_atomic
 from eval_audit.normalized import NormalizedRun
 from eval_audit.normalized.diff import assert_swept_tol
 from eval_audit.infra.profiling import profile
+from eval_audit.reports.attempt_selection import select_official_vs_local
 from eval_audit.reports.core_metric_curves import (
     _find_curve_value,
     _find_pair,
@@ -85,7 +86,8 @@ def _write_comparison_runlevel_table(
 def _write_text(report: dict[str, Any], out_fpath: Path) -> None:
     pairs = report['pairs']
     local_repeat = _find_pair(report, 'local_repeat')
-    official_vs_local = _find_pair(report, 'official_vs_local') or (pairs[-1] if pairs else {})
+    selection = select_official_vs_local(report)
+    official_vs_local = selection.pair or (pairs[-1] if pairs else {})
     lines = []
     lines.append('Core Metric Report')
     lines.append('')
@@ -170,7 +172,8 @@ def _write_text(report: dict[str, Any], out_fpath: Path) -> None:
 def _write_management_summary(report: dict[str, Any], out_fpath: Path) -> None:
     pairs = report['pairs']
     local_repeat = _find_pair(report, 'local_repeat')
-    official_vs_local = _find_pair(report, 'official_vs_local') or (pairs[-1] if pairs else {})
+    selection = select_official_vs_local(report)
+    official_vs_local = selection.pair or (pairs[-1] if pairs else {})
     ref_pair = local_repeat or official_vs_local
     lines = []
     lines.append('Core Metric Executive Summary')
@@ -253,15 +256,15 @@ def _write_management_summary(report: dict[str, Any], out_fpath: Path) -> None:
         lines.append('local_repeat: not_computed')
         lines.append('')
     # IM-6: the management summary shows a single official_vs_local pair. When a
-    # packet carries more than one (e.g. split-by-track), disclose the count and
-    # which one is being shown so the reader knows the summary is "1 of N".
-    n_official_vs_local_pairs = sum(
-        1 for pair in pairs if pair.get('comparison_kind') == 'official_vs_local'
-    )
-    if n_official_vs_local_pairs > 1:
+    # packet carries more than one (e.g. split-by-track, or a rerun that never
+    # demoted its predecessor), disclose the count, which one is being shown,
+    # and *by what rule* it was chosen — the number is only interpretable
+    # alongside the choice that produced it (docs/helm-gotchas.md §G14).
+    if selection.is_ambiguous:
         lines.append(
-            f"n_official_vs_local_pairs: {n_official_vs_local_pairs}; "
-            f"showing {official_vs_local.get('comparison_id')}"
+            f"n_official_vs_local_pairs: {selection.n_candidates}; "
+            f"showing {selection.selected_comparison_id} "
+            f"(selection_rule={selection.rule})"
         )
     lines.append(f"{official_vs_local['comparison_id']}:")
     lines.append(f"  diagnosis: {official_vs_local['diagnosis'].get('label')}")

@@ -4815,3 +4815,86 @@ when you believe the builder.
 **Next steps.** `/data/_transfer-package` must be discarded and rebuilt; it has
 corrupt paths throughout and is missing a third of the analyses. No full pack
 has yet completed under the fixed code.
+
+## 2026-08-05 10:57:28 -0400
+
+**Model/config.** claude-opus-5[1m], Claude Code CLI (VS Code extension), repo
+`eval_audit` on `main`.
+
+**User intent.** Continuation of the multi-attempt investigation. Having landed
+option D (the read-only store lint, `9510f3ac`), the user asked me to explain and
+then implement option **C**: the reduction guard that stops a future analysis
+silently averaging competing local attempts.
+
+**What was wrong.** A packet can hold several enabled `official_vs_local`
+comparisons for one official row (§G14). The tree reduced over them three
+different ways, and only one of the three was even a selection:
+
+1. `core_metric_tables._write_text/_write_management_summary` used `_find_pair`,
+   which returns the *first* matching pair. A selection, but by an arbitrary rule
+   nothing recorded — the mechanism behind the false "containerization costs
+   0.003" reading.
+2. `eee_heatmap_data._accumulate_aggregate_diff_cells` keyed off `ovl_pairs[0]`
+   with a warning. Same rule, independently reimplemented.
+3. `eee_heatmap_data._collect_cells` / `_collect_cells_per_metric` **pooled**
+   `matched`/`count` across every attempt. This is the halving mechanism.
+
+**What I built.** `eval_audit/reports/attempt_selection.py`:
+`select_official_vs_local(report) -> AttemptSelection`, returning the pair plus
+the rule, candidate count, and dropped comparison ids. All three sites plus
+`lint_store` now call it, so the lint's verdict and the rendered number name the
+same attempt.
+
+**The design decision that mattered: how tolerant to make the fallback.** I had
+told the user latest-wins could not apply to existing stores because
+`manifest_timestamp` is not serialized into `core_metric_report.json`. That was
+only half true — inspecting a real packet showed the timestamp survives *inside*
+`attempt_fallback_key` (`...|manifest_timestamp=1783021451.022587|...`), which
+every local component carries. So the ladder became three rungs, not two:
+serialized field → parsed from the fallback key → pair order. The middle rung is
+named separately (`latest_manifest_timestamp:attempt_fallback_key`) rather than
+folded into the first, because a number cited off a recovered timestamp has
+weaker provenance than one cited off a recorded field and should say so. I also
+serialized `manifest_timestamp` in `NormalizedPlannerComponent.to_manifest_component`
+so future renders take the strong rung.
+
+Two smaller calls in the same spirit: a **tie** in timestamps falls through to
+pair order rather than being broken arbitrarily under a rule name claiming
+recency; and `local_repeat` is never a candidate, because a repeat is an
+intentional noise measurement, not a rival answer to the same question.
+
+**Validation on real stores.** Aggregate score-drift: 162 cells, **zero**
+change — the planner already emitted components newest-first, so `ovl_pairs[0]`
+happened to equal latest-wins. That is the point of a guard: it makes accidental
+correctness deliberate. Instance agreement: exactly six cells move, all
+`allenai/olmo-7b` — `narrative_qa` 0.637→0.948, `mmlu` 0.824→0.939,
+`legalbench` 0.794→0.967, `med_qa` 0.860→0.937, `commonsense` 0.852→0.926,
+`gsm` 0.977→0.990. No other model in any store moves, which independently
+confirms the scope the paper claims. Full suite 812 passed / 75 skipped; 13 new
+tests in `tests/test_attempt_selection.py` plus one in `tests/test_lint_store.py`.
+
+**Uncertainty I am leaving explicit.** Latest-wins is a convention, not
+evidence. On the `e2e-phi2` first-pass packet the seven "attempts" are different
+*configurations* (vLLM, container, HF, the temperature-1 control), not
+successive corrections, so "newest" has no claim to being right there. The lint
+grades that packet MATERIAL, which is the honest answer: the guard makes the
+choice deterministic and visible, and the lint says don't cite it. I deliberately
+did not try to make the selector smart enough to tell a rerun from an arm.
+
+**Design insights.** (1) When a value seems unavailable, check whether it
+survives inside a *derived* string before concluding the fallback must be weak —
+`attempt_fallback_key` had the timestamp all along, which turned C from
+degrade-gracefully into actually-works-on-existing-stores. (2) Name the weak
+path differently from the strong one instead of collapsing them; a provenance
+field that can't distinguish "recorded" from "recovered" is decoration. (3) Three
+call sites implementing the same policy three ways is not redundancy, it is three
+policies — the bug was that nobody had written the policy down anywhere.
+
+**Next steps.** Unchanged from the agreed sequence: **A** (planner emits enabled
+`official_vs_local` against `local_reference` only, others
+`enabled=False, disabled_reason="superseded_local_attempt"`), batched into the
+re-render already owed — after which C's fallback rarely fires. Then **E**
+(publish run id + hash beside every cited number) and **F** (forward-only
+execution hygiene: a rerun gets its own experiment name; must not be applied
+retroactively, since stored manifests record absolute `run_path`s). Rendered
+store artifacts still show the pooled instance-agreement values until re-rendered.

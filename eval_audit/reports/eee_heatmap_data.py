@@ -18,6 +18,7 @@ from loguru import logger
 from eval_audit.infra.fs_publish import write_text_atomic
 from eval_audit.infra.logging import rich_link
 from eval_audit.infra.profiling import profile
+from eval_audit.reports.attempt_selection import select_official_vs_local
 
 # ---------------------------------------------------------------------------
 # Display label tables
@@ -149,21 +150,33 @@ def _collect_cells(
             "matched": int,            # instances agreeing within abs_tol
             "count": int,               # total paired instances
             "agree_ratio": float | None,
-            "n_pairs_with_data": int,   # official_vs_local pairs whose
-                                        # instance_level.n_rows > 0
+            "n_pairs_with_data": int,   # selected official_vs_local pairs
+                                        # whose instance_level.n_rows > 0
             "n_pairs_total": int,       # all official_vs_local pairs we saw,
-                                        # including ones with 0 instance rows
+                                        # including non-selected attempts and
+                                        # ones with 0 instance rows
             "n_joined_pairs": int,      # sum of instance_level.n_joined_pairs
-                                        # across all official_vs_local pairs.
+                                        # over the selected pairs.
                                         # Pre-classifier-filter join count
                                         # used to discriminate join_failed vs
                                         # no_core_metrics.
             "n_packets": int,           # number of distinct packet json files
                                         # that targeted this (model, bench)
+            "n_attempts_dropped": int,  # local attempts not selected; >0 means
+                                        # this cell's number is a choice
+            "n_ambiguous_packets": int, # packets that held >1 local attempt
+            "selection_rules": list,    # rules used where a choice was made,
+                                        # see reports.attempt_selection
             "status": str,              # "present" / "join_failed" /
                                         # "no_core_metrics" / "missing"
                                         # (missing == cell absent from result)
         }
+
+    One local attempt per packet feeds a cell. Pooling every attempt would
+    micro-average a superseded run (e.g. the olmo-7b tokenizer collapse,
+    scoring 0.000) into the one that reproduced, so
+    :func:`~eval_audit.reports.attempt_selection.select_official_vs_local`
+    picks one and the counts above disclose that it did.
 
     The four statuses distinguish:
 
@@ -186,6 +199,9 @@ def _collect_cells(
             "n_pairs_total": 0,
             "n_joined_pairs": 0,
             "n_packets": 0,
+            "n_attempts_dropped": 0,
+            "n_ambiguous_packets": 0,
+            "selection_rules": set(),
         }
     )
 
@@ -223,12 +239,18 @@ def _collect_cells(
         # whether its pairs produced any instance-level rows.
         cells[key]["n_packets"] += 1
 
-        # Accumulate instance-level agreement from official_vs_local pairs
-        for pair in (report.get("pairs") or []):
-            if pair.get("comparison_kind") != "official_vs_local":
-                continue
-            cells[key]["n_pairs_total"] += 1
-
+        # Accumulate instance-level agreement from the *selected* local
+        # attempt. A packet can hold several official_vs_local pairs (a
+        # pre-fix attempt beside its rerun); pooling matched/count across
+        # them micro-averages a collapsed run into a good one and halves the
+        # cell. Select one, and record how (docs/helm-gotchas.md §G14).
+        selection = select_official_vs_local(report)
+        cells[key]["n_pairs_total"] += selection.n_candidates
+        cells[key]["n_attempts_dropped"] += len(selection.dropped_comparison_ids)
+        if selection.is_ambiguous:
+            cells[key]["n_ambiguous_packets"] += 1
+            cells[key]["selection_rules"].add(selection.rule)
+        for pair in ([selection.pair] if selection.pair else []):
             il = pair.get("instance_level") or {}
             # Pre-classifier-filter join count. Older reports without
             # this field default to 0; the resulting status defaults to
@@ -284,6 +306,9 @@ def _collect_cells(
             "n_pairs_total": cell["n_pairs_total"],
             "n_joined_pairs": cell["n_joined_pairs"],
             "n_packets": cell["n_packets"],
+            "n_attempts_dropped": cell["n_attempts_dropped"],
+            "n_ambiguous_packets": cell["n_ambiguous_packets"],
+            "selection_rules": sorted(cell["selection_rules"]),
             "status": status,
         }
     return result
@@ -302,8 +327,9 @@ def _collect_cells_per_metric(
     Each per-pair report's ``instance_level.per_metric_agreement`` provides
     the per-metric breakdown — the same shape as ``agreement_vs_abs_tol``
     but one curve per metric. We micro-average ``matched`` / ``count``
-    across all ``official_vs_local`` pairs that contributed to that
-    (model, benchmark, metric) cell.
+    across the packets that contributed to that (model, benchmark, metric)
+    cell — one *selected* local attempt per packet, never a pool over the
+    competing attempts within one (see :func:`_collect_cells`).
 
     ``include_bookkeeping=False`` (default) drops metrics in
     :data:`_BOOKKEEPING_METRICS` — counts/labels that are
@@ -351,9 +377,8 @@ def _collect_cells_per_metric(
         if not model_id or not benchmark:
             continue
 
-        for pair in (report.get("pairs") or []):
-            if pair.get("comparison_kind") != "official_vs_local":
-                continue
+        selection = select_official_vs_local(report)
+        for pair in ([selection.pair] if selection.pair else []):
             il = pair.get("instance_level") or {}
             per_metric = il.get("per_metric_agreement") or {}
             if not per_metric:
@@ -513,34 +538,26 @@ def _accumulate_aggregate_diff_cells(
         # (e.g. an old run re-run into the same combined experiment). Summing
         # every such row micro-averages the fresh attempt with the stale one,
         # dragging the aggregate toward the stale value (a stale run scoring
-        # ~0.0 halves the local score). The rest of the pipeline already
-        # collapses to a single local via _find_pair, which returns the *first*
-        # official_vs_local pair; mirror that here so the drift plot agrees with
-        # the per-pair reports and reproducibility_rows.csv. We key off the
-        # canonical comparison_id (from report["pairs"], the same list
-        # _find_pair walks) and drop rows/pairs from any other attempt.
-        ovl_pairs = [
-            p
-            for p in (report.get("pairs") or [])
-            if (p.get("comparison_kind") or "").strip() == "official_vs_local"
-        ]
-        canonical_ovl_id = (
-            (ovl_pairs[0].get("comparison_id") or "").strip() if ovl_pairs else ""
-        )
-        if len(ovl_pairs) > 1:
-            dropped = [
-                (p.get("comparison_id") or "").strip() for p in ovl_pairs[1:]
-            ]
+        # ~0.0 halves the local score). Selection runs through the shared
+        # attempt_selection rule (newest attempt where a manifest timestamp
+        # survives, pair order otherwise) so this plot, the per-pair reports,
+        # reproducibility_rows.csv and eval-audit-lint-store all name the same
+        # attempt. We key off the selected comparison_id and drop rows/pairs
+        # from any other attempt.
+        selection = select_official_vs_local(report)
+        canonical_ovl_id = selection.selected_comparison_id or ""
+        if selection.is_ambiguous:
             logger.warning(
                 "aggregate_score_diff: {model}/{benchmark} report has "
                 "{n} official_vs_local pairs; keeping canonical "
-                "{canonical!r}, dropping {dropped} (stale/non-canonical "
-                "local attempt). Source: {path}",
+                "{canonical!r} by {rule}, dropping {dropped} "
+                "(superseded/non-canonical local attempt). Source: {path}",
                 model=model_id,
                 benchmark=benchmark,
-                n=len(ovl_pairs),
+                n=selection.n_candidates,
                 canonical=canonical_ovl_id,
-                dropped=dropped,
+                rule=selection.rule,
+                dropped=selection.dropped_comparison_ids,
                 path=rich_link(rp),
             )
 

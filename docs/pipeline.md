@@ -217,8 +217,13 @@ deprecated no-op — canonicalization is always on.)
 > of them and emits `local_repeat` comparisons beside the `official_vs_local`
 > one. Any reduction over `pairs[]` must therefore **select** an attempt, not
 > average them — averaging a collapsed run against a working one halves the cell.
-> See [`docs/helm-gotchas.md`](helm-gotchas.md) §G14 for the check and for the
-> three times this has bitten.
+> The reporting layer does this through one shared rule
+> ([`eval_audit/reports/attempt_selection.py`](../eval_audit/reports/attempt_selection.py)):
+> newest attempt by `manifest_timestamp` where one survives, pair order
+> otherwise, with the rule recorded beside the number. Run
+> `eval-audit-lint-store <store>` to find packets where that choice is worth
+> something. See [`docs/helm-gotchas.md`](helm-gotchas.md) §G14 for the grading,
+> the full-tree scan, and the three times this has bitten.
 
 **What it does:** for each packet, loads both sides via the normalized
 loader ([`eval_audit/normalized/loaders.py`](../eval_audit/normalized/loaders.py)),
