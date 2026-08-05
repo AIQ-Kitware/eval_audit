@@ -4748,3 +4748,70 @@ right check all along.
 **Design insight.** A transfer artifact should assume the receiving machine has
 nothing. Every dependency the far side needs before it can use the data is a
 dependency that can be absent exactly when you are least able to fix it.
+
+## 2026-08-05 09:25:00 -0400
+
+**Model / harness.** claude-opus-5[1m], Claude Code in the VSCode extension.
+
+**Intent.** The user ran the packager for real and asked me to check the
+resulting `/data/_transfer-package`. Three defects, two of them mine.
+
+**(1) Path rewriting was corrupt in 20,506 files.** Every rewritten path came
+out doubled: `<pkg>/root<pkg>/root/data/crfm-helm-audit-store/...`. Cause:
+`_rewrite_paths` ran one `str.replace` per root, so each pass re-scanned text
+earlier passes had already written. Because the mirror deliberately keeps the
+original absolute path *inside* the new one, and `/data/crfm-helm-audit` is a
+**prefix** of `/data/crfm-helm-audit-store`, the shorter root matched again
+inside the replacement just emitted. Longest-first ordering fixes matching
+ambiguity but not re-matching. Fixed with a single `re.sub` pass, which scans
+left to right and never reconsiders its own output.
+
+The reason 13 tests missed it is worth recording: the fixture's roots are
+`world/{audit-store,audit-runs,public}`, and none is a prefix of another. The
+fixture reproduced the *shapes* of the real store (relative depth-coupled
+symlinks, shared runs, dangling refs) but not this *relationship* between
+roots. A fixture models the properties you thought of.
+
+**(2) The crawl silently lost 33 of 85 analyses.** The user's inventory had 52:
+all 29 `experiment` records gone, plus 2 virtual-experiments and 2
+store-reports. `Path.exists()` and `Path.is_dir()` swallow `OSError` and return
+False, and `crawl_store` caught `OSError` from `iterdir()` with a `logger.warning`
+and `continue`. So a transient filesystem failure reads as "this analysis does
+not exist", the crawl writes a short inventory and exits 0, and the package that
+follows looks complete --- all sidecars, verification runs, nothing flagged. The
+mix of total loss (a whole `iterdir`) and partial loss (individual `is_dir`
+calls) matches scattered stat failures.
+
+Every record in that inventory says `status: ok` with no notes, so the run left
+**no evidence of what went wrong**. That absence is the defect: I cannot now say
+whether it was descriptor exhaustion or something else. Fixed by retrying EMFILE
+with backoff and raising `CrawlError` otherwise, so the CLI refuses to write a
+short inventory and exits 3. Host-agnostic on purpose --- I had reached for this
+box's known VM problem as the explanation, and the user pointed out the target
+machine is not a VM at all.
+
+**(3) 1112 "broken symlinks" were my classification being wrong.** They are
+`core_metric_report.png` links from the aggregate summary into core-report
+packets, pointing at rasters we drop as regenerable. They resolve again the
+moment `redraw_plots.sh` runs, so they are not damage; reclassified as an
+informational note.
+
+**Validation.** Re-planned the full store: 85 analyses, 8373 artifacts, 32.60 GB
+--- identical to the pre-incident figures. Then packed a small real subset
+(`e2e-phi2`) against the genuine `/data` roots, which is the only configuration
+that exercises the prefix relationship end to end: verification errors 0, notes
+37, and zero files containing a doubled package prefix.
+
+**Design insights.** (1) Sequential string substitution over a set of patterns
+where one is a prefix of another, and the replacement retains the original, is a
+re-entrancy bug; one regex pass is the fix, and "sort longest first" is not.
+(2) Standard-library predicates that answer False on error (`Path.exists`,
+`Path.is_dir`) turn infrastructure faults into wrong answers, and a crawler
+built on them fails by shrinking rather than by stopping. (3) The verifier was
+the only reason any of this surfaced --- it flagged 21,618 errors and exited
+non-zero on a package that otherwise looked finished. Build the checker even
+when you believe the builder.
+
+**Next steps.** `/data/_transfer-package` must be discarded and rebuilt; it has
+corrupt paths throughout and is missing a third of the analyses. No full pack
+has yet completed under the fixed code.

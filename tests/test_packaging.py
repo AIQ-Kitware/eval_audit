@@ -351,6 +351,54 @@ def test_execution_state_is_skipped_even_when_referenced_directly():
     assert not _is_execution_state(Path(job))
 
 
+def test_rewrite_survives_roots_that_prefix_each_other(tmp_path):
+    """`/data/crfm-helm-audit` is a prefix of `/data/crfm-helm-audit-store`.
+
+    Regression, found only on the real store: the rewrite ran one
+    str.replace per root, so it re-scanned text it had already rewritten.
+    Because the mirror keeps the original path *inside* the new one, the
+    shorter root matched again in the replacement just written and
+    produced a doubled prefix --
+
+        <pkg>/root<pkg>/root/data/crfm-helm-audit-store/...
+
+    -- across 20,506 files. The fixture's own roots (audit-store,
+    audit-runs, public) are not prefixes of one another, which is exactly
+    why the existing tests could not see it.
+    """
+    from eval_audit.packaging.pack import MIRROR_DIRNAME, _rewrite_paths
+
+    roots = ("/data/crfm-helm-audit-store", "/data/crfm-helm-audit",
+             "/data/crfm-helm-public")
+    package = tmp_path / "pkg"
+    mirror = package / MIRROR_DIRNAME
+    mirror.mkdir(parents=True)
+
+    doc = mirror / "sample.json"
+    doc.write_text(
+        json.dumps({
+            "store": "/data/crfm-helm-audit-store/analysis/x",
+            "local": "/data/crfm-helm-audit/exp/helm/job",
+            "public": "/data/crfm-helm-public/mmlu/run",
+            "upstream": "/data/CLEAR/keep-me.jsonl",
+        }),
+        encoding="utf-8",
+    )
+
+    _rewrite_paths(package, roots)
+    out = json.loads(doc.read_text(encoding="utf-8"))
+
+    for key, root in (("store", "/data/crfm-helm-audit-store"),
+                      ("local", "/data/crfm-helm-audit"),
+                      ("public", "/data/crfm-helm-public")):
+        expected_prefix = f"{package}/{MIRROR_DIRNAME}{root}"
+        assert out[key].startswith(expected_prefix), (key, out[key])
+        # exactly one package prefix, not two
+        assert out[key].count(str(package)) == 1, (key, out[key])
+    # and the upstream path is still untouched
+    assert out["upstream"] == "/data/CLEAR/keep-me.jsonl"
+
+
 def test_catalog_rows_are_not_followed():
     """An index row alone must not drag a public run into the package.
 

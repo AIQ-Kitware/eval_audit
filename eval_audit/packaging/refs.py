@@ -25,6 +25,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+import time
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
@@ -254,10 +255,22 @@ def walk(root: Path) -> Iterator[Path]:
     stack = [root]
     while stack:
         current = stack.pop()
-        try:
-            entries = sorted(current.iterdir())
-        except OSError as exc:
-            logger.warning(f"cannot list {current}: {exc}")
+        entries = None
+        for attempt in range(40):
+            try:
+                entries = sorted(current.iterdir())
+                break
+            except OSError as exc:
+                if exc.errno == 24:  # EMFILE -- transient, back off and retry
+                    time.sleep(0.25 * (attempt + 1))
+                    continue
+                logger.warning(f"cannot list {current}: {exc}")
+                break
+        if entries is None:
+            logger.error(
+                f"gave up listing {current} after EMFILE retries; "
+                "this host is out of file descriptors"
+            )
             continue
         for entry in entries:
             yield entry

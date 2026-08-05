@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import time
 from collections import Counter
@@ -42,6 +43,7 @@ from eval_audit.packaging.policy import (
     JOB_MARKERS,
     JOB_SKIP_DIRS,
     JUNK_NAMES,
+    REGENERABLE_SUFFIXES,
     RUN_MARKERS,
     STRONG_CARRIERS,
     TEXT_SUFFIXES,
@@ -603,7 +605,19 @@ def _rewrite_paths(
     reversible and re-appliable if the package is later moved.
     """
     mirror = package_dpath / MIRROR_DIRNAME
-    subs = [(root, str(mirror_dest(root, package_dpath))) for root in rewrite_roots(roots)]
+    subs = {root: str(mirror_dest(root, package_dpath)) for root in rewrite_roots(roots)}
+    # ONE pass, not one pass per root. Sequential str.replace re-scans text it
+    # has already rewritten, and because the mirror keeps the original path
+    # inside the new one, a root that is a *prefix* of another root matches
+    # again in the replacement just written:
+    #
+    #   /data/crfm-helm-audit-store  ->  <pkg>/root/data/crfm-helm-audit-store
+    #   then /data/crfm-helm-audit matches inside that ^^^^^^^^^^^^^^^^^^^^^^
+    #   giving <pkg>/root<pkg>/root/data/crfm-helm-audit-store
+    #
+    # re.sub scans left to right and never reconsiders what it emitted, and
+    # the alternation is longest-first so the most specific root wins.
+    pattern = re.compile("|".join(re.escape(r) for r in rewrite_roots(roots)))
     rewrites: list[dict] = []
     pre_hashes: dict[str, str] = {}
 
@@ -617,14 +631,15 @@ def _rewrite_paths(
             text = entry.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        counts = {old: text.count(old) for old, _ in subs}
-        if not any(counts.values()):
+        counts: Counter[str] = Counter()
+        rewritten = pattern.sub(
+            lambda m: (counts.update([m.group(0)]), subs[m.group(0)])[1], text
+        )
+        if not counts:
             continue
         rel = entry.relative_to(package_dpath).as_posix()
         pre_hashes[rel] = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        for old, new in subs:
-            if counts[old]:
-                text = text.replace(old, new)
+        text = rewritten
         try:
             entry.write_text(text, encoding="utf-8")
         except OSError as exc:
@@ -634,8 +649,8 @@ def _rewrite_paths(
         rewrites.append(
             {
                 "file": rel,
-                "substitutions": {old: new for old, new in subs if counts[old]},
-                "counts": {old: n for old, n in counts.items() if n},
+                "substitutions": {old: subs[old] for old in counts},
+                "counts": dict(counts),
                 "sha256_after": hashlib.sha256(text.encode("utf-8")).hexdigest(),
             }
         )
@@ -722,12 +737,21 @@ def verify_package(
         resolved = (entry.parent / os.readlink(entry)).resolve(strict=False)
         if not resolved.exists():
             src_link = source_of(entry, package_dpath)
-            preexisting = src_link.is_symlink() and not src_link.exists()
+            if src_link.is_symlink() and not src_link.exists():
+                kind, severity = "preexisting_broken_symlink", "info"
+            elif resolved.suffix.lower() in REGENERABLE_SUFFIXES:
+                # The aggregate summary symlinks to plot rasters inside
+                # core-report packets, and those rasters are dropped as
+                # regenerable. The link is not wrong -- it resolves again
+                # the moment redraw_plots.sh runs -- so keep it and say so
+                # rather than calling it damage.
+                kind, severity = "symlink_to_dropped_regenerable", "info"
+            else:
+                kind, severity = "broken_symlink", "error"
             problems.append(
                 {
-                    "kind": "preexisting_broken_symlink" if preexisting
-                            else "broken_symlink",
-                    "severity": "info" if preexisting else "error",
+                    "kind": kind,
+                    "severity": severity,
                     "path": entry.relative_to(package_dpath).as_posix(),
                 }
             )

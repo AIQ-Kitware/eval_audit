@@ -17,6 +17,7 @@ experiment nests them one level deeper at
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +29,59 @@ from eval_audit.packaging.policy import JUNK_NAMES
 from eval_audit.packaging.refs import walk
 
 SCHEMA_VERSION = 1
+
+#: Filesystem probes that silently answer "no".
+#
+# ``Path.exists()`` and ``Path.is_dir()`` swallow ``OSError`` and return
+# False. On a host that intermittently exhausts file descriptors that turns
+# a transient error into "this analysis does not exist" -- the crawl writes
+# a short inventory, exits 0, and the package quietly omits whatever could
+# not be stat'd at that instant. One real run lost 33 of 85 analyses this
+# way and looked entirely healthy afterwards.
+#
+# So: retry, and if it still fails, say so and fail the crawl rather than
+# under-report. A packager whose scope silently shrinks under load is worse
+# than one that stops.
+_EMFILE_RETRIES = 40
+_EMFILE_BACKOFF_S = 0.25
+
+
+class CrawlError(RuntimeError):
+    """The store could not be read completely; the inventory would be short."""
+
+
+def _retry(fn, what: str):
+    """Run a filesystem probe, retrying descriptor exhaustion.
+
+    Raises :class:`CrawlError` rather than returning a wrong answer.
+    """
+    last: OSError | None = None
+    for attempt in range(_EMFILE_RETRIES):
+        try:
+            return fn()
+        except OSError as exc:
+            last = exc
+            if exc.errno != 24:  # not EMFILE -- a real, permanent error
+                raise CrawlError(f"cannot read {what}: {exc}") from exc
+            time.sleep(_EMFILE_BACKOFF_S * (attempt + 1))
+    raise CrawlError(
+        f"cannot read {what} after {_EMFILE_RETRIES} retries: {last}. "
+        "This host is out of file descriptors; recycle it and re-run rather "
+        "than packaging a store that cannot be fully listed."
+    )
+
+
+def _listdir(dpath: Path) -> list[Path]:
+    return sorted(_retry(lambda: list(dpath.iterdir()), str(dpath)))
+
+
+def _exists(fpath: Path) -> bool:
+    """Like ``Path.exists()`` but never answers False because of EMFILE."""
+    return _retry(lambda: fpath.exists() or fpath.is_symlink(), str(fpath))
+
+
+def _is_dir(dpath: Path) -> bool:
+    return _retry(lambda: dpath.is_dir(), str(dpath))
 
 
 @dataclass
@@ -89,17 +143,13 @@ def crawl_store(store_dpath: Path) -> list[AnalysisRecord]:
 
     for kind, parent_rel, marker in _CHILD_KINDS:
         parent = store_dpath / parent_rel
-        if not parent.is_dir():
+        if not _is_dir(parent):
             continue
-        try:
-            children = sorted(p for p in parent.iterdir() if p.is_dir())
-        except OSError as exc:
-            logger.warning(f"cannot list {parent}: {exc}")
-            continue
+        children = [p for p in _listdir(parent) if _is_dir(p)]
         for child in children:
             if child.name in JUNK_NAMES:
                 continue
-            if marker and not (child / marker).exists():
+            if marker and not _exists(child / marker):
                 logger.debug(f"skipping {child}: no {marker}")
                 continue
             if child in seen:
@@ -109,14 +159,14 @@ def crawl_store(store_dpath: Path) -> list[AnalysisRecord]:
 
     for kind, rel in _SINGLETON_KINDS:
         dpath = store_dpath / rel
-        if not dpath.is_dir() or dpath in seen:
+        if not _is_dir(dpath) or dpath in seen:
             continue
         seen.add(dpath)
         records.append(_build_record(kind, dpath, store_dpath, subtract=seen))
 
     for rel in _LOOSE_ANALYSIS_FILES:
         fpath = store_dpath / rel
-        if fpath.exists():
+        if _exists(fpath):
             records.append(_build_record("analysis-input", fpath, store_dpath))
 
     records.sort(key=lambda r: (r.kind, r.id))

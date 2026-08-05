@@ -22,6 +22,7 @@ from loguru import logger
 
 from eval_audit.infra.logging import setup_cli_logging
 from eval_audit.packaging.crawl import (
+    CrawlError,
     crawl_store,
     read_inventory,
     summarize,
@@ -84,7 +85,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     logger.info(f"crawling {args.store_dpath}")
-    records = crawl_store(args.store_dpath)
+    try:
+        records = crawl_store(args.store_dpath)
+    except CrawlError as exc:
+        # Refuse to write a short inventory. A crawl that quietly drops
+        # analyses it could not stat produces a package that looks complete
+        # and is not -- which is the one failure this tool exists to avoid.
+        logger.error(f"crawl incomplete, refusing to write an inventory: {exc}")
+        return 3
     if not records:
         logger.error("no analyses found; is this a store root?")
         return 1
