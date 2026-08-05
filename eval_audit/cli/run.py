@@ -90,6 +90,19 @@ def main(argv: list[str] | None = None) -> None:
             "busy. Only meaningful with --lease."
         ),
     )
+    parser.add_argument(
+        "--strict-attempts",
+        action="store_true",
+        help=(
+            "Exit nonzero if this run leaves any run entry holding more than "
+            "one local attempt in the experiment. Default is to warn and "
+            "continue: rerunning into a live experiment is legal, and the "
+            "planner demotes the superseded attempt (docs/helm-gotchas.md "
+            "§G14). Use for unattended batch runs that would rather stop than "
+            "find out later. Resuming a partly-finished sweep never triggers "
+            "it — a skipped run entry creates no new attempt."
+        ),
+    )
     args = parser.parse_args(argv)
     # P2: --dry-run is an alias for --run=0; passing it alongside an explicit
     # --run 1 is contradictory. Error instead of silently overriding to preview.
@@ -109,6 +122,7 @@ def main(argv: list[str] | None = None) -> None:
         lease_timeout=args.lease_timeout,
         lease_catalog=args.lease_catalog,
         lease_queue=not args.no_queue,
+        strict_attempts=args.strict_attempts,
     )
     print(json.dumps(info, indent=2))
 

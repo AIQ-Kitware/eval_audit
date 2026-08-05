@@ -483,6 +483,29 @@ same number of comparisons either way.
 A demoted attempt whose repeat is missing reports `UNSCORED` rather than passing
 quietly — the demotion is only safe *because* the repeat survives.
 
+**Being told when it happens (2026-08-05).** `eval-audit-run --run=1` snapshots
+the experiment's run tree before and after scheduling and reports any run entry
+that came out holding more than one attempt, naming the prior and new job ids
+(`eval_audit/workflows/attempt_collision.py`). It never blocks: rerunning into a
+live experiment is legitimate, and the planner now demotes the superseded
+attempt. `--strict-attempts` turns the report into a nonzero exit for unattended
+batch runs.
+
+Detection is a **before/after diff, not a pre-flight prediction**. Whether a run
+entry gains a *new* attempt depends on kwdagger's skip-vs-recompute decision, so
+predicting would mean guessing it — and would fire on every plain resume, which
+is the one case that must stay frictionless. A resumed sweep re-runs only the
+entries with no prior output, adds no second attempt to anything, and reports
+nothing.
+
+Scanning the raw run tree independently confirms what the store lint sees from
+the reports: `audit-allenai-olmo-7b-lite-full` holds 14 run entries with two
+attempts and `audit-allenai-olmo-7b-mmlu-full` holds 57 — exactly the 71 double
+packets in `olmo-models-combined`. (A run directory is identified by its
+`run_spec.json`; HELM writes an `eval_cache` sibling under the suite, and
+counting that makes every job in the experiment look like an attempt at one
+shared entry.)
+
 **Do not re-render `e2e-phi2` (first pass) under this planner.** Its seven
 "attempts" are different *configurations* — vLLM, container, HF, the
 temperature-1 control — that share a packet because they ran into one experiment

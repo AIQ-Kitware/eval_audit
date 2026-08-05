@@ -4983,3 +4983,77 @@ id + hash beside every cited number) and **F** (forward-only execution hygiene �
 a rerun gets its own experiment name; must not be applied retroactively, since
 stored manifests record absolute `run_path`s). F is now also the precondition for
 touching `e2e-phi2`.
+
+## 2026-08-05 13:05:41 -0400
+
+**Model/config.** claude-opus-5[1m], Claude Code CLI (VS Code extension), repo
+`eval_audit` on `main`. Same session as the two entries above.
+
+**User intent.** Implement option **F**, the last of the multi-attempt sequence,
+after D/C/A landed. The design changed twice under questioning before any code
+was written, and both changes were the user pushing back.
+
+**How F shrank, twice.** I first described F as "naming discipline — a rerun gets
+its own experiment name", and deferred it on the grounds that process fixes only
+bind future behavior. The user asked why not F first. Reading the code showed my
+premise was wrong: `presets.py` sets `experiment_name` to `f"audit-{name}-full"`,
+a pure function of the preset, and `run_from_manifest` takes it straight from the
+manifest with no check — so a rerun collides *by construction*, not by operator
+slip. That argued for F first, and I said so.
+
+Then the user asked why not just timestamp the name. Checking that killed the
+idea three ways, but the third finding was the important one: the `e2e-phi2`
+packet's seven attempts come from **three differently-named disk experiments**.
+They were already uniquely named and still peered, because a virtual experiment
+composes them and the planner groups by logical run key. So renaming cannot fix
+composition-driven peering at all — and that peering is a feature. (The other two
+reasons: job dirs live under `<experiment>/helm/<job_id>/`, so a new experiment
+name moves the root kwdagger looks in for `DONE` and every job recomputes — a
+369-run sweep dying at 300 would restart at zero; and CLAUDE.md explicitly forbids
+timestamp-dependent behavior, with 15 runbook references computing paths from the
+name.) That retired my "F is the only cause-level fix" claim.
+
+Then the user said they didn't want reruns to become impossible, which removed
+the last blocking behavior. F ended as a **diagnostic**: warn, never gate.
+
+**The design decision that mattered: diff, don't predict.** The obvious
+implementation is a pre-flight check — "this experiment already has runs for N of
+your entries". It is also wrong, because it fires on every plain resume, which is
+the single case that must stay frictionless. Whether an entry gains a *new*
+attempt depends on kwdagger's skip-vs-recompute decision, which is only knowable
+after the fact. So `run_from_manifest` snapshots the run tree before scheduling
+and diffs after. Resume adds no attempt and reports nothing; a changed-recipe
+rerun reports exactly the affected entries with both job ids.
+
+`--strict-attempts` is a near-miss against the standing "no flags to preserve
+bugs" rule, and I convinced myself it isn't one: rerunning into a live experiment
+is legitimate, the defect was that the intent went unrecorded, and the flag
+chooses reporting volume for unattended runs rather than keeping old behavior
+alive. It also deliberately does *not* fire on duplicates the run merely carried
+through — only on ones it created.
+
+**Real data found a bug the fixtures wouldn't have.** The first scan reported
+`eval_cache` as a run entry with 38 attempts, and every key in
+`audit-allenai-olmo-7b-lite-full` as multi-attempt. HELM writes an `eval_cache`
+sibling under the suite directory; counting it makes every job in the experiment
+look like an attempt at one shared entry. Identifying a run by its `run_spec.json`
+fixes it, and the corrected scan is a genuine cross-check: 14 multi-attempt
+entries in `-lite-full` plus 57 in `-mmlu-full` = **exactly the 71 double packets**
+the store lint found in `olmo-models-combined`, derived from the raw run tree
+rather than from any report.
+
+**Design insights.** (1) When a check would fire on the benign case, the answer is
+usually to move it later in time rather than to add an exemption — before/after
+beats predict-and-whitelist. (2) A uniqueness scheme is worth nothing if the
+identity it adds is coarser than one that already exists; attempts already had
+unique job ids and uuids, and the bug was that the planner treated distinguishable
+attempts as interchangeable. (3) Validate a tree-walker against the real tree
+before trusting its counts — `eval_cache` is exactly the kind of sibling no
+hand-built fixture contains.
+
+**Next steps.** The multi-attempt sequence is complete (D, C, A, F). Remaining:
+the owed re-render of `olmo-models-combined` and `olmo-models` under the new
+planner, and **E** (run id + input digest beside every cited number), whose phase
+1 is worth landing before that re-render so it emits digests first. `e2e-phi2`
+first-pass still must not be re-rendered until its arms have separate experiment
+names.

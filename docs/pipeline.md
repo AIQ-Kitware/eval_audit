@@ -380,6 +380,16 @@ schedule time. Details, including the era invariants and the digest-pinning
 mechanism, are in
 [`docs/container-execution.md`](container-execution.md).
 
+**Rerunning into a live experiment.** kwdagger keys a job on the hash of its
+algo params, so changing the recipe (a tokenizer flag, a dtype) correctly mints
+a *new* job rather than overwriting the old one — and both then sit in the same
+experiment, where downstream they become candidate attempts at the same run
+entry. `eval-audit-run --run=1` reports that when it happens, naming the prior
+and new job ids; `--strict-attempts` exits nonzero instead. It never blocks, and
+**resuming a partly-finished sweep never triggers it** — a skipped entry creates
+no new attempt. To keep attempts separate, re-run with a different
+`--experiment-name`. See [`docs/helm-gotchas.md`](helm-gotchas.md) §G14.
+
 ### The runbook step ladder
 
 The from-spec runbooks share a numbered shape; running them in order is the

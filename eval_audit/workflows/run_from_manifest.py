@@ -10,6 +10,10 @@ from eval_audit.integrations.kwdagger_bridge import (
     prepare_schedule_request,
     run_kwdagger_schedule,
 )
+from eval_audit.workflows.attempt_collision import (
+    report_attempt_collisions,
+    scan_experiment_attempts,
+)
 
 
 def run_from_manifest(
@@ -27,6 +31,7 @@ def run_from_manifest(
     lease_timeout: str | None = None,
     lease_catalog: str | None = None,
     lease_queue: bool = True,
+    strict_attempts: bool = False,
 ) -> dict[str, Any]:
     manifest = load_manifest(manifest_fpath)
     request = prepare_schedule_request(
@@ -59,6 +64,18 @@ def run_from_manifest(
     if request.resolved_image is not None:
         info["container_image"] = request.resolved_image.to_dict()
     if request.runtime.run:
+        # Snapshot before/after rather than predicting: whether a run entry
+        # gains a *new* attempt depends on kwdagger's skip-vs-recompute
+        # decision, so a pre-flight guess would fire on every plain resume.
+        # See eval_audit/workflows/attempt_collision.py.
+        experiment_root = request.runtime.root_dpath
+        before = scan_experiment_attempts(experiment_root)
         proc = run_kwdagger_schedule(request)
         info["returncode"] = proc.returncode
+        info["attempts"] = report_attempt_collisions(
+            info["experiment_name"],
+            before,
+            scan_experiment_attempts(experiment_root),
+            strict=strict_attempts,
+        )
     return info
