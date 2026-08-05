@@ -378,20 +378,34 @@ For `olmo-7b` specifically the second attempt is the **tokenizer collapse of
 G-series (a)**: completions are the prompt-independent `"The …"` boilerplate and
 `exact_match` is `0.000`, so averaging with the good run halves the cell exactly.
 
-**How to check.** Count pairs per packet before reducing:
+**How to check.** `eval-audit-lint-store` reports every packet with competing
+attempts, and grades each by how much the unrecorded choice is worth (the spread
+in zero-tolerance agreement across the attempts):
 
 ```bash
-python3 -c "
-import json,glob,collections
-c=collections.Counter()
-for f in glob.glob('<store>/analysis/core-reports/*/core_metric_report.json'):
-    c[len(json.load(open(f)).get('pairs',[]))]+=1
-print(dict(c))"
+eval-audit-lint-store /data/crfm-helm-audit-store/virtual-experiments
+eval-audit-lint-store <store> --json lint.json --strict
 ```
 
-Verified 2026-08-04: `qwen-models-combined` 703/703 single-pair,
-`gpt-oss-20b-from-spec` 4/4, both `era-redpajama-*` 2/2 — but
-`olmo-models-combined` is 78 single and **71 double, all of them `olmo-7b`**.
+`MATERIAL` (attempts disagree by more than `--tol`) fails the lint; `BENIGN`
+(several attempts that agree, so any selection gives the same answer) is reported
+only. Nonzero exit on any `MATERIAL`, or on any ambiguity at all under `--strict`.
+
+Full-tree scan 2026-08-04 — 1040 packets, 137 ambiguous:
+
+| store | packets | ambiguous | max spread |
+|---|--:|--:|--:|
+| `qwen-models-combined` | 703 | — | — |
+| `gpt-oss-20b-from-spec` | 4 | — | — |
+| `era-redpajama-v024` / `-v030` | 2 / 2 | — | — |
+| `e2e-phi2-{vllm,container,hf,incomparable}` | 1 each | — | — |
+| `e2e-phi2` (first pass) | 1 | 1 MATERIAL | 0.222 |
+| `olmo-models` | 175 | 38 MATERIAL + 27 BENIGN | 0.303 |
+| `olmo-models-combined` | 149 | 71 MATERIAL | 0.623 |
+
+All 71 in `olmo-models-combined` are `olmo-7b`. The `e2e-phi2` first-pass packet
+holds **seven** attempts scoring 0.77–0.99, and the number that store reports is
+its first — so that store's headline is a selection, not a measurement.
 
 **Rule.** A figure read from a multi-attempt store is meaningless without the
 selection rule that produced it, and the rule belongs next to the figure. This
