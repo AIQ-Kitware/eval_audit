@@ -369,10 +369,16 @@ from *the same artifacts*.
 **Mechanism.** An experiment legitimately accumulates more than one local run for
 the same official row — a pre-fix attempt and a post-fix rerun, a smoke and a
 full, two suites (`/mmlu` and `/lite`) covering the same subject. The planner
-keeps all of them and emits `local_repeat` comparisons alongside the
-`official_vs_local` one (`eval_audit/planning/core_report_planner.py`). A packet
-therefore has *n* pairs, not one, and any reduction over `pairs[]` that treats
-them as independent observations averages a collapsed run against a working one.
+kept all of them and emitted one **enabled** `official_vs_local` per attempt
+(`eval_audit/planning/core_report_planner.py`). A packet therefore had *n* pairs,
+not one, and any reduction over `pairs[]` that treats them as independent
+observations averages a collapsed run against a working one.
+
+The asymmetry that produced this is worth naming: the same function built
+`local_repeat` comparisons off `local_components[0]` as the reference and
+`local_components[1:]` as repeats, so the planner *had* a concept of the
+canonical attempt and simply didn't apply it to the comparison that produces the
+reported number.
 
 For `olmo-7b` specifically the second attempt is the **tokenizer collapse of
 G-series (a)**: completions are the prompt-independent `"The …"` boilerplate and
@@ -450,6 +456,39 @@ Two behaviours changed when the guard landed (2026-08-05):
 
 Rendered store artifacts predate this and still show the pooled values until
 re-rendered.
+
+**How the planner now records it (2026-08-05).** The ambiguity is also removed at
+source. Only the canonical local attempt keeps an enabled `official_vs_local`;
+every other attempt is emitted `enabled=False,
+disabled_reason="superseded_local_attempt"` and **retyped as a `local_repeat`** —
+which is the question it actually answers ("how far apart are two of my own
+executions?") rather than a rival answer to "how well did this row reproduce?".
+
+The retype is not optional. `EVAL_AUDIT_SKIP_LOCAL_REPEAT` suppresses ordinary
+replica comparisons for compute, and every multi-attempt packet in every existing
+store was built with it set — so a plain demotion would have left superseded
+attempts with *no rendered comparison at all*, destroying the evidence on the very
+re-render that resolves the ambiguity. Attempts this packet demoted therefore
+always get their repeat, skip flag or not. This is cost-neutral: those attempts
+each used to render an enabled `official_vs_local` diff, so the packet renders the
+same number of comparisons either way.
+
+`eval-audit-lint-store` grades both packet shapes:
+
+| shape | packet holds | graded on |
+|---|---|---|
+| `competing_attempts` | *n* enabled `official_vs_local` peers | spread in their agreement with the official |
+| `demoted_attempts` | 1 enabled + *n−1* `superseded_local_attempt` | `1 −` the `local_repeat` agreement, i.e. how far the superseded attempt sits from the canonical one |
+
+A demoted attempt whose repeat is missing reports `UNSCORED` rather than passing
+quietly — the demotion is only safe *because* the repeat survives.
+
+**Do not re-render `e2e-phi2` (first pass) under this planner.** Its seven
+"attempts" are different *configurations* — vLLM, container, HF, the
+temperature-1 control — that share a packet because they ran into one experiment
+under one run entry. Demotion would leave one canonical `official_vs_local` and
+six repeats, which is lossless but wrong typing: those arms are not repeats of
+each other. They need separate experiment names first.
 
 **Rule.** A figure read from a multi-attempt store is meaningless without the
 selection rule that produced it, and the rule belongs next to the figure. This

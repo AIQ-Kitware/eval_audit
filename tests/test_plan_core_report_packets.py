@@ -386,7 +386,17 @@ def test_multi_track_official_ambiguity_does_not_silently_auto_pick_reference(tm
             if comparison["comparison_kind"] == "official_vs_local"
         ]
         assert official_vs_local
-        assert all(comparison["enabled"] is True for comparison in official_vs_local)
+        # Splitting by track must leave each packet with a usable comparison
+        # rather than disabling it for official ambiguity. The fixture's two
+        # local attempts mean the non-canonical one is disabled here too, but
+        # for local supersession — a different question from official
+        # ambiguity, and the reason distinguishes them.
+        assert sum(1 for comparison in official_vs_local if comparison["enabled"]) == 1
+        assert {
+            comparison["disabled_reason"]
+            for comparison in official_vs_local
+            if not comparison["enabled"]
+        } <= {"superseded_local_attempt"}
         assert "split_by_public_track" in packet["warnings"]
 
 
@@ -494,3 +504,79 @@ def test_experiment_scoped_planning_does_not_emit_unrelated_official_only_packet
 
     assert artifact["packet_count"] == 1
     assert artifact["packets"][0]["logical_run_key"] == "boolq:model=meta_llama-3-8b"
+
+
+def _comparisons_by_kind(packet: dict, kind: str) -> list[dict]:
+    return [c for c in packet["comparisons"] if c["comparison_kind"] == kind]
+
+
+def test_only_the_canonical_local_attempt_is_enabled_against_the_official(tmp_path):
+    """A packet must hold one answer to "how well did this row reproduce?".
+
+    The fixture carries two local attempts, job-a (manifest_timestamp 20) and
+    job-b (10). Emitting both as enabled peers is what let reductions pool a
+    superseded run into the canonical one (docs/helm-gotchas.md §G14).
+    """
+    local_index, official_index = _setup_index_inputs(tmp_path)
+    artifact = core_report_planner.build_planning_artifact(
+        local_index_fpath=local_index,
+        official_index_fpath=official_index,
+        experiment_name="exp-a",
+        run_entry="boolq:model=meta/llama-3-8b",
+    )
+
+    official_vs_local = _comparisons_by_kind(artifact["packets"][0], "official_vs_local")
+    enabled = [c for c in official_vs_local if c["enabled"]]
+    disabled = [c for c in official_vs_local if not c["enabled"]]
+
+    assert len(official_vs_local) == 2
+    assert len(enabled) == 1
+    assert "job-a" in enabled[0]["comparison_id"], "newest attempt should be the canonical one"
+    assert [c["disabled_reason"] for c in disabled] == ["superseded_local_attempt"]
+    assert "job-b" in disabled[0]["comparison_id"]
+
+
+def test_superseded_attempt_keeps_its_repeat_even_when_repeats_are_skipped(monkeypatch, tmp_path):
+    """Demotion must not destroy the evidence that grades the choice.
+
+    Without this, a superseded attempt would have no rendered comparison at
+    all — disabled as official_vs_local, skipped as local_repeat — so
+    eval-audit-lint-store could no longer tell a benign duplicate from a
+    material one.
+    """
+    monkeypatch.setenv("EVAL_AUDIT_SKIP_LOCAL_REPEAT", "1")
+    local_index, official_index = _setup_index_inputs(tmp_path)
+    artifact = core_report_planner.build_planning_artifact(
+        local_index_fpath=local_index,
+        official_index_fpath=official_index,
+        experiment_name="exp-a",
+        run_entry="boolq:model=meta/llama-3-8b",
+    )
+
+    repeats = _comparisons_by_kind(artifact["packets"][0], "local_repeat")
+    assert len(repeats) == 1
+    assert "job-b" in repeats[0]["comparison_id"]
+    assert repeats[0]["notes"] == "superseded local attempt, retyped from official_vs_local"
+
+
+def test_skip_flag_still_suppresses_repeats_that_were_not_demoted(monkeypatch, tmp_path):
+    """The exception is scoped to demoted attempts, not a blanket override.
+
+    With no official component nothing is demoted, so the skip flag applies
+    exactly as before and no repeat is planned.
+    """
+    monkeypatch.setenv("EVAL_AUDIT_SKIP_LOCAL_REPEAT", "1")
+    local_index, official_index = _setup_index_inputs(tmp_path)
+    _write_csv(official_index, [])
+    artifact = core_report_planner.build_planning_artifact(
+        local_index_fpath=local_index,
+        official_index_fpath=official_index,
+        experiment_name="exp-a",
+        run_entry="boolq:model=meta/llama-3-8b",
+    )
+
+    packet = artifact["packets"][0]
+    assert _comparisons_by_kind(packet, "local_repeat") == []
+    assert {c["disabled_reason"] for c in _comparisons_by_kind(packet, "official_vs_local")} == {
+        "missing_official_component"
+    }

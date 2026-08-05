@@ -268,7 +268,10 @@ def test_multi_run_core_report_renders_only_declared_planner_comparisons(tmp_pat
     ]
     assert len(local_components) == 2
     assert {comparison["comparison_kind"] for comparison in comparisons_manifest["comparisons"]} == {"official_vs_local", "local_repeat"}
-    assert len(pair_sample_calls) == 3
+    # Two enabled comparisons, not three: the superseded local attempt's
+    # official_vs_local is planned but disabled, and the renderer skips
+    # disabled comparisons. The attempt survives as the local_repeat.
+    assert len(pair_sample_calls) == 2
     assert {call["label"].split("::", 1)[0] for call in pair_sample_calls} == {"official_vs_local", "local_repeat"}
     assert len(core_metric_calls) == 1
 

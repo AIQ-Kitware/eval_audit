@@ -99,34 +99,44 @@ def test_index_csvs_written(demo_output: Path) -> None:
 
 
 def test_planner_packet_and_pair_counts(demo_output: Path) -> None:
-    """3 models × 3 benchmarks => 9 packets; one packet has +2 extra pairs."""
+    """3 models × 3 benchmarks => 9 packets; one packet has +1 extra pair."""
     packet_dirs = _all_packet_dirs(demo_output)
     assert len(packet_dirs) == 9
 
     total_pairs = 0
     for packet_dir in packet_dirs:
         total_pairs += len(_load_pairs(packet_dir))
-    # 9 baseline official_vs_local + 1 extra official_vs_local (repeat) +
-    # 1 local_repeat (primary vs repeat).
-    assert total_pairs == 11
+    # 9 official_vs_local (one per packet, against the canonical local
+    # attempt) + 1 local_repeat (canonical vs superseded). The superseded
+    # attempt's own official_vs_local is planned but disabled, so the
+    # renderer never emits it as a pair.
+    assert total_pairs == 10
 
 
-def test_arc_easy_m1_small_has_local_repeat(demo_output: Path) -> None:
-    """The multi-attempt packet must contain both official_vs_local pairs and
-    a local_repeat pair — that's the whole point of having two locals here.
-    Since D-1 the two attempts live under one experiment (same model dir),
-    so the pair lands in a normal packet, not a cross-experiment orphan.
+def test_arc_easy_m1_small_retypes_its_second_attempt_as_a_repeat(demo_output: Path) -> None:
+    """A packet answers "how well did this row reproduce?" exactly once.
+
+    Two locals here means one canonical official_vs_local plus a local_repeat
+    carrying the superseded attempt. Emitting the second attempt as a rival
+    official_vs_local is what let reductions pool a superseded run into the
+    canonical one (docs/helm-gotchas.md §G14). Since D-1 the two attempts live
+    under one experiment (same model dir), so the pair lands in a normal
+    packet, not a cross-experiment orphan.
     """
     packet_dir = _packet_dir(demo_output, "arc_easy", "m1-small")
     pairs = _load_pairs(packet_dir)
     kinds = sorted(p.get("comparison_kind") for p in pairs)
-    assert kinds == ["local_repeat", "official_vs_local", "official_vs_local"]
+    assert kinds == ["local_repeat", "official_vs_local"]
+
+    comparisons = json.loads((packet_dir / "core_metric_report.json").read_text())["comparisons"]
+    disabled = [c for c in comparisons if not c.get("enabled")]
+    assert [c.get("disabled_reason") for c in disabled] == ["superseded_local_attempt"]
 
 
 def test_arc_easy_perfect_agreement(demo_output: Path) -> None:
     """The arc_easy fixture is engineered for perfect agreement on every model.
 
-    All four arc_easy pairs (3 baseline + 1 repeat + 1 local_repeat) should
+    All arc_easy pairs (3 official_vs_local + 1 local_repeat) should
     show ``agree_ratio=1.0`` at ``abs_tol=0`` at both run-level and instance-level.
     """
     for model in ["m1-small", "m2-medium", "m3-large"]:

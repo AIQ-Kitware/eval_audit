@@ -4898,3 +4898,88 @@ re-render already owed — after which C's fallback rarely fires. Then **E**
 execution hygiene: a rerun gets its own experiment name; must not be applied
 retroactively, since stored manifests record absolute `run_path`s). Rendered
 store artifacts still show the pooled instance-agreement values until re-rendered.
+
+## 2026-08-05 11:32:10 -0400
+
+**Model/config.** claude-opus-5[1m], Claude Code CLI (VS Code extension), repo
+`eval_audit` on `main`. Same session as the entry above.
+
+**User intent.** Implement option **A** — remove the multi-attempt ambiguity at
+its source in the planner — after C (`be8f70a9`) had made the reductions
+deterministic downstream.
+
+**The change.** `_packet_payload` built two comparison families off the same
+`local_components` list and treated it two ways: `official_vs_local` looped over
+*every* attempt with `enabled=True`, while `local_repeat` used
+`local_components[0]` as the reference and `[1:]` as repeats. The planner already
+had a concept of the canonical attempt; it just didn't apply it to the comparison
+that produces the reported number. Now the first loop mirrors the second: enabled
+against `local_reference` only, everything else
+`enabled=False, disabled_reason="superseded_local_attempt"`.
+
+**The thing that made this non-trivial.** I had described A as "the extra attempt
+isn't discarded, it's retyped as the `local_repeat` it already was". Checking
+that claim before writing the code showed it was false for every store we own:
+`e2e-phi2` (7 attempts), `olmo-models` (65 packets), `olmo-models-combined` (71)
+all have **zero** `local_repeat` comparisons — `EVAL_AUDIT_SKIP_LOCAL_REPEAT` was
+set for all those builds. So plain demotion would have left each superseded
+attempt with no rendered comparison at all, disabled above and skipped below, and
+the re-render that resolves the ambiguity would have destroyed the evidence that
+lets the lint grade it.
+
+The fix is scoped rather than blanket: attempts *this packet demoted* always get
+their repeat, skip flag or not; attempts the packet never demoted still obey the
+flag. The cost argument is what makes it defensible — those attempts each used to
+render an enabled `official_vs_local` diff, so the packet renders the same number
+of comparisons either way. A blanket override would have re-introduced the
+quadratic blowup the flag exists to prevent (Pythia-6.9B mmlu: 15 locals).
+
+**Keeping the lint honest across the shape change.** After A a packet holds one
+`official_vs_local`, so `eval-audit-lint-store` counting peers would have reported
+every re-rendered packet clean — A would have laundered exactly what D was built
+to surface. The lint now recognizes two shapes: `competing_attempts` (graded on
+the spread across enabled peers) and `demoted_attempts` (graded on `1 −` the
+`local_repeat` agreement — if two attempts produce identical per-instance
+metrics, picking either gives the same official comparison). A demotion whose
+repeat is missing reports `UNSCORED` rather than passing quietly, because the
+demotion is only safe *because* the repeat survives.
+
+**Test fallout, all of it legitimate.** Four existing tests encoded the old
+shape and were updated rather than worked around: the eee-only demo's pair count
+(11 → 10) and its `arc_easy/m1-small` kinds; `rebuild_core_report`'s
+`pair_sample_calls` (3 → 2, since the renderer skips disabled comparisons); and
+the multi-track ambiguity test, whose `all(enabled)` assertion I rewrote as
+"exactly one enabled, and any disabled one is disabled for supersession, not
+official ambiguity" — which is what that test actually meant. The two phase-3
+golden baselines drifted by exactly four added `"manifest_timestamp": null`
+lines (from C's planner serialization); diff reviewed, recaptured via
+`capture_baseline.py`. Full suite green: **890 passed** with `--run-slow`.
+
+Worth recording that the default `pytest tests/` run *skips*
+`test_plan_core_report_packets.py` and the phase-3 baselines entirely — they are
+module-level `slow`. My earlier 812-pass run for C never exercised the planner
+packet tests. Any planner change needs `--run-slow` to be believed.
+
+**Deliberately not done.** `e2e-phi2` (first pass) must not be re-rendered under
+this planner. Its seven "attempts" are different configurations — vLLM,
+container, HF, the temperature-1 control — sharing a packet because they ran into
+one experiment under one run entry. Demotion there is lossless but wrongly typed:
+those arms are not repeats of each other. They need separate experiment names
+first, which is option F. Noted in §G14.
+
+**Design insights.** (1) Verify the premise of a design before implementing it —
+"the data is already retained elsewhere" was the load-bearing claim in my own
+explanation of A and it was false in every store we own. (2) When a fix changes
+the shape an auditor reads, the auditor has to learn the new shape in the same
+commit, or the fix reads as the problem disappearing. (3) A compute-saving flag
+and a correctness-preserving emission are different concerns wearing the same
+name; scope the exception to the attempts the correctness argument covers rather
+than overriding the flag.
+
+**Next steps.** Re-render `olmo-models-combined` and `olmo-models` under the new
+planner (the owed re-render; will move the six `olmo-7b` instance-agreement cells
+and collapse 137 ambiguous packets to graded demotions). Then **E** (publish run
+id + hash beside every cited number) and **F** (forward-only execution hygiene —
+a rerun gets its own experiment name; must not be applied retroactively, since
+stored manifests record absolute `run_path`s). F is now also the precondition for
+touching `e2e-phi2`.

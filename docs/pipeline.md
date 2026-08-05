@@ -214,16 +214,21 @@ deprecated no-op — canonicalization is always on.)
 > **A packet may hold more than one local attempt.** When an experiment contains
 > several local runs for the same official row (a pre-fix attempt and a rerun, a
 > smoke and a full, two suites covering the same subject), the planner keeps all
-> of them and emits `local_repeat` comparisons beside the `official_vs_local`
-> one. Any reduction over `pairs[]` must therefore **select** an attempt, not
-> average them — averaging a collapsed run against a working one halves the cell.
-> The reporting layer does this through one shared rule
-> ([`eval_audit/reports/attempt_selection.py`](../eval_audit/reports/attempt_selection.py)):
-> newest attempt by `manifest_timestamp` where one survives, pair order
-> otherwise, with the rule recorded beside the number. Run
-> `eval-audit-lint-store <store>` to find packets where that choice is worth
-> something. See [`docs/helm-gotchas.md`](helm-gotchas.md) §G14 for the grading,
-> the full-tree scan, and the three times this has bitten.
+> of them but enables **one** `official_vs_local` — against the canonical
+> attempt, newest by `manifest_timestamp`. The others are emitted
+> `enabled=False, disabled_reason="superseded_local_attempt"` and retyped as
+> `local_repeat`, which is the question they actually answer. A packet therefore
+> reports exactly one answer to "how well did this row reproduce?".
+>
+> Reductions over `pairs[]` must **select** an attempt regardless, never average
+> — averaging a collapsed run against a working one halves the cell — and the
+> reporting layer does this through one shared rule
+> ([`eval_audit/reports/attempt_selection.py`](../eval_audit/reports/attempt_selection.py)),
+> recording which rule it used beside the number. Stores built before
+> 2026-08-05 still carry the old shape until re-rendered. Run
+> `eval-audit-lint-store <store>` to find packets where the choice is worth
+> something; it grades both shapes. See [`docs/helm-gotchas.md`](helm-gotchas.md)
+> §G14 for the grading, the full-tree scan, and the three times this has bitten.
 
 **What it does:** for each packet, loads both sides via the normalized
 loader ([`eval_audit/normalized/loaders.py`](../eval_audit/normalized/loaders.py)),

@@ -19,11 +19,38 @@ def _pair(local_id: str, agreement: float | None, kind: str = "official_vs_local
     }
 
 
-def _write_packet(root: Path, slug: str, pairs: list[dict]) -> Path:
+def _repeat_pair(canonical_id: str, local_id: str, agreement: float | None) -> dict:
+    instance_level = {}
+    if agreement is not None:
+        instance_level = {"agreement_vs_abs_tol": [{"abs_tol": 0.0, "agree_ratio": agreement}]}
+    return {
+        "comparison_kind": "local_repeat",
+        "reference_component_id": canonical_id,
+        "component_ids": [canonical_id, local_id],
+        "instance_level": instance_level,
+    }
+
+
+def _demoted_comparison(local_id: str) -> dict:
+    return {
+        "comparison_kind": "official_vs_local",
+        "enabled": False,
+        "disabled_reason": "superseded_local_attempt",
+        "reference_component_id": "official::mmlu::v1.1.0::mmlu:subject=anatomy",
+        "component_ids": ["official::mmlu::v1.1.0::mmlu:subject=anatomy", local_id],
+    }
+
+
+def _write_packet(
+    root: Path,
+    slug: str,
+    pairs: list[dict],
+    comparisons: list[dict] | None = None,
+) -> Path:
     dpath = root / "analysis" / "core-reports" / slug
     dpath.mkdir(parents=True, exist_ok=True)
     fpath = dpath / "core_metric_report.json"
-    fpath.write_text(json.dumps({"pairs": pairs}))
+    fpath.write_text(json.dumps({"pairs": pairs, "comparisons": comparisons or []}))
     return fpath
 
 
@@ -117,3 +144,66 @@ def test_summary_counts_every_packet_scanned(tmp_path: Path) -> None:
     assert result["n_packets"] == 2
     assert result["n_ambiguous"] == 1
     assert result["by_severity"] == {"MATERIAL": 1}
+
+
+# --- post-demotion packet shape (planner marks superseded attempts disabled) ---
+
+
+def test_demoted_attempt_that_disagrees_with_the_canonical_is_material(tmp_path: Path) -> None:
+    """A re-render must not launder a material choice into a clean packet.
+
+    After demotion the packet holds one official_vs_local, so counting peers
+    would report it clean. The choice is still graded — on how far the
+    superseded attempt sits from the canonical one.
+    """
+    fpath = _write_packet(
+        tmp_path,
+        "demoted-disagreeing",
+        [_pair("local::exp::rerun", 0.99), _repeat_pair("local::exp::rerun", "local::exp::collapsed", 0.10)],
+        comparisons=[_demoted_comparison("local::exp::collapsed")],
+    )
+    finding = audit_packet(fpath, tol=1e-6)
+    assert finding is not None
+    assert finding["shape"] == "demoted_attempts"
+    assert finding["severity"] == "MATERIAL"
+    assert finding["n_attempts"] == 2
+    assert finding["spread"] == 0.90
+    assert finding["selected_agreement_at_zero"] == 0.99
+
+
+def test_demoted_attempt_identical_to_the_canonical_is_benign(tmp_path: Path) -> None:
+    """Two attempts with identical per-instance metrics make the choice free."""
+    fpath = _write_packet(
+        tmp_path,
+        "demoted-agreeing",
+        [_pair("local::exp::rerun", 0.99), _repeat_pair("local::exp::rerun", "local::exp::other", 1.0)],
+        comparisons=[_demoted_comparison("local::exp::other")],
+    )
+    finding = audit_packet(fpath, tol=1e-6)
+    assert finding is not None
+    assert finding["severity"] == "BENIGN"
+    assert finding["spread"] == 0.0
+
+
+def test_demoted_attempt_without_its_repeat_is_unscored_not_silently_clean(tmp_path: Path) -> None:
+    """The demotion is only safe because the repeat survives; say so when it doesn't."""
+    fpath = _write_packet(
+        tmp_path,
+        "demoted-no-repeat",
+        [_pair("local::exp::rerun", 0.99)],
+        comparisons=[_demoted_comparison("local::exp::gone")],
+    )
+    finding = audit_packet(fpath, tol=1e-6)
+    assert finding is not None
+    assert finding["severity"] == "UNSCORED"
+    assert finding["spread"] is None
+
+
+def test_ordinary_repeat_without_a_demotion_is_not_a_finding(tmp_path: Path) -> None:
+    """A plain replica measurement is not a choice anyone had to make."""
+    fpath = _write_packet(
+        tmp_path,
+        "plain-repeat",
+        [_pair("local::exp::a", 0.99), _repeat_pair("local::exp::a", "local::exp::b", 0.42)],
+    )
+    assert audit_packet(fpath, tol=1e-6) is None

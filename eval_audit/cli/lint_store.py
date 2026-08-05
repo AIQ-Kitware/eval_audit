@@ -3,29 +3,43 @@
 A packet pairs one official row with the local run(s) that claim to reproduce it.
 An experiment legitimately accumulates **more than one** local attempt for the
 same official row — a pre-fix attempt and its rerun, a smoke and a full, two
-suites covering one subject. The planner emits one ``official_vs_local``
-comparison per local attempt, all ``enabled``, all peers
-(``eval_audit/planning/core_report_planner.py``), so such a packet holds *n*
-answers to "how well did this row reproduce?" and nothing in the artifact marks
-which one is *the* answer.
+suites covering one subject. Whichever way the packet records that, one attempt
+ends up standing for the packet's number, and this lint asks what that choice was
+worth.
 
-Any reduction over those peers must **select**, never average: for
+Any reduction over the attempts must **select**, never average: for
 ``allenai/olmo-7b`` the second attempt is the tokenizer collapse (completions are
 prompt-independent boilerplate, ``exact_match`` 0.000), so averaging halves the
 cell exactly — 0.295/**0.144** averaged against 0.295/**0.287** selected, from the
 same artifacts. See ``docs/helm-gotchas.md`` §G14.
 
-This lint is read-only. It reports, per packet:
+Packets come in two shapes and the lint grades both:
 
-* ``n_attempts``     — enabled ``official_vs_local`` comparisons;
-* ``spread``         — max minus min zero-tolerance agreement across those
-                       attempts, i.e. how much the unrecorded choice is worth;
-* a severity, because ambiguity is only dangerous when the attempts disagree:
+``competing_attempts``
+    Pre-2026-08 planning: every attempt is an enabled ``official_vs_local``
+    peer, so the packet holds *n* rival answers and nothing marks which is
+    *the* answer. Graded on the **spread** in zero-tolerance agreement across
+    those peers.
+
+``demoted_attempts``
+    Current planning: only the canonical attempt keeps its
+    ``official_vs_local``; the rest are disabled
+    ``superseded_local_attempt`` and retyped as ``local_repeat``. The rival
+    answers no longer exist to be compared, so the choice is graded on the
+    **local-vs-local disagreement** the repeat measures — if two attempts
+    produce identical per-instance metrics, picking either gives the same
+    official comparison.
+
+Either way the packet reports ``n_attempts``, a ``spread`` (how much the choice
+is worth, in agreement units), and a severity, because multiplicity is only
+dangerous when the attempts disagree:
 
   ``MATERIAL``  spread > ``--tol``  — a number read from this packet depends on
                 which attempt was picked. This is what fails the lint.
   ``BENIGN``    spread <= ``--tol`` — several attempts, but they agree, so any
                 selection gives the same answer. Reported, not fatal.
+  ``UNSCORED``  the attempts exist but nothing scored them, so the choice
+                cannot be graded either way.
 
 Usage::
 
@@ -84,12 +98,55 @@ def audit_packet(report_fpath: Path, tol: float) -> dict[str, Any] | None:
         }
 
     attempts = official_vs_local_attempts(report)
-    if len(attempts) <= 1:
+    demoted = _demoted_comparisons(report)
+    if len(attempts) <= 1 and not demoted:
         return None
 
-    # The rule the reporting layer would apply to this packet, so the lint and
-    # the rendered number name the same attempt rather than merely agreeing
-    # that a choice exists.
+    if len(attempts) > 1:
+        shape, scored, spread = _grade_competing_attempts(report, attempts)
+    else:
+        shape, scored, spread = _grade_demoted_attempts(report, attempts, demoted)
+
+    if spread is None:
+        severity = "UNSCORED"
+    elif spread > tol:
+        severity = "MATERIAL"
+    else:
+        severity = "BENIGN"
+
+    # The rule the reporting layer would apply, so the lint and the rendered
+    # number name the same attempt rather than merely agreeing a choice exists.
+    selection = select_official_vs_local(report)
+    return {
+        "packet": report_fpath.parent.name,
+        "report_fpath": str(report_fpath),
+        "severity": severity,
+        "shape": shape,
+        "n_attempts": len(scored),
+        "spread": spread,
+        "selection_rule": selection.rule,
+        "selected_comparison_id": selection.selected_comparison_id,
+        "selected_agreement_at_zero": next(
+            (row["agreement_at_zero"] for row in scored if row["selected"]), None
+        ),
+        "attempts": scored,
+    }
+
+
+def _demoted_comparisons(report: dict[str, Any]) -> list[dict[str, Any]]:
+    """Planned-but-disabled attempts the planner superseded (post-2026-08 shape)."""
+    return [
+        comparison
+        for comparison in report.get("comparisons") or []
+        if comparison.get("disabled_reason") == "superseded_local_attempt"
+    ]
+
+
+def _grade_competing_attempts(
+    report: dict[str, Any],
+    attempts: list[dict[str, Any]],
+) -> tuple[str, list[dict[str, Any]], float | None]:
+    """Grade rival enabled peers by the spread in their agreement with the official."""
     selection = select_official_vs_local(report)
     scored = [
         {
@@ -103,27 +160,55 @@ def audit_packet(report_fpath: Path, tol: float) -> dict[str, Any] | None:
     ]
     values = [row["agreement_at_zero"] for row in scored if row["agreement_at_zero"] is not None]
     spread = (max(values) - min(values)) if len(values) > 1 else None
+    return "competing_attempts", scored, spread
 
-    if spread is None:
-        severity = "UNSCORED"
-    elif spread > tol:
-        severity = "MATERIAL"
-    else:
-        severity = "BENIGN"
 
-    return {
-        "packet": report_fpath.parent.name,
-        "report_fpath": str(report_fpath),
-        "severity": severity,
-        "n_attempts": len(attempts),
-        "spread": spread,
-        "selection_rule": selection.rule,
-        "selected_comparison_id": selection.selected_comparison_id,
-        "selected_agreement_at_zero": next(
-            (row["agreement_at_zero"] for row in scored if row["selected"]), None
-        ),
-        "attempts": scored,
-    }
+def _grade_demoted_attempts(
+    report: dict[str, Any],
+    attempts: list[dict[str, Any]],
+    demoted: list[dict[str, Any]],
+) -> tuple[str, list[dict[str, Any]], float | None]:
+    """Grade a superseded attempt by how far its repeat sits from the canonical one.
+
+    The rival ``official_vs_local`` no longer exists to be compared, so the
+    question becomes local-vs-local: two attempts producing identical
+    per-instance metrics make the choice free, however they were ranked.
+    """
+    repeat_agreement: dict[str, float | None] = {}
+    for pair in report.get("pairs") or []:
+        if (pair.get("comparison_kind") or "").strip() != "local_repeat":
+            continue
+        component_id = local_component_id(pair)
+        if component_id:
+            repeat_agreement[component_id] = _zero_tol_agreement(pair)
+
+    scored = [
+        {
+            "local_component_id": local_component_id(pair),
+            "agreement_at_zero": _zero_tol_agreement(pair),
+            "selected": True,
+        }
+        for pair in attempts
+    ]
+    distances: list[float] = []
+    for comparison in demoted:
+        component_id = local_component_id(comparison)
+        agreement = repeat_agreement.get(component_id or "")
+        scored.append(
+            {
+                "local_component_id": component_id,
+                # The superseded attempt was never diffed against the official,
+                # so what is reported here is its agreement with the canonical
+                # local attempt — a different quantity, hence the explicit key.
+                "agreement_at_zero": None,
+                "repeat_agreement_at_zero": agreement,
+                "selected": False,
+            }
+        )
+        if agreement is not None:
+            distances.append(1.0 - agreement)
+    spread = max(distances) if distances else None
+    return "demoted_attempts", scored, spread
 
 
 def audit_paths(roots: list[Path], tol: float) -> dict[str, Any]:
@@ -163,21 +248,29 @@ def _render(result: dict[str, Any]) -> str:
     for finding in material:
         lines.append(
             f"MATERIAL  spread={finding['spread']:.4f}  attempts={finding['n_attempts']}  "
-            f"rule={finding.get('selection_rule')}  {finding['packet'][:72]}"
+            f"shape={finding.get('shape')}  rule={finding.get('selection_rule')}  "
+            f"{finding['packet'][:72]}"
         )
         for attempt in finding["attempts"]:
-            agreement = attempt["agreement_at_zero"]
-            shown = f"{agreement:.4f}" if agreement is not None else "  n/a "
             marker = "->" if attempt.get("selected") else "  "
+            if attempt["agreement_at_zero"] is not None:
+                measure = f"agree@0={attempt['agreement_at_zero']:.4f}"
+            elif attempt.get("repeat_agreement_at_zero") is not None:
+                # Superseded attempts were never diffed against the official;
+                # what is known is how far they sit from the canonical local.
+                measure = f"vs-canon={attempt['repeat_agreement_at_zero']:.4f}"
+            else:
+                measure = "agree@0=  n/a "
             lines.append(
-                f"         {marker} agree@0={shown}  {str(attempt['local_component_id'])[-58:]}"
+                f"         {marker} {measure:<20s}  {str(attempt['local_component_id'])[-58:]}"
             )
     other = [f for f in result["findings"] if f["severity"] != "MATERIAL"]
     if other:
         lines.append("")
         for finding in other:
             lines.append(
-                f"{finding['severity']:<10} attempts={finding['n_attempts']}  {finding['packet'][:72]}"
+                f"{finding['severity']:<10} attempts={finding['n_attempts']}  "
+                f"shape={finding.get('shape')}  {finding['packet'][:72]}"
             )
     return "\n".join(lines)
 

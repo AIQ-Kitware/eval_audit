@@ -864,6 +864,7 @@ def _packet_payload(
         *_comparability_warning_lines(packet_comparability_facts),
     ]
     comparisons: list[dict[str, Any]] = []
+    demoted_local_ids: set[str] = set()
     if local_components:
         if not official_components:
             for local_component in local_components:
@@ -880,15 +881,31 @@ def _packet_payload(
                 )
         elif len(official_components) == 1:
             official_reference = official_components[0]
+            # Only the canonical local attempt answers "how well did this row
+            # reproduce?". Emitting every attempt as an enabled peer made a
+            # packet carry n answers with nothing marking which was *the*
+            # answer, so any reduction over pairs[] had to guess — and the
+            # pooling reductions averaged a collapsed run into a good one,
+            # halving the cell (docs/helm-gotchas.md §G14). The local_repeat
+            # block below already treats local_components[0] as the reference;
+            # this loop now agrees with it.
             for local_component in local_components:
+                is_reference = local_component is local_reference
+                if not is_reference:
+                    demoted_local_ids.add(local_component.component_id)
                 comparisons.append(
                     _comparison_payload(
                         comparison_id=f"official_vs_local::{official_reference.component_id}::{local_component.component_id}",
                         comparison_kind="official_vs_local",
                         components=[official_reference, local_component],
                         reference_component_id=official_reference.component_id,
-                        enabled=True,
-                        notes="planner first-pass official-vs-local comparison",
+                        enabled=is_reference,
+                        disabled_reason=None if is_reference else "superseded_local_attempt",
+                        notes=(
+                            "planner first-pass official-vs-local comparison"
+                            if is_reference
+                            else "superseded by a newer local attempt; retyped as local_repeat"
+                        ),
                     )
                 )
         else:
@@ -915,11 +932,26 @@ def _packet_payload(
     # local_repeat pairs per cell). The official_vs_local comparisons
     # are unaffected; reviewers can re-enable replicas by unsetting the
     # env var.
+    #
+    # EXCEPTION: attempts this packet just demoted out of official_vs_local
+    # always get their repeat, skip flag or not. Otherwise a superseded
+    # attempt would have no rendered comparison at all — disabled above,
+    # skipped here — and the evidence that lets eval-audit-lint-store grade
+    # the choice would be destroyed by the very re-render that resolves it.
+    # This is cost-neutral against the pre-demotion behavior: those same
+    # attempts each used to render an enabled official_vs_local diff, so the
+    # packet renders the same number of comparisons either way.
     _skip_local_repeat = os.environ.get(
         "EVAL_AUDIT_SKIP_LOCAL_REPEAT", ""
     ).strip().lower() in {"1", "true", "yes"}
-    if not _skip_local_repeat and local_reference is not None:
-        for repeat_component in local_components[1:]:
+    if local_reference is not None:
+        repeat_targets = [
+            component
+            for component in local_components[1:]
+            if not _skip_local_repeat or component.component_id in demoted_local_ids
+        ]
+        for repeat_component in repeat_targets:
+            demoted = repeat_component.component_id in demoted_local_ids
             comparisons.append(
                 _comparison_payload(
                     comparison_id=f"local_repeat::{local_reference.component_id}::{repeat_component.component_id}",
@@ -927,7 +959,11 @@ def _packet_payload(
                     components=[local_reference, repeat_component],
                     reference_component_id=local_reference.component_id,
                     enabled=True,
-                    notes="planner first-pass local repeat comparison",
+                    notes=(
+                        "superseded local attempt, retyped from official_vs_local"
+                        if demoted
+                        else "planner first-pass local repeat comparison"
+                    ),
                 )
             )
     # Canonicalization debug plumbing removed: do not attach internal
