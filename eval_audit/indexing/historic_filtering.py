@@ -74,8 +74,6 @@ def gather_runs(
 
                 run = HelmRun(run_dir)
 
-                # TODO: if not run.exists():
-                #     ...
                 # Only include if it looks "complete enough"
                 if not is_complete_run_dir(run_dir, require_per_instance_stats=require_per_instance_stats):
                     incomplete_rows.append(build_incomplete_inventory_row(run_dir))

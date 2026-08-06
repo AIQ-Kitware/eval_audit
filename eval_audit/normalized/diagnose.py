@@ -5,10 +5,10 @@ pure module-level function (Phase 3 sub-stage 4.2 of
 docs/planning/phase3-comparison-core-unification.md). The original is
 already a pure function of its keyword inputs — it never reads
 ``self`` — so this port preserves the label vocabulary and reason
-ordering byte-for-byte; ``tests/test_phase3_diagnose_equivalence.py``
-asserts equality against the HELM implementation across a
-branch-covering input battery. ``HelmRunDiff`` keeps its own copy
-until sub-stage 4.6 points the HELM path at the unified core.
+ordering byte-for-byte. Since sub-stage 4.6 landed this is the single
+implementation: ``HelmRunDiff._diagnose_repro`` delegates here, and
+``tests/test_phase3_diagnose_equivalence.py`` pins the delegation
+across a branch-covering input battery.
 
 New here (R2, design doc §3.5): substitution awareness. A comparison
 intent may declare expected recipe substitutions (e.g. ``judge`` for

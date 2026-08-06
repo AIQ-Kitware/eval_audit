@@ -10,10 +10,10 @@ the row-math helpers relocated here from
 :mod:`eval_audit.metrics_taxonomy` judge-dependence split for the
 open-judge extension.
 
-This sub-stage is **additive**: nothing routes through NormalizedDiff
-yet. Sub-stage 4.6 points the HELM renderer at it (keeping the
-HelmRunDiff run_spec *semantic* diff alongside, per design §3.2); the
-EEE renderer adopts the facts-grade diagnosis at the same time.
+Both render paths route through NormalizedDiff (sub-stage 4.6):
+``reports/pair_report.py``, ``reports/core_metric_curves.py``, and
+``reports/pair_samples.py`` all construct it. The HelmRunDiff run_spec
+*semantic* diff is kept alongside for the HELM path, per design §3.2.
 
 Facts-grade diagnosis
 ---------------------

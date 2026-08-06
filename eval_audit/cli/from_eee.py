@@ -54,23 +54,14 @@ from eval_audit.infra.profiling import profile
 
 
 
-# ---------------------------------------------------------------------------
-# EEE artifact discovery + index-row synthesis moved to
-# eval_audit.normalized.eee_sources (Phase 3 sub-stage 4.4). The
-# underscore aliases keep this module's historical import surface
-# working (compare_pair_eee and virtual.compose imported from here
-# before the move, and docs reference from_eee.detect_helm_sidecars).
-# ---------------------------------------------------------------------------
-
-from eval_audit.normalized.eee_sources import (  # noqa: F401
-    build_local_index_row as _build_local_index_row,
-    build_logical_run_key as _build_logical_run_key,
-    build_official_index_row as _build_official_index_row,
-    detect_helm_sidecars,
-    discover_eee_artifacts as _discover_eee_artifacts,
-    extract_artifact_meta as _extract_artifact_meta,
-    stable_short_hash as _stable_short_hash,
-    write_index_csv as _write_index_csv,
+# EEE artifact discovery + index-row synthesis live in
+# eval_audit.normalized.eee_sources (Phase 3 sub-stage 4.4).
+from eval_audit.normalized.eee_sources import (
+    build_local_index_row,
+    build_official_index_row,
+    discover_eee_artifacts,
+    extract_artifact_meta,
+    write_index_csv,
 )
 
 
@@ -229,8 +220,8 @@ def _build_indexes(
     official_root = eee_root / "official"
     local_root = eee_root / "local"
 
-    official_artifacts = _discover_eee_artifacts(official_root)
-    local_artifacts = _discover_eee_artifacts(local_root)
+    official_artifacts = discover_eee_artifacts(official_root)
+    local_artifacts = discover_eee_artifacts(local_root)
 
     if not official_artifacts and not local_artifacts:
         raise SystemExit(
@@ -240,22 +231,22 @@ def _build_indexes(
         )
 
     official_rows = [
-        _build_official_index_row(_extract_artifact_meta(row, root=official_root))
+        build_official_index_row(extract_artifact_meta(row, root=official_root))
         for row in official_artifacts
     ]
     local_rows = [
-        _build_local_index_row(
-            _extract_artifact_meta(row, root=local_root),
+        build_local_index_row(
+            extract_artifact_meta(row, root=local_root),
             experiment_override=experiment_name,
         )
         for row in local_artifacts
     ]
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    official_index_fpath = _write_index_csv(
+    official_index_fpath = write_index_csv(
         official_rows, out_dir / "official_public_index.csv"
     )
-    local_index_fpath = _write_index_csv(
+    local_index_fpath = write_index_csv(
         local_rows, out_dir / "audit_results_index.csv"
     )
     return local_index_fpath, official_index_fpath, local_rows, official_rows

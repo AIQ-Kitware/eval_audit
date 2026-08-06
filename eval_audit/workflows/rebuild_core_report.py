@@ -34,12 +34,9 @@ from eval_audit.infra.profiling import profile
 
 
 # P0-2 / R-6 / D1: single source of truth for index resolution + loading.
-# Re-exported here so existing `from ...rebuild_core_report import
-# latest_index_csv` call sites (analyze_experiment) keep working.
-from eval_audit.infra.index_io import (  # noqa: F401
+from eval_audit.infra.index_io import (
     latest_index_csv,
     latest_official_index_csv,
-    load_rows,
     resolve_index_fpath,
 )
 

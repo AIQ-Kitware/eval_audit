@@ -14,7 +14,9 @@ so they are loader-format-agnostic.
 
 Why this exists
 --------------
-``HelmRun`` (in :mod:`magnet.backends.helm.helm_outputs`) is intentionally a *reader*.
+``HelmRun`` (in :mod:`eval_audit.compat.helm_outputs`; magnet's
+``magnet.backends.helm.helm_outputs`` is the equivalent upstream reader)
+is intentionally a *reader*.
 This module defines :class:`HelmRunAnalysis`, which *wraps* a ``HelmRun`` and
 adds cached analyses / indices that make higher-level tasks (e.g. run diffs)
 much easier to write.
@@ -57,7 +59,7 @@ from eval_audit.helm.analysis_report import (  # noqa: F401
 
 
 class HelmRunAnalysis(ub.NiceRepr):
-    """Wrap a :class:`~magnet.helm_outputs.HelmRun` with cached analyses.
+    """Wrap a ``HelmRun`` reader with cached analyses.
 
     Parameters
     ----------
@@ -116,8 +118,8 @@ class HelmRunAnalysis(ub.NiceRepr):
     # --- Summaries -----------------------------------------------------
 
     def summary_dict(self, *args, **kwargs) -> dict[str, Any]:
-        # Hack for now while developing. TODO: move the implementation here and
-        # fix the signature.
+        # Implementation deliberately lives in helm.analysis_report (see the
+        # module-header note); this module stays a thin legacy surface.
         return summary_dict(self, *args, **kwargs)
 
     def summary(self, *args, **kwargs):

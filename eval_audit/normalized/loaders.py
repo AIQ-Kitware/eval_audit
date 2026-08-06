@@ -4,7 +4,7 @@ Loaders convert artifacts on disk into :class:`NormalizedRun` instances.
 They are registered against an :class:`ArtifactFormat`, and dispatched by
 :func:`load_run`.
 
-Two loaders ship in Stage 2:
+Two loaders are registered:
 
 * :class:`EeeArtifactLoader` reads converted EEE artifact directories
   produced by ``every_eval_ever convert helm`` (or another converter that

@@ -24,9 +24,12 @@ where those facts come from, in priority order
    ``comparability_unknown:*`` warnings. That collapse is the honest
    "recipe unverifiable" signal and must not be defaulted away.
 
-Sub-stage 4.1 is additive: nothing is wired into the planner yet; the
-planner keeps calling ``extract_run_spec_fields`` directly until
-sub-stage 4.2/4.3 route diagnosis through this resolver.
+Wiring status: the planner still derives comparability facts by calling
+``extract_run_spec_fields`` directly (``planning/core_report_planner.py``);
+:func:`resolve_recipe_facts` is exercised by the native-block read path
+and by ``tests/test_recipe_facts.py``, but is not yet the planner's
+entry point. Routing the planner through this resolver remains open
+follow-up work.
 """
 
 from __future__ import annotations

@@ -104,7 +104,7 @@ def _emit_bar_chart(
 ) -> dict[str, str | None]:
     if not rows:
         return {'html': None, 'png': None, 'plotly_error': None}
-    del report_dpath, stamp  # vestigial; kept in signature for backwards-compat
+    del report_dpath, stamp  # unused; kept so every chart emitter shares one calling convention
     html_fpath = interactive_dpath / f'{stem}.html'
     png_fpath = static_dpath / f'{stem}.png'
     html_out = None
@@ -160,7 +160,7 @@ def _emit_stacked_bar_chart(
 ) -> dict[str, str | None]:
     if not rows:
         return {'html': None, 'png': None, 'plotly_error': None}
-    del report_dpath, stamp  # vestigial; kept in signature for backwards-compat
+    del report_dpath, stamp  # unused; kept so every chart emitter shares one calling convention
     html_fpath = interactive_dpath / f'{stem}.html'
     png_fpath = static_dpath / f'{stem}.png'
     html_out = None

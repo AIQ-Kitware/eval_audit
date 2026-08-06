@@ -2,9 +2,10 @@
 
 Builds the operational + reproducibility summary tree (sankeys, agreement
 curves, per-metric breakdowns, prioritized examples, READMEs) for every
-scope. The implementation lives in ``eval_audit.reports.summary``; this
-module keeps the scope-rendering recursion (``_render_scope_summary`` /
-``_render_breakdown_scopes``), the CLI ``main``, and compat re-exports.
+scope. The implementation lives in ``eval_audit.reports.summary``
+(including the scope-rendering recursion, moved to
+``reports.summary.scope`` in C1, 2026-07-12); this module keeps the CLI
+``main`` plus compat re-exports.
 Invoked as ``eval-audit-build-summary`` or
 ``python -m eval_audit.workflows.build_reports_summary``.
 """

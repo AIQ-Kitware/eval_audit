@@ -23,8 +23,10 @@ Design (see ``dev/analysis/eee_refactor_stage1_map.md``):
   in :mod:`eval_audit.normalized.loaders` and are registered against an
   ``ArtifactFormat`` value.
 
-Stage 2 only introduces these abstractions and validates them with small
-targeted smoke tests. Stages 3+ migrate call sites onto them.
+These abstractions were introduced in Stage 2 of the refactor plan; the
+migration is complete — the report layer consumes :class:`NormalizedRun`
+throughout, and the comparison core is :class:`NormalizedDiff`
+(:mod:`eval_audit.normalized.diff`).
 """
 
 from __future__ import annotations

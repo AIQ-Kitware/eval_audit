@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> None:
         "--abs-tol",
         type=float,
         default=1e-9,
-        help="Agreement threshold (default: 1e-9, between exact-match and 10-pico).",
+        help="Agreement threshold (default: 1e-9, i.e. nano — near-exact).",
     )
     parser.add_argument(
         "--title",

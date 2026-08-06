@@ -1,9 +1,9 @@
 """Generic join helpers for normalized runs.
 
-Stage-2 scope: provide the join primitives used by the Stage-3+
-comparison core, but no comparison logic of their own. Code outside the
-normalized package should rely on these helpers rather than re-implementing
-the same joins ad hoc.
+Join primitives used by the comparison core
+(:mod:`eval_audit.normalized.compare`), with no comparison logic of
+their own. Code outside the normalized package should rely on these
+helpers rather than re-implementing the same joins ad hoc.
 """
 
 from __future__ import annotations

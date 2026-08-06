@@ -38,10 +38,8 @@ from eval_audit.infra.index_io import (
     load_rows,
     resolve_index_fpath,
 )
-from eval_audit.workflows.rebuild_core_report import (
-    main as rebuild_core_report_main,
-    slugify_identifier,
-)
+from eval_audit.reports.core_packet import slugify_identifier
+from eval_audit.workflows.rebuild_core_report import main as rebuild_core_report_main
 
 from eval_audit.infra.profiling import profile
 
