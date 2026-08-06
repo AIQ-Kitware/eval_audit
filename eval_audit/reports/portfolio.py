@@ -34,7 +34,7 @@ def _default_summary_history_root() -> Path:
 DEFAULT_HISTORIC_ROOT = Path("/data/crfm-helm-public")
 
 
-# R-6: shared with cli.analyze_backlog; canonical def in infra.index_io.
+# R-6: canonical def in infra.index_io.
 from eval_audit.infra.index_io import latest_run_inventory_csv as _latest_run_inventory_csv
 
 
