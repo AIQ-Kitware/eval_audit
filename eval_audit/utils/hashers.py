@@ -1,5 +1,13 @@
 """eval_audit.utils.hashers (moved from eval_audit.helm.hashers, Phase 3 / 4.4)
 
+NOTE: this is an intentional vendored copy of magnet's
+``magnet/backends/helm/util/helm_hashers.py`` (kept so ``eval_audit``
+does not depend on magnet at import time). The two files must stay
+**hash-compatible**: silent drift in canonicalization or ``stable_hash36``
+here would invalidate every stored hash comparison. If you change one,
+change the other, and diff them. (Known benign deltas: docstrings, and
+helpers eval_audit does not use — e.g. ``row_id``, removed 2026-08-06.)
+
 NOTE: this might be over-engineering. Treat hashes as internal only for now.
 
 Centralized hashing helpers for HELM run analysis / comparison.

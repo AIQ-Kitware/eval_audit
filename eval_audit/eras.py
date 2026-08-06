@@ -209,8 +209,8 @@ def parse_public_signal_from_run_dir(run_dir: Path | str) -> tuple[str | None, s
     """Derive ``(public_track, suite_version)`` from an official HELM run dir path.
 
     Delegates to the shared component-based parser (B1:
-    :func:`eval_audit.run_entries.parse_benchmark_output_signal`) so era
-    resolution and ``compare_batch`` cannot drift on the
+    :func:`eval_audit.run_entries.parse_benchmark_output_signal`) so its
+    consumers cannot drift on the
     ``<...>/<public_track>/benchmark_output/runs/<suite_version>/<run_leaf>``
     convention. Either element may be ``None`` if the path does not follow
     it — :func:`resolve_era` fails loud on the dangerous half-parsed case

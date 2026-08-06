@@ -201,7 +201,8 @@ only by `groups=` — collapse to one key, while every semantic token
 full-sweep recipes and different subjects stay distinct. This is a *symmetric*
 equivalence (the right tool for grouping), distinct from
 `run_dir_matches_requested`'s asymmetric subset test (the right tool for "does
-this candidate satisfy this request", used by `compare_batch`). It replaced an
+this candidate satisfy this request", used by the historic-candidate
+lookup in `eval_audit/indexing/historic_candidates.py`). It replaced an
 order-sensitive, string-variant matcher that left runs like OLMo MMLU unpaired
 purely because the official key listed the same tokens in a different order.
 When canonicalization changes a key, the affected packet carries a

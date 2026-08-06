@@ -127,8 +127,6 @@ def _render_packet(
     *,
     packet: dict[str, Any],
     out_root: Path,
-    components_manifest_fpath: Path,
-    comparisons_manifest_fpath: Path,
     plot_layout_args: list[str],
     render_heavy_plots: bool,
 ) -> Path:
@@ -381,8 +379,6 @@ def main(argv: list[str] | None = None) -> None:
             report_dpath = _render_packet(
                 packet=entry,
                 out_root=out_dir,
-                components_manifest_fpath=Path(),  # constructed inline
-                comparisons_manifest_fpath=Path(),
                 plot_layout_args=plot_layout_args,
                 render_heavy_plots=args.render_heavy_pairwise_plots,
             )
@@ -407,8 +403,6 @@ def main(argv: list[str] | None = None) -> None:
                     _render_packet,
                     packet=entry,
                     out_root=out_dir,
-                    components_manifest_fpath=Path(),
-                    comparisons_manifest_fpath=Path(),
                     plot_layout_args=plot_layout_args,
                     render_heavy_plots=args.render_heavy_pairwise_plots,
                 ): entry["packet_id"]

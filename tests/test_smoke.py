@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from eval_audit.cli.check_env import main as check_env_main
-from eval_audit.cli.compare_batch import main as compare_batch_main
 from eval_audit.cli.compare_pair import main as compare_pair_main
 from eval_audit.cli.manifests import main as manifests_main
 from eval_audit.cli.reports import main as reports_main
@@ -16,14 +15,12 @@ from eval_audit.run_entries import (
     parse_run_entry_description,
     run_dir_matches_requested,
 )
-from eval_audit.workflows.compare_batch import aggregate_report
 
 
 @pytest.mark.parametrize(
     "main",
     [
         check_env_main,
-        compare_batch_main,
         compare_pair_main,
         manifests_main,
         # cli.reports is the deprecated grouped dispatcher kept alive for
@@ -71,20 +68,3 @@ def test_discover_benchmark_output_dirs(tmp_path: Path):
     assert found == [benchmark_output]
 
 
-def test_aggregate_report_counts():
-    rows = [
-        {
-            "status": "compared",
-            "diagnosis": {
-                "label": "deployment_drift",
-                "primary_reason_names": ["deployment_changed"],
-                "reasons": [{"name": "deployment_changed"}],
-            },
-        },
-        {"status": "missing"},
-    ]
-    report = aggregate_report(rows)
-    assert report["n_rows"] == 2
-    assert report["status_counts"]["compared"] == 1
-    assert report["diagnosis_label_counts"]["deployment_drift"] == 1
-    assert report["primary_reason_name_counts"]["deployment_changed"] == 1

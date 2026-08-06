@@ -426,10 +426,10 @@ def parse_benchmark_output_signal(run_dir: os.PathLike[str] | str) -> tuple[str 
     convention (B1): ``public_track`` is the component immediately *before*
     ``benchmark_output``; ``suite_version`` is two components past it (the
     directory under ``runs/``). Either is ``None`` when the path does not
-    follow the convention. Consumers: era resolution
-    (``eval_audit.eras``) and ``compare_batch`` run-dir labeling — the two
-    readers that must agree, since era resolution silently selects the
-    measurement instrument.
+    follow the convention. Primary consumer: era resolution
+    (``eval_audit.eras``), which silently selects the measurement
+    instrument — any other reader of this convention must delegate here
+    rather than re-parse.
 
     Deliberately different: the official public index derives its
     ``public_track`` *relative to a scan root* (may be multi-part, e.g.

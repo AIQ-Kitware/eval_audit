@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from eval_audit.workflows import compare_batch
+from eval_audit.indexing import historic_candidates
 
 
 def test_collect_historic_candidates_ignores_local_model_deployment(
@@ -39,13 +39,13 @@ def test_collect_historic_candidates_ignores_local_model_deployment(
             "narrative_qa": (wrong_benchmark,),
         }
 
-    compare_batch._historic_candidate_benchmark_index.cache_clear()
+    historic_candidates._historic_candidate_benchmark_index.cache_clear()
     monkeypatch.setattr(
-        compare_batch,
+        historic_candidates,
         "_historic_candidate_benchmark_index",
         fake_index,
     )
-    candidates = compare_batch.collect_historic_candidates(precomputed_root, run_entry)
+    candidates = historic_candidates.collect_historic_candidates(precomputed_root, run_entry)
     assert [candidate["run_name"] for candidate in candidates] == [
         public_candidate["run_name"]
     ]

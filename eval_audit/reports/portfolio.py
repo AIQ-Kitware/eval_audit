@@ -18,7 +18,7 @@ from typing import Any
 
 from eval_audit.infra.logging import setup_cli_logging
 from eval_audit.infra.report_layout import aggregate_summary_reports_root
-from eval_audit.workflows.compare_batch import collect_historic_candidates
+from eval_audit.indexing.historic_candidates import collect_historic_candidates
 
 
 def _default_summary_history_root() -> Path:

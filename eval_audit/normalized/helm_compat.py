@@ -32,12 +32,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from eval_audit.normalized.model import (
-    ArtifactFormat,
-    NormalizedRun,
-    NormalizedRunRef,
-    SourceKind,
-)
+from eval_audit.normalized.model import NormalizedRun
 
 
 class _NormalizedJsonView:
@@ -126,46 +121,4 @@ def helm_view(run: NormalizedRun) -> HelmRunView:
     return HelmRunView(run)
 
 
-def helm_view_from_path(
-    run_path: str | Path,
-    *,
-    source_kind: SourceKind | str = SourceKind.OFFICIAL,
-    component_id: str | None = None,
-    logical_run_key: str | None = None,
-    display_name: str | None = None,
-) -> HelmRunView:
-    """Cheap legacy bridge: HELM run dir → HELM-shape view via the normalized layer.
-
-    Routes through :class:`NormalizedRunRef` and an :class:`Origin` so the
-    legacy comparison core sees the *same* identity surface as the new EEE
-    code paths, without paying for the in-memory HELM→EEE conversion. This
-    is the Stage-3 seam: no comparison logic moves, but every legacy reader
-    construction now flows through the normalized boundary.
-
-    Stage 4 replaces the comparison core itself; this helper goes away then.
-    """
-    if not isinstance(source_kind, SourceKind):
-        source_kind = SourceKind(str(source_kind))
-    run_path = Path(run_path)
-    ref = NormalizedRunRef.from_helm_run(
-        run_path,
-        source_kind=source_kind,
-        component_id=component_id,
-        logical_run_key=logical_run_key,
-        display_name=display_name,
-    )
-    # Note: NormalizedRun normally requires an EvaluationLog; for the
-    # raw-only legacy bridge we deliberately leave that slot None and
-    # populate ``raw_helm`` lazily through _NormalizedJsonView's filesystem
-    # fallback (Origin.helm_run_path). This avoids running the EEE
-    # converter just to read run_spec.json. The bridge exists only while
-    # the comparison core is still HELM-shaped.
-    run = NormalizedRun.__new__(NormalizedRun)
-    object.__setattr__(run, "ref", ref)
-    object.__setattr__(run, "evaluation_log", None)
-    object.__setattr__(run, "instances", [])
-    object.__setattr__(run, "raw_helm", None)
-    return HelmRunView(run)
-
-
-__all__ = ["HelmRunView", "helm_view", "helm_view_from_path"]
+__all__ = ["HelmRunView", "helm_view"]

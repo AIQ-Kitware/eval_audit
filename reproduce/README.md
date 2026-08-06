@@ -32,7 +32,7 @@ before relying on a claim.
 
 | scenario | purpose | status |
 |---|---|---|
-| `apples/` | apples-to-apples reproduction control (check_env → make_manifest → run → compare) | **UNSURE** |
+| `apples/` | apples-to-apples reproduction control (check_env → make_manifest → run; the deprecated `30_compare.sh` batch step was removed 2026-08-06 — use `eval-audit-analyze-experiment`) | **UNSURE** |
 | `classic_together_combined/` | era-pinned replay of gpt-j / gpt-neox / opt across `v0.2.4` + `v0.3.0` | **WORKING** (2026-07-13, execution; RedPajama arm complete) |
 | `eee_only_demo/` | self-contained EEE-only tutorial: compare official vs local EEE artifact trees via `eval-audit-from-eee` against a checked-in 3×3 fixture | **WORKING** (2026-04-29) |
 | `eee_only_reproducibility_heatmap/` | model × benchmark instance-agreement heatmap (paper Case Study 3), entirely in EEE format — no GPU/internet at report time | **WORKING** (2026-05) |
@@ -57,7 +57,7 @@ before relying on a claim.
 | `qwen_models_combined/` | from-spec replay of the Qwen family; source of the 703-comparison base rate | **WORKING** (2026-07-15, execution) |
 | `setup/` | one-time host setup (e.g. install Chrome for Plotly/Kaleido static image export on Ubuntu 24.04) | **UNSURE** but harmless |
 | `small_models_kubeai/` | KubeAI overnight batch keeping `qwen2.5-7b` + `vicuna-7b` resident together; emits one combined benchmark bundle | **UNSURE** (KubeAI-side) |
-| `smoke/` | minimal end-to-end sanity run (check_env → make_manifest → run → compare) | **UNSURE** |
+| `smoke/` | minimal end-to-end sanity run (check_env → make_manifest → run; the deprecated `30_compare.sh` batch step was removed 2026-08-06 — use `eval-audit-analyze-experiment`) | **UNSURE** |
 
 ## Conventions & assumptions
 

@@ -212,7 +212,7 @@ dormant breakdown:
 - `eval-audit-analyze-index-snapshot` — snapshot the audit-results index
 - `eval-audit-rebuild-core` — rebuild the per-packet core metric report
 - `eval-audit-report-core` — single-packet core-metric reporting
-- `eval-audit-compare-pair` / `eval-audit-compare-batch` — pair-level comparison
+- `eval-audit-compare-pair` — pair-level comparison
 - `eval-audit-index` — build the audit-results index
 - `eval-audit-index-historic` — Stage 1: discover historic public-HELM runs, apply the eligibility filters, and emit the filter report + sankey (what was kept/dropped and why)
 - `eval-audit-portfolio-status` — multi-experiment status snapshot
