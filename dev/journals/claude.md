@@ -5279,3 +5279,71 @@ after the fix — otherwise "clean" is indistinguishable from "blind".
 **Next steps.** Promotion decision on the re-rendered store. Optionally
 `40_build_summary.sh` against it for the aggregate report. `e2e-phi2` first-pass
 still must not be re-rendered until its arms have separate experiment names.
+
+## 2026-08-06 12:36:00 -0400
+
+**User intent.** Audit the whole repository for simplification opportunities
+and stale/wrong documentation, with the stated goal that the repo be in good
+shape for the paper and for hand-off to other maintainers after the
+internship. Plan-mode approval was given for full dead-code removal and
+deletion of all six untracked root archives.
+
+**Model/config.** Claude Fable 5 (claude-fable-5), Claude Code VSCode harness,
+plan mode → execution. Audit itself ran as three parallel Explore subagents
+(docs accuracy / code simplification / comments + hygiene); every finding was
+re-verified with greps before acting.
+
+**What landed** (six commits, `8ee7c16c..80167870` + this journal):
+
+1. *docs accuracy sweep* — the worst finding was
+   `docs/eee-only-hard-split-todo.md` instructing `EVAL_AUDIT_EEE_STRICT=1`
+   "for the run whose numbers you publish" when that env var has been a
+   silent no-op since 2026-07-12; the doc is now a SUPERSEDED status record
+   pointing at what actually landed (`--instance-source`,
+   `normalized/diagnose.py`, `recipe_facts.py`). Also: pipeline.md's retired
+   `.history/` claims and a CLI invocation that fails as written; CLAUDE.md's
+   stage numbering reconciled with pipeline.md's 1–4; README package
+   tree/entry-point gaps; reproduce/README.md phantom `olmo_models/` row +
+   four missing runbooks; planning docs claiming "not implemented" for
+   shipped work (phase3 unification, from-spec replay, robust matching).
+2. *docstring truth sweep* — `normalized/` modules no longer describe the
+   finished Phase 3 migration as in-flight; `recipe_facts.py` states its real
+   (unwired) planner status; obsolete TODOs and misleading compat comments
+   dropped.
+3. *dead code* — ~2,000 lines removed across four commits: zero-caller
+   aliases/shims, the unreachable HelmRunDiff/analysis_report text-render
+   chain, `reports/aggregate` + `cli/analyze_backlog`, and the deprecated
+   `compare_batch` stack (its own deletion date had passed; ADR-5 pre-check
+   against the real store found no generated script invoking it).
+   `collect_historic_candidates` survived by relocation to
+   `eval_audit/indexing/historic_candidates.py` (portfolio needs it).
+4. *hygiene* — 774 MB of untracked root archives deleted (user-approved;
+   docs zips verified byte-redundant first, the tracked experiment-dump
+   manifest amended before deleting the powerpoints zip it referenced),
+   `.gitignore` fixed, `archive-repo.sh` (abandoned duplicate) deleted,
+   workspace-sync scripts moved to `dev/scripts/`, README install now routes
+   through `run_developer_setup.sh`.
+
+**Uncertainties / caveats.** (a) The venv's installed console scripts still
+include the removed `eval-audit-report-aggregate` / `eval-audit-compare-batch`
+stubs until the next `uv pip install -e .`. (b) `ladder-out/` (2.3 GB,
+gitignored) deliberately NOT deleted — `hf-cache/` may be expensive to
+refetch; operator decision. (c) `analysis_report.summary_dict`'s `level>=5`
+branches were kept even though in-repo callers use `level<=20` via
+`HelmRunDiff` only — it is a public analysis surface and cheap.
+
+**Design insights.** (1) A deprecation marker that says "after one cycle"
+with no date is self-expiring documentation — always write the concrete
+date or the tree accumulates modules past their own funerals. (2) When a
+doc names an env var or flag, the doc is a *caller*: retiring the flag
+without grepping docs left an instruction that would have silently produced
+wrong published numbers. (3) `git add -A` / `git add docs/` in a tree with
+untracked large artifacts is a footgun — twice this session an amend was
+needed to keep 774 MB out of history; stage explicit paths until hygiene
+lands.
+
+**Next steps.** `docs/planning/deferred-simplifications-2026-08-06.md`
+records the structural items deliberately not done (render-loop
+unification, the 121-name re-export audit, dual HelmOutputs readers,
+recipe-facts planner wiring, overgrown-file splits). Reinstall the package
+to refresh console scripts; decide on `ladder-out/`.
