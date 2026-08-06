@@ -46,15 +46,22 @@ eval_audit/                 the Python package (renamed from helm_audit on 2026-
 ├── planning/               comparison-intent planner used by core metrics
 ├── manifests/              manifest builders / presets  [legacy; superseded by
 │                           integrations/infer_stack's export-benchmark-bundle]
-├── helm/                   HELM-specific readers + diff helpers (analysis.py, diff.py,
-│                           hashers.py, metrics.py, run_entries.py)
+├── helm/                   HELM-specific diff helpers (analysis.py, diff.py,
+│                           analysis_report.py, instance_stats.py)
+├── judging/                open-judge extension: judge audit, replay, rejudge
+├── packaging/              transfer packaging (crawl + pack analyses for hand-off)
 ├── indexing/               run-spec hash + schema helpers
 ├── infra/                  paths, env, yaml IO, logging, plotly env
 ├── integrations/           kwdagger_bridge.py (scheduling + container pinning)
 │                           + infer_stack/ (bundle export, leases)  [active]
+├── utils/                  sankey renderer, hashers, misc helpers
 ├── eras.py                 era registry: pre-v0.5 HELM images, one per era
 ├── pipelines/              kwdagger pipeline factories (modern / era docker)
 ├── compat/                 backward-compat shims
+├── run_entries.py          run-entry parsing + canonical logical keys
+├── judge_registry.py       curated annotator-class → judge-model map
+├── metrics_taxonomy.py     framework-free metric classification
+├── hf_inprocess.py         HF in-process runner (parked; see its plan doc)
 └── model_registry.py
 ```
 
@@ -193,7 +200,7 @@ it's still good.
 
 ## CLI
 
-Entry points are declared in [`pyproject.toml`](pyproject.toml#L42). Active /
+Entry points are declared in [`pyproject.toml`](pyproject.toml#L74). Active /
 dormant breakdown:
 
 **Active (exercised by the analysis runbooks):**
@@ -209,6 +216,13 @@ dormant breakdown:
 - `eval-audit-index` — build the audit-results index
 - `eval-audit-index-historic` — Stage 1: discover historic public-HELM runs, apply the eligibility filters, and emit the filter report + sankey (what was kept/dropped and why)
 - `eval-audit-portfolio-status` — multi-experiment status snapshot
+- `eval-audit-lint-store` — lint a store for packets whose numbers depended on
+  an unrecorded choice (see `docs/pipeline.md` and `docs/helm-gotchas.md` §G14)
+- `eval-audit-verify-provenance` — check that a packet's recorded inputs are
+  still present and digest-clean (see `docs/pipeline.md`)
+- `eval-audit-crawl-analyses` / `eval-audit-package-analyses` — inventory and
+  package analysis trees for transfer (driven by `package-analyses.sh`; see
+  [`docs/transfer-packaging.md`](docs/transfer-packaging.md))
 - `eval-audit-prepare-eee` — prepare EEE artifacts for downstream analysis
 - `eval-audit-from-eee` — **EEE-only tutorial path.** Walks an
   ``official/`` + ``local/`` tree of `every_eval_ever` artifacts, runs the
@@ -278,10 +292,12 @@ straightforward apt invocation).
 | [`docs/helm-gotchas.md`](docs/helm-gotchas.md) | **CURRENT** | running ledger of HELM-specific behaviors hit during analysis |
 | [`docs/helm-reproduction-research-journal.md`](docs/helm-reproduction-research-journal.md) | **CURRENT** | research context, failure taxonomies |
 | [`docs/eee-vs-helm-metadata.md`](docs/eee-vs-helm-metadata.md) | **CURRENT** | what HELM has that EEE doesn't, what `unknown` comparability facts mean, how to ship sidecar metadata so they evaluate normally |
+| [`docs/transfer-packaging.md`](docs/transfer-packaging.md) | **CURRENT** | packaging analysis trees for hand-off (`package-analyses.sh`, crawl/pack CLIs, repoint) |
+| [`docs/eee-only-hard-split-todo.md`](docs/eee-only-hard-split-todo.md) | **SUPERSEDED** | historical record of the hard-split proposal; the concerns were resolved differently (declared `--instance-source` policy + `normalized/diagnose.py` + `recipe_facts.py`) |
 | [`docs/papers/`](docs/papers/) | **ACTIVE** | paper drafts: `neurips-2026/` (`technical_report.tex`, `case_study_3*.tex`) and `tmlr-2026/` (`main.tex`); renamed from `dev/paper/` on 2026-05-02 |
 | [`docs/kwdagger-notes.md`](docs/kwdagger-notes.md) | **UNSURE** | small file, may still be accurate |
 | [`docs/helm-null-completion-text-patch-proposal.md`](docs/helm-null-completion-text-patch-proposal.md) | **UNSURE** | pre-EEE patch proposal; outcome unclear |
-| [`docs/architecture.md`](docs/architecture.md) | **PARTIALLY STALE** | core ADRs (raw vs derived, reports/, filesystem-as-interface) still hold; specific module/CLI lists drifted with the rename and recent refactors; moved from repo-root `ARCHITECTURE.md` on 2026-06-11 |
+| [`docs/architecture.md`](docs/architecture.md) | **CURRENT** | core ADRs (raw vs derived, reports/, filesystem-as-interface); its concrete module/CLI/env-var references were re-verified against the tree on 2026-08-06; moved from repo-root `ARCHITECTURE.md` on 2026-06-11 |
 
 Moved into [`docs/historical/`](docs/historical/) on 2026-04-28 (preserved
 verbatim — they may still be useful as records of *how* a problem was
@@ -297,7 +313,7 @@ approached at the time):
 
 - **STALE** / **UNSURE** annotations above mean "nobody has confirmed this file
   is still correct." It does not mean the file is wrong. This README was last
-  swept against the tree on **2026-08-04**.
+  swept against the tree on **2026-08-06**.
 - The `eval-audit-run` execution path is exercised (2026-07). What remains
   unverified is the *legacy* surface it used to drive: `make-manifest` output,
   the KubeAI/LiteLLM serving variants, and the bare-venv (uncontainerized) path,

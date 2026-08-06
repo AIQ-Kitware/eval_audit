@@ -20,7 +20,7 @@ outcomes a real comparison can produce:
 
 | (model, benchmark) | Run-level agreement at `abs_tol=0` | Instance-level agreement at `abs_tol=0` | What the pair illustrates |
 |---|---|---|---|
-| `toy/m1-small` × `arc_easy` | 1.0 | 1.0 | **Perfect reproduction** — local matches official exactly. Also has a *repeat* local attempt, so the packet contains a `local_repeat` comparison alongside the two `official_vs_local` ones. |
+| `toy/m1-small` × `arc_easy` | 1.0 | 1.0 | **Perfect reproduction** — local matches official exactly. Also has a *repeat* local attempt, so the packet contains a `local_repeat` comparison alongside one enabled `official_vs_local`; the superseded attempt's `official_vs_local` is planned but disabled (`superseded_local_attempt`). |
 | `toy/m1-small` × `truthful_qa` | 0.0 | 0.75 | **Run-level metrics differ but most instances agree** — one of four instances flipped, dragging the per-metric mean off. Useful for seeing how aggregate disagreement can be milder than it looks at the run level. |
 | `toy/m1-small` × `imdb` | 0.0 | 0.0 | **Full divergence** — every instance disagrees. The plotted distribution should show `|Δ|=1` everywhere. |
 | `toy/m2-medium` × `imdb` | 0.0 | 0.75 | Same one-instance-flipped pattern but on a different model, so aggregate views can pick it up too. |

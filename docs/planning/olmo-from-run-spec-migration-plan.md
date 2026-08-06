@@ -1,7 +1,10 @@
 # OLMo from-spec reproduction — status & plan
 
 **Status (2026-07-06): IMPLEMENTED (host/CPU side); GPU verification is the only
-open work.** This is the single live doc for the OLMo from-spec effort. It folds in
+open work.** *(Path note, 2026-08-06: the runbook directory referenced below as
+`reproduce/olmo_models/` now lives at `reproduce/olmo_models_combined/`, and the
+manifest `configs/virtual-experiments/olmo-models.yaml` is now
+`olmo-models-combined.yaml`.)* This is the single live doc for the OLMo from-spec effort. It folds in
 and supersedes two now-archived siblings:
 `olmo-from-spec-handoff.md`
 (the continuation handoff — env gotchas + landed-commit table) and

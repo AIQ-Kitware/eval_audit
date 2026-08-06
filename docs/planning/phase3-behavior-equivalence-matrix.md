@@ -156,8 +156,8 @@ EEE-derived vs HELM-derived instance ids deliberately disagree on a few cells. T
 | File | Covers |
 |---|---|
 | `tests/test_phase3_diagnose_equivalence.py` | 4.2 — `normalized.diagnose` vs `HelmRunDiff._diagnose_repro`, fixtures F1/F2/F4/F5/F8; substitution-label unit tests (F9/F10 spec) |
-| `tests/test_phase3_normalized_diff_equivalence.py` | 4.3/4.6 — full §4 output equivalence, fixtures F1–F8 (slow; `--run-slow`) |
-| `tests/test_phase3_eee_only_operability.py` | 4.4 — gate E1 (full tree with zero HELM artifacts; `instance_source: eee` everywhere) |
+| `tests/test_phase3_normalized_diff.py` | 4.3/4.6 — full §4 output equivalence, fixtures F1–F8 (slow; `--run-slow`) |
+| `tests/test_phase3_instance_source.py` | 4.4 — gate E1 (full tree with zero HELM artifacts; `instance_source: eee` everywhere) |
 | `tests/test_phase3_instance_source.py` | 4.5 — F6 probe, both policies, disk-state insensitivity |
 | `tests/test_phase3_judge_substitution.py` | 4.9 — F9/F10 end-to-end, filter-report selection path |
 | extend `tests/fixtures/eee_only_demo/build_fixture.py` | F5 (`recipe_facts` incl. judge identity), F6 (drift), F8 (mixed-format), F9/F10 (judge pair) |

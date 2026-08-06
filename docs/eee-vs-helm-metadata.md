@@ -129,16 +129,18 @@ options:
   `adapter_spec.instructions`, `adapter_spec.max_eval_instances`,
   `scenario_spec.class_name`.
 
-- **Extend EEE.** Add a `comparison_metadata` block at the top level
-  of `<uuid>.json` capturing the same fields. The downside is a
-  schema change in `every_eval_ever`; the upside is metadata travels
-  with the artifact rather than as a sidecar. If you're already
-  patching the EEE converter for your local pipeline, this is
+- **Extend EEE.** Embed the same fields natively in the artifact so
+  metadata travels with it rather than as a sidecar. If you're
+  already patching the EEE converter for your local pipeline, this is
   cheap.
 
-We currently support option (1) and not (2). Option (2) is a
-reasonable next step for the EEE schema; tracked as a todo on the
-EEE side rather than the eval_audit side.
+Both options are supported. The native-block reader landed as
+`eval_audit/normalized/recipe_facts.py`: a JSON-encoded `recipe_facts`
+entry under `source_metadata.additional_details` in the EEE aggregate,
+resolved *before* any sidecar `run_spec.json`. (An upstream EEE schema
+slot for it is still pending — see
+[`docs/planning/upstream-eee-recipe-facts-issue.md`](planning/upstream-eee-recipe-facts-issue.md);
+until then the block rides the existing free-form `additional_details`.)
 
 ### 3. When you can't preserve the metadata, surface that to the reader
 

@@ -78,22 +78,30 @@ Commit finished logical units of work proactively as you complete them — do no
 
 ### Pipeline Architecture
 
-See [`docs/pipeline.md`](docs/pipeline.md) for the canonical pipeline. The high-level stages:
+See [`docs/pipeline.md`](docs/pipeline.md) for the canonical pipeline. Its four
+**analysis** stages:
 
-- **Stage 1 (index_historic_helm_runs.py)**: Discovers runs, applies eligibility filters, emits filter report with sankey showing what was kept/dropped and why
-- **Stage 2 (eval-audit-make-manifest)**: Converts run specs to execution manifests
-- **Stage 3 (eval-audit-run)**: Executes on GPUs via kwdagger scheduler
-- **Stage 4 (eval-audit-index)**: Builds master index CSV
-- **Stage 5 (analyze-experiment / rebuild-core)**: Per-run reproducibility analysis with tolerance sweeps and per-metric curves
-- **Stage 6 (build_reports_summary)**: Aggregate reporting with operational sankey, reproducibility sankey, agreement curves, and per-metric breakdowns
+- **Stage 1 — EEE conversion (eval-audit-prepare-eee)**: Converts executed HELM run dirs into `every_eval_ever` artifacts
+- **Stage 2 — Virtual experiment compose (eval-audit-build-virtual-experiment)**: Composes a manifest-scoped slice from the official/local indexes and/or EEE sources, computes the coverage funnel
+- **Stage 3 — Per-packet core analysis (eval-audit-analyze-experiment)**: Planner pairs official + local components, renders per-packet core-metric reports with tolerance sweeps and per-metric agreement curves
+- **Stage 4 — Aggregate / publication (eval-audit-build-summary)**: Aggregate reporting with operational sankey, reproducibility sankey, agreement curves, and per-metric breakdowns
+
+Feeding those stages is the **execution half** (also in `docs/pipeline.md`):
+`eval-audit-index-historic` (discovers historic public runs, applies eligibility
+filters, emits the filter report + sankey), `export-benchmark-bundle` (freezes
+official run specs into a manifest; the older `eval-audit-make-manifest` is
+superseded and its output no longer schedules), `eval-audit-run` (executes on
+GPUs via the kwdagger scheduler — a pinned container image is mandatory; a
+manifest without one is refused), and `eval-audit-index` (builds the master
+index CSV).
 
 **EEE-only short circuit.** When the user already has both sides of the
 comparison in `every_eval_ever` artifact format (no HELM run dirs, no
 `run_spec.json`), [`eval-audit-from-eee`](eval_audit/cli/from_eee.py)
-skips Stages 1–2 entirely. It walks `<eee-root>/{official,local}/`,
-synthesizes the index rows the rest of the pipeline expects, runs
-Stages 5–6 against them, and lands a per-packet + cross-packet report
-at `<out>/`. The tutorial fixture lives at
+skips discovery and execution entirely. It walks `<eee-root>/{official,local}/`,
+synthesizes the index rows the rest of the pipeline expects, runs the
+analyze + summarize stages against them, and lands a per-packet +
+cross-packet report at `<out>/`. The tutorial fixture lives at
 [`tests/fixtures/eee_only_demo/eee_artifacts/`](tests/fixtures/eee_only_demo/eee_artifacts/)
 and the runbook at
 [`reproduce/eee_only_demo/`](reproduce/eee_only_demo/).
@@ -116,8 +124,7 @@ instructions, max_eval_instances, benchmark family) collapse to
 `comparability_unknown:*` warnings — that's the correct behavior, not
 a bug. **Both EEE-driven CLIs auto-detect a sidecar `run_spec.json`
 next to the EEE artifact** (see `detect_helm_sidecars` in
-`eval_audit/normalized/eee_sources.py`; `cli/from_eee.py` re-exports
-it for compatibility); when present, the HELM-side comparability
+`eval_audit/normalized/eee_sources.py`); when present, the HELM-side comparability
 facts evaluate normally. An EEE aggregate can also carry the facts
 natively (JSON-encoded `recipe_facts` under
 `source_metadata.additional_details` — see
@@ -129,8 +136,8 @@ Full mapping + recommendations:
 
 | File | Purpose |
 |---|---|
-| `eval_audit/cli/index_historic_helm_runs.py` | Stage 1: filtering, filter-step analysis, sankey emission |
-| `eval_audit/cli/from_eee.py` | EEE-only tutorial path; skips Stages 1–2 and routes EEE artifacts straight into the planner + core-metrics + aggregate summary. |
+| `eval_audit/cli/index_historic_helm_runs.py` | Historic-run discovery: filtering, filter-step analysis, sankey emission |
+| `eval_audit/cli/from_eee.py` | EEE-only tutorial path; skips discovery/execution and routes EEE artifacts straight into the planner + core-metrics + aggregate summary. |
 | `eval_audit/cli/compare_pair_eee.py` | EEE-only single-pair comparison CLI; analogue of `eval-audit-compare-pair` |
 | `docs/eee-vs-helm-metadata.md` | HELM↔EEE field mapping + recommendations for shipping sidecar metadata |
 | `eval_audit/normalized/diff.py` | **The unified comparison core** (`NormalizedDiff`): agreement rows/curves/quantiles, facts-grade diagnosis, judge-dependence metric-class split. Both render paths route through it. |

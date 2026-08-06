@@ -186,7 +186,8 @@ Implementation cautions:
 
 ### 1c. Per-era virtual-experiment manifests
 
-`configs/virtual-experiments/era-pythia-v024.yaml` and `era-pythia-v030.yaml`,
+`configs/virtual-experiments/era-redpajama-v024.yaml` and `era-redpajama-v030.yaml`
+(per the subject swap in this doc's header),
 mirroring `e2e-phi2-vllm.yaml` but pointing at **runbook-scoped** official
 artifacts (see Phase 2, step 25 — the canonical
 `$STORE_ROOT/indexes/official_public_index.csv` currently has **zero

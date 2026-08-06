@@ -161,7 +161,7 @@ A manifest declares:
 - `scope` — `MultiPattern` filters applied to those sources.
 - Provenance metadata for the publication surface.
 
-**CLI:** `eval-audit-build-virtual-experiment <manifest>`.
+**CLI:** `eval-audit-build-virtual-experiment --manifest <yaml>`.
 
 **What it does:** loads the official + local indexes, applies the manifest
 scope, computes the three-level coverage funnel
@@ -317,8 +317,7 @@ $AUDIT_STORE_ROOT/analysis/experiments/<experiment>/core-reports/<packet-slug>/
 ├── components_manifest.json
 ├── core_metric_management_summary.txt
 ├── core_metric_ecdfs.png         # per-metric agreement ECDF
-├── *.json                         # comparability facts, etc.
-└── .history/                             # stamped past runs
+└── *.json                         # comparability facts, etc.
 ```
 
 ## Stage 4 — Aggregate / publication
@@ -333,9 +332,9 @@ $AUDIT_STORE_ROOT/analysis/experiments/<experiment>/core-reports/<packet-slug>/
    runs narrows to the manifest's in-scope rows. Stages: structural gate,
    metadata gate, open-weight gate, tag gate, deployment gate, size gate,
    manifest scope.
-2. **Sankey B — Scope → Reproduced → Analyzed:** how in-scope rows funnel
-   to logical match → recipe-canonical match → analyzed packet → agreement
-   bucket.
+2. **Sankey B — Scope → Attempt → Execution → Analysis → Reproduction:**
+   how in-scope rows funnel through local attempt, execution outcome, and
+   analysis into the `abs_tol=0` agreement bucket.
 3. **Coverage funnel summary:** the three-level table from Stage 2,
    formatted as `coverage_funnel_summary.txt`.
 4. **Prioritized examples:** quantile-bucketed example packets
@@ -363,8 +362,12 @@ $AUDIT_STORE_ROOT/virtual-experiments/<name>/
 
 ## Filesystem-as-interface
 
-`*.<ext>` are symlinks to the most recent stamped run; the stamps
-live under `.history/`. Many directories also carry a `reproduce.sh`
+`*.<ext>` are the current outputs, renamed into place from stamped
+intermediates (the `.history/` layer was retired 2026-04-28; see
+`write_latest_alias` in
+[`eval_audit/reports/core_metrics.py`](../eval_audit/reports/core_metrics.py)
+— the visible file is the actual file, not a symlink). Many directories
+also carry a `reproduce.sh`
 that re-runs the computation that produced that directory. ADRs 4 ("the
 filesystem is part of the interface") and 5 ("every meaningful generated
 output gets a reproduce script") in

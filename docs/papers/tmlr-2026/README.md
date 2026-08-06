@@ -1,7 +1,7 @@
 # TMLR paper draft — *A Benchmark Recipe Is Not an Experiment*
 
 Scaffolded first draft, generated from the master collaborative reference
-(`docs/Master_Collaborative_Reference_2026-07-15c/`) and the consensus
+(`docs/Master_Collaborative_Reference_2026-07-27/`) and the consensus
 thesis/story. Every claim is scoped to the current evidence; parts that depend on
 experiments not yet run are visibly marked.
 

@@ -395,7 +395,7 @@ is circular and a reviewer will say so; Q1/Q3 claims get scoped to
 
 ### 5.3 Conclusion-metrics module (the main new code)
 
-`eval_audit/judging/conclusions.py`, deliberately HELM-free and offline
+`eval_audit/judging/conclusions.py` (proposed; not yet written), deliberately HELM-free and offline
 like `rejudge_matrix.py`. This module is central enough that its estimands
 are specified here, before implementation — effectively a mini
 pre-registration (statistical spec adopted from GPT 5.6 round 2, all four

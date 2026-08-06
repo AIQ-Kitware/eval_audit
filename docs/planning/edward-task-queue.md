@@ -46,7 +46,8 @@ wins, bf16 loses. Control (pinned bf16): gemma-2-9b-it → predict bf16 wins, fp
 loses. (gemma is a gated HF repo — needs Gemma token access; skip if it can't
 download.)
 
-**Record** in a new table `docs/reproduction/family-generality.md`: per family —
+**Record** in a new table `docs/reproduction/family-generality.md` (a proposed
+new file — the `docs/reproduction/` directory does not exist yet): per family —
 winning dtype, exact/quasi match, and whether it confirms the treatment/control
 prediction. Any family that does NOT reproduce at fp32/eager/single: broaden the
 forward-pass axes (`DM_HF_ATTN=eager,sdpa DM_HF_DEVMAPS=auto,single ./72...`) and

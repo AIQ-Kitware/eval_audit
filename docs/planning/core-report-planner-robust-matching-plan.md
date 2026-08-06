@@ -1,5 +1,10 @@
 # Plan: Robust, order-insensitive run-key matching in `core_report_planner`
 
+**Status (2026-08-06): LANDED** as `canonical_logical_key` in
+`eval_audit/run_entries.py` (see commit `a25aac9` and the matching note in
+`docs/pipeline.md`). Line references and future-tense phrasing below reflect
+the tree at planning time.
+
 ## Objective
 Replace the planner's order-sensitive, string-variant matching with a single
 **canonical-key** equivalence so that local and official runs describing the

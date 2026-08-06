@@ -1,8 +1,7 @@
 # TMLR Paper Plan: Systematic Reproducibility of Open-Weight HELM Evaluation
 
-Status: planning / advisory. Written 2026-07-15. Companion to
-[`docs/internship-chronology/`](../internship-chronology/) (the full internship
-chronology) and the existing draft
+Status: planning / advisory. Written 2026-07-15. Companion to the internship
+chronology (shipped out-of-band; not in this repo) and the existing draft
 [`docs/papers/tmlr-2026/main.tex`](../papers/tmlr-2026/main.tex) (skeleton).
 
 This document answers two questions: **(1) what should the paper's thesis and

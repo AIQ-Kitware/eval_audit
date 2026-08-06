@@ -33,25 +33,28 @@ before relying on a claim.
 | scenario | purpose | status |
 |---|---|---|
 | `apples/` | apples-to-apples reproduction control (check_env → make_manifest → run → compare) | **UNSURE** |
+| `classic_together_combined/` | era-pinned replay of gpt-j / gpt-neox / opt across `v0.2.4` + `v0.3.0` | **WORKING** (2026-07-13, execution; RedPajama arm complete) |
 | `eee_only_demo/` | self-contained EEE-only tutorial: compare official vs local EEE artifact trees via `eval-audit-from-eee` against a checked-in 3×3 fixture | **WORKING** (2026-04-29) |
 | `eee_only_reproducibility_heatmap/` | model × benchmark instance-agreement heatmap (paper Case Study 3), entirely in EEE format — no GPU/internet at report time | **WORKING** (2026-05) |
 | `extend_grid_falcon_7b/` | local Falcon-7B reproduction across the heatmap's 14 benchmarks (HELM HF backend, single GPU) | **WORKING** (2026-05, execution side) |
 | `finish_qwen25_gptoss/` | close the Qwen 2.5 7B + gpt-oss audit gaps surfaced by Case Study 3 (re-run public run_specs with prompt prefix intact) | **WORKING** (2026-05, gated-dataset caveats) |
 | `gpt_oss_20b_core_grid/` | run `openai/gpt-oss-20b` on the 14 core reproducibility benchmarks for a cross-model comparison (TMLR paper context) | status unrecorded |
-| `gpt_oss_20b_from_spec/` | faithful **from-spec** replay of the 4 ungated-judge public gpt-oss-20b rows (bbq, ifeval, mmlu_pro, gpqa); single-model analogue of `olmo_models_combined/` | **WIRED** (2026-07; discovery 4/4 RESOLVED, GPU run pending) |
+| `gpt_oss_20b_from_spec/` | faithful **from-spec** replay of the 4 ungated-judge public gpt-oss-20b rows (bbq, ifeval, mmlu_pro, gpqa); single-model analogue of `olmo_models_combined/` | **WORKING** (2026-07-13, execution; store unhashed) |
 | `gpt_oss_20b_vllm/` | LiteLLM-fronted vLLM smoke + overnight batch for `openai/gpt-oss-20b` | **UNSURE** (vLLM/LiteLLM-side) |
 | `historic_grid/` | regenerate a historic public-run manifest grid and rebuild reports | **UNSURE** |
 | `inspectai_helm_eee_compare/` | EEE-only comparability stress: HELM-shaped + InspectAI-shaped artifacts in one bundle; probes what the planner can conclude | **WORKING** (2026-05) |
 | `llama2_70b_helm_audit/` | local LLaMA-2-70B reproduction (vLLM tp=2, 2×96 GB) to add a 4th model to the Case Study 3 heatmap | **IN PROGRESS** (2026-05) |
 | `machine_compare/` | cross-machine indexing, per-experiment analysis, and pairwise compare | **UNSURE** |
-| `olmo_models/` | six AllenAI OLMo models: smoke + full grids folded into one grouped virtual-experiment report (from-spec) | status unrecorded |
-| `olmo_models_combined/` | sibling of `olmo_models/` — a single multi-deployment preset fans five OLMo models across GPUs under one schedule | status unrecorded |
+| `olmo_models_combined/` | from-spec replay of six AllenAI OLMo models as one multi-deployment fan-out (a single preset fans the models across GPUs under one schedule) | **WORKING** (2026-07, execution) |
 | `open_helm_models_reproducibility/` | virtual experiment over existing audit data: how reproducible are the open-weight public-HELM models (analysis + publication only) | **WORKING** (analysis) |
+| `open_judge_gpt_oss/` | rejudge gpt-oss-20b XSTest/WildBench with open-weight judges | **WORKING** (2026-07-17 through the identity-replay gate) |
 | `pythia12b_mmlu_smoke/` | local `pythia-12b-v0` run through the `eval-audit-run` → `kwdagger` → `magnet` → `helm-run` execution chain | **WORKING** (2026-04-28) |
 | `pythia_mmlu_stress/` | virtual-experiment slice (Pythia × MMLU) over already-executed audit data; analysis + publication only, no execution step | **WORKING** (analysis) |
 | `pythia_smoke_eee_only/` | EEE-only counterpart to `pythia12b_mmlu_smoke/` (no execution; `pythia-6.9b` on MMLU/BoolQ) | **WORKING** (2026-05) |
 | `qwen2_72b_vllm/` | local vLLM smoke + full EWOK historic-grid batch for `qwen/qwen2-72b-instruct` | **UNSURE** (vLLM-side) |
+| `qwen35_small_vllm/` | small-model vLLM smoke for the qwen3.5 line | **UNSURE** (vLLM-side) |
 | `qwen35_vllm/` | local vLLM smoke for `qwen/qwen3.5-9b` through `kwdagger` + the materialized HELM path | **UNSURE** (vLLM-side) |
+| `qwen_models_combined/` | from-spec replay of the Qwen family; source of the 703-comparison base rate | **WORKING** (2026-07-15, execution) |
 | `setup/` | one-time host setup (e.g. install Chrome for Plotly/Kaleido static image export on Ubuntu 24.04) | **UNSURE** but harmless |
 | `small_models_kubeai/` | KubeAI overnight batch keeping `qwen2.5-7b` + `vicuna-7b` resident together; emits one combined benchmark bundle | **UNSURE** (KubeAI-side) |
 | `smoke/` | minimal end-to-end sanity run (check_env → make_manifest → run → compare) | **UNSURE** |

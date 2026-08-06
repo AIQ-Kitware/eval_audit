@@ -1,6 +1,13 @@
 # Phase 3 Design — Unify the comparison core (HELM + EEE as adapters)
 
-**Status:** DESIGN — no code yet. Requires owner sign-off (see §9) before implementation.
+**Status (2026-08-06): LANDED.** The sub-stages are implemented and cite this
+doc from their module docstrings: 4.0 → `eval_audit/metrics_taxonomy.py`,
+4.2 → `eval_audit/normalized/diagnose.py`, 4.3 → `eval_audit/normalized/diff.py`,
+4.4 → `eval_audit/normalized/eee_sources.py`, 4.5 → `eval_audit/reports/core_metrics.py`
+(`--instance-source`), 4.6 → `eval_audit/helm/diff.py` (delegation),
+4.9 → `eval_audit/judge_registry.py`. §9.2's open judge-identity decision was
+answered by [`judge-identity-inventory.md`](judge-identity-inventory.md).
+Line references and "will" phrasing below reflect the tree at design time.
 **Author:** drafted 2026-06-11; **revised 2026-06-11** for the new research program (see §0).
 **Supersedes the Phase 3 sketch in** [`repo-refactor-plan.md`](../historical/planning/repo-refactor-plan.md) **§Phase 3.**
 

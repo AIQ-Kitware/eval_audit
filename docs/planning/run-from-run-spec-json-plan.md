@@ -1,6 +1,11 @@
 # Running HELM from `run_spec.json` (faithful replay) plan
 
-**Status:** PLAN — approved direction; not yet implemented.
+**Status (2026-08-06): IMPLEMENTED — this is the production execution path.**
+Landed as `--from-spec` / `--freeze-rel-paths` in
+`eval_audit/integrations/infer_stack/__main__.py` and the `from_run_spec`
+exact-path replay in `eval_audit/integrations/kwdagger_bridge.py`; every audit
+result the paper reports was produced this way (see the top-level README).
+The plan below is kept as the design record.
 **Decision:** Placement **Option A (aiq-magnet)**; substitution **by-name only**.
 **Context:** Public HELM runs do not record the CLI run-entry string (nor the
 crfm-helm library version) they were produced with. They *do* ship a fully

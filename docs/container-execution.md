@@ -6,7 +6,8 @@ software environment is auditable.
 
 This is **mandatory, not opt-in**: set `container_image` in a manifest (or pass
 `--container-image`). A manifest without one is refused at schedule time
-(`build_helm_matrix` raises), because the bare host-venv path — running
+(`build_schedule_params` in `eval_audit/integrations/kwdagger_bridge.py`
+raises), because the bare host-venv path — running
 `python -m magnet.backends.helm.cli.materialize_helm_run` directly in the venv
 of whatever GPU machine kwdagger scheduled onto — made the software environment
 (torch / CUDA / transformers / HELM build) an *uncontrolled* variable, precisely
@@ -188,7 +189,7 @@ Key invariants:
   registers a deployment under the exact official model name). The materializer
   **refuses** to insert a `model_deployment` field into an era spec.
 - **`same_deployment` resolves `unknown`** for era pairs (both sides lack the
-  field) — the correct behavior, not a bug; no Stage 5/6 changes.
+  field) — the correct behavior, not a bug; no analysis-stage changes.
 - **Provenance.** The era key + the image's `org.aiq.era` label are recorded in
   `container_provenance.json`; the era value also rides the manifest.
 
