@@ -1,7 +1,7 @@
 .PHONY: help configure-submodule-branches push-submodules pull-submodules submodule-status
 
 help:
-	@echo "helm_audit maintenance targets:"
+	@echo "eval_audit maintenance targets:"
 	@echo
 	@echo "  make configure-submodule-branches"
 	@echo "                          One-time: pin every submodule to a branch"

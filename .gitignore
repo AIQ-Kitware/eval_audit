@@ -54,7 +54,11 @@ old-backup-reports/
 # symlink to directory with reports
 crfm-helm-audit-store
 paper_draft
-# validation-ladder machine-local artifacts (reproduce/classic_era_replay)
+# validation-ladder machine-local output (dev/era-tests/ writes ERA_OUT here)
 ladder-out/
-reproduce/classic_era_replay/ladder.env
+# scratch dir some contributors keep at the repo root
 uncommitted
+# generated transfer/source archives (package-analyses.sh, archive-source.sh)
+/eval-audit-analyses.tar.zst
+/eval_audit-source-*.tar.gz
+/docs/*.zip

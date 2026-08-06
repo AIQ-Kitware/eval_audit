@@ -269,8 +269,15 @@ dormant breakdown:
 ## Install
 
 ```bash
-uv pip install -e .
+./run_developer_setup.sh
 ```
+
+The setup script initializes the git submodules (the
+`every_eval_ever` editable-path dependency in `pyproject.toml` requires
+`submodules/every_eval_ever` to be checked out), then installs the
+package and each Python submodule editable into your active venv (or a
+repo-local `.venv`). If the submodules are already initialized, a plain
+`uv pip install -e .` is equivalent.
 
 Then the CLI scripts above are on `$PATH`. For analysis-only work this is
 all you need.

@@ -16,7 +16,9 @@ the [TMLR draft](../papers/tmlr-2026/).
 2. **The `/data` stores on this host** (`crfm-helm-audit`, `crfm-helm-audit-store`,
    `crfm-helm-public`, `dkps-embeddings`) — every number below marked *(disk)* was
    read off these directly today, not copied from prose
-3. `docs/internship-powerpoints.zip` — seven weekly decks, 2026-06-02 … 2026-07-14
+3. `internship-powerpoints.zip` — seven weekly decks, 2026-06-02 … 2026-07-14.
+   Ships out-of-band (not tracked in this repository); request it from the
+   internship hand-off materials if you need the original decks.
 
 Where the three disagree, §8 says so explicitly. **Four of those disagreements
 matter and are listed there — read §8 before citing anything.**
