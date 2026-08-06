@@ -147,12 +147,6 @@ def stat_name_id(name_obj: Any, *, count: Any = None) -> str:
     return nice_hash_id(obj, rawstr=raw)
 
 
-def row_id(row: Any, *, hint: str = 'row') -> str:
-    """Stable-ish id for arbitrary rows (e.g. per-instance rows)."""
-    raw = f"{hint},"
-    return nice_hash_id(row, rawstr=raw)
-
-
 # --- Higher-level HELM-specific ids ----------------------------------------
 
 def perturbation_id(pert: Any, *, short_hash: int = 16) -> str | None:

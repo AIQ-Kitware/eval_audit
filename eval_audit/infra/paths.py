@@ -93,10 +93,5 @@ def index_snapshot_analysis_dpath() -> Path:
     return audit_store_root() / "analysis" / "index-snapshot"
 
 
-def official_public_analysis_dpath() -> Path:
-    """Backwards-compat alias for index_snapshot_analysis_dpath()."""
-    return index_snapshot_analysis_dpath()
-
-
 def paper_label_config_fpath() -> Path:
     return configs_root() / "paper_label_mappings.yaml"

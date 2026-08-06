@@ -239,8 +239,4 @@ class NormalizedRun:
     def model_id(self) -> str:
         return self.evaluation_log.model_info.id
 
-    @property
-    def evaluation_name_hint(self) -> str | None:
-        results = self.evaluation_log.evaluation_results or []
-        return results[0].evaluation_name if results else None
 

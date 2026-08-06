@@ -13,7 +13,7 @@ exist. Do not add new consumers; new code reads
 Stage-3 scope (historical): the existing
 :class:`eval_audit.helm.diff.HelmRunDiff` and
 :class:`eval_audit.helm.analysis.HelmRunAnalysis` consume objects that look
-like ``compat.helm_outputs.HelmRun`` — i.e. they expose ``.json.run_spec()``,
+like magnet's ``HelmRun`` reader — i.e. they expose ``.json.run_spec()``,
 ``.json.scenario()``, ``.json.scenario_state()``, ``.json.stats()``,
 ``.json.per_instance_stats()`` and a ``.path``. This module provides a tiny
 adapter so a :class:`NormalizedRun` (which now sits at the boundary between
@@ -41,7 +41,7 @@ from eval_audit.normalized.model import (
 
 
 class _NormalizedJsonView:
-    """Mimics ``compat.helm_outputs._JsonRunView`` for legacy consumers.
+    """Mimics the ``HelmRun.json`` view for legacy consumers.
 
     The legacy comparison core (HelmRunDiff + HelmRunAnalysis) reads
     ``run_spec.json`` etc. via this view. For pure-EEE runs (no HELM run

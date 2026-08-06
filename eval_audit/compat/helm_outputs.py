@@ -13,56 +13,9 @@ so source_kind / artifact_format / Origin are populated.
 from __future__ import annotations
 
 import fnmatch
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
-
-
-class _JsonRunView:
-    def __init__(self, run_dpath: str | Path):
-        self.run_dpath = Path(run_dpath)
-
-    def _load(self, name: str):
-        fpath = self.run_dpath / f"{name}.json"
-        text = fpath.read_text()
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError as ex:
-            # Name the offending file (JSONDecodeError alone gives only an
-            # offset). JSONDecodeError is a ValueError subclass, so callers that
-            # already tolerate ValueError keep working.
-            raise ValueError(f"invalid JSON in {fpath}: {ex}") from ex
-
-    def run_spec(self):
-        return self._load("run_spec")
-
-    def scenario(self):
-        return self._load("scenario")
-
-    def scenario_state(self):
-        return self._load("scenario_state")
-
-    def stats(self):
-        return self._load("stats")
-
-    def per_instance_stats(self):
-        return self._load("per_instance_stats")
-
-
-class HelmRun:
-    def __init__(self, path: str | Path):
-        self.path = Path(path)
-        self.name = self.path.name
-        self.json = _JsonRunView(self.path)
-
-    @classmethod
-    def coerce(cls, data: Any) -> "HelmRun":
-        if isinstance(data, cls):
-            return data
-        if hasattr(data, "path"):
-            return cls(getattr(data, "path"))
-        return cls(data)
 
 
 @dataclass

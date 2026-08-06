@@ -56,19 +56,9 @@ def experiments_analysis_root() -> Path:
 
 
 # ----------------------------------------------------------------------
-# Legacy aliases. Kept for migration code that still needs to reach the
-# pre-move locations. New code must not introduce calls to these.
+# Legacy location. Kept for migration code that still needs to reach the
+# pre-move in-repo path. New code must not introduce calls to this.
 # ----------------------------------------------------------------------
-
-
-def core_run_reports_root() -> Path:
-    """Deprecated alias for :func:`experiments_analysis_root`.
-
-    The old name conflated "where reports live" with "where canonical
-    analysis lives". Kept for backward compatibility while call sites
-    migrate.
-    """
-    return experiments_analysis_root()
 
 
 def legacy_repo_publication_root() -> Path:
@@ -78,15 +68,6 @@ def legacy_repo_publication_root() -> Path:
     legacy in-repo analysis directories to the canonical store path.
     """
     return repo_reports_root() / "core-run-analysis"
-
-
-def compat_core_run_reports_root() -> Path:
-    """Deprecated alias for :func:`legacy_repo_publication_root`.
-
-    Some code still refers to this name when scanning for legacy data.
-    Returns the in-repo legacy path, not the new publication root.
-    """
-    return legacy_repo_publication_root()
 
 
 # ----------------------------------------------------------------------

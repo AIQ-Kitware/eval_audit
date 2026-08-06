@@ -29,11 +29,6 @@ class LocalModelEntry:
     source: str
     notes: str = field(default="")
 
-    @property
-    def is_on_story(self) -> bool:
-        """True iff this model reproduces a public HELM deployment (main storyline)."""
-        return self.replaces_helm_deployment is not None
-
 
 LOCAL_MODEL_REGISTRY: list[LocalModelEntry] = [
     # --- On-story: public HELM open-weight models with local serving recipes ---

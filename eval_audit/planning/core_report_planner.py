@@ -554,32 +554,6 @@ def normalize_official_index_rows(
     return components
 
 
-@profile
-def normalize_index_rows(
-    *,
-    local_rows: list[dict[str, Any]],
-    official_rows: list[dict[str, Any]],
-    local_index_fpath: str | Path,
-    official_index_fpath: str | Path,
-    official_eee_root: str | Path | None = None,
-    local_eee_root: str | Path | None = None,
-    ensure_local_eee: bool = False,
-) -> list[NormalizedPlannerComponent]:
-    return [
-        *normalize_local_index_rows(
-            local_rows,
-            index_fpath=local_index_fpath,
-            local_eee_root=local_eee_root,
-            ensure_local_eee=ensure_local_eee,
-        ),
-        *normalize_official_index_rows(
-            official_rows,
-            index_fpath=official_index_fpath,
-            official_eee_root=official_eee_root,
-        ),
-    ]
-
-
 def _component_sort_key(component: NormalizedPlannerComponent) -> tuple[Any, ...]:
     if component.source_kind == "local":
         return (

@@ -328,10 +328,6 @@ class Group(Node):
             return CaseSet([self.cases.setdefault(v, Case()) for v in vals])
         return self.cases.setdefault(key, Case())
 
-    def set_default(self) -> Case:
-        if self.default is None:
-            self.default = Case()
-        return self.default
 
     def _label_for(self, value: Any, case: Optional[Case], *, label_fmt: str) -> str:
         if case is not None and case.label is not None:

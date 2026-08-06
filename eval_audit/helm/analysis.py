@@ -14,8 +14,9 @@ so they are loader-format-agnostic.
 
 Why this exists
 --------------
-``HelmRun`` (in :mod:`eval_audit.compat.helm_outputs`; magnet's
-``magnet.backends.helm.helm_outputs`` is the equivalent upstream reader)
+``HelmRun`` (magnet's :mod:`magnet.backends.helm.helm_outputs` reader —
+or any object exposing the same ``.json.run_spec()``-style surface, e.g.
+:class:`eval_audit.normalized.helm_compat.HelmRunView`)
 is intentionally a *reader*.
 This module defines :class:`HelmRunAnalysis`, which *wraps* a ``HelmRun`` and
 adds cached analyses / indices that make higher-level tasks (e.g. run diffs)
@@ -47,15 +48,10 @@ from eval_audit.utils.numeric import safe_float as _safe_float
 
 # Implementation moved to helm.instance_stats / helm.analysis_report on
 # 2026-06-11 (Phase 2 of docs/historical/planning/repo-refactor-plan.md).
-# HelmRunAnalysis methods resolve summary/summary_dict through this
-# module's globals; keep re-exporting. (The instance-level join stack
-# was retired 2026-07-12 — plan item A2.)
+# (The instance-level join stack was retired 2026-07-12 — plan item A2;
+# the writer-style text renderers were retired 2026-08-06 as unreachable.)
 from eval_audit.helm.instance_stats import StatMeta  # noqa: F401
-from eval_audit.helm.analysis_report import (  # noqa: F401
-    summary_dict,
-    summary,
-    summary_text,
-)
+from eval_audit.helm.analysis_report import summary_dict
 
 
 class HelmRunAnalysis(ub.NiceRepr):
@@ -75,7 +71,6 @@ class HelmRunAnalysis(ub.NiceRepr):
         >>> ana = HelmRunAnalysis(run)
         >>> info = ana.summary_dict(level=10)
         >>> assert 'run_spec_name' in info
-        >>> ana.summary(level=1)
     """
 
     def __init__(self, run, *, name: str | None = None):
@@ -121,11 +116,6 @@ class HelmRunAnalysis(ub.NiceRepr):
         # Implementation deliberately lives in helm.analysis_report (see the
         # module-header note); this module stays a thin legacy surface.
         return summary_dict(self, *args, **kwargs)
-
-    def summary(self, *args, **kwargs):
-        # Hack for now while developing. TODO: move the implementation here and
-        # fix the signature.
-        return summary(self, *args, **kwargs)
 
     # --- Stats: inventory + index -------------------------------------
 

@@ -7,7 +7,6 @@ function bodies are unchanged.
 """
 from __future__ import annotations
 import json
-import shlex
 from pathlib import Path
 from typing import Any
 import kwutil
@@ -91,10 +90,6 @@ def _write_stamped_json(report_root: Path, root: Path, stem: str, stamp: str, pa
 
 def _write_stamped_table(report_root: Path, root: Path, stem: str, stamp: str, rows: list[dict[str, Any]]) -> Path:
     return _write_stamped_text(report_root, root, stem, stamp, '.tsv', to_tsv(rows))
-
-
-def _shell_quote(parts: list[str]) -> str:
-    return ' '.join(shlex.quote(part) for part in parts)
 
 
 def write_filter_rebuild_script(report_dpath: Path, *, inventory_json: Path | None = None) -> Path:
