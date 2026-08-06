@@ -5197,3 +5197,85 @@ packets into graded demotions, and brings those packets under digest coverage so
 `verify-provenance` has something to check. Run `eval-audit-lint-store` and
 `eval-audit-verify-provenance` over the result. `e2e-phi2` first-pass still must
 not be re-rendered until its arms have separate experiment names.
+
+## 2026-08-05 16:35:12 -0400
+
+**Model/config.** claude-opus-5[1m], Claude Code CLI (VS Code extension), repo
+`eval_audit` on `main`. Continuation session.
+
+**User intent.** Re-render the OLMo models under the current planner, the
+operation owed since options A/C landed.
+
+**What I did.** Rendered `olmo-models-combined` **side-by-side** rather than in
+place: copied the checked-in manifest to the scratchpad with `output.root`
+pointed at `…/olmo-models-combined-rerender`, since the composer takes its
+output root from the manifest and has no CLI override. The existing store's
+numbers are the ones cited elsewhere, and 564 MB of derived data is cheap to
+duplicate next to 18 GB free — losing the before-state to save disk would have
+been a bad trade. 149 run entries → 149 planned → **149 built**, zero skipped,
+~55 min at ~22 s/packet, stamped `git_sha=08e1cd0c`.
+
+**Before/after.**
+
+| | old | new |
+|---|---|---|
+| packets | 149 | 149 |
+| pairs | 220 `official_vs_local` | 149 `official_vs_local` + 71 `local_repeat` |
+| disabled | none | 71 `superseded_local_attempt` |
+| digests | none | 369 components, all `ok` |
+
+220 − 149 = 71 demoted and retyped, exactly the 71 double packets the earlier
+scans found. `verify-provenance`: **149/149 match** — the first store under
+digest coverage. Aggregate score-drift: 162 cells, unchanged.
+
+**The result that needed interpreting.** The `olmo-7b` instance-agreement cells
+read *identically* old and new (mmlu 0.939, narrative_qa 0.948, …) — not the
+0.824/0.637 pooled values I predicted moving. That is correct and I nearly
+mis-reported it: I was reading the old store with the **new** collector, which
+selects rather than pools, so it already returns the corrected numbers. The
+pooled values only appear when old code reads the old store. The real change is
+that the new store now has one `official_vs_local` per packet, so even a naive
+pooling consumer gets the right answer. A's value is that the artifact is
+unambiguous regardless of who reads it — not that it changes what correct code
+computes.
+
+**The laundering check held.** `lint-store` still flags all 71 packets
+`MATERIAL`, now with `shape=demoted_attempts`, graded on the `local_repeat`
+agreement (e.g. commonsense: canonical agrees with official 0.926, superseded
+agrees with canonical only 0.760). This is exactly the failure I built the
+second grading shape to prevent — A resolves the ambiguity in the artifact, and
+without that shape the lint would have reported a clean store and the material
+choice would have vanished from view on re-render.
+
+Minor cosmetic wart: the flagged lines print `attempts=2 … rule=single_attempt`,
+because the attempt count comes from the demoted shape while the selection rule
+correctly reports that only one enabled pair exists. Consistent but reads oddly;
+worth a label change if it ever confuses anyone.
+
+**Not done, deliberately.** The re-render is *not* promoted — the canonical
+`olmo-models-combined` store is untouched, and both now sit under
+`virtual-experiments/`, so whole-root scans see 1189 packets rather than 1040
+until one is retired. Promotion overwrites 564 MB of cited derived data and is
+the user's call.
+
+**On `olmo-models`.** Established that it is fully encompassed: both stores
+cover the *identical* 149 canonical logical run keys, zero difference either
+way. Its extra 26 packet directories are pre-canonicalization duplicates. What
+differs is the backing executions — 8 per-preset serial experiments vs the
+fan-out plus the two olmo-7b suites, and the two olmo-7b suites are shared. So
+nothing is lost by retiring it. Its one residual value is as a second execution
+of five models, but the two batches used **different container digests**
+(`de6c5f82…` 06-30 vs `f6bc2f2b…` 07-01), so that is a paired cross-image
+comparison, not a repeatability floor — only the agreement direction is cleanly
+interpretable.
+
+**Design insights.** (1) When a fix and a measurement land together, check which
+code path you are reading the *old* data with before claiming the data moved.
+(2) Side-by-side beats in-place for any render whose previous output is cited;
+the disk cost is trivial against losing the comparison. (3) A fix that removes an
+ambiguity must be validated against the checker that detects it, on real data,
+after the fix — otherwise "clean" is indistinguishable from "blind".
+
+**Next steps.** Promotion decision on the re-rendered store. Optionally
+`40_build_summary.sh` against it for the aggregate report. `e2e-phi2` first-pass
+still must not be re-rendered until its arms have separate experiment names.
